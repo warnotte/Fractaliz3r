@@ -40,6 +40,7 @@ public class MandelbulbParams implements FractalParams {
 
     // Rendering quality
     private float shadowSoftness;
+    private int shadowSteps;
     private int aoSteps;
     private float aoIntensity;
     private float glowIntensity;
@@ -103,6 +104,7 @@ public class MandelbulbParams implements FractalParams {
 
         // Enhanced rendering defaults
         this.shadowSoftness = 16f;
+        this.shadowSteps = 128;
         this.aoSteps = 5;
         this.aoIntensity = 0.5f;
         this.glowIntensity = 0.15f;
@@ -154,6 +156,7 @@ public class MandelbulbParams implements FractalParams {
 
         // Rendering quality
         engine.setKernelArgFloat(kernelName, idx++, shadowSoftness);
+        engine.setKernelArgInt(kernelName, idx++, shadowSteps);
         engine.setKernelArgInt(kernelName, idx++, aoSteps);
         engine.setKernelArgFloat(kernelName, idx++, aoIntensity);
         engine.setKernelArgFloat(kernelName, idx++, glowIntensity);
@@ -209,6 +212,7 @@ public class MandelbulbParams implements FractalParams {
 
         // Simplified rendering for preview
         reduced.shadowSoftness = 8f;
+        reduced.shadowSteps = Math.max(32, this.shadowSteps / reductionFactor);
         reduced.aoSteps = 2;
         reduced.aoIntensity = this.aoIntensity;
         reduced.glowIntensity = this.glowIntensity;
@@ -370,6 +374,12 @@ public class MandelbulbParams implements FractalParams {
     public float getHueB() { return hueB; }
 
     public float getShadowSoftness() { return shadowSoftness; }
+    public int getShadowSteps() { return shadowSteps; }
+    public void setShadowSteps(int steps) { this.shadowSteps = steps; }
+    public MandelbulbParams shadowSteps(int steps) {
+        this.shadowSteps = steps;
+        return this;
+    }
     public int getAoSteps() { return aoSteps; }
     public float getAoIntensity() { return aoIntensity; }
     public float getGlowIntensity() { return glowIntensity; }

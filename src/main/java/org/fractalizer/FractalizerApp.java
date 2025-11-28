@@ -435,6 +435,17 @@ public class FractalizerApp extends Application {
             needsRender = true;
         });
 
+        Label shadowStepsLabel = new Label("Shadow Steps: 128");
+        Slider shadowStepsSlider = new Slider(32, 256, 128);
+        shadowStepsSlider.setMajorTickUnit(64);
+        shadowStepsSlider.setShowTickLabels(true);
+        shadowStepsSlider.valueProperty().addListener((obs, old, val) -> {
+            int steps = val.intValue();
+            shadowStepsLabel.setText(String.format("Shadow Steps: %d", steps));
+            params.setShadowSteps(steps);
+            needsRender = true;
+        });
+
         // === Ambient Occlusion ===
         Label aoLabel = new Label("Ambient Occlusion:");
         aoLabel.setStyle("-fx-font-weight: bold;");
@@ -553,6 +564,7 @@ public class FractalizerApp extends Application {
             autoFullQualityCheck,
             new Separator(),
             shadowLabel, shadowSoftLabel, shadowSoftnessSlider,
+            shadowStepsLabel, shadowStepsSlider,
             new Separator(),
             aoLabel, aoIntLabel, aoIntensitySlider,
             new Separator(),

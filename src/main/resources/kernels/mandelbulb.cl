@@ -213,11 +213,11 @@ float3 calcNormalTetra(float3 pos, float power, int maxIterations, float bailout
 // ============================================================================
 
 float calcSoftShadow(float3 ro, float3 rd, float mint, float maxt,
-                     float softness, float power, int maxIterations, float bailout) {
+                     float softness, int shadowSteps, float power, int maxIterations, float bailout) {
     float res = 1.0f;
     float t = mint;
 
-    for (int i = 0; i < 64 && t < maxt; i++) {
+    for (int i = 0; i < shadowSteps && t < maxt; i++) {
         float3 pos = ro + rd * t;
         float h = mandelbulbDE_simple(pos, power, maxIterations, bailout);
 
@@ -227,17 +227,17 @@ float calcSoftShadow(float3 ro, float3 rd, float mint, float maxt,
         }
 
         // Soft shadow calculation
-        // softness is inverted: lower value = softer shadows
+        // softness is the hardness factor (k): higher = sharper shadows
         // We use h/t ratio - when h is small relative to t, we're close to shadow
         res = fmin(res, h * softness / t);
 
-        // Step forward
-        t += h * 0.4f;
+        // Step forward with clamping to avoid banding artifacts
+        // Clamp between 0.01 and 0.5 as recommended for penumbra quality
+        t += clamp(h, 0.01f, 0.5f);
     }
 
-    // Clamp and apply smoothstep for nicer falloff
-    res = clamp(res, 0.0f, 1.0f);
-    return res * res * (3.0f - 2.0f * res);
+    // Clamp result
+    return clamp(res, 0.0f, 1.0f);
 }
 
 // ============================================================================
@@ -360,6 +360,7 @@ __kernel void renderMandelbulb(
     float4 materialHue,       // RGB offset for color palette
     // Rendering quality
     float shadowSoftness,
+    int shadowSteps,
     int aoSteps,
     float aoIntensity,
     float glowIntensity,
@@ -501,7 +502,7 @@ __kernel void renderMandelbulb(
         // Soft shadows
         float shadowBias = 0.001f + totalDist * 0.001f;
         float shadow = calcSoftShadow(pos + normal * shadowBias, light,
-                                      shadowBias, 15.0f, shadowSoftness,
+                                      shadowBias, 15.0f, shadowSoftness, shadowSteps,
                                       power, max(8, maxIterations / 2), bailout);
 
         // Ambient occlusion
