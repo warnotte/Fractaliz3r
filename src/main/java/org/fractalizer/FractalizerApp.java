@@ -11,6 +11,7 @@ import javafx.scene.control.*;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -24,7 +25,7 @@ import java.util.Set;
 
 /**
  * Main JavaFX application for Fractaliz3r.
- * Supports FPS-style navigation with arrow keys and mouse.
+ * Supports FPS-style navigation with arrow keys and click+drag mouse.
  */
 public class FractalizerApp extends Application {
 
@@ -43,15 +44,17 @@ public class FractalizerApp extends Application {
 
     // Navigation state
     private final Set<KeyCode> pressedKeys = new HashSet<>();
-    private boolean mouseCaptured = false;
-    private double lastMouseX, lastMouseY;
     private Camera camera;
     private MandelbulbParams params;
+
+    // Mouse drag state
+    private boolean isDragging = false;
+    private double dragStartX, dragStartY;
 
     // Rendering state
     private boolean needsRender = true;
     private long lastRenderTime = 0;
-    private static final long RENDER_DELAY_MS = 100; // Minimum delay between previews
+    private static final long RENDER_DELAY_MS = 100;
 
     @Override
     public void start(Stage primaryStage) {
@@ -96,10 +99,8 @@ public class FractalizerApp extends Application {
 
         Scene scene = new Scene(root, 1200, 700);
 
-        // Setup keyboard controls
+        // Setup controls
         setupKeyboardControls(scene);
-
-        // Setup mouse controls
         setupMouseControls();
 
         primaryStage.setScene(scene);
@@ -108,8 +109,8 @@ public class FractalizerApp extends Application {
         // Focus the image container for keyboard input
         imageContainer.requestFocus();
 
-        // Initial preview
-        statusLabel.setText("GPU: " + controller.getDeviceName() + " | Click image to navigate (ESC to release)");
+        // Initial status
+        statusLabel.setText("GPU: " + controller.getDeviceName());
 
         // Start render loop
         startRenderLoop();
@@ -121,17 +122,11 @@ public class FractalizerApp extends Application {
     private void setupKeyboardControls(Scene scene) {
         // Use event filter to capture keys before UI components
         scene.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
-            // Always track arrow keys for camera movement
+            // Track navigation keys and consume them to prevent UI interaction
             if (e.getCode() == KeyCode.UP || e.getCode() == KeyCode.DOWN ||
                 e.getCode() == KeyCode.LEFT || e.getCode() == KeyCode.RIGHT ||
                 e.getCode() == KeyCode.PAGE_UP || e.getCode() == KeyCode.PAGE_DOWN) {
                 pressedKeys.add(e.getCode());
-                e.consume(); // Prevent UI components from receiving arrow keys
-            }
-
-            // ESC to release mouse capture
-            if (e.getCode() == KeyCode.ESCAPE && mouseCaptured) {
-                releaseMouse();
                 e.consume();
             }
 
@@ -165,62 +160,62 @@ public class FractalizerApp extends Application {
     }
 
     private void setupMouseControls() {
-        // Click to capture mouse
-        imageContainer.setOnMouseClicked(e -> {
-            if (e.getButton() == MouseButton.PRIMARY && !mouseCaptured) {
-                captureMouse();
-                lastMouseX = e.getScreenX();
-                lastMouseY = e.getScreenY();
+        // Start drag on mouse press
+        imageContainer.setOnMousePressed(e -> {
+            if (e.getButton() == MouseButton.PRIMARY) {
+                isDragging = true;
+                dragStartX = e.getScreenX();
+                dragStartY = e.getScreenY();
+                imageContainer.setCursor(Cursor.CLOSED_HAND);
             }
         });
 
-        // Mouse movement for camera rotation
-        imageContainer.setOnMouseMoved(e -> {
-            if (mouseCaptured) {
-                double deltaX = e.getScreenX() - lastMouseX;
-                double deltaY = e.getScreenY() - lastMouseY;
-
-                camera.rotate((float) deltaX, (float) deltaY);
-                needsRender = true;
-
-                lastMouseX = e.getScreenX();
-                lastMouseY = e.getScreenY();
-            }
-        });
-
-        // Also handle dragged for smoother control
+        // Handle drag movement
         imageContainer.setOnMouseDragged(e -> {
-            if (mouseCaptured) {
-                double deltaX = e.getScreenX() - lastMouseX;
-                double deltaY = e.getScreenY() - lastMouseY;
+            if (isDragging) {
+                double deltaX = e.getScreenX() - dragStartX;
+                double deltaY = e.getScreenY() - dragStartY;
 
+                // Apply rotation
                 camera.rotate((float) deltaX, (float) deltaY);
                 needsRender = true;
 
-                lastMouseX = e.getScreenX();
-                lastMouseY = e.getScreenY();
+                // Update start position for next delta
+                dragStartX = e.getScreenX();
+                dragStartY = e.getScreenY();
             }
         });
 
-        // Scroll for speed adjustment
+        // End drag on mouse release
+        imageContainer.setOnMouseReleased(e -> {
+            if (e.getButton() == MouseButton.PRIMARY) {
+                isDragging = false;
+                imageContainer.setCursor(Cursor.OPEN_HAND);
+            }
+        });
+
+        // Change cursor when entering/leaving image area
+        imageContainer.setOnMouseEntered(e -> {
+            if (!isDragging) {
+                imageContainer.setCursor(Cursor.OPEN_HAND);
+            }
+            imageContainer.requestFocus();
+        });
+
+        imageContainer.setOnMouseExited(e -> {
+            if (!isDragging) {
+                imageContainer.setCursor(Cursor.DEFAULT);
+            }
+        });
+
+        // Scroll for movement speed adjustment
         imageContainer.setOnScroll(e -> {
             double delta = e.getDeltaY() > 0 ? 1.1 : 0.9;
-            camera.setMoveSpeed(camera.getMoveSpeed() * (float) delta);
-            camera.setMoveSpeed(Math.max(0.001f, Math.min(1.0f, camera.getMoveSpeed())));
-            speedSlider.setValue(camera.getMoveSpeed());
+            float newSpeed = camera.getMoveSpeed() * (float) delta;
+            newSpeed = Math.max(0.001f, Math.min(1.0f, newSpeed));
+            camera.setMoveSpeed(newSpeed);
+            speedSlider.setValue(newSpeed);
         });
-    }
-
-    private void captureMouse() {
-        mouseCaptured = true;
-        imageContainer.setCursor(Cursor.NONE);
-        statusLabel.setText("Navigating... (ESC to release, Arrows=move, Q/E=roll, PgUp/Dn=up/down)");
-    }
-
-    private void releaseMouse() {
-        mouseCaptured = false;
-        imageContainer.setCursor(Cursor.DEFAULT);
-        statusLabel.setText("Navigation released. Click image to navigate.");
     }
 
     private void startRenderLoop() {
@@ -262,6 +257,16 @@ public class FractalizerApp extends Application {
         }
         if (pressedKeys.contains(KeyCode.RIGHT)) {
             camera.strafe(1);
+            moved = true;
+        }
+
+        // Page Up/Down for vertical movement
+        if (pressedKeys.contains(KeyCode.PAGE_UP)) {
+            camera.moveUp(1);
+            moved = true;
+        }
+        if (pressedKeys.contains(KeyCode.PAGE_DOWN)) {
+            camera.moveUp(-1);
             moved = true;
         }
 
@@ -325,14 +330,13 @@ public class FractalizerApp extends Application {
         Label navLabel = new Label("Navigation:");
         navLabel.setStyle("-fx-font-weight: bold;");
         Label helpLabel = new Label(
-            "Click image to start\n" +
-            "Mouse: Look around\n" +
+            "Drag: Look around\n" +
             "Arrows: Move\n" +
             "Q/E: Roll\n" +
             "PgUp/Dn: Up/Down\n" +
             "R: Reset camera\n" +
             "Space: Render full\n" +
-            "ESC: Release mouse"
+            "Scroll: Adjust speed"
         );
         helpLabel.setStyle("-fx-font-size: 11px;");
 
@@ -430,9 +434,7 @@ public class FractalizerApp extends Application {
         progressBar.setProgress(0);
 
         controller.renderPreview(
-            image -> {
-                imageView.setImage(image);
-            },
+            image -> imageView.setImage(image),
             progress -> progressBar.setProgress(progress)
         );
     }
@@ -448,9 +450,7 @@ public class FractalizerApp extends Application {
                 statusLabel.setText("Render complete");
             },
             progress -> progressBar.setProgress(progress),
-            tile -> {
-                // Could update display progressively here
-            }
+            null
         );
     }
 
@@ -469,9 +469,9 @@ public class FractalizerApp extends Application {
             progressBar.setProgress(0);
 
             controller.exportToPNG(file, progress -> progressBar.setProgress(progress))
-                .thenRun(() -> Platform.runLater(() -> {
-                    statusLabel.setText("Exported to: " + file.getName());
-                }))
+                .thenRun(() -> Platform.runLater(() ->
+                    statusLabel.setText("Exported to: " + file.getName())
+                ))
                 .exceptionally(e -> {
                     Platform.runLater(() -> showError("Export failed", e.getMessage()));
                     return null;
