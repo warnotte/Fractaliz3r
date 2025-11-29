@@ -29,6 +29,30 @@
 #define NORMAL_EPSILON 0.0012f
 
 // ============================================================================
+// Adaptive epsilon and step helpers (Hart sphere tracing best practices)
+// ============================================================================
+
+/**
+ * Adaptive hit epsilon based on travel distance and quality multiplier.
+ * Clamped to avoid overshoot or excessive banding.
+ */
+float computeAdaptiveEpsilon(float totalDist, float baseEpsilon, float qualityMultiplier) {
+    float adaptive = fmax(MIN_EPSILON / qualityMultiplier, totalDist * EPSILON_FACTOR / qualityMultiplier);
+    adaptive = fmin(adaptive, MAX_EPSILON / qualityMultiplier);
+    adaptive = fmax(adaptive, baseEpsilon * 0.1f);
+    return adaptive;
+}
+
+/**
+ * Step size scaled by a global factor and clamped to avoid tunneling and micro-steps.
+ */
+float computeStep(float dist, float qualityMultiplier, float factor) {
+    float step = dist * factor / fmax(1.0f, qualityMultiplier * 0.5f);
+    step = fmax(step, MIN_EPSILON / qualityMultiplier);
+    return step;
+}
+
+// ============================================================================
 // Vector operations
 // ============================================================================
 

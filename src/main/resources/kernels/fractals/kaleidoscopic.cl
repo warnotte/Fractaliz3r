@@ -217,6 +217,7 @@ float calcAOKaleido(float3 pos, float3 normal, int aoSteps,
 }
 
 // ============================================================================
+// ============================================================================
 // Material color from orbit traps
 // ============================================================================
 
@@ -313,7 +314,6 @@ __kernel void renderKaleidoscopic(
         // Scale parameters by quality multiplier
         int effectiveMaxSteps = (int)((float)maxRaySteps * qualityMultiplier);
         float qualityEpsilon = baseEpsilon / qualityMultiplier;
-        float qualityStepFactor = STEP_FACTOR / fmax(1.0f, qualityMultiplier * 0.5f);
 
         // For very high quality, increase fractal iterations near the surface
         int baseIterations = maxIterations;
@@ -329,18 +329,14 @@ __kernel void renderKaleidoscopic(
 
             minDist = fmin(minDist, dist);
 
-            // Adaptive epsilon scaled by quality
-            float adaptiveEpsilon = fmax(MIN_EPSILON / qualityMultiplier, totalDist * EPSILON_FACTOR / qualityMultiplier);
-            adaptiveEpsilon = fmin(adaptiveEpsilon, MAX_EPSILON / qualityMultiplier);
-            adaptiveEpsilon = fmax(adaptiveEpsilon, qualityEpsilon * 0.1f);
+            float adaptiveEpsilon = computeAdaptiveEpsilon(totalDist, qualityEpsilon, qualityMultiplier);
 
             if (dist < adaptiveEpsilon) {
                 hit = true;
                 break;
             }
 
-            float step = dist * qualityStepFactor;
-            step = fmax(step, MIN_EPSILON / qualityMultiplier);
+            float step = computeStep(dist, qualityMultiplier, STEP_FACTOR);
             totalDist += step;
 
             if (totalDist > MAX_DISTANCE) break;

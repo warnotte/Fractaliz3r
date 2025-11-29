@@ -129,8 +129,8 @@ float3 calcNormalMandelbox(float3 pos, float scale, float minRadius, float fixed
     float d3 = mandelboxDE_simple(pos + k3 * e, scale, minRadius, fixedRadius, foldingLimit, maxIterations);
     float d4 = mandelboxDE_simple(pos + k4 * e, scale, minRadius, fixedRadius, foldingLimit, maxIterations);
 
-    float3 n = k1 * d1 + k2 * d2 + k3 * d3 + k4 * d4;
-    return normalize3(n);
+        float3 n = k1 * d1 + k2 * d2 + k3 * d3 + k4 * d4;
+        return normalize3(n);
 }
 
 // ============================================================================
@@ -278,18 +278,14 @@ __kernel void renderMandelbox(
 
             minDist = fmin(minDist, dist);
 
-            // Adaptive epsilon scaled by quality
-            float adaptiveEpsilon = fmax(MIN_EPSILON / qualityMultiplier, totalDist * EPSILON_FACTOR / qualityMultiplier);
-            adaptiveEpsilon = fmin(adaptiveEpsilon, MAX_EPSILON / qualityMultiplier);
-            adaptiveEpsilon = fmax(adaptiveEpsilon, qualityEpsilon * 0.1f);
+            float adaptiveEpsilon = computeAdaptiveEpsilon(totalDist, qualityEpsilon, qualityMultiplier);
 
             if (dist < adaptiveEpsilon) {
                 hit = true;
                 break;
             }
 
-            float step = dist * qualityStepFactor;
-            step = fmax(step, MIN_EPSILON / qualityMultiplier);
+            float step = computeStep(dist, qualityMultiplier, STEP_FACTOR);
             totalDist += step;
 
             if (totalDist > MAX_DISTANCE) break;
@@ -303,13 +299,11 @@ __kernel void renderMandelbox(
             float3 viewDir = -rayDir;
             float3 baseColor = getMandelboxColor(traps, baseHue, scale);
 
-            // Calculate shadow and AO
-            int reducedIter = max(5, maxIterations / 2);
             float shadowBias = 0.001f + totalDist * 0.001f;
             float shadow = calcShadowMandelbox(pos + normal * shadowBias, light,
                                                 shadowBias, 15.0f, shadowSoftness, shadowSteps,
-                                                scale, minRadius, fixedRadius, foldingLimit, reducedIter);
-            float ao = calcAOMandelbox(pos, normal, aoSteps, scale, minRadius, fixedRadius, foldingLimit, reducedIter);
+                                                scale, minRadius, fixedRadius, foldingLimit, maxIterations);
+            float ao = calcAOMandelbox(pos, normal, aoSteps, scale, minRadius, fixedRadius, foldingLimit, maxIterations);
 
             // Use common rendering pipeline
             sampleColor = renderByMode(

@@ -20,9 +20,9 @@ import java.util.function.Consumer;
  */
 public class FractalizerController implements AutoCloseable {
 
-    private final OpenCLEngine engine;
-    private final TileRenderer renderer;
-    private final TileRenderer previewRenderer;
+    private OpenCLEngine engine;
+    private TileRenderer renderer;
+    private TileRenderer previewRenderer;
 
     private FractalParams currentParams;
     private FractalType currentFractalType = FractalType.MANDELBULB;
@@ -34,7 +34,9 @@ public class FractalizerController implements AutoCloseable {
     private boolean isRendering = false;
 
     public FractalizerController() throws IOException {
-        this.engine = new OpenCLEngine();
+        OpenCLEngine.DevicePreference preference = resolveDevicePreference();
+        int deviceIndex = resolveDeviceIndex();
+        this.engine = new OpenCLEngine(preference, deviceIndex);
 
         // Load all fractal kernels
         loadAllKernels();
@@ -226,8 +228,8 @@ public class FractalizerController implements AutoCloseable {
      * Cancel current rendering.
      */
     public void cancelRender() {
-        renderer.cancel();
-        previewRenderer.cancel();
+        if (renderer != null) renderer.cancel();
+        if (previewRenderer != null) previewRenderer.cancel();
         if (currentRender != null) {
             currentRender.cancel(true);
         }
@@ -268,11 +270,74 @@ public class FractalizerController implements AutoCloseable {
         return engine.getDeviceName();
     }
 
+    public String getDeviceType() {
+        return engine.getDeviceType();
+    }
+
+    public java.util.List<String> getAvailableDevices() {
+        return engine.getAvailableDeviceSummaries();
+    }
+
+    public java.util.List<OpenCLEngine.DeviceDescriptor> getAvailableDeviceDescriptors() {
+        return engine.getAvailableDeviceDescriptors();
+    }
+
     @Override
     public void close() {
         cancelRender();
-        renderer.shutdown();
-        previewRenderer.shutdown();
-        engine.close();
+        if (renderer != null) renderer.shutdown();
+        if (previewRenderer != null) previewRenderer.shutdown();
+        if (engine != null) engine.close();
+    }
+
+    private OpenCLEngine.DevicePreference resolveDevicePreference() {
+        String value = System.getProperty("fractalizer.device", System.getenv("FRACTALIZER_DEVICE"));
+        if (value == null) {
+            return OpenCLEngine.DevicePreference.AUTO;
+        }
+        return switch (value.trim().toLowerCase()) {
+            case "cpu" -> OpenCLEngine.DevicePreference.CPU_ONLY;
+            case "gpu" -> OpenCLEngine.DevicePreference.GPU_ONLY;
+            default -> OpenCLEngine.DevicePreference.AUTO;
+        };
+    }
+
+    private int resolveDeviceIndex() {
+        String value = System.getProperty("fractalizer.device.index", System.getenv("FRACTALIZER_DEVICE_INDEX"));
+        if (value == null) return 0;
+        try {
+            return Math.max(0, Integer.parseInt(value.trim()));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Switch the underlying OpenCL device (GPU/CPU) at runtime.
+     * Cancels current renders, rebuilds kernels and renderers, and keeps the current fractal params.
+     */
+    public synchronized void switchDevice(OpenCLEngine.DevicePreference preference, int deviceIndex) throws IOException {
+        cancelRender();
+
+        // Keep old references to close after successful switch
+        TileRenderer oldRenderer = renderer;
+        TileRenderer oldPreview = previewRenderer;
+        OpenCLEngine oldEngine = engine;
+
+        // Build new engine/renderers first
+        OpenCLEngine newEngine = new OpenCLEngine(preference, deviceIndex);
+        TileRenderer newRenderer = new TileRenderer(newEngine, TileRenderer.DEFAULT_TILE_SIZE);
+        TileRenderer newPreview = new TileRenderer(newEngine, TileRenderer.PREVIEW_TILE_SIZE);
+
+        // Swap in new engine and reload kernels
+        this.engine = newEngine;
+        this.renderer = newRenderer;
+        this.previewRenderer = newPreview;
+        loadAllKernels();
+
+        // Close old resources
+        if (oldRenderer != null) oldRenderer.shutdown();
+        if (oldPreview != null) oldPreview.shutdown();
+        if (oldEngine != null) oldEngine.close();
     }
 }

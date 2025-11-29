@@ -224,7 +224,6 @@ __kernel void renderMenger(
         // Scale parameters by quality multiplier
         int effectiveMaxSteps = (int)((float)maxRaySteps * qualityMultiplier);
         float qualityEpsilon = baseEpsilon / qualityMultiplier;
-        float qualityStepFactor = 0.9f / fmax(1.0f, qualityMultiplier * 0.5f);
 
         for (int i = 0; i < effectiveMaxSteps; i++) {
             pos = ro + rd * t;
@@ -232,12 +231,13 @@ __kernel void renderMenger(
             minDist = fmin(minDist, d);
 
             // Adaptive epsilon scaled by quality
-            float adaptiveEps = qualityEpsilon * (1.0f + t * 0.1f / qualityMultiplier);
+            float adaptiveEps = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
             if (d < adaptiveEps) {
                 hit = true;
                 break;
             }
-            t += d * qualityStepFactor;
+            float step = computeStep(d, qualityMultiplier, 0.9f);
+            t += step;
             if (t > 100.0f) break;
         }
 
@@ -250,6 +250,7 @@ __kernel void renderMenger(
             float3 baseColor = getMengerColor(traps, baseHue);
 
             // Shadow & AO
+            // Shadows/AO (simple versions)
             float sha = calcShadowMenger(pos + nor * 0.01f, light, 0.01f, 10.0f,
                                          shadowSoftness, shadowSteps, maxIterations - 1, scale, offsetVec);
             float ao = calcAOMenger(pos, nor, maxIterations - 1, scale, offsetVec);

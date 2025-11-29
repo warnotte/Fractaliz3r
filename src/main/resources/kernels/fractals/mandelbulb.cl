@@ -1,4 +1,4 @@
-co/**
+/**
  * Mandelbulb 3D fractal OpenCL kernel (Refactored)
  *
  * This file contains only Mandelbulb-specific code:
@@ -295,18 +295,14 @@ __kernel void renderMandelbulb(
             minDist = fmin(minDist, dist);
             lastDist = dist;
 
-            // Adaptive epsilon scaled by quality
-            float adaptiveEpsilon = fmax(MIN_EPSILON / qualityMultiplier, totalDist * EPSILON_FACTOR / qualityMultiplier);
-            adaptiveEpsilon = fmin(adaptiveEpsilon, MAX_EPSILON / qualityMultiplier);
-            adaptiveEpsilon = fmax(adaptiveEpsilon, qualityEpsilon * 0.1f);
+            float adaptiveEpsilon = computeAdaptiveEpsilon(totalDist, qualityEpsilon, qualityMultiplier);
 
             if (dist < adaptiveEpsilon) {
                 hit = true;
                 break;
             }
 
-            float step = dist * qualityStepFactor;
-            step = fmax(step, MIN_EPSILON / qualityMultiplier);
+            float step = computeStep(dist, qualityMultiplier, STEP_FACTOR);
             totalDist += step;
 
             if (totalDist > MAX_DISTANCE) break;
@@ -320,13 +316,11 @@ __kernel void renderMandelbulb(
             float3 viewDir = -rayDir;
             float3 baseColor = getOrbitColor(traps, baseHue);
 
-            // Calculate shadow and AO
-            int reducedIter = max(8, maxIterations / 2);
             float shadowBias = 0.001f + totalDist * 0.001f;
             float shadow = calcShadowMandelbulb(pos + normal * shadowBias, light,
                                                  shadowBias, 15.0f, shadowSoftness, shadowSteps,
-                                                 power, reducedIter, bailout);
-            float ao = calcAOMandelbulb(pos, normal, aoSteps, power, reducedIter, bailout);
+                                                 power, maxIterations, bailout);
+            float ao = calcAOMandelbulb(pos, normal, aoSteps, power, maxIterations, bailout);
 
             // Use common rendering pipeline
             sampleColor = renderByMode(

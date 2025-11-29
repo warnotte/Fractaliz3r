@@ -37,6 +37,7 @@ public class FractalizerApp extends Application {
     private LightingPanel lightingPanel;
     private QualityPanel qualityPanel;
     private ExportPanel exportPanel;
+    private DevicePanel devicePanel;
 
     // Rendering state
     private boolean needsRender = true;
@@ -108,7 +109,7 @@ public class FractalizerApp extends Application {
         imageContainer.requestFocus();
 
         // Initial status
-        statusLabel.setText("GPU: " + controller.getDeviceName());
+        statusLabel.setText("Device (" + controller.getDeviceType() + "): " + controller.getDeviceName());
 
         // Start render loop
         startRenderLoop();
@@ -149,7 +150,15 @@ public class FractalizerApp extends Application {
         );
         Tab exportTab = new Tab("Export", exportPanel);
 
-        tabPane.getTabs().addAll(fractalTab, lightingTab, qualityTab, exportTab);
+        // Device tab
+        devicePanel = new DevicePanel(
+            controller,
+            this::requestRender,
+            status -> statusLabel.setText(status)
+        );
+        Tab deviceTab = new Tab("Device", devicePanel);
+
+        tabPane.getTabs().addAll(fractalTab, lightingTab, qualityTab, exportTab, deviceTab);
 
         return tabPane;
     }
