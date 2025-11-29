@@ -193,86 +193,123 @@ __kernel void renderMenger(
     float u = (2.0f * ((float)pixelX + 0.5f) / (float)imageWidth - 1.0f) * aspectRatio;
     float v = 1.0f - 2.0f * ((float)pixelY + 0.5f) / (float)imageHeight;
 
-    float3 ro = (float3)(camPos.x, camPos.y, camPos.z);
-    float3 rd = getCameraRay((float2)(u, v), fov, camQuat);
+    // Base camera setup
+    float3 camOrigin = (float3)(camPos.x, camPos.y, camPos.z);
+    float3 baseCameraRay = getCameraRay((float2)(u, v), fov, camQuat);
     float3 offsetVec = (float3)(offset.x, offset.y, offset.z);
 
-    // Ray march
-    float t = 0.0f;
-    float3 pos;
-    MengerOrbitTraps traps;
-    bool hit = false;
-    float minDist = 1e10f;
+    // Get camera basis vectors for DoF lens offset
+    float3 camRight = rotateByQuaternion((float3)(1.0f, 0.0f, 0.0f), camQuat);
+    float3 camUp = rotateByQuaternion((float3)(0.0f, 1.0f, 0.0f), camQuat);
 
-    for (int i = 0; i < maxRaySteps; i++) {
-        pos = ro + rd * t;
-        float d = mengerDE(pos, maxIterations, scale, offsetVec, 0.0f, &traps);
-        minDist = fmin(minDist, d);
+    // Calculate focal point
+    float3 focalPoint = camOrigin + baseCameraRay * focalDistance;
 
-        if (d < baseEpsilon * (1.0f + t * 0.1f)) {
-            hit = true;
-            break;
-        }
-        t += d * 0.9f;
-        if (t > 100.0f) break;
-    }
+    // Number of DoF samples
+    int numSamples = (dofEnabled && aperture > 0.0001f) ? max(1, dofSamples) : 1;
 
-    // Shading
-    float3 col;
+    // Accumulator for multi-sample DoF
+    float3 accumulatedColor = (float3)(0.0f, 0.0f, 0.0f);
+
+    // Light and color setup (outside loop for efficiency)
     float3 light = normalize((float3)(lightDir.x, lightDir.y, lightDir.z));
     float3 lcol = (float3)(lightColor.x, lightColor.y, lightColor.z);
     float3 acol = (float3)(ambientColor.x, ambientColor.y, ambientColor.z);
     float3 hue = (float3)(materialHue.x, materialHue.y, materialHue.z);
 
-    if (hit) {
-        float3 nor = calcNormalMenger(pos, maxIterations, scale, offsetVec);
-        float3 baseCol = getMengerColor(traps, hue);
+    // DoF sampling loop
+    for (int sampleIdx = 0; sampleIdx < numSamples; sampleIdx++) {
+        float3 ro = camOrigin;
+        float3 rd = baseCameraRay;
 
-        // Diffuse
-        float dif = fmax(dot(nor, light), 0.0f);
+        // Apply thin-lens model if DoF is enabled
+        if (dofEnabled && aperture > 0.0001f && numSamples > 1) {
+            float2 seed = (float2)((float)pixelX + (float)sampleIdx * 0.1f,
+                                   (float)pixelY + (float)sampleIdx * 0.37f);
+            float2 lensOffset = randomInDisk(seed) * aperture;
 
-        // Specular
-        float3 hal = normalize(light - rd);
-        float spe = pow(fmax(dot(nor, hal), 0.0f), specularPower) * specularIntensity;
-
-        // Shadow
-        float sha = calcShadowMenger(pos + nor * 0.01f, light, 0.01f, 10.0f,
-                                     shadowSoftness, shadowSteps, maxIterations - 1, scale, offsetVec);
-
-        // AO
-        float ao = calcAOMenger(pos, nor, maxIterations - 1, scale, offsetVec);
-        ao = mix(1.0f, ao, aoIntensity);
-
-        if (renderMode == RENDER_NORMALS) {
-            col = nor * 0.5f + 0.5f;
-        } else if (renderMode == RENDER_DEPTH) {
-            col = (float3)(exp(-t * 0.3f));
-        } else if (renderMode == RENDER_AO) {
-            col = (float3)(ao);
-        } else if (renderMode == RENDER_SHADOWS) {
-            col = (float3)(sha);
-        } else if (renderMode == RENDER_ORBIT_TRAP) {
-            col = baseCol;
-        } else {
-            // Final
-            col = baseCol * (acol * ambientColor.w + lcol * dif * lightColor.w * sha) * ao;
-            col += lcol * spe * sha;
-
-            // Fog
-            col = mix(col, acol * 0.1f, 1.0f - exp(-t * 0.03f));
-
-            // Tone map & gamma
-            col = col / (col + 1.0f);
-            col = pow(fmax(col, (float3)(0.0f)), (float3)(0.4545f));
+            ro = camOrigin + camRight * lensOffset.x + camUp * lensOffset.y;
+            rd = normalize(focalPoint - ro);
         }
-    } else {
-        // Background with glow
-        float glow = exp(-minDist * 5.0f) * glowIntensity;
-        col = acol * 0.1f + palette(0.5f, hue) * glow;
+
+        // Ray march
+        float t = 0.0f;
+        float3 pos;
+        MengerOrbitTraps traps;
+        bool hit = false;
+        float minDist = 1e10f;
+
+        for (int i = 0; i < maxRaySteps; i++) {
+            pos = ro + rd * t;
+            float d = mengerDE(pos, maxIterations, scale, offsetVec, 0.0f, &traps);
+            minDist = fmin(minDist, d);
+
+            if (d < baseEpsilon * (1.0f + t * 0.1f)) {
+                hit = true;
+                break;
+            }
+            t += d * 0.9f;
+            if (t > 100.0f) break;
+        }
+
+        // Shading
+        float3 col;
+
+        if (hit) {
+            float3 nor = calcNormalMenger(pos, maxIterations, scale, offsetVec);
+            float3 baseCol = getMengerColor(traps, hue);
+
+            // Diffuse
+            float dif = fmax(dot(nor, light), 0.0f);
+
+            // Specular
+            float3 hal = normalize(light - rd);
+            float spe = pow(fmax(dot(nor, hal), 0.0f), specularPower) * specularIntensity;
+
+            // Shadow
+            float sha = calcShadowMenger(pos + nor * 0.01f, light, 0.01f, 10.0f,
+                                         shadowSoftness, shadowSteps, maxIterations - 1, scale, offsetVec);
+
+            // AO
+            float ao = calcAOMenger(pos, nor, maxIterations - 1, scale, offsetVec);
+            ao = mix(1.0f, ao, aoIntensity);
+
+            if (renderMode == RENDER_NORMALS) {
+                col = nor * 0.5f + 0.5f;
+            } else if (renderMode == RENDER_DEPTH) {
+                col = (float3)(exp(-t * 0.3f));
+            } else if (renderMode == RENDER_AO) {
+                col = (float3)(ao);
+            } else if (renderMode == RENDER_SHADOWS) {
+                col = (float3)(sha);
+            } else if (renderMode == RENDER_ORBIT_TRAP) {
+                col = baseCol;
+            } else {
+                // Final
+                col = baseCol * (acol * ambientColor.w + lcol * dif * lightColor.w * sha) * ao;
+                col += lcol * spe * sha;
+
+                // Fog
+                col = mix(col, acol * 0.1f, 1.0f - exp(-t * 0.03f));
+
+                // Tone map & gamma
+                col = col / (col + 1.0f);
+                col = pow(fmax(col, (float3)(0.0f)), (float3)(0.4545f));
+            }
+        } else {
+            // Background with glow
+            float glow = exp(-minDist * 5.0f) * glowIntensity;
+            col = acol * 0.1f + palette(0.5f, hue) * glow;
+        }
+
+        accumulatedColor += col;
     }
 
-    output[outputIdx] = clamp(col.x, 0.0f, 1.0f);
-    output[outputIdx + 1] = clamp(col.y, 0.0f, 1.0f);
-    output[outputIdx + 2] = clamp(col.z, 0.0f, 1.0f);
+    // Average all DoF samples
+    float3 finalColor = accumulatedColor / (float)numSamples;
+
+    output[outputIdx] = clamp(finalColor.x, 0.0f, 1.0f);
+    output[outputIdx + 1] = clamp(finalColor.y, 0.0f, 1.0f);
+    output[outputIdx + 2] = clamp(finalColor.z, 0.0f, 1.0f);
     output[outputIdx + 3] = 1.0f;
 }
