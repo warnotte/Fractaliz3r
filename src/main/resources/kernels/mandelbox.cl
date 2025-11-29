@@ -1,6 +1,6 @@
 /**
- * Mandelbulb 3D fractal OpenCL kernel
- * Distance estimator, lighting, and rendering specific to Mandelbulb
+ * Mandelbox 3D fractal OpenCL kernel
+ * Distance estimator, lighting, and rendering specific to Mandelbox
  *
  * Note: This file is loaded AFTER common.cl which provides:
  * - Vector operations (normalize3, length3, dot3, cross3)
@@ -11,108 +11,124 @@
  */
 
 // ============================================================================
-// Orbit trap structure for rich coloring
+// Orbit trap structure for Mandelbox coloring
 // ============================================================================
 
 typedef struct {
-    float plane;
-    float sphere;
-    float axis;
-    float cube;
+    float minDist;      // Minimum distance during iteration
+    float avgFold;      // Average fold amount
+    float sphereHits;   // Number of sphere inversions
     int iterations;
-} OrbitTraps;
+} MandelboxTraps;
 
 // ============================================================================
-// Mandelbulb distance estimator with multiple orbit traps
+// Box fold operation
 // ============================================================================
 
-float mandelbulbDE(float3 pos, float power, int baseIterations, float bailout,
-                   float distanceHint, OrbitTraps* traps) {
+float3 boxFold(float3 z, float foldingLimit) {
+    return clamp(z, -foldingLimit, foldingLimit) * 2.0f - z;
+}
+
+// ============================================================================
+// Sphere fold operation
+// ============================================================================
+
+void sphereFold(float3* z, float* dz, float minRadius, float fixedRadius) {
+    float minR2 = minRadius * minRadius;
+    float fixR2 = fixedRadius * fixedRadius;
+    float r2 = dot3(*z, *z);
+
+    if (r2 < minR2) {
+        // Inside inner sphere - invert through inner sphere
+        float scale = fixR2 / minR2;
+        *z *= scale;
+        *dz *= scale;
+    } else if (r2 < fixR2) {
+        // Between spheres - invert through outer sphere
+        float scale = fixR2 / r2;
+        *z *= scale;
+        *dz *= scale;
+    }
+}
+
+// ============================================================================
+// Mandelbox distance estimator with orbit traps
+// ============================================================================
+
+float mandelboxDE(float3 pos, float scale, float minRadius, float fixedRadius,
+                  float foldingLimit, int maxIterations, MandelboxTraps* traps) {
     float3 z = pos;
-    float dr = 1.0f;
-    float r = 0.0f;
+    float3 offset = pos;
+    float dz = 1.0f;
 
-    traps->plane = 1e10f;
-    traps->sphere = 1e10f;
-    traps->axis = 1e10f;
-    traps->cube = 1e10f;
+    traps->minDist = 1e10f;
+    traps->avgFold = 0.0f;
+    traps->sphereHits = 0.0f;
     traps->iterations = 0;
 
-    int dynamicIter = baseIterations;
-    if (distanceHint < 0.1f && distanceHint > 0.0f) {
-        dynamicIter = baseIterations + (int)((0.1f - distanceHint) * 10.0f * (float)baseIterations);
-        dynamicIter = min(dynamicIter, baseIterations * 2);
-    }
-
     int i;
-    for (i = 0; i < dynamicIter; i++) {
-        r = length3(z);
+    for (i = 0; i < maxIterations; i++) {
+        // Box fold
+        float3 oldZ = z;
+        z = boxFold(z, foldingLimit);
+        float foldAmount = length3(z - oldZ);
+        traps->avgFold += foldAmount;
 
-        traps->plane = fmin(traps->plane, fabs(z.y));
-        traps->sphere = fmin(traps->sphere, fabs(r - 1.0f));
-        traps->axis = fmin(traps->axis, sqrt(z.x * z.x + z.y * z.y));
-        traps->cube = fmin(traps->cube, fmax(fmax(fabs(z.x), fabs(z.y)), fabs(z.z)));
+        // Sphere fold
+        float r2Before = dot3(z, z);
+        sphereFold(&z, &dz, minRadius, fixedRadius);
+        float r2After = dot3(z, z);
+        if (r2After != r2Before) {
+            traps->sphereHits += 1.0f;
+        }
 
-        if (r > bailout) break;
+        // Scale and translate
+        z = z * scale + offset;
+        dz = dz * fabs(scale) + 1.0f;
 
-        float theta = acos(clamp(z.z / r, -1.0f, 1.0f));
-        float phi = atan2(z.y, z.x);
-        dr = pow(r, power - 1.0f) * power * dr + 1.0f;
+        // Track minimum distance for coloring
+        float dist = length3(z);
+        traps->minDist = fmin(traps->minDist, dist);
 
-        float zr = pow(r, power);
-        theta *= power;
-        phi *= power;
-
-        float sinTheta = sin(theta);
-        z = (float3)(
-            sinTheta * cos(phi),
-            sinTheta * sin(phi),
-            cos(theta)
-        ) * zr + pos;
+        // Bailout
+        if (dist > 1000.0f) break;
     }
 
     traps->iterations = i;
-    float de = 0.5f * log(r) * r / dr;
-    return fmax(de, 1e-7f);
+    traps->avgFold /= (float)(i + 1);
+
+    float r = length3(z);
+    return r / fabs(dz);
 }
 
 /**
- * Simplified DE for shadows/AO (fixed iterations, no orbit trap)
+ * Simplified DE for shadows/AO (no orbit trap)
  */
-float mandelbulbDE_simple(float3 pos, float power, int maxIterations, float bailout) {
+float mandelboxDE_simple(float3 pos, float scale, float minRadius, float fixedRadius,
+                         float foldingLimit, int maxIterations) {
     float3 z = pos;
-    float dr = 1.0f;
-    float r = 0.0f;
+    float3 offset = pos;
+    float dz = 1.0f;
 
     for (int i = 0; i < maxIterations; i++) {
-        r = length3(z);
-        if (r > bailout) break;
+        z = boxFold(z, foldingLimit);
+        sphereFold(&z, &dz, minRadius, fixedRadius);
+        z = z * scale + offset;
+        dz = dz * fabs(scale) + 1.0f;
 
-        float theta = acos(clamp(z.z / r, -1.0f, 1.0f));
-        float phi = atan2(z.y, z.x);
-        dr = pow(r, power - 1.0f) * power * dr + 1.0f;
-
-        float zr = pow(r, power);
-        theta *= power;
-        phi *= power;
-
-        float sinTheta = sin(theta);
-        z = (float3)(
-            sinTheta * cos(phi),
-            sinTheta * sin(phi),
-            cos(theta)
-        ) * zr + pos;
+        if (dot3(z, z) > 1000000.0f) break;
     }
 
-    float de = 0.5f * log(r) * r / dr;
-    return fmax(de, 1e-7f);
+    float r = length3(z);
+    return r / fabs(dz);
 }
 
 // ============================================================================
-// Tetrahedron normal calculation (4 samples instead of 6)
+// Tetrahedron normal calculation
 // ============================================================================
 
-float3 calcNormalTetra(float3 pos, float power, int maxIterations, float bailout) {
+float3 calcNormalTetra(float3 pos, float scale, float minRadius, float fixedRadius,
+                       float foldingLimit, int maxIterations) {
     const float3 k1 = (float3)( 1.0f, -1.0f, -1.0f);
     const float3 k2 = (float3)(-1.0f, -1.0f,  1.0f);
     const float3 k3 = (float3)(-1.0f,  1.0f, -1.0f);
@@ -120,27 +136,28 @@ float3 calcNormalTetra(float3 pos, float power, int maxIterations, float bailout
 
     float e = NORMAL_EPSILON;
 
-    float d1 = mandelbulbDE_simple(pos + k1 * e, power, maxIterations, bailout);
-    float d2 = mandelbulbDE_simple(pos + k2 * e, power, maxIterations, bailout);
-    float d3 = mandelbulbDE_simple(pos + k3 * e, power, maxIterations, bailout);
-    float d4 = mandelbulbDE_simple(pos + k4 * e, power, maxIterations, bailout);
+    float d1 = mandelboxDE_simple(pos + k1 * e, scale, minRadius, fixedRadius, foldingLimit, maxIterations);
+    float d2 = mandelboxDE_simple(pos + k2 * e, scale, minRadius, fixedRadius, foldingLimit, maxIterations);
+    float d3 = mandelboxDE_simple(pos + k3 * e, scale, minRadius, fixedRadius, foldingLimit, maxIterations);
+    float d4 = mandelboxDE_simple(pos + k4 * e, scale, minRadius, fixedRadius, foldingLimit, maxIterations);
 
     float3 n = k1 * d1 + k2 * d2 + k3 * d3 + k4 * d4;
     return normalize3(n);
 }
 
 // ============================================================================
-// Soft shadows with step clamping
+// Soft shadows
 // ============================================================================
 
 float calcSoftShadow(float3 ro, float3 rd, float mint, float maxt,
-                     float softness, int shadowSteps, float power, int maxIterations, float bailout) {
+                     float softness, int shadowSteps, float scale, float minRadius,
+                     float fixedRadius, float foldingLimit, int maxIterations) {
     float res = 1.0f;
     float t = mint;
 
     for (int i = 0; i < shadowSteps && t < maxt; i++) {
         float3 pos = ro + rd * t;
-        float h = mandelbulbDE_simple(pos, power, maxIterations, bailout);
+        float h = mandelboxDE_simple(pos, scale, minRadius, fixedRadius, foldingLimit, maxIterations);
 
         if (h < 0.0001f) {
             return 0.0f;
@@ -157,16 +174,17 @@ float calcSoftShadow(float3 ro, float3 rd, float mint, float maxt,
 // Ambient occlusion
 // ============================================================================
 
-float calcAO(float3 pos, float3 normal, int aoSteps, float power, int maxIterations, float bailout) {
+float calcAO(float3 pos, float3 normal, int aoSteps, float scale, float minRadius,
+             float fixedRadius, float foldingLimit, int maxIterations) {
     float ao = 0.0f;
-    float scale = 1.0f;
+    float sca = 1.0f;
 
     for (int i = 0; i < aoSteps; i++) {
-        float hr = 0.005f + 0.12f * (float)(i + 1) / (float)aoSteps;
+        float hr = 0.01f + 0.12f * (float)(i + 1) / (float)aoSteps;
         float3 aoPos = pos + normal * hr;
-        float dd = mandelbulbDE_simple(aoPos, power, maxIterations, bailout);
-        ao += (hr - dd) * scale;
-        scale *= 0.6f;
+        float dd = mandelboxDE_simple(aoPos, scale, minRadius, fixedRadius, foldingLimit, maxIterations);
+        ao += (hr - dd) * sca;
+        sca *= 0.6f;
     }
 
     return clamp(1.0f - 5.0f * ao, 0.0f, 1.0f);
@@ -176,21 +194,26 @@ float calcAO(float3 pos, float3 normal, int aoSteps, float power, int maxIterati
 // Material color from orbit traps
 // ============================================================================
 
-float3 getOrbitColor(OrbitTraps traps, float3 baseHue) {
-    float t1 = traps.plane * 2.0f;
-    float t2 = traps.sphere * 3.0f;
-    float t3 = traps.axis * 1.5f;
-    float t4 = traps.cube * 2.5f;
+float3 getMandelboxColor(MandelboxTraps traps, float3 baseHue, float scale) {
+    // Use various trap values for coloring
+    float t1 = traps.minDist * 0.1f;
+    float t2 = traps.avgFold * 0.5f;
+    float t3 = traps.sphereHits * 0.1f;
+    float t4 = (float)traps.iterations * 0.05f;
 
-    float combined = t1 * 0.3f + t2 * 0.3f + t3 * 0.2f + t4 * 0.2f;
+    float combined = t1 * 0.25f + t2 * 0.25f + t3 * 0.25f + t4 * 0.25f;
+
+    // Add scale influence for variety
+    combined += fabs(scale) * 0.1f;
+
     return palette(combined, baseHue);
 }
 
 // ============================================================================
-// Main Mandelbulb render kernel
+// Main Mandelbox render kernel
 // ============================================================================
 
-__kernel void renderMandelbulb(
+__kernel void renderMandelbox(
     __global float* output,
     int imageWidth,
     int imageHeight,
@@ -202,10 +225,12 @@ __kernel void renderMandelbulb(
     float4 camQuat,
     float fov,
     // Fractal params
-    float power,
+    float scale,
+    float minRadius,
+    float fixedRadius,
+    float foldingLimit,
     int maxIterations,
     int maxRaySteps,
-    float bailout,
     float baseEpsilon,
     // Light direction
     float4 lightDir,
@@ -253,17 +278,13 @@ __kernel void renderMandelbulb(
     float3 camOrigin = (float3)(camPos.x, camPos.y, camPos.z);
     float3 baseCameraRay = getCameraRay((float2)(u, v), fov, camQuat);
 
-    // Get camera basis vectors for DoF lens offset
+    // Camera basis vectors for DoF
     float3 camRight = rotateByQuaternion((float3)(1.0f, 0.0f, 0.0f), camQuat);
     float3 camUp = rotateByQuaternion((float3)(0.0f, 1.0f, 0.0f), camQuat);
 
-    // Calculate focal point
     float3 focalPoint = camOrigin + baseCameraRay * focalDistance;
-
-    // Number of DoF samples
     int numSamples = (dofEnabled && aperture > 0.0001f) ? max(1, dofSamples) : 1;
 
-    // Accumulator for multi-sample DoF
     float3 accumulatedColor = (float3)(0.0f, 0.0f, 0.0f);
 
     // DoF sampling loop
@@ -271,12 +292,10 @@ __kernel void renderMandelbulb(
         float3 rayOrigin = camOrigin;
         float3 rayDir = baseCameraRay;
 
-        // Apply thin-lens model if DoF is enabled
         if (dofEnabled && aperture > 0.0001f && numSamples > 1) {
             float2 seed = (float2)((float)pixelX + (float)sampleIdx * 0.1f,
                                    (float)pixelY + (float)sampleIdx * 0.37f);
             float2 lensOffset = randomInDisk(seed) * aperture;
-
             rayOrigin = camOrigin + camRight * lensOffset.x + camUp * lensOffset.y;
             rayDir = normalize3(focalPoint - rayOrigin);
         }
@@ -285,17 +304,15 @@ __kernel void renderMandelbulb(
         float totalDist = 0.0f;
         float3 pos = rayOrigin;
         float dist = 0.0f;
-        OrbitTraps traps;
+        MandelboxTraps traps;
         bool hit = false;
         float minDist = 1e10f;
-        float lastDist = 1e10f;
 
         for (int i = 0; i < maxRaySteps; i++) {
             pos = rayOrigin + rayDir * totalDist;
-            dist = mandelbulbDE(pos, power, maxIterations, bailout, lastDist, &traps);
+            dist = mandelboxDE(pos, scale, minRadius, fixedRadius, foldingLimit, maxIterations, &traps);
 
             minDist = fmin(minDist, dist);
-            lastDist = dist;
 
             float adaptiveEpsilon = fmax(MIN_EPSILON, totalDist * EPSILON_FACTOR);
             adaptiveEpsilon = fmin(adaptiveEpsilon, MAX_EPSILON);
@@ -317,17 +334,17 @@ __kernel void renderMandelbulb(
         float4 color;
 
         float3 lightCol = (float3)(lightColor.x, lightColor.y, lightColor.z);
-        float lightIntensity = lightColor.w;
+        float lightInt = lightColor.w;
         float3 ambientCol = (float3)(ambientColor.x, ambientColor.y, ambientColor.z);
         float ambientInt = ambientColor.w;
         float3 baseHue = (float3)(materialHue.x, materialHue.y, materialHue.z);
 
         if (hit) {
-            float3 normal = calcNormalTetra(pos, power, maxIterations, bailout);
+            float3 normal = calcNormalTetra(pos, scale, minRadius, fixedRadius, foldingLimit, maxIterations);
             float3 light = normalize3((float3)(lightDir.x, lightDir.y, lightDir.z));
             float3 viewDir = -rayDir;
 
-            float3 baseColor = getOrbitColor(traps, baseHue);
+            float3 baseColor = getMandelboxColor(traps, baseHue, scale);
 
             float NdotL = fmax(dot3(normal, light), 0.0f);
             float diffuse = NdotL;
@@ -342,9 +359,11 @@ __kernel void renderMandelbulb(
             float shadowBias = 0.001f + totalDist * 0.001f;
             float shadow = calcSoftShadow(pos + normal * shadowBias, light,
                                           shadowBias, 15.0f, shadowSoftness, shadowSteps,
-                                          power, max(8, maxIterations / 2), bailout);
+                                          scale, minRadius, fixedRadius, foldingLimit,
+                                          max(5, maxIterations / 2));
 
-            float ao = calcAO(pos, normal, aoSteps, power, max(8, maxIterations / 2), bailout);
+            float ao = calcAO(pos, normal, aoSteps, scale, minRadius, fixedRadius,
+                             foldingLimit, max(5, maxIterations / 2));
 
             float3 finalColor;
 
@@ -383,7 +402,7 @@ __kernel void renderMandelbulb(
                 float rim = pow(1.0f - NdotV, 4.0f) * 0.5f;
 
                 float3 ambient = baseColor * ambientCol * ambientInt;
-                float3 diffuseColor = baseColor * lightCol * diffuse * lightIntensity * shadow;
+                float3 diffuseColor = baseColor * lightCol * diffuse * lightInt * shadow;
                 float3 specularColor = lightCol * specular * shadow * (1.0f + fres);
                 float3 rimColor = baseColor * rim * lightCol * 0.3f;
 

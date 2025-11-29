@@ -4,8 +4,7 @@ import javafx.application.Platform;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.image.Image;
 import org.fractalizer.engine.OpenCLEngine;
-import org.fractalizer.fractals.FractalParams;
-import org.fractalizer.fractals.MandelbulbParams;
+import org.fractalizer.fractals.*;
 import org.fractalizer.render.ImageExporter;
 import org.fractalizer.render.TileRenderer;
 
@@ -26,6 +25,7 @@ public class FractalizerController implements AutoCloseable {
     private final TileRenderer previewRenderer;
 
     private FractalParams currentParams;
+    private FractalType currentFractalType = FractalType.MANDELBULB;
     private int outputWidth = 1920;
     private int outputHeight = 1080;
     private int previewScale = 4;
@@ -36,14 +36,82 @@ public class FractalizerController implements AutoCloseable {
     public FractalizerController() throws IOException {
         this.engine = new OpenCLEngine();
 
-        // Load the Mandelbulb kernel
-        engine.loadKernel("mandelbulb", "/kernels/mandelbulb.cl", "renderMandelbulb");
+        // Load all fractal kernels
+        loadAllKernels();
 
         this.renderer = new TileRenderer(engine, TileRenderer.DEFAULT_TILE_SIZE);
         this.previewRenderer = new TileRenderer(engine, TileRenderer.PREVIEW_TILE_SIZE);
 
         // Default to Mandelbulb
         this.currentParams = new MandelbulbParams();
+    }
+
+    /**
+     * Load all available fractal kernels.
+     */
+    private void loadAllKernels() throws IOException {
+        // Mandelbulb kernel
+        engine.loadKernelFromSources("mandelbulb", "renderMandelbulb",
+            "/kernels/common.cl",
+            "/kernels/mandelbulb.cl"
+        );
+
+        // Mandelbox kernel
+        engine.loadKernelFromSources("mandelbox", "renderMandelbox",
+            "/kernels/common.cl",
+            "/kernels/mandelbox.cl"
+        );
+
+        // Menger Sponge kernel
+        engine.loadKernelFromSources("menger", "renderMenger",
+            "/kernels/common.cl",
+            "/kernels/menger.cl"
+        );
+
+        // Kaleidoscopic IFS kernel
+        engine.loadKernelFromSources("kaleidoscopic", "renderKaleidoscopic",
+            "/kernels/common.cl",
+            "/kernels/kaleidoscopic.cl"
+        );
+    }
+
+    /**
+     * Get the kernel name for the current fractal type.
+     */
+    private String getCurrentKernelName() {
+        return currentFractalType.getKernelName();
+    }
+
+    /**
+     * Switch to a different fractal type.
+     */
+    public void setFractalType(FractalType type) {
+        if (type == currentFractalType) return;
+
+        this.currentFractalType = type;
+
+        // Create new params for the fractal type
+        switch (type) {
+            case MANDELBULB:
+                this.currentParams = new MandelbulbParams();
+                break;
+            case MANDELBOX:
+                this.currentParams = new MandelboxParams();
+                break;
+            case MENGER_SPONGE:
+                this.currentParams = new MengerSpongeParams();
+                break;
+            case KALEIDOSCOPIC_IFS:
+                this.currentParams = new KaleidoscopicIFSParams();
+                break;
+        }
+    }
+
+    /**
+     * Get the current fractal type.
+     */
+    public FractalType getFractalType() {
+        return currentFractalType;
     }
 
     /**
@@ -57,7 +125,7 @@ public class FractalizerController implements AutoCloseable {
         isRendering = true;
 
         currentRender = previewRenderer.renderPreview(
-            "mandelbulb",
+            getCurrentKernelName(),
             currentParams,
             outputWidth,
             outputHeight,
@@ -94,7 +162,7 @@ public class FractalizerController implements AutoCloseable {
         isRendering = true;
 
         currentRender = renderer.renderAsync(
-            "mandelbulb",
+            getCurrentKernelName(),
             currentParams,
             outputWidth,
             outputHeight,
@@ -131,7 +199,7 @@ public class FractalizerController implements AutoCloseable {
         isRendering = true;
 
         return renderer.renderAsync(
-            "mandelbulb",
+            getCurrentKernelName(),
             currentParams,
             outputWidth,
             outputHeight,

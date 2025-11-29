@@ -16,7 +16,7 @@ import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import org.fractalizer.engine.Camera;
-import org.fractalizer.fractals.MandelbulbParams;
+import org.fractalizer.fractals.*;
 import org.fractalizer.ui.FractalizerController;
 
 import java.io.File;
@@ -60,7 +60,13 @@ public class FractalizerApp extends Application {
     // Navigation state
     private final Set<KeyCode> pressedKeys = new HashSet<>();
     private Camera camera;
-    private MandelbulbParams params;
+    private AbstractFractalParams params;
+
+    // Fractal-specific control containers
+    private VBox mandelbulbControls;
+    private VBox mandelboxControls;
+    private VBox mengerControls;
+    private VBox kaleidoscopicControls;
 
     // Mouse drag state
     private boolean isDragging = false;
@@ -167,29 +173,255 @@ public class FractalizerApp extends Application {
 
         // Fractal type selector
         Label typeLabel = new Label("Fractal Type:");
-        ComboBox<String> typeCombo = new ComboBox<>();
-        typeCombo.getItems().addAll("Mandelbulb", "Mandelbox (TODO)", "Julia 3D (TODO)");
-        typeCombo.setValue("Mandelbulb");
+        ComboBox<FractalType> typeCombo = new ComboBox<>();
+        typeCombo.getItems().addAll(FractalType.MANDELBULB, FractalType.MANDELBOX,
+                                    FractalType.MENGER_SPONGE, FractalType.KALEIDOSCOPIC_IFS);
+        typeCombo.setValue(FractalType.MANDELBULB);
         typeCombo.setMaxWidth(Double.MAX_VALUE);
+        // Display friendly names
+        typeCombo.setButtonCell(new ListCell<>() {
+            @Override
+            protected void updateItem(FractalType item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? "" : item.getDisplayName());
+            }
+        });
+        typeCombo.setCellFactory(lv -> new ListCell<>() {
+            @Override
+            protected void updateItem(FractalType item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? "" : item.getDisplayName());
+            }
+        });
 
-        // Power control
+        // === Mandelbulb-specific controls ===
+        mandelbulbControls = new VBox(8);
+
         Label powerLabel = new Label("Power: 8.0");
         powerSlider = new Slider(2, 16, 8);
         powerSlider.setShowTickLabels(true);
         powerSlider.setShowTickMarks(true);
         powerSlider.valueProperty().addListener((obs, old, val) -> {
             powerLabel.setText(String.format("Power: %.1f", val.doubleValue()));
-            params.power(val.floatValue());
-            needsRender = true;
+            if (params instanceof MandelbulbParams mbParams) {
+                mbParams.power(val.floatValue());
+                needsRender = true;
+            }
         });
 
-        // Iterations
         Label iterLabel = new Label("Iterations: 15");
         iterationsSlider = new Slider(5, 30, 15);
         iterationsSlider.setShowTickLabels(true);
         iterationsSlider.valueProperty().addListener((obs, old, val) -> {
             iterLabel.setText(String.format("Iterations: %d", val.intValue()));
-            params.iterations(val.intValue());
+            if (params instanceof MandelbulbParams mbParams) {
+                mbParams.iterations(val.intValue());
+                needsRender = true;
+            }
+        });
+
+        mandelbulbControls.getChildren().addAll(
+            powerLabel, powerSlider,
+            iterLabel, iterationsSlider
+        );
+
+        // === Mandelbox-specific controls ===
+        mandelboxControls = new VBox(8);
+
+        Label scaleLabel = new Label("Scale: 2.0");
+        Slider scaleSlider = new Slider(-3, 3, 2);
+        scaleSlider.setShowTickLabels(true);
+        scaleSlider.valueProperty().addListener((obs, old, val) -> {
+            scaleLabel.setText(String.format("Scale: %.2f", val.doubleValue()));
+            if (params instanceof MandelboxParams mbxParams) {
+                mbxParams.setScale(val.floatValue());
+                needsRender = true;
+            }
+        });
+
+        Label minRadiusLabel = new Label("Min Radius: 0.25");
+        Slider minRadiusSlider = new Slider(0.01, 1.0, 0.25);
+        minRadiusSlider.valueProperty().addListener((obs, old, val) -> {
+            minRadiusLabel.setText(String.format("Min Radius: %.2f", val.doubleValue()));
+            if (params instanceof MandelboxParams mbxParams) {
+                mbxParams.setMinRadius(val.floatValue());
+                needsRender = true;
+            }
+        });
+
+        Label fixedRadiusLabel = new Label("Fixed Radius: 1.0");
+        Slider fixedRadiusSlider = new Slider(0.5, 2.0, 1.0);
+        fixedRadiusSlider.valueProperty().addListener((obs, old, val) -> {
+            fixedRadiusLabel.setText(String.format("Fixed Radius: %.2f", val.doubleValue()));
+            if (params instanceof MandelboxParams mbxParams) {
+                mbxParams.setFixedRadius(val.floatValue());
+                needsRender = true;
+            }
+        });
+
+        Label foldingLimitLabel = new Label("Folding Limit: 1.0");
+        Slider foldingLimitSlider = new Slider(0.5, 2.0, 1.0);
+        foldingLimitSlider.valueProperty().addListener((obs, old, val) -> {
+            foldingLimitLabel.setText(String.format("Folding Limit: %.2f", val.doubleValue()));
+            if (params instanceof MandelboxParams mbxParams) {
+                mbxParams.setFoldingLimit(val.floatValue());
+                needsRender = true;
+            }
+        });
+
+        Label mbxIterLabel = new Label("Iterations: 15");
+        Slider mbxIterSlider = new Slider(5, 30, 15);
+        mbxIterSlider.setShowTickLabels(true);
+        mbxIterSlider.valueProperty().addListener((obs, old, val) -> {
+            mbxIterLabel.setText(String.format("Iterations: %d", val.intValue()));
+            if (params instanceof MandelboxParams mbxParams) {
+                mbxParams.setMaxIterations(val.intValue());
+                needsRender = true;
+            }
+        });
+
+        mandelboxControls.getChildren().addAll(
+            scaleLabel, scaleSlider,
+            minRadiusLabel, minRadiusSlider,
+            fixedRadiusLabel, fixedRadiusSlider,
+            foldingLimitLabel, foldingLimitSlider,
+            mbxIterLabel, mbxIterSlider
+        );
+        mandelboxControls.setVisible(false);
+        mandelboxControls.setManaged(false);
+
+        // === Menger Sponge-specific controls ===
+        mengerControls = new VBox(8);
+
+        Label mengerIterLabel = new Label("Iterations: 6");
+        Slider mengerIterSlider = new Slider(2, 10, 6);
+        mengerIterSlider.setShowTickLabels(true);
+        mengerIterSlider.valueProperty().addListener((obs, old, val) -> {
+            mengerIterLabel.setText(String.format("Iterations: %d", val.intValue()));
+            if (params instanceof MengerSpongeParams msParams) {
+                msParams.setMaxIterations(val.intValue());
+                needsRender = true;
+            }
+        });
+
+        Label mengerScaleLabel = new Label("Scale: 3.0");
+        Slider mengerScaleSlider = new Slider(2.0, 4.0, 3.0);
+        mengerScaleSlider.valueProperty().addListener((obs, old, val) -> {
+            mengerScaleLabel.setText(String.format("Scale: %.2f", val.doubleValue()));
+            if (params instanceof MengerSpongeParams msParams) {
+                msParams.setScale(val.floatValue());
+                needsRender = true;
+            }
+        });
+
+        mengerControls.getChildren().addAll(
+            mengerIterLabel, mengerIterSlider,
+            mengerScaleLabel, mengerScaleSlider
+        );
+        mengerControls.setVisible(false);
+        mengerControls.setManaged(false);
+
+        // === Kaleidoscopic IFS-specific controls ===
+        kaleidoscopicControls = new VBox(8);
+
+        Label kIterLabel = new Label("Iterations: 12");
+        Slider kIterSlider = new Slider(4, 20, 12);
+        kIterSlider.setShowTickLabels(true);
+        kIterSlider.valueProperty().addListener((obs, old, val) -> {
+            kIterLabel.setText(String.format("Iterations: %d", val.intValue()));
+            if (params instanceof KaleidoscopicIFSParams kParams) {
+                kParams.setMaxIterations(val.intValue());
+                needsRender = true;
+            }
+        });
+
+        Label kScaleLabel = new Label("Scale: 2.0");
+        Slider kScaleSlider = new Slider(1.5, 3.0, 2.0);
+        kScaleSlider.valueProperty().addListener((obs, old, val) -> {
+            kScaleLabel.setText(String.format("Scale: %.2f", val.doubleValue()));
+            if (params instanceof KaleidoscopicIFSParams kParams) {
+                kParams.setScale(val.floatValue());
+                needsRender = true;
+            }
+        });
+
+        Label kFoldXLabel = new Label("Fold Angle X: 77");
+        Slider kFoldXSlider = new Slider(30, 120, 77);
+        kFoldXSlider.valueProperty().addListener((obs, old, val) -> {
+            kFoldXLabel.setText(String.format("Fold Angle X: %.0f", val.doubleValue()));
+            if (params instanceof KaleidoscopicIFSParams kParams) {
+                kParams.setFoldAngleX(val.floatValue());
+                needsRender = true;
+            }
+        });
+
+        Label kFoldYLabel = new Label("Fold Angle Y: 77");
+        Slider kFoldYSlider = new Slider(30, 120, 77);
+        kFoldYSlider.valueProperty().addListener((obs, old, val) -> {
+            kFoldYLabel.setText(String.format("Fold Angle Y: %.0f", val.doubleValue()));
+            if (params instanceof KaleidoscopicIFSParams kParams) {
+                kParams.setFoldAngleY(val.floatValue());
+                needsRender = true;
+            }
+        });
+
+        Label kMinRadLabel = new Label("Min Radius: 0.5");
+        Slider kMinRadSlider = new Slider(0, 1.0, 0.5);
+        kMinRadSlider.valueProperty().addListener((obs, old, val) -> {
+            kMinRadLabel.setText(String.format("Min Radius: %.2f", val.doubleValue()));
+            if (params instanceof KaleidoscopicIFSParams kParams) {
+                kParams.setMinRadius(val.floatValue());
+                needsRender = true;
+            }
+        });
+
+        kaleidoscopicControls.getChildren().addAll(
+            kIterLabel, kIterSlider,
+            kScaleLabel, kScaleSlider,
+            kFoldXLabel, kFoldXSlider,
+            kFoldYLabel, kFoldYSlider,
+            kMinRadLabel, kMinRadSlider
+        );
+        kaleidoscopicControls.setVisible(false);
+        kaleidoscopicControls.setManaged(false);
+
+        // Fractal type change handler
+        typeCombo.setOnAction(e -> {
+            FractalType selectedType = typeCombo.getValue();
+            controller.setFractalType(selectedType);
+            params = (AbstractFractalParams) controller.getParams();
+            camera = params.getCamera();
+
+            // Hide all fractal-specific controls
+            mandelbulbControls.setVisible(false);
+            mandelbulbControls.setManaged(false);
+            mandelboxControls.setVisible(false);
+            mandelboxControls.setManaged(false);
+            mengerControls.setVisible(false);
+            mengerControls.setManaged(false);
+            kaleidoscopicControls.setVisible(false);
+            kaleidoscopicControls.setManaged(false);
+
+            // Show only the relevant controls
+            switch (selectedType) {
+                case MANDELBULB:
+                    mandelbulbControls.setVisible(true);
+                    mandelbulbControls.setManaged(true);
+                    break;
+                case MANDELBOX:
+                    mandelboxControls.setVisible(true);
+                    mandelboxControls.setManaged(true);
+                    break;
+                case MENGER_SPONGE:
+                    mengerControls.setVisible(true);
+                    mengerControls.setManaged(true);
+                    break;
+                case KALEIDOSCOPIC_IFS:
+                    kaleidoscopicControls.setVisible(true);
+                    kaleidoscopicControls.setManaged(true);
+                    break;
+            }
+
             needsRender = true;
         });
 
@@ -231,8 +463,10 @@ public class FractalizerApp extends Application {
         panel.getChildren().addAll(
             typeLabel, typeCombo,
             new Separator(),
-            powerLabel, powerSlider,
-            iterLabel, iterationsSlider,
+            mandelbulbControls,
+            mandelboxControls,
+            mengerControls,
+            kaleidoscopicControls,
             speedLabel, speedSlider,
             new Separator(),
             positionLabel,

@@ -113,7 +113,27 @@ public class OpenCLEngine implements AutoCloseable {
      */
     public void loadKernel(String name, String resourcePath, String functionName) throws IOException {
         String source = loadResource(resourcePath);
+        compileKernel(name, source, functionName);
+    }
 
+    /**
+     * Load and compile an OpenCL kernel from multiple resource files (concatenated).
+     * This allows modular kernel organization.
+     */
+    public void loadKernelFromSources(String name, String functionName, String... resourcePaths) throws IOException {
+        StringBuilder source = new StringBuilder();
+        for (String path : resourcePaths) {
+            source.append("// ============ ").append(path).append(" ============\n");
+            source.append(loadResource(path));
+            source.append("\n\n");
+        }
+        compileKernel(name, source.toString(), functionName);
+    }
+
+    /**
+     * Compile kernel from source string.
+     */
+    private void compileKernel(String name, String source, String functionName) {
         try (MemoryStack stack = stackPush()) {
             IntBuffer errBuffer = stack.mallocInt(1);
 
