@@ -195,6 +195,76 @@ __kernel void renderFractal(...) { ... }
 - Multiple render modes (Final, Normals, Depth, AO, Shadows, Diffuse, Specular, Orbit Trap, Iterations)
 - Tone mapping and gamma correction
 - Background glow effect with stars
+- **Quality Multiplier** for ultimate detail when exploring close to surfaces
+- **Dynamic image view** that fills available space with correct aspect ratio
+
+## Quality Multiplier System
+
+The Quality Multiplier allows for ultimate precision when exploring fractals at any distance from the surface:
+
+### Parameters Affected
+- **Effective Ray Steps**: `maxRaySteps * qualityMultiplier` (more iterations)
+- **Epsilon**: `baseEpsilon / qualityMultiplier` (smaller hit threshold)
+- **Step Factor**: `STEP_FACTOR / (1 + qualityMultiplier * 0.5)` (smaller steps)
+- **Fractal Iterations** (Kaleidoscopic): Increased near surface for high quality
+
+### Quality Levels
+| Level | Multiplier | Description |
+|-------|------------|-------------|
+| Fast Preview | 0.5x | Quick navigation |
+| Normal | 1.0x | Default quality |
+| High | 2.0x | Better detail |
+| Ultra | 3.0x | Fine detail |
+| Ultimate | 5.0x | Maximum precision (slow) |
+
+### Implementation
+- `AbstractFractalParams.qualityMultiplier` - Parameter passed to all kernels
+- All 4 fractal kernels use quality-scaled ray marching
+- UI slider in Quality tab (0.5x to 5.0x)
+- Quality presets include multiplier adjustment
+
+## Kaleidoscopic IFS Algorithm
+
+The Kaleidoscopic IFS (KIFS) fractal uses conditional reflections to create Sierpinski-like structures.
+
+### Algorithm (from Syntopia blog)
+```c
+// Classic KIFS folding - creates tetrahedral/kaleidoscopic symmetry
+for (n = 0; n < maxIterations; n++) {
+    // Fold 1: plane with normal (1, 1, 0)
+    if (z.x + z.y < 0.0f) { z.xy = -z.yx; }  // Negate AND swap
+
+    // Fold 2: plane with normal (1, 0, 1)
+    if (z.x + z.z < 0.0f) { z.xz = -z.zx; }
+
+    // Fold 3: plane with normal (0, 1, 1)
+    if (z.y + z.z < 0.0f) { z.yz = -z.zy; }
+
+    // Scale and translate
+    z = z * scale - offset * (scale - 1.0f);
+}
+
+// Distance estimation
+return length(z) * pow(scale, -n);
+```
+
+### Key Parameters
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Scale | 2.0 | Classic Sierpinski scale |
+| Offset | 3.0 | Translation offset (critical!) |
+| Fold Angle X/Y | 0° | Optional rotation for variations |
+| Iterations | 15 | Fractal depth |
+
+### Presets
+- **Sierpinski**: Scale=2.0, Offset=3.0, Rotation=0°
+- **Variation 1**: Scale=2.0, Offset=3.0, Rotation X=10°, Y=5°
+- **Variation 2**: Scale=2.2, Offset=2.8, Rotation X=15°
+
+### Important Notes
+- The folding is `z.xy = -z.yx` (negate AND swap), NOT just swap
+- Offset parameter is critical - 3.0 gives classic Sierpinski
+- Rotation angles should be small (-30° to 30°) to avoid instability
 
 ## Roadmap
 
@@ -204,11 +274,19 @@ __kernel void renderFractal(...) { ... }
 - [x] Menger Sponge - Recursive cube subdivision (IQ algorithm)
 - [x] Kaleidoscopic IFS - Configurable reflection-based IFS
 
+### Recent Improvements
+- [x] **Refactor to modular pipeline architecture**
+- [x] **Quality Multiplier system** for ultimate detail at any distance
+- [x] **Kaleidoscopic IFS rewrite** with correct KIFS algorithm
+- [x] **Auto Full Quality** enabled by default
+- [x] **Dynamic image view** fills available space
+- [x] **KIFS UI improvements** - Offset slider, rotation limits, presets
+
 ### Planned Improvements
-- [x] **Refactor to modular pipeline architecture** (completed - see below)
 - [ ] Animation system for parameter interpolation
 - [ ] Save/load fractal configurations
 - [ ] Video export
+- [ ] Auto-adapt render resolution to view size
 
 ---
 
