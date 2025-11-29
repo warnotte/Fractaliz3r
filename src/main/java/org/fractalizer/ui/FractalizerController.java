@@ -48,30 +48,36 @@ public class FractalizerController implements AutoCloseable {
 
     /**
      * Load all available fractal kernels.
+     *
+     * Architecture: common.cl provides shared utilities and rendering pipeline helpers:
+     * - DoF setup (initDofSetup, getDofSampleRay)
+     * - Shading (renderByMode, calculateShading)
+     * - Background (renderBackground)
+     * - Tone mapping (toneMapAndGamma)
+     *
+     * Each fractal kernel in /kernels/fractals/ uses these helpers
+     * but defines its own DE functions and orbit trap structure.
      */
     private void loadAllKernels() throws IOException {
-        // Mandelbulb kernel
+        // All fractals use the refactored modular architecture
         engine.loadKernelFromSources("mandelbulb", "renderMandelbulb",
             "/kernels/common.cl",
-            "/kernels/mandelbulb.cl"
+            "/kernels/fractals/mandelbulb.cl"
         );
 
-        // Mandelbox kernel
         engine.loadKernelFromSources("mandelbox", "renderMandelbox",
             "/kernels/common.cl",
-            "/kernels/mandelbox.cl"
+            "/kernels/fractals/mandelbox.cl"
         );
 
-        // Menger Sponge kernel
         engine.loadKernelFromSources("menger", "renderMenger",
             "/kernels/common.cl",
-            "/kernels/menger.cl"
+            "/kernels/fractals/menger.cl"
         );
 
-        // Kaleidoscopic IFS kernel
         engine.loadKernelFromSources("kaleidoscopic", "renderKaleidoscopic",
             "/kernels/common.cl",
-            "/kernels/kaleidoscopic.cl"
+            "/kernels/fractals/kaleidoscopic.cl"
         );
     }
 

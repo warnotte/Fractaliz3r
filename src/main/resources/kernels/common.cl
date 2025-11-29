@@ -124,3 +124,264 @@ float3 iterationColor(int iterations, int maxIterations) {
     }
     return c;
 }
+
+// ============================================================================
+// Common Rendering Pipeline Helpers
+// ============================================================================
+
+/**
+ * Tone mapping and gamma correction.
+ * Uses filmic tone mapping + sRGB gamma.
+ */
+float3 toneMapAndGamma(float3 col) {
+    // Filmic tone mapping
+    col = col * (col + 0.5f) / (col * (col + 0.5f) + 0.5f);
+    // Gamma correction (sRGB)
+    return pow(fmax(col, (float3)(0.0f)), (float3)(0.4545f));
+}
+
+/**
+ * Apply fog based on distance.
+ */
+float3 applyFog(float3 col, float3 fogColor, float distance, float density) {
+    float fogAmount = 1.0f - exp(-distance * density);
+    return mix(col, fogColor, fogAmount);
+}
+
+/**
+ * Calculate specular highlight (Blinn-Phong).
+ */
+float calcSpecular(float3 normal, float3 light, float3 viewDir,
+                   float specularPower, float specularIntensity) {
+    float3 halfVec = normalize3(light + viewDir);
+    float NdotH = fmax(dot3(normal, halfVec), 0.0f);
+    return pow(NdotH, specularPower) * specularIntensity;
+}
+
+/**
+ * Calculate rim lighting.
+ */
+float calcRimLight(float3 normal, float3 viewDir) {
+    float NdotV = fmax(dot3(normal, viewDir), 0.0f);
+    return pow(1.0f - NdotV, 4.0f) * 0.5f;
+}
+
+/**
+ * Complete shading calculation.
+ * Returns the final lit color before tone mapping.
+ */
+float3 calculateShading(
+    float3 baseColor,
+    float3 normal,
+    float3 light,
+    float3 viewDir,
+    float3 lightCol,
+    float lightIntensity,
+    float3 ambientCol,
+    float ambientIntensity,
+    float shadow,
+    float ao,
+    float aoIntensity,
+    float specularPower,
+    float specularIntensity
+) {
+    // Mix AO intensity
+    float aoMixed = mix(1.0f, ao, aoIntensity);
+
+    // Diffuse
+    float NdotL = fmax(dot3(normal, light), 0.0f);
+
+    // Specular with Fresnel
+    float NdotV = fmax(dot3(normal, viewDir), 0.0f);
+    float fres = fresnel(NdotV, 0.04f);
+    float specular = calcSpecular(normal, light, viewDir, specularPower, specularIntensity);
+
+    // Rim light
+    float rim = calcRimLight(normal, viewDir);
+
+    // Combine lighting components
+    float3 ambient = baseColor * ambientCol * ambientIntensity;
+    float3 diffuseColor = baseColor * lightCol * NdotL * lightIntensity * shadow;
+    float3 specularColor = lightCol * specular * shadow * (1.0f + fres);
+    float3 rimColor = baseColor * rim * lightCol * 0.3f;
+
+    return (ambient + diffuseColor + specularColor + rimColor) * aoMixed;
+}
+
+/**
+ * Render based on visualization mode.
+ * Returns the color for the specified render mode.
+ */
+float3 renderByMode(
+    int renderMode,
+    float3 baseColor,
+    float3 normal,
+    float3 light,
+    float3 viewDir,
+    float3 lightCol,
+    float lightIntensity,
+    float3 ambientCol,
+    float ambientIntensity,
+    float shadow,
+    float ao,
+    float aoIntensity,
+    float specularPower,
+    float specularIntensity,
+    float totalDist,
+    int iterations,
+    int maxIterations
+) {
+    float3 finalColor;
+
+    if (renderMode == RENDER_NORMALS) {
+        finalColor = normal * 0.5f + 0.5f;
+    }
+    else if (renderMode == RENDER_DEPTH) {
+        float depthValue = exp(-totalDist * 0.5f);
+        finalColor = (float3)(depthValue, depthValue, depthValue);
+    }
+    else if (renderMode == RENDER_AO) {
+        finalColor = (float3)(ao, ao, ao);
+    }
+    else if (renderMode == RENDER_SHADOWS) {
+        finalColor = (float3)(shadow, shadow, shadow);
+    }
+    else if (renderMode == RENDER_DIFFUSE) {
+        float NdotL = fmax(dot3(normal, light), 0.0f);
+        float aoMixed = mix(1.0f, ao, aoIntensity);
+        finalColor = baseColor * NdotL * shadow * aoMixed;
+        finalColor = toneMapAndGamma(finalColor);
+    }
+    else if (renderMode == RENDER_SPECULAR) {
+        float specular = calcSpecular(normal, light, viewDir, specularPower, specularIntensity);
+        float NdotV = fmax(dot3(normal, viewDir), 0.0f);
+        float fres = fresnel(NdotV, 0.04f);
+        float spec = specular * shadow * (1.0f + fres);
+        finalColor = (float3)(spec, spec, spec);
+    }
+    else if (renderMode == RENDER_ORBIT_TRAP) {
+        finalColor = toneMapAndGamma(baseColor);
+    }
+    else if (renderMode == RENDER_ITERATIONS) {
+        finalColor = iterationColor(iterations, maxIterations);
+    }
+    else {
+        // RENDER_FINAL - full shading pipeline
+        finalColor = calculateShading(
+            baseColor, normal, light, viewDir,
+            lightCol, lightIntensity, ambientCol, ambientIntensity,
+            shadow, ao, aoIntensity, specularPower, specularIntensity
+        );
+
+        // Apply fog
+        float3 fogColor = ambientCol * 0.1f;
+        finalColor = applyFog(finalColor, fogColor, totalDist, 0.025f);
+
+        // Tone map and gamma
+        finalColor = toneMapAndGamma(finalColor);
+    }
+
+    return finalColor;
+}
+
+/**
+ * Render background with glow and stars.
+ */
+float3 renderBackground(
+    int renderMode,
+    float3 rayDir,
+    float minDist,
+    float glowIntensity,
+    float3 baseHue,
+    float3 lightCol,
+    float3 ambientCol
+) {
+    float3 finalBg;
+
+    if (renderMode == RENDER_DEPTH) {
+        finalBg = (float3)(0.0f, 0.0f, 0.0f);
+    }
+    else if (renderMode == RENDER_NORMALS || renderMode == RENDER_AO ||
+             renderMode == RENDER_SHADOWS || renderMode == RENDER_SPECULAR ||
+             renderMode == RENDER_ITERATIONS) {
+        finalBg = (float3)(0.1f, 0.1f, 0.1f);
+    }
+    else {
+        // Glow effect
+        float glow = exp(-minDist * 8.0f) * glowIntensity;
+        float3 glowColor = palette(0.6f, baseHue) * glow * lightCol;
+
+        // Gradient background
+        float t = rayDir.y * 0.5f + 0.5f;
+        float3 bgColor = mix(ambientCol * 0.05f, ambientCol * 0.15f, t);
+
+        // Stars
+        float stars = 0.0f;
+        float3 starDir = rayDir * 100.0f;
+        float starNoise = fract1(sin(dot3(floor(starDir), (float3)(12.9898f, 78.233f, 45.164f))) * 43758.5453f);
+        if (starNoise > 0.997f) {
+            stars = (starNoise - 0.997f) * 333.0f;
+        }
+
+        finalBg = bgColor + glowColor + (float3)(stars, stars, stars) * 0.5f;
+    }
+
+    return finalBg;
+}
+
+// ============================================================================
+// DoF Setup Helpers
+// ============================================================================
+
+/**
+ * Structure to hold DoF sampling state.
+ */
+typedef struct {
+    float3 camOrigin;
+    float3 baseCameraRay;
+    float3 camRight;
+    float3 camUp;
+    float3 focalPoint;
+    int numSamples;
+} DofSetup;
+
+/**
+ * Initialize DoF setup for a pixel.
+ */
+DofSetup initDofSetup(
+    float4 camPos, float4 camQuat, float fov,
+    float2 uv, float focalDistance, float aperture,
+    int dofEnabled, int dofSamples
+) {
+    DofSetup dof;
+
+    dof.camOrigin = (float3)(camPos.x, camPos.y, camPos.z);
+    dof.baseCameraRay = getCameraRay(uv, fov, camQuat);
+    dof.camRight = rotateByQuaternion((float3)(1.0f, 0.0f, 0.0f), camQuat);
+    dof.camUp = rotateByQuaternion((float3)(0.0f, 1.0f, 0.0f), camQuat);
+    dof.focalPoint = dof.camOrigin + dof.baseCameraRay * focalDistance;
+    dof.numSamples = (dofEnabled && aperture > 0.0001f) ? max(1, dofSamples) : 1;
+
+    return dof;
+}
+
+/**
+ * Get ray origin and direction for a DoF sample.
+ */
+void getDofSampleRay(
+    DofSetup dof, int sampleIdx, int pixelX, int pixelY,
+    float aperture, int dofEnabled,
+    float3* rayOrigin, float3* rayDir
+) {
+    *rayOrigin = dof.camOrigin;
+    *rayDir = dof.baseCameraRay;
+
+    if (dofEnabled && aperture > 0.0001f && dof.numSamples > 1) {
+        float2 seed = (float2)((float)pixelX + (float)sampleIdx * 0.1f,
+                               (float)pixelY + (float)sampleIdx * 0.37f);
+        float2 lensOffset = randomInDisk(seed) * aperture;
+
+        *rayOrigin = dof.camOrigin + dof.camRight * lensOffset.x + dof.camUp * lensOffset.y;
+        *rayDir = normalize3(dof.focalPoint - *rayOrigin);
+    }
+}

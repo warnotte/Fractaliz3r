@@ -1,6 +1,9 @@
 /**
- * Menger Sponge 3D fractal OpenCL kernel
- * Classic IQ algorithm implementation
+ * Menger Sponge 3D fractal OpenCL kernel (Refactored)
+ * Classic IQ algorithm implementation.
+ *
+ * This file contains only Menger-specific code.
+ * Common functionality is provided by common.cl.
  */
 
 // ============================================================================
@@ -61,20 +64,13 @@ float mengerDE(float3 p, int maxIterations, float scale, float3 offset,
     float s = 1.0f;
 
     for (int m = 0; m < maxIterations; m++) {
-        // Map to repeating [-1, 1] space
         float3 a = glsl_mod3(p * s, 2.0f) - (float3)(1.0f);
         s *= scale;
 
-        // Compute cross shape
         float3 r = (float3)(1.0f) - scale * fabs(a);
-
-        // Cross distance
         float c = sdCross(r) / s;
-
-        // Subtract cross from box
         d = fmax(d, c);
 
-        // Orbit trap for coloring
         traps->minDist = fmin(traps->minDist, length(r));
         traps->trap += length(a);
         traps->iterations = m + 1;
@@ -179,6 +175,7 @@ __kernel void renderMenger(
     int renderMode,
     int dofEnabled, float focalDistance, float aperture, int dofSamples
 ) {
+    // Bounds check
     int localX = get_global_id(0);
     int localY = get_global_id(1);
     if (localX >= tileSize || localY >= tileSize) return;
@@ -189,48 +186,32 @@ __kernel void renderMenger(
 
     int outputIdx = (localY * tileSize + localX) * 4;
 
+    // Screen coordinates
     float aspectRatio = (float)imageWidth / (float)imageHeight;
     float u = (2.0f * ((float)pixelX + 0.5f) / (float)imageWidth - 1.0f) * aspectRatio;
     float v = 1.0f - 2.0f * ((float)pixelY + 0.5f) / (float)imageHeight;
 
-    // Base camera setup
-    float3 camOrigin = (float3)(camPos.x, camPos.y, camPos.z);
-    float3 baseCameraRay = getCameraRay((float2)(u, v), fov, camQuat);
     float3 offsetVec = (float3)(offset.x, offset.y, offset.z);
 
-    // Get camera basis vectors for DoF lens offset
-    float3 camRight = rotateByQuaternion((float3)(1.0f, 0.0f, 0.0f), camQuat);
-    float3 camUp = rotateByQuaternion((float3)(0.0f, 1.0f, 0.0f), camQuat);
+    // Extract lighting parameters
+    float3 lightCol = (float3)(lightColor.x, lightColor.y, lightColor.z);
+    float lightInt = lightColor.w;
+    float3 ambientCol = (float3)(ambientColor.x, ambientColor.y, ambientColor.z);
+    float ambientInt = ambientColor.w;
+    float3 baseHue = (float3)(materialHue.x, materialHue.y, materialHue.z);
+    float3 light = normalize((float3)(lightDir.x, lightDir.y, lightDir.z));
 
-    // Calculate focal point
-    float3 focalPoint = camOrigin + baseCameraRay * focalDistance;
+    // Initialize DoF
+    DofSetup dof = initDofSetup(camPos, camQuat, fov, (float2)(u, v),
+                                 focalDistance, aperture, dofEnabled, dofSamples);
 
-    // Number of DoF samples
-    int numSamples = (dofEnabled && aperture > 0.0001f) ? max(1, dofSamples) : 1;
-
-    // Accumulator for multi-sample DoF
+    // Accumulator for DoF samples
     float3 accumulatedColor = (float3)(0.0f, 0.0f, 0.0f);
 
-    // Light and color setup (outside loop for efficiency)
-    float3 light = normalize((float3)(lightDir.x, lightDir.y, lightDir.z));
-    float3 lcol = (float3)(lightColor.x, lightColor.y, lightColor.z);
-    float3 acol = (float3)(ambientColor.x, ambientColor.y, ambientColor.z);
-    float3 hue = (float3)(materialHue.x, materialHue.y, materialHue.z);
-
     // DoF sampling loop
-    for (int sampleIdx = 0; sampleIdx < numSamples; sampleIdx++) {
-        float3 ro = camOrigin;
-        float3 rd = baseCameraRay;
-
-        // Apply thin-lens model if DoF is enabled
-        if (dofEnabled && aperture > 0.0001f && numSamples > 1) {
-            float2 seed = (float2)((float)pixelX + (float)sampleIdx * 0.1f,
-                                   (float)pixelY + (float)sampleIdx * 0.37f);
-            float2 lensOffset = randomInDisk(seed) * aperture;
-
-            ro = camOrigin + camRight * lensOffset.x + camUp * lensOffset.y;
-            rd = normalize(focalPoint - ro);
-        }
+    for (int sampleIdx = 0; sampleIdx < dof.numSamples; sampleIdx++) {
+        float3 ro, rd;
+        getDofSampleRay(dof, sampleIdx, pixelX, pixelY, aperture, dofEnabled, &ro, &rd);
 
         // Ray march
         float t = 0.0f;
@@ -253,60 +234,35 @@ __kernel void renderMenger(
         }
 
         // Shading
-        float3 col;
+        float3 sampleColor;
 
         if (hit) {
             float3 nor = calcNormalMenger(pos, maxIterations, scale, offsetVec);
-            float3 baseCol = getMengerColor(traps, hue);
+            float3 viewDir = -rd;
+            float3 baseColor = getMengerColor(traps, baseHue);
 
-            // Diffuse
-            float dif = fmax(dot(nor, light), 0.0f);
-
-            // Specular
-            float3 hal = normalize(light - rd);
-            float spe = pow(fmax(dot(nor, hal), 0.0f), specularPower) * specularIntensity;
-
-            // Shadow
+            // Shadow & AO
             float sha = calcShadowMenger(pos + nor * 0.01f, light, 0.01f, 10.0f,
                                          shadowSoftness, shadowSteps, maxIterations - 1, scale, offsetVec);
-
-            // AO
             float ao = calcAOMenger(pos, nor, maxIterations - 1, scale, offsetVec);
-            ao = mix(1.0f, ao, aoIntensity);
 
-            if (renderMode == RENDER_NORMALS) {
-                col = nor * 0.5f + 0.5f;
-            } else if (renderMode == RENDER_DEPTH) {
-                col = (float3)(exp(-t * 0.3f));
-            } else if (renderMode == RENDER_AO) {
-                col = (float3)(ao);
-            } else if (renderMode == RENDER_SHADOWS) {
-                col = (float3)(sha);
-            } else if (renderMode == RENDER_ORBIT_TRAP) {
-                col = baseCol;
-            } else {
-                // Final
-                col = baseCol * (acol * ambientColor.w + lcol * dif * lightColor.w * sha) * ao;
-                col += lcol * spe * sha;
-
-                // Fog
-                col = mix(col, acol * 0.1f, 1.0f - exp(-t * 0.03f));
-
-                // Tone map & gamma
-                col = col / (col + 1.0f);
-                col = pow(fmax(col, (float3)(0.0f)), (float3)(0.4545f));
-            }
+            // Use common rendering pipeline
+            sampleColor = renderByMode(
+                renderMode, baseColor, nor, light, viewDir,
+                lightCol, lightInt, ambientCol, ambientInt,
+                sha, ao, aoIntensity, specularPower, specularIntensity,
+                t, traps.iterations, maxIterations
+            );
         } else {
-            // Background with glow
-            float glow = exp(-minDist * 5.0f) * glowIntensity;
-            col = acol * 0.1f + palette(0.5f, hue) * glow;
+            sampleColor = renderBackground(renderMode, rd, minDist,
+                                           glowIntensity, baseHue, lightCol, ambientCol);
         }
 
-        accumulatedColor += col;
+        accumulatedColor += sampleColor;
     }
 
-    // Average all DoF samples
-    float3 finalColor = accumulatedColor / (float)numSamples;
+    // Average DoF samples and output
+    float3 finalColor = accumulatedColor / (float)dof.numSamples;
 
     output[outputIdx] = clamp(finalColor.x, 0.0f, 1.0f);
     output[outputIdx + 1] = clamp(finalColor.y, 0.0f, 1.0f);

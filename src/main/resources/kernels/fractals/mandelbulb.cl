@@ -1,13 +1,18 @@
 /**
- * Mandelbulb 3D fractal OpenCL kernel
- * Distance estimator, lighting, and rendering specific to Mandelbulb
+ * Mandelbulb 3D fractal OpenCL kernel (Refactored)
  *
- * Note: This file is loaded AFTER common.cl which provides:
- * - Vector operations (normalize3, length3, dot3, cross3)
- * - Quaternion operations (rotateByQuaternion, getCameraRay)
- * - Constants (RENDER_*, STEP_FACTOR, etc.)
- * - Color utilities (palette, fresnel, iterationColor)
- * - DoF helpers (hash, randomInDisk)
+ * This file contains only Mandelbulb-specific code:
+ * - Distance estimators (full + simple)
+ * - Orbit trap structure
+ * - Normal/shadow/AO calculations using the DE
+ * - Color from orbit traps
+ * - Main kernel function
+ *
+ * Common functionality is provided by common.cl:
+ * - DoF setup (initDofSetup, getDofSampleRay)
+ * - Shading (renderByMode, calculateShading)
+ * - Background (renderBackground)
+ * - Tone mapping (toneMapAndGamma)
  */
 
 // ============================================================================
@@ -23,7 +28,7 @@ typedef struct {
 } OrbitTraps;
 
 // ============================================================================
-// Mandelbulb distance estimator with multiple orbit traps
+// Mandelbulb distance estimator with orbit traps
 // ============================================================================
 
 float mandelbulbDE(float3 pos, float power, int baseIterations, float bailout,
@@ -109,10 +114,10 @@ float mandelbulbDE_simple(float3 pos, float power, int maxIterations, float bail
 }
 
 // ============================================================================
-// Tetrahedron normal calculation (4 samples instead of 6)
+// Normal calculation (tetrahedron method)
 // ============================================================================
 
-float3 calcNormalTetra(float3 pos, float power, int maxIterations, float bailout) {
+float3 calcNormalMandelbulb(float3 pos, float power, int maxIterations, float bailout) {
     const float3 k1 = (float3)( 1.0f, -1.0f, -1.0f);
     const float3 k2 = (float3)(-1.0f, -1.0f,  1.0f);
     const float3 k3 = (float3)(-1.0f,  1.0f, -1.0f);
@@ -130,11 +135,12 @@ float3 calcNormalTetra(float3 pos, float power, int maxIterations, float bailout
 }
 
 // ============================================================================
-// Soft shadows with step clamping
+// Soft shadows
 // ============================================================================
 
-float calcSoftShadow(float3 ro, float3 rd, float mint, float maxt,
-                     float softness, int shadowSteps, float power, int maxIterations, float bailout) {
+float calcShadowMandelbulb(float3 ro, float3 rd, float mint, float maxt,
+                            float softness, int shadowSteps,
+                            float power, int maxIterations, float bailout) {
     float res = 1.0f;
     float t = mint;
 
@@ -142,9 +148,7 @@ float calcSoftShadow(float3 ro, float3 rd, float mint, float maxt,
         float3 pos = ro + rd * t;
         float h = mandelbulbDE_simple(pos, power, maxIterations, bailout);
 
-        if (h < 0.0001f) {
-            return 0.0f;
-        }
+        if (h < 0.0001f) return 0.0f;
 
         res = fmin(res, h * softness / t);
         t += clamp(h, 0.01f, 0.5f);
@@ -157,7 +161,8 @@ float calcSoftShadow(float3 ro, float3 rd, float mint, float maxt,
 // Ambient occlusion
 // ============================================================================
 
-float calcAO(float3 pos, float3 normal, int aoSteps, float power, int maxIterations, float bailout) {
+float calcAOMandelbulb(float3 pos, float3 normal, int aoSteps,
+                        float power, int maxIterations, float bailout) {
     float ao = 0.0f;
     float scale = 1.0f;
 
@@ -232,14 +237,13 @@ __kernel void renderMandelbulb(
     float aperture,
     int dofSamples
 ) {
+    // Bounds check
     int localX = get_global_id(0);
     int localY = get_global_id(1);
-
     if (localX >= tileSize || localY >= tileSize) return;
 
     int pixelX = tileOffsetX + localX;
     int pixelY = tileOffsetY + localY;
-
     if (pixelX >= imageWidth || pixelY >= imageHeight) return;
 
     int outputIdx = (localY * tileSize + localX) * 4;
@@ -249,42 +253,30 @@ __kernel void renderMandelbulb(
     float u = (2.0f * ((float)pixelX + 0.5f) / (float)imageWidth - 1.0f) * aspectRatio;
     float v = 1.0f - 2.0f * ((float)pixelY + 0.5f) / (float)imageHeight;
 
-    // Base camera setup
-    float3 camOrigin = (float3)(camPos.x, camPos.y, camPos.z);
-    float3 baseCameraRay = getCameraRay((float2)(u, v), fov, camQuat);
+    // Extract lighting parameters
+    float3 lightCol = (float3)(lightColor.x, lightColor.y, lightColor.z);
+    float lightInt = lightColor.w;
+    float3 ambientCol = (float3)(ambientColor.x, ambientColor.y, ambientColor.z);
+    float ambientInt = ambientColor.w;
+    float3 baseHue = (float3)(materialHue.x, materialHue.y, materialHue.z);
+    float3 light = normalize3((float3)(lightDir.x, lightDir.y, lightDir.z));
 
-    // Get camera basis vectors for DoF lens offset
-    float3 camRight = rotateByQuaternion((float3)(1.0f, 0.0f, 0.0f), camQuat);
-    float3 camUp = rotateByQuaternion((float3)(0.0f, 1.0f, 0.0f), camQuat);
+    // Initialize DoF
+    DofSetup dof = initDofSetup(camPos, camQuat, fov, (float2)(u, v),
+                                 focalDistance, aperture, dofEnabled, dofSamples);
 
-    // Calculate focal point
-    float3 focalPoint = camOrigin + baseCameraRay * focalDistance;
-
-    // Number of DoF samples
-    int numSamples = (dofEnabled && aperture > 0.0001f) ? max(1, dofSamples) : 1;
-
-    // Accumulator for multi-sample DoF
+    // Accumulator for DoF samples
     float3 accumulatedColor = (float3)(0.0f, 0.0f, 0.0f);
 
     // DoF sampling loop
-    for (int sampleIdx = 0; sampleIdx < numSamples; sampleIdx++) {
-        float3 rayOrigin = camOrigin;
-        float3 rayDir = baseCameraRay;
-
-        // Apply thin-lens model if DoF is enabled
-        if (dofEnabled && aperture > 0.0001f && numSamples > 1) {
-            float2 seed = (float2)((float)pixelX + (float)sampleIdx * 0.1f,
-                                   (float)pixelY + (float)sampleIdx * 0.37f);
-            float2 lensOffset = randomInDisk(seed) * aperture;
-
-            rayOrigin = camOrigin + camRight * lensOffset.x + camUp * lensOffset.y;
-            rayDir = normalize3(focalPoint - rayOrigin);
-        }
+    for (int sampleIdx = 0; sampleIdx < dof.numSamples; sampleIdx++) {
+        float3 rayOrigin, rayDir;
+        getDofSampleRay(dof, sampleIdx, pixelX, pixelY, aperture, dofEnabled,
+                        &rayOrigin, &rayDir);
 
         // Ray marching
         float totalDist = 0.0f;
         float3 pos = rayOrigin;
-        float dist = 0.0f;
         OrbitTraps traps;
         bool hit = false;
         float minDist = 1e10f;
@@ -292,7 +284,7 @@ __kernel void renderMandelbulb(
 
         for (int i = 0; i < maxRaySteps; i++) {
             pos = rayOrigin + rayDir * totalDist;
-            dist = mandelbulbDE(pos, power, maxIterations, bailout, lastDist, &traps);
+            float dist = mandelbulbDE(pos, power, maxIterations, bailout, lastDist, &traps);
 
             minDist = fmin(minDist, dist);
             lastDist = dist;
@@ -314,128 +306,42 @@ __kernel void renderMandelbulb(
         }
 
         // Shading
-        float4 color;
-
-        float3 lightCol = (float3)(lightColor.x, lightColor.y, lightColor.z);
-        float lightIntensity = lightColor.w;
-        float3 ambientCol = (float3)(ambientColor.x, ambientColor.y, ambientColor.z);
-        float ambientInt = ambientColor.w;
-        float3 baseHue = (float3)(materialHue.x, materialHue.y, materialHue.z);
+        float3 sampleColor;
 
         if (hit) {
-            float3 normal = calcNormalTetra(pos, power, maxIterations, bailout);
-            float3 light = normalize3((float3)(lightDir.x, lightDir.y, lightDir.z));
+            float3 normal = calcNormalMandelbulb(pos, power, maxIterations, bailout);
             float3 viewDir = -rayDir;
-
             float3 baseColor = getOrbitColor(traps, baseHue);
 
-            float NdotL = fmax(dot3(normal, light), 0.0f);
-            float diffuse = NdotL;
-
-            float3 halfVec = normalize3(light + viewDir);
-            float NdotH = fmax(dot3(normal, halfVec), 0.0f);
-            float specular = pow(NdotH, specularPower) * specularIntensity;
-
-            float NdotV = fmax(dot3(normal, viewDir), 0.0f);
-            float fres = fresnel(NdotV, 0.04f);
-
+            // Calculate shadow and AO
+            int reducedIter = max(8, maxIterations / 2);
             float shadowBias = 0.001f + totalDist * 0.001f;
-            float shadow = calcSoftShadow(pos + normal * shadowBias, light,
-                                          shadowBias, 15.0f, shadowSoftness, shadowSteps,
-                                          power, max(8, maxIterations / 2), bailout);
+            float shadow = calcShadowMandelbulb(pos + normal * shadowBias, light,
+                                                 shadowBias, 15.0f, shadowSoftness, shadowSteps,
+                                                 power, reducedIter, bailout);
+            float ao = calcAOMandelbulb(pos, normal, aoSteps, power, reducedIter, bailout);
 
-            float ao = calcAO(pos, normal, aoSteps, power, max(8, maxIterations / 2), bailout);
-
-            float3 finalColor;
-
-            if (renderMode == RENDER_NORMALS) {
-                finalColor = normal * 0.5f + 0.5f;
-            }
-            else if (renderMode == RENDER_DEPTH) {
-                float depthValue = exp(-totalDist * 0.5f);
-                finalColor = (float3)(depthValue, depthValue, depthValue);
-            }
-            else if (renderMode == RENDER_AO) {
-                finalColor = (float3)(ao, ao, ao);
-            }
-            else if (renderMode == RENDER_SHADOWS) {
-                finalColor = (float3)(shadow, shadow, shadow);
-            }
-            else if (renderMode == RENDER_DIFFUSE) {
-                float aoMixed = mix(1.0f, ao, aoIntensity);
-                finalColor = baseColor * diffuse * shadow * aoMixed;
-                finalColor = pow(fmax(finalColor, (float3)(0.0f)), (float3)(0.4545f));
-            }
-            else if (renderMode == RENDER_SPECULAR) {
-                float spec = specular * shadow * (1.0f + fres);
-                finalColor = (float3)(spec, spec, spec);
-            }
-            else if (renderMode == RENDER_ORBIT_TRAP) {
-                finalColor = baseColor;
-                finalColor = pow(fmax(finalColor, (float3)(0.0f)), (float3)(0.4545f));
-            }
-            else if (renderMode == RENDER_ITERATIONS) {
-                finalColor = iterationColor(traps.iterations, maxIterations);
-            }
-            else {
-                // RENDER_FINAL
-                float aoMixed = mix(1.0f, ao, aoIntensity);
-                float rim = pow(1.0f - NdotV, 4.0f) * 0.5f;
-
-                float3 ambient = baseColor * ambientCol * ambientInt;
-                float3 diffuseColor = baseColor * lightCol * diffuse * lightIntensity * shadow;
-                float3 specularColor = lightCol * specular * shadow * (1.0f + fres);
-                float3 rimColor = baseColor * rim * lightCol * 0.3f;
-
-                finalColor = (ambient + diffuseColor + specularColor + rimColor) * aoMixed;
-
-                float fogAmount = 1.0f - exp(-totalDist * 0.025f);
-                float3 fogColor = ambientCol * 0.1f;
-                finalColor = mix(finalColor, fogColor, fogAmount);
-
-                finalColor = finalColor * (finalColor + 0.5f) / (finalColor * (finalColor + 0.5f) + 0.5f);
-                finalColor = pow(fmax(finalColor, (float3)(0.0f)), (float3)(0.4545f));
-            }
-
-            color = (float4)(finalColor.x, finalColor.y, finalColor.z, 1.0f);
+            // Use common rendering pipeline
+            sampleColor = renderByMode(
+                renderMode, baseColor, normal, light, viewDir,
+                lightCol, lightInt, ambientCol, ambientInt,
+                shadow, ao, aoIntensity, specularPower, specularIntensity,
+                totalDist, traps.iterations, maxIterations
+            );
         } else {
             // Background
-            float3 finalBg;
-            if (renderMode == RENDER_DEPTH) {
-                finalBg = (float3)(0.0f, 0.0f, 0.0f);
-            }
-            else if (renderMode == RENDER_NORMALS || renderMode == RENDER_AO ||
-                     renderMode == RENDER_SHADOWS || renderMode == RENDER_SPECULAR ||
-                     renderMode == RENDER_ITERATIONS) {
-                finalBg = (float3)(0.1f, 0.1f, 0.1f);
-            }
-            else {
-                float glow = exp(-minDist * 8.0f) * glowIntensity;
-                float3 glowColor = palette(0.6f, baseHue) * glow * lightCol;
-
-                float t = rayDir.y * 0.5f + 0.5f;
-                float3 bgColor = mix(ambientCol * 0.05f, ambientCol * 0.15f, t);
-
-                float stars = 0.0f;
-                float3 starDir = rayDir * 100.0f;
-                float starNoise = fract1(sin(dot3(floor(starDir), (float3)(12.9898f, 78.233f, 45.164f))) * 43758.5453f);
-                if (starNoise > 0.997f) {
-                    stars = (starNoise - 0.997f) * 333.0f;
-                }
-
-                finalBg = bgColor + glowColor + (float3)(stars, stars, stars) * 0.5f;
-            }
-
-            color = (float4)(finalBg.x, finalBg.y, finalBg.z, 1.0f);
+            sampleColor = renderBackground(renderMode, rayDir, minDist,
+                                           glowIntensity, baseHue, lightCol, ambientCol);
         }
 
-        accumulatedColor += (float3)(color.x, color.y, color.z);
+        accumulatedColor += sampleColor;
     }
 
-    float3 finalPixelColor = accumulatedColor / (float)numSamples;
+    // Average DoF samples and output
+    float3 finalColor = accumulatedColor / (float)dof.numSamples;
 
-    output[outputIdx] = clamp(finalPixelColor.x, 0.0f, 1.0f);
-    output[outputIdx + 1] = clamp(finalPixelColor.y, 0.0f, 1.0f);
-    output[outputIdx + 2] = clamp(finalPixelColor.z, 0.0f, 1.0f);
+    output[outputIdx] = clamp(finalColor.x, 0.0f, 1.0f);
+    output[outputIdx + 1] = clamp(finalColor.y, 0.0f, 1.0f);
+    output[outputIdx + 2] = clamp(finalColor.z, 0.0f, 1.0f);
     output[outputIdx + 3] = 1.0f;
 }
