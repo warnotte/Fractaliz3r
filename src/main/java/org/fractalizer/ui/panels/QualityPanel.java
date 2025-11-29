@@ -67,6 +67,30 @@ public class QualityPanel extends ScrollPane {
             renderCallback.requestRender();
         });
 
+        // === Quality Multiplier (Ultimate Quality) ===
+        Label qualityLabel = new Label("Quality Multiplier:");
+        qualityLabel.setStyle("-fx-font-weight: bold;");
+
+        Label qualityValueLabel = new Label("Quality: 1.0x (Normal)");
+        Slider qualitySlider = new Slider(0.5, 5.0, 1.0);
+        qualitySlider.setMajorTickUnit(1.0);
+        qualitySlider.setShowTickLabels(true);
+        qualitySlider.valueProperty().addListener((obs, old, val) -> {
+            float q = val.floatValue();
+            String desc;
+            if (q < 0.8f) desc = "Fast Preview";
+            else if (q < 1.2f) desc = "Normal";
+            else if (q < 2.0f) desc = "High";
+            else if (q < 3.0f) desc = "Ultra";
+            else desc = "Ultimate";
+            qualityValueLabel.setText(String.format("Quality: %.1fx (%s)", q, desc));
+            getParams().setQualityMultiplier(q);
+            renderCallback.requestRender();
+        });
+
+        Label qualityInfoLabel = new Label("Higher = more detail when close to surface.\nWarning: >2x is slow!");
+        qualityInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
         // === Shadows ===
         Label shadowLabel = new Label("Shadows:");
         shadowLabel.setStyle("-fx-font-weight: bold;");
@@ -182,27 +206,39 @@ public class QualityPanel extends ScrollPane {
         HBox presetBox = new HBox(5);
         Button fastBtn = new Button("Fast");
         fastBtn.setOnAction(e -> {
+            qualitySlider.setValue(0.5);
             shadowSoftnessSlider.setValue(8);
             aoIntensitySlider.setValue(0.3);
             specularIntensitySlider.setValue(0.3);
         });
         Button balancedBtn = new Button("Balanced");
         balancedBtn.setOnAction(e -> {
+            qualitySlider.setValue(1.0);
             shadowSoftnessSlider.setValue(16);
             aoIntensitySlider.setValue(0.5);
             specularIntensitySlider.setValue(0.5);
         });
         Button highBtn = new Button("High");
         highBtn.setOnAction(e -> {
+            qualitySlider.setValue(2.0);
             shadowSoftnessSlider.setValue(32);
             aoIntensitySlider.setValue(0.7);
             specularIntensitySlider.setValue(0.6);
         });
-        presetBox.getChildren().addAll(fastBtn, balancedBtn, highBtn);
+        Button ultimateBtn = new Button("Ultimate");
+        ultimateBtn.setOnAction(e -> {
+            qualitySlider.setValue(5.0);
+            shadowSoftnessSlider.setValue(48);
+            aoIntensitySlider.setValue(0.8);
+            specularIntensitySlider.setValue(0.7);
+        });
+        presetBox.getChildren().addAll(fastBtn, balancedBtn, highBtn, ultimateBtn);
 
         panel.getChildren().addAll(
             passLabel, passCombo,
             autoFullQualityCheck,
+            new Separator(),
+            qualityLabel, qualityValueLabel, qualitySlider, qualityInfoLabel,
             new Separator(),
             shadowLabel, shadowSoftLabel, shadowSoftnessSlider,
             shadowStepsLabel, shadowStepsSlider,

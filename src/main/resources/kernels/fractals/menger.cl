@@ -171,6 +171,7 @@ __kernel void renderMenger(
     int maxRaySteps, float baseEpsilon,
     float4 lightDir, float4 lightColor, float4 ambientColor, float4 materialHue,
     float shadowSoftness, int shadowSteps, int aoSteps, float aoIntensity, float glowIntensity,
+    float qualityMultiplier,
     float specularIntensity, float specularPower,
     int renderMode,
     int dofEnabled, float focalDistance, float aperture, int dofSamples
@@ -213,23 +214,30 @@ __kernel void renderMenger(
         float3 ro, rd;
         getDofSampleRay(dof, sampleIdx, pixelX, pixelY, aperture, dofEnabled, &ro, &rd);
 
-        // Ray march
+        // Ray march with quality multiplier for ultimate detail
         float t = 0.0f;
         float3 pos;
         MengerOrbitTraps traps;
         bool hit = false;
         float minDist = 1e10f;
 
-        for (int i = 0; i < maxRaySteps; i++) {
+        // Scale parameters by quality multiplier
+        int effectiveMaxSteps = (int)((float)maxRaySteps * qualityMultiplier);
+        float qualityEpsilon = baseEpsilon / qualityMultiplier;
+        float qualityStepFactor = 0.9f / fmax(1.0f, qualityMultiplier * 0.5f);
+
+        for (int i = 0; i < effectiveMaxSteps; i++) {
             pos = ro + rd * t;
             float d = mengerDE(pos, maxIterations, scale, offsetVec, 0.0f, &traps);
             minDist = fmin(minDist, d);
 
-            if (d < baseEpsilon * (1.0f + t * 0.1f)) {
+            // Adaptive epsilon scaled by quality
+            float adaptiveEps = qualityEpsilon * (1.0f + t * 0.1f / qualityMultiplier);
+            if (d < adaptiveEps) {
                 hit = true;
                 break;
             }
-            t += d * 0.9f;
+            t += d * qualityStepFactor;
             if (t > 100.0f) break;
         }
 

@@ -254,6 +254,7 @@ __kernel void renderKaleidoscopic(
     float4 materialHue,
     // Rendering quality
     float shadowSoftness, int shadowSteps, int aoSteps, float aoIntensity, float glowIntensity,
+    float qualityMultiplier,
     // Specular
     float specularIntensity, float specularPower,
     // Render mode
@@ -301,32 +302,45 @@ __kernel void renderKaleidoscopic(
         getDofSampleRay(dof, sampleIdx, pixelX, pixelY, aperture, dofEnabled,
                         &rayOrigin, &rayDir);
 
-        // Ray marching
+        // Ray marching with quality multiplier for ultimate detail
+        // Higher qualityMultiplier = smaller epsilon, more steps, better precision
         float totalDist = 0.0f;
         float3 pos = rayOrigin;
         KaleidoOrbitTraps traps;
         bool hit = false;
         float minDist = 1e10f;
 
-        for (int i = 0; i < maxRaySteps; i++) {
+        // Scale parameters by quality multiplier
+        int effectiveMaxSteps = (int)((float)maxRaySteps * qualityMultiplier);
+        float qualityEpsilon = baseEpsilon / qualityMultiplier;
+        float qualityStepFactor = STEP_FACTOR / fmax(1.0f, qualityMultiplier * 0.5f);
+
+        // For very high quality, increase fractal iterations near the surface
+        int baseIterations = maxIterations;
+        int highQualityIterations = (int)fmin((float)maxIterations + qualityMultiplier * 2.0f, 30.0f);
+
+        for (int i = 0; i < effectiveMaxSteps; i++) {
             pos = rayOrigin + rayDir * totalDist;
-            float dist = kaleidoscopicDE(pos, maxIterations, scale, offset,
+
+            // Use more iterations when close to surface for ultimate detail
+            int useIterations = (minDist < 0.1f) ? highQualityIterations : baseIterations;
+            float dist = kaleidoscopicDE(pos, useIterations, scale, offset,
                                          foldAngleX, foldAngleY, &traps);
 
             minDist = fmin(minDist, dist);
 
-            // Adaptive epsilon
-            float adaptiveEpsilon = fmax(MIN_EPSILON, totalDist * EPSILON_FACTOR);
-            adaptiveEpsilon = fmin(adaptiveEpsilon, MAX_EPSILON);
-            adaptiveEpsilon = fmax(adaptiveEpsilon, baseEpsilon * 0.1f);
+            // Adaptive epsilon scaled by quality
+            float adaptiveEpsilon = fmax(MIN_EPSILON / qualityMultiplier, totalDist * EPSILON_FACTOR / qualityMultiplier);
+            adaptiveEpsilon = fmin(adaptiveEpsilon, MAX_EPSILON / qualityMultiplier);
+            adaptiveEpsilon = fmax(adaptiveEpsilon, qualityEpsilon * 0.1f);
 
             if (dist < adaptiveEpsilon) {
                 hit = true;
                 break;
             }
 
-            float step = dist * STEP_FACTOR;
-            step = fmax(step, MIN_EPSILON);
+            float step = dist * qualityStepFactor;
+            step = fmax(step, MIN_EPSILON / qualityMultiplier);
             totalDist += step;
 
             if (totalDist > MAX_DISTANCE) break;

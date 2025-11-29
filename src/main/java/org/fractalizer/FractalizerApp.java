@@ -65,15 +65,19 @@ public class FractalizerApp extends Application {
         BorderPane root = new BorderPane();
         root.setPadding(new Insets(10));
 
-        // Center: Image view
+        // Center: Image view - fills available space dynamically
         imageView = new ImageView();
-        imageView.setFitWidth(800);
-        imageView.setFitHeight(600);
         imageView.setPreserveRatio(true);
+        imageView.setSmooth(true);
 
         imageContainer = new StackPane(imageView);
         imageContainer.setStyle("-fx-background-color: #1a1a2e;");
         imageContainer.setFocusTraversable(true);
+
+        // Bind ImageView size to container size for dynamic filling
+        imageView.fitWidthProperty().bind(imageContainer.widthProperty());
+        imageView.fitHeightProperty().bind(imageContainer.heightProperty());
+
         root.setCenter(imageContainer);
 
         // Right: Controls panel with tabs

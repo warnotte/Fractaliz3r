@@ -34,6 +34,9 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected int maxRaySteps;
     protected float epsilon;
 
+    // Quality multiplier for adaptive precision (1.0 = normal, higher = more detail)
+    protected float qualityMultiplier;
+
     // Light direction (will be normalized in kernel)
     protected float lightX, lightY, lightZ;
 
@@ -78,6 +81,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         // Ray marching defaults
         this.maxRaySteps = 200;
         this.epsilon = 0.0001f;
+        this.qualityMultiplier = 1.0f;
 
         // Default light direction (top-right-front)
         this.lightX = 2f;
@@ -165,6 +169,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         engine.setKernelArgInt(kernelName, idx++, aoSteps);
         engine.setKernelArgFloat(kernelName, idx++, aoIntensity);
         engine.setKernelArgFloat(kernelName, idx++, glowIntensity);
+        engine.setKernelArgFloat(kernelName, idx++, qualityMultiplier);
 
         // Specular
         engine.setKernelArgFloat(kernelName, idx++, specularIntensity);
@@ -190,6 +195,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.fov = this.fov;
         target.maxRaySteps = this.maxRaySteps;
         target.epsilon = this.epsilon;
+        target.qualityMultiplier = this.qualityMultiplier;
 
         // Copy lighting
         target.lightX = this.lightX;
@@ -272,6 +278,8 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setMaxRaySteps(int steps) { this.maxRaySteps = steps; }
     public float getEpsilon() { return epsilon; }
     public void setEpsilon(float epsilon) { this.epsilon = epsilon; }
+    public float getQualityMultiplier() { return qualityMultiplier; }
+    public void setQualityMultiplier(float multiplier) { this.qualityMultiplier = Math.max(0.5f, multiplier); }
 
     // Light direction
     public float getLightX() { return lightX; }

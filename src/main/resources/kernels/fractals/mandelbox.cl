@@ -215,6 +215,7 @@ __kernel void renderMandelbox(
     float4 materialHue,
     // Rendering quality
     float shadowSoftness, int shadowSteps, int aoSteps, float aoIntensity, float glowIntensity,
+    float qualityMultiplier,
     // Specular
     float specularIntensity, float specularPower,
     // Render mode
@@ -259,30 +260,36 @@ __kernel void renderMandelbox(
         getDofSampleRay(dof, sampleIdx, pixelX, pixelY, aperture, dofEnabled,
                         &rayOrigin, &rayDir);
 
-        // Ray marching
+        // Ray marching with quality multiplier for ultimate detail
         float totalDist = 0.0f;
         float3 pos = rayOrigin;
         MandelboxTraps traps;
         bool hit = false;
         float minDist = 1e10f;
 
-        for (int i = 0; i < maxRaySteps; i++) {
+        // Scale parameters by quality multiplier
+        int effectiveMaxSteps = (int)((float)maxRaySteps * qualityMultiplier);
+        float qualityEpsilon = baseEpsilon / qualityMultiplier;
+        float qualityStepFactor = STEP_FACTOR / fmax(1.0f, qualityMultiplier * 0.5f);
+
+        for (int i = 0; i < effectiveMaxSteps; i++) {
             pos = rayOrigin + rayDir * totalDist;
             float dist = mandelboxDE(pos, scale, minRadius, fixedRadius, foldingLimit, maxIterations, &traps);
 
             minDist = fmin(minDist, dist);
 
-            float adaptiveEpsilon = fmax(MIN_EPSILON, totalDist * EPSILON_FACTOR);
-            adaptiveEpsilon = fmin(adaptiveEpsilon, MAX_EPSILON);
-            adaptiveEpsilon = fmax(adaptiveEpsilon, baseEpsilon * 0.1f);
+            // Adaptive epsilon scaled by quality
+            float adaptiveEpsilon = fmax(MIN_EPSILON / qualityMultiplier, totalDist * EPSILON_FACTOR / qualityMultiplier);
+            adaptiveEpsilon = fmin(adaptiveEpsilon, MAX_EPSILON / qualityMultiplier);
+            adaptiveEpsilon = fmax(adaptiveEpsilon, qualityEpsilon * 0.1f);
 
             if (dist < adaptiveEpsilon) {
                 hit = true;
                 break;
             }
 
-            float step = dist * STEP_FACTOR;
-            step = fmax(step, MIN_EPSILON);
+            float step = dist * qualityStepFactor;
+            step = fmax(step, MIN_EPSILON / qualityMultiplier);
             totalDist += step;
 
             if (totalDist > MAX_DISTANCE) break;
