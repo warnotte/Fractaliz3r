@@ -307,8 +307,12 @@ public class FractalPanel extends ScrollPane {
     private void createKaleidoscopicControls() {
         kaleidoscopicControls = new VBox(8);
 
-        Label kIterLabel = new Label("Iterations: 12");
-        Slider kIterSlider = new Slider(4, 20, 12);
+        // Info label about parameter relationships
+        Label infoLabel = new Label("Classic Sierpinski: Scale=2, Offset=3");
+        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        Label kIterLabel = new Label("Iterations: 15");
+        Slider kIterSlider = new Slider(4, 25, 15);
         kIterSlider.setShowTickLabels(true);
         kIterSlider.valueProperty().addListener((obs, old, val) -> {
             kIterLabel.setText(String.format("Iterations: %d", val.intValue()));
@@ -318,8 +322,11 @@ public class FractalPanel extends ScrollPane {
             }
         });
 
+        // Scale: typically 1.5 to 3.0, default 2.0 for Sierpinski
         Label kScaleLabel = new Label("Scale: 2.0");
         Slider kScaleSlider = new Slider(1.5, 3.0, 2.0);
+        kScaleSlider.setShowTickLabels(true);
+        kScaleSlider.setMajorTickUnit(0.5);
         kScaleSlider.valueProperty().addListener((obs, old, val) -> {
             kScaleLabel.setText(String.format("Scale: %.2f", val.doubleValue()));
             if (params instanceof KaleidoscopicIFSParams kParams) {
@@ -328,42 +335,86 @@ public class FractalPanel extends ScrollPane {
             }
         });
 
-        Label kFoldXLabel = new Label("Fold Angle X: 77");
-        Slider kFoldXSlider = new Slider(30, 120, 77);
+        // Offset: critical parameter! For scale=2, offset should be around 3 (scale+1)
+        // Valid range typically: scale to scale*2
+        Label kOffsetLabel = new Label("Offset: 3.0");
+        Slider kOffsetSlider = new Slider(1.0, 5.0, 3.0);
+        kOffsetSlider.setShowTickLabels(true);
+        kOffsetSlider.setMajorTickUnit(1.0);
+        kOffsetSlider.valueProperty().addListener((obs, old, val) -> {
+            kOffsetLabel.setText(String.format("Offset: %.2f", val.doubleValue()));
+            if (params instanceof KaleidoscopicIFSParams kParams) {
+                // Offset is stored in offsetX (scalar for KIFS)
+                kParams.setOffset(val.floatValue(), 0, 0);
+                renderCallback.requestRender();
+            }
+        });
+
+        // Rotation angles: 0 = pure Sierpinski, small values create variations
+        Label kFoldXLabel = new Label("Rotation X: 0");
+        Slider kFoldXSlider = new Slider(-30, 30, 0);
+        kFoldXSlider.setShowTickLabels(true);
+        kFoldXSlider.setMajorTickUnit(15);
         kFoldXSlider.valueProperty().addListener((obs, old, val) -> {
-            kFoldXLabel.setText(String.format("Fold Angle X: %.0f", val.doubleValue()));
+            kFoldXLabel.setText(String.format("Rotation X: %.0f°", val.doubleValue()));
             if (params instanceof KaleidoscopicIFSParams kParams) {
                 kParams.setFoldAngleX(val.floatValue());
                 renderCallback.requestRender();
             }
         });
 
-        Label kFoldYLabel = new Label("Fold Angle Y: 77");
-        Slider kFoldYSlider = new Slider(30, 120, 77);
+        Label kFoldYLabel = new Label("Rotation Y: 0");
+        Slider kFoldYSlider = new Slider(-30, 30, 0);
+        kFoldYSlider.setShowTickLabels(true);
+        kFoldYSlider.setMajorTickUnit(15);
         kFoldYSlider.valueProperty().addListener((obs, old, val) -> {
-            kFoldYLabel.setText(String.format("Fold Angle Y: %.0f", val.doubleValue()));
+            kFoldYLabel.setText(String.format("Rotation Y: %.0f°", val.doubleValue()));
             if (params instanceof KaleidoscopicIFSParams kParams) {
                 kParams.setFoldAngleY(val.floatValue());
                 renderCallback.requestRender();
             }
         });
 
-        Label kMinRadLabel = new Label("Min Radius: 0.5");
-        Slider kMinRadSlider = new Slider(0, 1.0, 0.5);
-        kMinRadSlider.valueProperty().addListener((obs, old, val) -> {
-            kMinRadLabel.setText(String.format("Min Radius: %.2f", val.doubleValue()));
-            if (params instanceof KaleidoscopicIFSParams kParams) {
-                kParams.setMinRadius(val.floatValue());
-                renderCallback.requestRender();
-            }
+        // Preset buttons for common configurations
+        Label presetLabel = new Label("Presets:");
+        presetLabel.setStyle("-fx-font-weight: bold;");
+
+        Button sierpinskiBtn = new Button("Sierpinski");
+        sierpinskiBtn.setOnAction(e -> {
+            kScaleSlider.setValue(2.0);
+            kOffsetSlider.setValue(3.0);
+            kFoldXSlider.setValue(0);
+            kFoldYSlider.setValue(0);
         });
 
+        Button variation1Btn = new Button("Variation 1");
+        variation1Btn.setOnAction(e -> {
+            kScaleSlider.setValue(2.0);
+            kOffsetSlider.setValue(2.5);
+            kFoldXSlider.setValue(10);
+            kFoldYSlider.setValue(5);
+        });
+
+        Button variation2Btn = new Button("Variation 2");
+        variation2Btn.setOnAction(e -> {
+            kScaleSlider.setValue(2.2);
+            kOffsetSlider.setValue(3.5);
+            kFoldXSlider.setValue(-15);
+            kFoldYSlider.setValue(8);
+        });
+
+        javafx.scene.layout.HBox presetBox = new javafx.scene.layout.HBox(5);
+        presetBox.getChildren().addAll(sierpinskiBtn, variation1Btn, variation2Btn);
+
         kaleidoscopicControls.getChildren().addAll(
+            infoLabel,
             kIterLabel, kIterSlider,
             kScaleLabel, kScaleSlider,
+            kOffsetLabel, kOffsetSlider,
             kFoldXLabel, kFoldXSlider,
             kFoldYLabel, kFoldYSlider,
-            kMinRadLabel, kMinRadSlider
+            new Separator(),
+            presetLabel, presetBox
         );
         kaleidoscopicControls.setVisible(false);
         kaleidoscopicControls.setManaged(false);

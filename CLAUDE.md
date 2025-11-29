@@ -48,15 +48,31 @@ org.fractalizer
 
 Located in `src/main/resources/kernels/`:
 
-- **`common.cl`** - Shared utilities loaded first:
+```
+kernels/
+├── common.cl              # Shared utilities + rendering pipeline
+└── fractals/
+    ├── mandelbulb.cl      # Mandelbulb (power-based spherical folding)
+    ├── mandelbox.cl       # Mandelbox (box fold + sphere fold)
+    ├── menger.cl          # Menger Sponge (IQ algorithm)
+    └── kaleidoscopic.cl   # Kaleidoscopic IFS (reflection-based)
+```
+
+**`common.cl`** - Shared utilities and rendering pipeline:
   - Vector operations (normalize3, length3, dot3, cross3)
   - Quaternion operations (rotateByQuaternion, getCameraRay)
   - Constants (RENDER_*, STEP_FACTOR, MIN_EPSILON, etc.)
   - Color utilities (palette, fresnel, iterationColor)
-  - DoF helpers (hash, randomInDisk)
+  - DoF helpers (DofSetup, initDofSetup, getDofSampleRay)
+  - **Rendering pipeline** (renderByMode, calculateShading, renderBackground, toneMapAndGamma)
 
-- **`mandelbulb.cl`** - Mandelbulb fractal (power-based spherical folding)
-- **`mandelbox.cl`** - Mandelbox fractal (box fold + sphere fold)
+**`fractals/*.cl`** - Each fractal defines only:
+  - OrbitTraps structure (for coloring data)
+  - `fractalDE()` - Full DE with orbit traps
+  - `fractalDE_simple()` - Simplified DE for shadows/AO
+  - `calcNormal*()`, `calcShadow*()`, `calcAO*()` - Using DE_simple
+  - `get*Color()` - Color from orbit traps
+  - `render*()` kernel - Calls common rendering pipeline
 
 ### Kernel Structure Pattern
 
@@ -182,16 +198,120 @@ __kernel void renderFractal(...) { ... }
 
 ## Roadmap
 
-### Planned Fractals
-- [ ] Menger Sponge - Recursive cube subdivision
-- [ ] Kaleidoscopic IFS - Configurable reflection-based IFS
-- [ ] Sierpiński Tetrahedron (optional)
+### Completed Fractals
+- [x] Mandelbulb - Power-based spherical folding
+- [x] Mandelbox - Box fold + sphere fold
+- [x] Menger Sponge - Recursive cube subdivision (IQ algorithm)
+- [x] Kaleidoscopic IFS - Configurable reflection-based IFS
 
-### Future Improvements
-- Refactor common kernel patterns (shadows, AO, shading) into common.cl
-- Animation system for parameter interpolation
-- Save/load fractal configurations
-- Video export
+### Planned Improvements
+- [x] **Refactor to modular pipeline architecture** (completed - see below)
+- [ ] Animation system for parameter interpolation
+- [ ] Save/load fractal configurations
+- [ ] Video export
+
+---
+
+## Kernel Architecture (Implemented)
+
+### Problem Solved: Code Duplication
+
+Analysis of the original 4 fractal kernels revealed **~70% duplicated code**:
+
+| Component | Lines per kernel | Identical across kernels? |
+|-----------|-----------------|---------------------------|
+| DoF setup | ~30 lines | 100% identical |
+| Ray marching loop | ~40 lines | ~95% identical |
+| Shading (diffuse/specular) | ~30 lines | 100% identical |
+| Render mode switch | ~50 lines | 100% identical |
+| Background rendering | ~25 lines | 100% identical |
+| Tone mapping/gamma | ~5 lines | 100% identical |
+| **Total duplicated** | **~180 lines** | **Per kernel** |
+
+Only **fractal-specific code** differs:
+- Distance Estimator (DE full + DE_simple)
+- Orbit trap structure
+- Color from orbit trap mapping
+
+This duplication caused the DoF bug in Menger Sponge - when rewriting, DoF was forgotten.
+
+### Industry Best Practices Research
+
+Based on research from [Mandelbulber](https://github.com/buddhi1980/mandelbulber2), [Fragmentarium](https://github.com/Syntopia/Fragmentarium), and [Inigo Quilez's work](https://iquilezles.org/articles/raymarchingdf/):
+
+1. **Mandelbulber** (459 formula files):
+   - Uses PHP code generation to auto-generate OpenCL kernels
+   - Formulas stored separately, combined at compile time
+   - Function pointers in CPU code mapped to generated OpenCL
+
+2. **Fragmentarium** (GLSL):
+   - Uses `#include` directives with common raytracer
+   - Fractals provide only `float DE(vec3 pos)` function
+   - Raytracer is "fractal-agnostic" - calls DE without knowing implementation
+
+3. **OpenCL Limitation**:
+   - [No function pointers allowed](https://stackoverflow.com/questions/7391166/does-opencl-support-function-pointers)
+   - Workarounds: macros, code generation, or uber-shaders
+
+### Solution: Function-Based Common Pipeline
+
+We chose a **function-based approach** over macro injection for better maintainability:
+
+**`common.cl`** now includes rendering pipeline functions:
+```c
+// DoF helpers
+DofSetup initDofSetup(camPos, camQuat, fov, uv, focalDistance, aperture, dofEnabled, dofSamples);
+void getDofSampleRay(dof, sampleIdx, pixelX, pixelY, aperture, dofEnabled, &rayOrigin, &rayDir);
+
+// Shading helpers
+float3 calculateShading(baseColor, normal, light, viewDir, ...);
+float3 toneMapAndGamma(col);
+float3 applyFog(col, fogColor, distance, density);
+float calcSpecular(normal, light, viewDir, power, intensity);
+
+// Render mode dispatcher
+float3 renderByMode(renderMode, baseColor, normal, light, viewDir, ...);
+
+// Background with glow and stars
+float3 renderBackground(renderMode, rayDir, minDist, glowIntensity, baseHue, lightCol, ambientCol);
+```
+
+**Each fractal kernel** (e.g., `fractals/mandelbulb.cl`):
+```c
+// Only fractal-specific code:
+typedef struct { ... } OrbitTraps;
+
+float fractalDE(...) { ... }
+float fractalDE_simple(...) { ... }
+float3 calcNormal*(...) { ... }
+float calcShadow*(...) { ... }
+float calcAO*(...) { ... }
+float3 get*Color(...) { ... }
+
+// Kernel calls common functions
+__kernel void renderMandelbulb(...) {
+    DofSetup dof = initDofSetup(...);
+
+    for (int sampleIdx = 0; sampleIdx < dof.numSamples; sampleIdx++) {
+        getDofSampleRay(dof, sampleIdx, ...);
+        // Ray march with fractal-specific DE
+        // Calculate shadow/AO with fractal-specific functions
+
+        // Use common rendering pipeline:
+        sampleColor = renderByMode(renderMode, baseColor, normal, ...);
+    }
+}
+```
+
+### Benefits Achieved
+
+1. **No more forgotten features** - DoF/shading/background automatically consistent
+2. **Single point of maintenance** - Fix shading in common.cl, all fractals benefit
+3. **Reduced code per fractal** - ~250 lines instead of ~450 (45% reduction)
+4. **Clear separation** - Fractal math vs rendering pipeline
+5. **Type safety** - No macro complexity, normal function calls
+
+---
 
 ## Dependencies
 

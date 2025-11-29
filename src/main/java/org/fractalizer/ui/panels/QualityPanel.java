@@ -59,7 +59,9 @@ public class QualityPanel extends ScrollPane {
 
         // === Auto Full Quality ===
         CheckBox autoFullQualityCheck = new CheckBox("Auto Full Quality (slower)");
-        autoFullQualityCheck.setSelected(false);
+        autoFullQualityCheck.setSelected(true);  // Enabled by default
+        // Trigger callback to apply the default value
+        autoFullQualityCallback.accept(true);
         autoFullQualityCheck.setOnAction(e -> {
             autoFullQualityCallback.accept(autoFullQualityCheck.isSelected());
             renderCallback.requestRender();

@@ -4,8 +4,8 @@ import org.fractalizer.engine.OpenCLEngine;
 
 /**
  * Parameters specific to Kaleidoscopic IFS fractal rendering.
- * Creates symmetrical fractal patterns using reflection and scaling operations.
- * Can produce variations like Kali, Pseudo-Kleinian, and custom IFS patterns.
+ * Based on the classic Sierpinski tetrahedron folding algorithm.
+ * Reference: Syntopia blog - Distance Estimated 3D Fractals (III): Folding Space
  */
 public class KaleidoscopicIFSParams extends AbstractFractalParams {
 
@@ -16,44 +16,47 @@ public class KaleidoscopicIFSParams extends AbstractFractalParams {
     // Number of IFS iterations
     private int maxIterations;
 
-    // Scale factor per iteration (controls fractal density)
+    // Scale factor per iteration (2.0 for classic Sierpinski)
     private float scale;
 
-    // Fold angles for reflection planes (in degrees)
-    private float foldAngleX;  // Angle for YZ plane fold
-    private float foldAngleY;  // Angle for XZ plane fold
+    // Optional rotation angles for variety (in degrees)
+    private float foldAngleX;
+    private float foldAngleY;
 
-    // Translation offset applied after each iteration
+    // Scalar offset for translation (3.0 for classic Sierpinski)
+    // Note: stored in offsetX, offsetY/Z are unused but kept for UI compatibility
     private float offsetX;
     private float offsetY;
     private float offsetZ;
 
-    // Minimum radius for sphere fold (like Mandelbox)
+    // Minimum radius (unused in this algorithm but kept for signature compatibility)
     private float minRadius;
 
     public KaleidoscopicIFSParams() {
         super();
 
-        // Kaleidoscopic IFS defaults - creates interesting patterns
-        this.maxIterations = 12;
-        this.scale = 2.0f;
+        // Classic Sierpinski tetrahedron / KIFS defaults
+        this.maxIterations = 15;
+        this.scale = 2.0f;  // Standard scale for Sierpinski
 
-        // Fold angles (degrees) - affects symmetry
-        this.foldAngleX = 77.0f;  // Classic value for interesting patterns
-        this.foldAngleY = 77.0f;
+        // No rotation by default - creates classic Sierpinski tetrahedron
+        // Add small values (e.g., 5-15 degrees) for variations
+        this.foldAngleX = 0.0f;
+        this.foldAngleY = 0.0f;
 
-        // Offset - translation after each iteration
-        this.offsetX = 1.0f;
-        this.offsetY = 1.0f;
-        this.offsetZ = 0.0f;
+        // Offset = 3.0 for classic Sierpinski (uses only offsetX)
+        this.offsetX = 3.0f;
+        this.offsetY = 0.0f;  // unused
+        this.offsetZ = 0.0f;  // unused
 
-        // Min radius for sphere fold (0 = disabled)
-        this.minRadius = 0.5f;
+        // Unused in this algorithm but kept for compatibility
+        this.minRadius = 0.0f;
 
-        // Kaleidoscopic needs finer epsilon
-        this.epsilon = 0.0003f;
+        // Standard ray marching settings
+        this.epsilon = 0.0001f;
+        this.maxRaySteps = 150;
 
-        // Good camera position
+        // Camera position to view the fractal
         camera.setPosition(0f, 0f, -5f);
     }
 
@@ -73,14 +76,14 @@ public class KaleidoscopicIFSParams extends AbstractFractalParams {
         engine.setKernelArgInt(kernelName, idx++, maxIterations);
         engine.setKernelArgFloat(kernelName, idx++, scale);
 
-        // Fold angles (convert to radians in kernel)
+        // Fold angles (convert to radians)
         engine.setKernelArgFloat(kernelName, idx++, (float) Math.toRadians(foldAngleX));
         engine.setKernelArgFloat(kernelName, idx++, (float) Math.toRadians(foldAngleY));
 
-        // Offset
+        // Offset as float4 (kernel uses offsetVec.x as scalar)
         engine.setKernelArgFloats(kernelName, idx++, offsetX, offsetY, offsetZ, 0f);
 
-        // Min radius
+        // Min radius (unused but needed for signature)
         engine.setKernelArgFloat(kernelName, idx++, minRadius);
 
         engine.setKernelArgInt(kernelName, idx++, maxRaySteps);
