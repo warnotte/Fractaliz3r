@@ -19,6 +19,10 @@ public class QualityPanel extends ScrollPane {
     private final RenderCallback renderCallback;
     private final Consumer<Boolean> autoFullQualityCallback;
 
+    // DoF controls (stored for external updates)
+    private Slider focalDistSlider;
+    private Label focalDistLabel;
+
     public QualityPanel(Supplier<AbstractFractalParams> paramsSupplier,
                         RenderCallback renderCallback,
                         Consumer<Boolean> autoFullQualityCallback) {
@@ -228,8 +232,8 @@ public class QualityPanel extends ScrollPane {
             renderCallback.requestRender();
         });
 
-        Label focalDistLabel = new Label("Focal Distance: 2.5");
-        Slider focalDistSlider = new Slider(0.1, 10, 2.5);
+        focalDistLabel = new Label("Focal Distance: 2.5");
+        focalDistSlider = new Slider(0.1, 10, 2.5);
         focalDistSlider.valueProperty().addListener((obs, old, val) -> {
             focalDistLabel.setText(String.format("Focal Distance: %.2f", val.doubleValue()));
             getParams().setFocalDistance(val.floatValue());
@@ -255,7 +259,7 @@ public class QualityPanel extends ScrollPane {
             renderCallback.requestRender();
         });
 
-        Label dofInfoLabel = new Label("Note: DoF is slow. Use low samples\nfor preview, increase for final.");
+        Label dofInfoLabel = new Label("Middle-click or Ctrl+click to pick\nfocal distance from the image.");
         dofInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
         box.getChildren().addAll(dofEnabledCheck, focalDistLabel, focalDistSlider,
@@ -264,6 +268,20 @@ public class QualityPanel extends ScrollPane {
         TitledPane pane = new TitledPane("Depth of Field", box);
         pane.setExpanded(false);
         return pane;
+    }
+
+    /**
+     * Update the focal distance display from an external source (e.g., click-to-focus).
+     * @param distance The new focal distance value
+     */
+    public void updateFocalDistanceDisplay(float distance) {
+        if (focalDistSlider != null && focalDistLabel != null) {
+            // Clamp to slider range
+            double clampedDistance = Math.max(focalDistSlider.getMin(),
+                    Math.min(focalDistSlider.getMax(), distance));
+            focalDistSlider.setValue(clampedDistance);
+            focalDistLabel.setText(String.format("Focal Distance: %.2f", clampedDistance));
+        }
     }
 
     private TitledPane createPathTracingPane() {

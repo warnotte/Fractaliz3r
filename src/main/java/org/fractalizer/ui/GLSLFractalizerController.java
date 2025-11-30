@@ -500,6 +500,30 @@ public class GLSLFractalizerController implements RenderController {
     }
 
     /**
+     * Pick focal distance at a specific pixel coordinate.
+     * Reads the depth from the accumulation buffer and sets it as the focal distance.
+     *
+     * @param x X coordinate in viewport space (0 = left)
+     * @param y Y coordinate in viewport space (0 = top)
+     * @return The picked depth, or -1 if invalid
+     */
+    public float pickFocalDistance(int x, int y) {
+        // Scale coordinates from viewport to render size
+        int renderX = (int) ((float) x / viewportWidth * engine.getWidth());
+        int renderY = (int) ((float) y / viewportHeight * engine.getHeight());
+
+        float depth = engine.readDepthAt(renderX, renderY);
+
+        if (depth > 0 && depth < 100.0f && currentParams instanceof AbstractFractalParams params) {
+            params.setFocalDistance(depth);
+            System.out.println("[Focus] Picked focal distance: " + depth);
+            return depth;
+        }
+
+        return -1;
+    }
+
+    /**
      * Get underlying engine for advanced use.
      */
     public GLSLEngine getEngine() {

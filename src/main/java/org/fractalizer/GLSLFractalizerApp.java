@@ -121,6 +121,9 @@ public class GLSLFractalizerApp extends Application {
             newSpeed -> fractalPanel.setSpeedSliderValue(newSpeed)
         );
 
+        // Setup click-to-focus handler (middle click or Ctrl+click)
+        setupFocusPickHandler();
+
         primaryStage.setScene(scene);
         primaryStage.show();
 
@@ -171,6 +174,36 @@ public class GLSLFractalizerApp extends Application {
             controller.setViewportSize(width, height);
             exportPanel.updateViewportInfo();
         }
+    }
+
+    /**
+     * Setup click-to-focus handler for Depth of Field.
+     * Middle-click or Ctrl+click on the image to pick focal distance.
+     */
+    private void setupFocusPickHandler() {
+        imageContainer.setOnMouseClicked(event -> {
+            // Middle-click or Ctrl+click to pick focal distance
+            boolean isMiddleClick = event.getButton() == javafx.scene.input.MouseButton.MIDDLE;
+            boolean isCtrlClick = event.isControlDown() && event.getButton() == javafx.scene.input.MouseButton.PRIMARY;
+
+            if (isMiddleClick || isCtrlClick) {
+                int x = (int) event.getX();
+                int y = (int) event.getY();
+
+                float distance = controller.pickFocalDistance(x, y);
+
+                if (distance > 0) {
+                    statusLabel.setText(String.format("Focal distance: %.3f", distance));
+                    // Update quality panel if it has a focal distance control
+                    qualityPanel.updateFocalDistanceDisplay(distance);
+                    requestRender();
+                } else {
+                    statusLabel.setText("No surface at click position");
+                }
+
+                event.consume();
+            }
+        });
     }
 
     private TabPane createControlTabs(AbstractFractalParams initialParams) {

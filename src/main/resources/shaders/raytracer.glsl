@@ -488,14 +488,20 @@ void main() {
     Ray ray = getCameraRayDOF(screenUV, seed);
 
     vec3 color;
+    float depth = 100.0; // Default far distance
 
     // Choose rendering mode: Path Tracing or Raytracing
     if (pathTracingEnabled != 0 && renderMode == RENDER_MODE_FINAL) {
         // ====== PATH TRACING ======
         color = pathTrace(ray, seed);
+        // For path tracing, get depth from center ray (first bounce)
+        Ray centerRay = getCameraRay(fragCoord); // No DoF jitter
+        RayHit depthHit = rayMarch(centerRay);
+        depth = depthHit.hit ? depthHit.dist : 100.0;
     } else {
         // ====== CLASSIC RAYTRACING ======
         RayHit hit = rayMarch(ray);
+        depth = hit.hit ? hit.dist : 100.0;
 
         if (hit.hit) {
             vec3 normal = calcNormal(hit.pos);
@@ -515,6 +521,7 @@ void main() {
         }
     }
 
-    // Output (will be accumulated, tone mapping done in display shader)
-    FragColor = vec4(color, 1.0);
+    // Output: RGB = color (accumulated), A = depth (for focus picking)
+    // Depth is stored in alpha - will be averaged with colors, but that's fine for focus picking
+    FragColor = vec4(color, depth);
 }

@@ -396,6 +396,44 @@ public class GLSLEngine implements AutoCloseable {
     }
 
     /**
+     * Read the depth (from alpha channel) at a specific pixel coordinate.
+     * Used for click-to-focus feature.
+     *
+     * @param x X coordinate (0 = left)
+     * @param y Y coordinate (0 = top, will be flipped internally)
+     * @return Depth at that pixel, or -1 if out of bounds
+     */
+    public float readDepthAt(int x, int y) {
+        if (x < 0 || x >= currentWidth || y < 0 || y >= currentHeight) {
+            return -1.0f;
+        }
+
+        // Flip Y coordinate (OpenGL has origin at bottom-left)
+        int glY = currentHeight - 1 - y;
+
+        float[] depth = new float[1];
+
+        runOnGLThread(() -> {
+            glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
+
+            // Read just the single pixel (4 floats for RGBA)
+            FloatBuffer buffer = MemoryUtil.memAllocFloat(4);
+            glReadPixels(x, glY, 1, 1, GL_RGBA, GL_FLOAT, buffer);
+
+            // Depth is in alpha channel (index 3)
+            // Divide by sample count since it's accumulated
+            float accumDepth = buffer.get(3);
+            int samples = Math.max(1, sampleCount);
+            depth[0] = accumDepth / samples;
+
+            MemoryUtil.memFree(buffer);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        });
+
+        return depth[0];
+    }
+
+    /**
      * Get current dimensions.
      */
     public int getWidth() { return currentWidth; }
