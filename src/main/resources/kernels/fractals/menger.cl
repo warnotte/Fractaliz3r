@@ -176,21 +176,11 @@ __kernel void renderMenger(
     int renderMode,
     int dofEnabled, float focalDistance, float aperture, int dofSamples
 ) {
-    // Bounds check
-    int localX = get_global_id(0);
-    int localY = get_global_id(1);
-    if (localX >= tileSize || localY >= tileSize) return;
-
-    int pixelX = tileOffsetX + localX;
-    int pixelY = tileOffsetY + localY;
-    if (pixelX >= imageWidth || pixelY >= imageHeight) return;
-
-    int outputIdx = (localY * tileSize + localX) * 4;
-
-    // Screen coordinates
-    float aspectRatio = (float)imageWidth / (float)imageHeight;
-    float u = (2.0f * ((float)pixelX + 0.5f) / (float)imageWidth - 1.0f) * aspectRatio;
-    float v = 1.0f - 2.0f * ((float)pixelY + 0.5f) / (float)imageHeight;
+    // Setup pixel using common helper
+    PixelSetup px = setupPixel(get_global_id(0), get_global_id(1),
+                                tileOffsetX, tileOffsetY, tileSize,
+                                imageWidth, imageHeight);
+    if (!px.valid) return;
 
     float3 offsetVec = (float3)(offset.x, offset.y, offset.z);
 
@@ -203,7 +193,7 @@ __kernel void renderMenger(
     float3 light = normalize((float3)(lightDir.x, lightDir.y, lightDir.z));
 
     // Initialize DoF
-    DofSetup dof = initDofSetup(camPos, camQuat, fov, (float2)(u, v),
+    DofSetup dof = initDofSetup(camPos, camQuat, fov, (float2)(px.u, px.v),
                                  focalDistance, aperture, dofEnabled, dofSamples);
 
     // Accumulator for DoF samples
@@ -212,7 +202,7 @@ __kernel void renderMenger(
     // DoF sampling loop
     for (int sampleIdx = 0; sampleIdx < dof.numSamples; sampleIdx++) {
         float3 ro, rd;
-        getDofSampleRay(dof, sampleIdx, pixelX, pixelY, aperture, dofEnabled, &ro, &rd);
+        getDofSampleRay(dof, sampleIdx, px.x, px.y, aperture, dofEnabled, &ro, &rd);
 
         // Ray march with quality multiplier for ultimate detail
         float t = 0.0f;
@@ -270,11 +260,7 @@ __kernel void renderMenger(
         accumulatedColor += sampleColor;
     }
 
-    // Average DoF samples and output
+    // Average DoF samples and output using common helper
     float3 finalColor = accumulatedColor / (float)dof.numSamples;
-
-    output[outputIdx] = clamp(finalColor.x, 0.0f, 1.0f);
-    output[outputIdx + 1] = clamp(finalColor.y, 0.0f, 1.0f);
-    output[outputIdx + 2] = clamp(finalColor.z, 0.0f, 1.0f);
-    output[outputIdx + 3] = 1.0f;
+    outputPixel(output, px.outputIdx, finalColor);
 }

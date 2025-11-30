@@ -18,7 +18,7 @@ import java.util.function.Consumer;
  * Controller for fractal rendering operations.
  * Bridges UI with rendering engine.
  */
-public class FractalizerController implements AutoCloseable {
+public class FractalizerController implements RenderController {
 
     private OpenCLEngine engine;
     private TileRenderer renderer;
@@ -93,6 +93,7 @@ public class FractalizerController implements AutoCloseable {
     /**
      * Switch to a different fractal type.
      */
+    @Override
     public void setFractalType(FractalType type) {
         if (type == currentFractalType) return;
 
@@ -118,6 +119,7 @@ public class FractalizerController implements AutoCloseable {
     /**
      * Get the current fractal type.
      */
+    @Override
     public FractalType getFractalType() {
         return currentFractalType;
     }
@@ -125,6 +127,7 @@ public class FractalizerController implements AutoCloseable {
     /**
      * Start a preview render.
      */
+    @Override
     public void renderPreview(Consumer<Image> onComplete, Consumer<Double> onProgress) {
         if (isRendering) {
             cancelRender();
@@ -161,8 +164,9 @@ public class FractalizerController implements AutoCloseable {
     /**
      * Start a full quality render.
      */
+    @Override
     public void renderFull(Consumer<Image> onComplete, Consumer<Double> onProgress,
-                          Consumer<TileRenderer.TileResult> onTileComplete) {
+                          Consumer<Object> onTileComplete) {
         if (isRendering) {
             cancelRender();
         }
@@ -198,6 +202,7 @@ public class FractalizerController implements AutoCloseable {
     /**
      * Export the current render to a PNG file.
      */
+    @Override
     public CompletableFuture<Void> exportToPNG(File file, Consumer<Double> onProgress) {
         if (isRendering) {
             return CompletableFuture.failedFuture(
@@ -227,6 +232,7 @@ public class FractalizerController implements AutoCloseable {
     /**
      * Cancel current rendering.
      */
+    @Override
     public void cancelRender() {
         if (renderer != null) renderer.cancel();
         if (previewRenderer != null) previewRenderer.cancel();
@@ -236,28 +242,34 @@ public class FractalizerController implements AutoCloseable {
         isRendering = false;
     }
 
+    @Override
     public boolean isRendering() {
         return isRendering;
     }
 
     // Parameter setters
+    @Override
     public void setParams(FractalParams params) {
         this.currentParams = params;
     }
 
+    @Override
     public FractalParams getParams() {
         return currentParams;
     }
 
+    @Override
     public void setOutputSize(int width, int height) {
         this.outputWidth = width;
         this.outputHeight = height;
     }
 
+    @Override
     public int getOutputWidth() {
         return outputWidth;
     }
 
+    @Override
     public int getOutputHeight() {
         return outputHeight;
     }
@@ -266,10 +278,12 @@ public class FractalizerController implements AutoCloseable {
         this.previewScale = scale;
     }
 
+    @Override
     public String getDeviceName() {
         return engine.getDeviceName();
     }
 
+    @Override
     public String getDeviceType() {
         return engine.getDeviceType();
     }

@@ -223,11 +223,21 @@ __kernel void renderMandelbox(
     // Depth of Field
     int dofEnabled, float focalDistance, float aperture, int dofSamples
 ) {
-    // Setup pixel using common helper
-    PixelSetup px = setupPixel(get_global_id(0), get_global_id(1),
-                                tileOffsetX, tileOffsetY, tileSize,
-                                imageWidth, imageHeight);
-    if (!px.valid) return;
+    // Bounds check
+    int localX = get_global_id(0);
+    int localY = get_global_id(1);
+    if (localX >= tileSize || localY >= tileSize) return;
+
+    int pixelX = tileOffsetX + localX;
+    int pixelY = tileOffsetY + localY;
+    if (pixelX >= imageWidth || pixelY >= imageHeight) return;
+
+    int outputIdx = (localY * tileSize + localX) * 4;
+
+    // Screen coordinates
+    float aspectRatio = (float)imageWidth / (float)imageHeight;
+    float u = (2.0f * ((float)pixelX + 0.5f) / (float)imageWidth - 1.0f) * aspectRatio;
+    float v = 1.0f - 2.0f * ((float)pixelY + 0.5f) / (float)imageHeight;
 
     // Extract lighting parameters
     float3 lightCol = (float3)(lightColor.x, lightColor.y, lightColor.z);
@@ -238,7 +248,7 @@ __kernel void renderMandelbox(
     float3 light = normalize3((float3)(lightDir.x, lightDir.y, lightDir.z));
 
     // Initialize DoF
-    DofSetup dof = initDofSetup(camPos, camQuat, fov, (float2)(px.u, px.v),
+    DofSetup dof = initDofSetup(camPos, camQuat, fov, (float2)(u, v),
                                  focalDistance, aperture, dofEnabled, dofSamples);
 
     // Accumulator for DoF samples
@@ -247,7 +257,7 @@ __kernel void renderMandelbox(
     // DoF sampling loop
     for (int sampleIdx = 0; sampleIdx < dof.numSamples; sampleIdx++) {
         float3 rayOrigin, rayDir;
-        getDofSampleRay(dof, sampleIdx, px.x, px.y, aperture, dofEnabled,
+        getDofSampleRay(dof, sampleIdx, pixelX, pixelY, aperture, dofEnabled,
                         &rayOrigin, &rayDir);
 
         // Ray marching with quality multiplier for ultimate detail
@@ -260,6 +270,7 @@ __kernel void renderMandelbox(
         // Scale parameters by quality multiplier
         int effectiveMaxSteps = (int)((float)maxRaySteps * qualityMultiplier);
         float qualityEpsilon = baseEpsilon / qualityMultiplier;
+        float qualityStepFactor = STEP_FACTOR / fmax(1.0f, qualityMultiplier * 0.5f);
 
         for (int i = 0; i < effectiveMaxSteps; i++) {
             pos = rayOrigin + rayDir * totalDist;
@@ -309,7 +320,11 @@ __kernel void renderMandelbox(
         accumulatedColor += sampleColor;
     }
 
-    // Average DoF samples and output using common helper
+    // Average DoF samples and output
     float3 finalColor = accumulatedColor / (float)dof.numSamples;
-    outputPixel(output, px.outputIdx, finalColor);
+
+    output[outputIdx] = clamp(finalColor.x, 0.0f, 1.0f);
+    output[outputIdx + 1] = clamp(finalColor.y, 0.0f, 1.0f);
+    output[outputIdx + 2] = clamp(finalColor.z, 0.0f, 1.0f);
+    output[outputIdx + 3] = 1.0f;
 }

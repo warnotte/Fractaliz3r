@@ -409,3 +409,73 @@ void getDofSampleRay(
         *rayDir = normalize3(dof.focalPoint - *rayOrigin);
     }
 }
+
+// ============================================================================
+// Ray Hit Result Structure (for generic pipeline)
+// ============================================================================
+
+/**
+ * Result of ray marching - used to pass hit information between functions.
+ */
+typedef struct {
+    bool hit;           // Did we hit the surface?
+    float3 pos;         // Hit position
+    float totalDist;    // Total distance traveled
+    float minDist;      // Minimum distance encountered (for glow)
+    int iterations;     // Fractal iterations at hit point
+} RayHit;
+
+// ============================================================================
+// Pixel Setup Structure (for generic pipeline)
+// ============================================================================
+
+/**
+ * Pixel setup information - computed once per kernel invocation.
+ */
+typedef struct {
+    int x;              // Pixel X coordinate
+    int y;              // Pixel Y coordinate
+    int outputIdx;      // Output buffer index
+    float u;            // Normalized screen coordinate U
+    float v;            // Normalized screen coordinate V
+    bool valid;         // Is this pixel within bounds?
+} PixelSetup;
+
+/**
+ * Setup pixel coordinates and check bounds.
+ * Common code that was duplicated in every kernel.
+ */
+PixelSetup setupPixel(
+    int localX, int localY,
+    int tileOffsetX, int tileOffsetY, int tileSize,
+    int imageWidth, int imageHeight
+) {
+    PixelSetup px;
+
+    px.x = tileOffsetX + localX;
+    px.y = tileOffsetY + localY;
+    px.outputIdx = (localY * tileSize + localX) * 4;
+
+    // Bounds check
+    px.valid = (localX < tileSize && localY < tileSize &&
+                px.x < imageWidth && px.y < imageHeight);
+
+    if (px.valid) {
+        float aspectRatio = (float)imageWidth / (float)imageHeight;
+        px.u = (2.0f * ((float)px.x + 0.5f) / (float)imageWidth - 1.0f) * aspectRatio;
+        px.v = 1.0f - 2.0f * ((float)px.y + 0.5f) / (float)imageHeight;
+    }
+
+    return px;
+}
+
+/**
+ * Write final color to output buffer.
+ * Common code that was duplicated in every kernel.
+ */
+void outputPixel(__global float* output, int outputIdx, float3 color) {
+    output[outputIdx]     = clamp(color.x, 0.0f, 1.0f);
+    output[outputIdx + 1] = clamp(color.y, 0.0f, 1.0f);
+    output[outputIdx + 2] = clamp(color.z, 0.0f, 1.0f);
+    output[outputIdx + 3] = 1.0f;
+}

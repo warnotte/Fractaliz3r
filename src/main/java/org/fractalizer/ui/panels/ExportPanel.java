@@ -7,7 +7,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
-import org.fractalizer.ui.FractalizerController;
+import org.fractalizer.ui.RenderController;
 
 import java.io.File;
 import java.util.function.Consumer;
@@ -17,7 +17,7 @@ import java.util.function.Consumer;
  */
 public class ExportPanel extends ScrollPane {
 
-    private final FractalizerController controller;
+    private final RenderController controller;
     private final Runnable renderFullCallback;
     private final Consumer<Double> progressCallback;
     private final Consumer<String> statusCallback;
@@ -25,7 +25,7 @@ public class ExportPanel extends ScrollPane {
     private TextField widthField;
     private TextField heightField;
 
-    public ExportPanel(FractalizerController controller,
+    public ExportPanel(RenderController controller,
                        Runnable renderFullCallback,
                        Consumer<Double> progressCallback,
                        Consumer<String> statusCallback) {

@@ -5,14 +5,14 @@ import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
 import org.fractalizer.engine.Camera;
 import org.fractalizer.fractals.*;
-import org.fractalizer.ui.FractalizerController;
+import org.fractalizer.ui.RenderController;
 
 /**
  * Panel for fractal type selection and fractal-specific parameters.
  */
 public class FractalPanel extends ScrollPane {
 
-    private final FractalizerController controller;
+    private final RenderController controller;
     private final RenderCallback renderCallback;
 
     // Current state
@@ -29,7 +29,7 @@ public class FractalPanel extends ScrollPane {
     private Slider speedSlider;
     private Label positionLabel;
 
-    public FractalPanel(FractalizerController controller, AbstractFractalParams initialParams,
+    public FractalPanel(RenderController controller, AbstractFractalParams initialParams,
                         RenderCallback renderCallback) {
         this.controller = controller;
         this.params = initialParams;
