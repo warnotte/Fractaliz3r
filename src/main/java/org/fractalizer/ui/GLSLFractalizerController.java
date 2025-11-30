@@ -269,6 +269,12 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("aperture", params.getAperture());
             uniforms.put("dofSamples", params.getDofSamples());
 
+            // Path Tracing
+            uniforms.put("pathTracingEnabled", params.isPathTracingEnabled() ? 1 : 0);
+            uniforms.put("maxBounces", params.getMaxBounces());
+            uniforms.put("roughness", params.getRoughness());
+            uniforms.put("skyIntensity", params.getSkyIntensity());
+
             // Render mode
             uniforms.put("renderMode", params.getRenderMode());
         }

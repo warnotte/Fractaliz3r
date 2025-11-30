@@ -69,6 +69,12 @@ uniform int dofSamples;
 // Render mode (0=Final, 1=Normals, 2=Depth, 3=AO, 4=Iterations, etc.)
 uniform int renderMode;
 
+// Path Tracing
+uniform int pathTracingEnabled;
+uniform int maxBounces;
+uniform float roughness;        // Surface roughness for GGX
+uniform float skyIntensity;     // Environment light intensity
+
 // ============================================================================
 // Random Number Generation (PCG-based)
 // ============================================================================

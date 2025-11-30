@@ -172,7 +172,7 @@ vec3 shade(RayHit hit, Ray ray) {
 }
 
 // ============================================================================
-// Background
+// Background / Environment
 // ============================================================================
 
 vec3 background(Ray ray, float minDist) {
@@ -190,6 +190,122 @@ vec3 background(Ray ray, float minDist) {
     bg += vec3(stars * 0.3);
 
     return bg;
+}
+
+// Environment lighting for path tracing (HDR-like)
+vec3 envLight(vec3 dir) {
+    // Gradient sky
+    float t = 0.5 + 0.5 * dir.y;
+    vec3 sky = mix(vec3(0.4, 0.4, 0.5), vec3(0.7, 0.8, 1.0), t);
+
+    // Sun contribution
+    float sunAngle = max(0.0, dot(dir, normalize(lightDir)));
+    vec3 sun = lightColor * pow(sunAngle, 64.0) * 5.0;
+
+    // Ground reflection (dark below horizon)
+    if (dir.y < 0.0) {
+        sky = mix(sky, vec3(0.1, 0.08, 0.06), smoothstep(0.0, -0.3, dir.y));
+    }
+
+    return (sky + sun) * skyIntensity;
+}
+
+// ============================================================================
+// Path Tracing
+// ============================================================================
+
+// Simple ray march for path tracing (no orbit traps needed)
+bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist) {
+    float t = 0.0;
+    int effectiveMaxSteps = int(float(maxRaySteps) * qualityMultiplier * 0.5); // Fewer steps for bounces
+    float qualityEpsilon = baseEpsilon / qualityMultiplier;
+
+    for (int i = 0; i < effectiveMaxSteps; i++) {
+        vec3 pos = ray.origin + ray.direction * t;
+        float d = DE_simple(pos);
+
+        float epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
+
+        if (d < epsilon) {
+            hitPos = pos;
+            hitDist = t;
+            return true;
+        }
+
+        t += d * STEP_FACTOR;
+
+        if (t > MAX_DISTANCE) break;
+    }
+
+    hitDist = t;
+    return false;
+}
+
+// Path trace with multiple bounces
+vec3 pathTrace(Ray ray, inout uint seed) {
+    vec3 throughput = vec3(1.0);  // Path throughput (accumulated BRDF)
+    vec3 radiance = vec3(0.0);    // Accumulated light
+
+    Ray currentRay = ray;
+
+    for (int bounce = 0; bounce <= maxBounces; bounce++) {
+        vec3 hitPos;
+        float hitDist;
+
+        if (!rayMarchSimple(currentRay, hitPos, hitDist)) {
+            // Ray escaped - add environment light
+            radiance += throughput * envLight(currentRay.direction);
+            break;
+        }
+
+        // Calculate normal at hit point
+        vec3 normal = calcNormal(hitPos);
+
+        // Get surface color (albedo)
+        OrbitTrap trap;
+        DE(hitPos, trap);
+        vec3 albedo = getColor(trap);
+
+        // Direct lighting (Next Event Estimation)
+        vec3 lightDirNorm = normalize(lightDir);
+        float NdotL = max(dot(normal, lightDirNorm), 0.0);
+
+        if (NdotL > 0.0) {
+            // Shadow ray
+            Ray shadowRay;
+            shadowRay.origin = hitPos + normal * 0.001;
+            shadowRay.direction = lightDirNorm;
+
+            vec3 shadowHitPos;
+            float shadowDist;
+            bool inShadow = rayMarchSimple(shadowRay, shadowHitPos, shadowDist);
+
+            if (!inShadow) {
+                // Direct light contribution
+                vec3 directLight = lightColor * lightIntensity * NdotL;
+                radiance += throughput * albedo * directLight / PI;
+            }
+        }
+
+        // Russian Roulette for path termination
+        if (bounce >= 2) {
+            float p = max(throughput.x, max(throughput.y, throughput.z));
+            if (random(seed) > p) break;
+            throughput /= p;
+        }
+
+        // Sample new direction (cosine-weighted hemisphere)
+        vec3 newDir = randomCosineHemisphere(seed, normal);
+
+        // Update throughput with BRDF (Lambertian: albedo/PI, cosine already in sampling)
+        throughput *= albedo;
+
+        // Setup next ray
+        currentRay.origin = hitPos + normal * 0.001;
+        currentRay.direction = newDir;
+    }
+
+    return radiance;
 }
 
 // ============================================================================
@@ -251,25 +367,31 @@ void main() {
     // Get camera ray (with optional DoF)
     Ray ray = getCameraRayDOF(screenUV, seed);
 
-    // Ray march
-    RayHit hit = rayMarch(ray);
-
-    // Shade
     vec3 color;
-    if (hit.hit) {
-        vec3 normal = calcNormal(hit.pos);
-        float shadowBias = 0.001 + hit.dist * 0.001;
-        float shadow = calcShadow(hit.pos + normal * shadowBias, normalize(lightDir), shadowBias, 15.0);
-        float ao = calcAO(hit.pos, normal);
 
-        color = renderByMode(hit, ray, normal, shadow, ao);
+    // Choose rendering mode: Path Tracing or Raytracing
+    if (pathTracingEnabled != 0 && renderMode == RENDER_MODE_FINAL) {
+        // ====== PATH TRACING ======
+        color = pathTrace(ray, seed);
     } else {
-        // For debug modes, use simple background; for final mode use fancy background with glow
-        if (renderMode == RENDER_MODE_FINAL) {
-            color = background(ray, hit.minDist);
+        // ====== CLASSIC RAYTRACING ======
+        RayHit hit = rayMarch(ray);
+
+        if (hit.hit) {
+            vec3 normal = calcNormal(hit.pos);
+            float shadowBias = 0.001 + hit.dist * 0.001;
+            float shadow = calcShadow(hit.pos + normal * shadowBias, normalize(lightDir), shadowBias, 15.0);
+            float ao = calcAO(hit.pos, normal);
+
+            color = renderByMode(hit, ray, normal, shadow, ao);
         } else {
-            // True black background for debug modes
-            color = vec3(0.0);
+            // For debug modes, use simple background; for final mode use fancy background with glow
+            if (renderMode == RENDER_MODE_FINAL) {
+                color = background(ray, hit.minDist);
+            } else {
+                // True black background for debug modes
+                color = vec3(0.0);
+            }
         }
     }
 

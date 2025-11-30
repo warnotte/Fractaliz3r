@@ -199,6 +199,41 @@ public class QualityPanel extends ScrollPane {
         Label dofInfoLabel = new Label("Note: DoF is slow. Use low samples\nfor preview, increase for final.");
         dofInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
+        // === Path Tracing ===
+        Label pathTracingLabel = new Label("Path Tracing (GI):");
+        pathTracingLabel.setStyle("-fx-font-weight: bold;");
+
+        CheckBox pathTracingCheck = new CheckBox("Enable Path Tracing");
+        pathTracingCheck.setSelected(false);
+        pathTracingCheck.setOnAction(e -> {
+            getParams().setPathTracingEnabled(pathTracingCheck.isSelected());
+            renderCallback.requestRender();
+        });
+
+        Label bouncesLabel = new Label("Max Bounces: 4");
+        Slider bouncesSlider = new Slider(1, 8, 4);
+        bouncesSlider.setMajorTickUnit(1);
+        bouncesSlider.setMinorTickCount(0);
+        bouncesSlider.setSnapToTicks(true);
+        bouncesSlider.setShowTickLabels(true);
+        bouncesSlider.valueProperty().addListener((obs, old, val) -> {
+            int bounces = val.intValue();
+            bouncesLabel.setText(String.format("Max Bounces: %d", bounces));
+            getParams().setMaxBounces(bounces);
+            renderCallback.requestRender();
+        });
+
+        Label skyIntensityLabel = new Label("Sky Intensity: 1.0");
+        Slider skyIntensitySlider = new Slider(0.0, 3.0, 1.0);
+        skyIntensitySlider.valueProperty().addListener((obs, old, val) -> {
+            skyIntensityLabel.setText(String.format("Sky Intensity: %.2f", val.doubleValue()));
+            getParams().setSkyIntensity(val.floatValue());
+            renderCallback.requestRender();
+        });
+
+        Label pathTracingInfo = new Label("Path tracing adds global illumination\n(soft indirect lighting). Slower but\nmore realistic. Works best with\nmany samples.");
+        pathTracingInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
         // Quality presets
         Label presetLabel = new Label("Quality Presets:");
         presetLabel.setStyle("-fx-font-weight: bold;");
@@ -256,6 +291,11 @@ public class QualityPanel extends ScrollPane {
             apertureLabel, apertureSlider,
             dofSamplesLabel, dofSamplesSlider,
             dofInfoLabel,
+            new Separator(),
+            pathTracingLabel, pathTracingCheck,
+            bouncesLabel, bouncesSlider,
+            skyIntensityLabel, skyIntensitySlider,
+            pathTracingInfo,
             new Separator(),
             presetLabel, presetBox
         );

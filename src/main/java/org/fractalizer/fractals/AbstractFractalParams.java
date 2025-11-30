@@ -70,6 +70,12 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float aperture;
     protected int dofSamples;
 
+    // Path Tracing
+    protected boolean pathTracingEnabled;
+    protected int maxBounces;
+    protected float roughness;
+    protected float skyIntensity;
+
     /**
      * Initialize common parameters with sensible defaults.
      */
@@ -120,6 +126,12 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.focalDistance = 2.5f;
         this.aperture = 0.02f;
         this.dofSamples = 16;
+
+        // Path tracing defaults (disabled by default)
+        this.pathTracingEnabled = false;
+        this.maxBounces = 4;
+        this.roughness = 0.5f;
+        this.skyIntensity = 1.0f;
     }
 
     /**
@@ -167,6 +179,12 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.focalDistance = this.focalDistance;
         target.aperture = this.aperture;
         target.dofSamples = this.dofSamples;
+
+        // Copy path tracing
+        target.pathTracingEnabled = this.pathTracingEnabled;
+        target.maxBounces = this.maxBounces;
+        target.roughness = this.roughness;
+        target.skyIntensity = this.skyIntensity;
     }
 
     /**
@@ -295,6 +313,16 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setAperture(float aperture) { this.aperture = aperture; }
     public int getDofSamples() { return dofSamples; }
     public void setDofSamples(int samples) { this.dofSamples = samples; }
+
+    // Path Tracing
+    public boolean isPathTracingEnabled() { return pathTracingEnabled; }
+    public void setPathTracingEnabled(boolean enabled) { this.pathTracingEnabled = enabled; }
+    public int getMaxBounces() { return maxBounces; }
+    public void setMaxBounces(int bounces) { this.maxBounces = bounces; }
+    public float getRoughness() { return roughness; }
+    public void setRoughness(float roughness) { this.roughness = roughness; }
+    public float getSkyIntensity() { return skyIntensity; }
+    public void setSkyIntensity(float intensity) { this.skyIntensity = intensity; }
 
     // ========================================================================
     // Builder-style setters (return this for chaining)
