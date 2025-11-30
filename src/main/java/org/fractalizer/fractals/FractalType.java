@@ -8,7 +8,8 @@ public enum FractalType {
     MANDELBOX("Mandelbox", "mandelbox"),
     MENGER_SPONGE("Menger Sponge", "menger"),
     KALEIDOSCOPIC_IFS("Kaleidoscopic IFS", "kaleidoscopic"),
-    JULIA_3D("Julia 3D", "julia3d");
+    JULIA_3D("Julia 3D", "julia3d"),
+    PSEUDO_KLEINIAN("Pseudo Kleinian", "pseudokleinian");
 
     private final String displayName;
     private final String kernelName;

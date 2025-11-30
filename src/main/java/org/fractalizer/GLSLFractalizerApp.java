@@ -50,6 +50,7 @@ public class GLSLFractalizerApp extends Application {
     private long lastRenderTime = 0;
     private static final long RENDER_DELAY_MS = 100;
     private boolean autoFullQuality = true;
+    private volatile boolean exportingAnimation = false;
 
     @Override
     public void start(Stage primaryStage) {
@@ -145,10 +146,14 @@ public class GLSLFractalizerApp extends Application {
     /**
      * Setup listeners for viewport size changes.
      * Automatically updates the controller and triggers re-render.
+     * Ignored during animation export to prevent conflicts.
      */
     private void setupViewportSizeListener() {
         // Listen for layout bounds changes (single listener for both dimensions)
         imageContainer.layoutBoundsProperty().addListener((obs, old, bounds) -> {
+            // Ignore size changes during animation export
+            if (exportingAnimation) return;
+
             if (bounds.getWidth() > 0 && bounds.getHeight() > 0) {
                 updateViewportSize();
                 requestRender();
@@ -191,6 +196,14 @@ public class GLSLFractalizerApp extends Application {
         );
         Tab qualityTab = new Tab("Quality", qualityPanel);
 
+        // Animation tab (created first so ExportPanel can reference it)
+        animationPanel = new AnimationPanel(
+            () -> fractalPanel.getParams(),
+            time -> fractalPanel.updatePositionLabel(),
+            this::requestRender
+        );
+        Tab animationTab = new Tab("Anim", animationPanel);
+
         // Export tab
         exportPanel = new ExportPanel(
             controller,
@@ -198,19 +211,31 @@ public class GLSLFractalizerApp extends Application {
             progress -> progressBar.setProgress(progress),
             status -> statusLabel.setText(status)
         );
+        // Connect ExportPanel to AnimationPanel's timeline
+        exportPanel.setTimelineSupplier(() -> animationPanel.getTimeline());
+        // Set animation export callback with visual feedback
+        exportPanel.setAnimationExportCallback((file, width, height, samples) -> {
+            // Apply timeline params before rendering
+            animationPanel.applyTimelineToParams();
+            // Export frame and get image for visual feedback
+            javafx.scene.image.Image image = controller.exportAnimationFrame(file, width, height, samples);
+            // Update image view for visual feedback
+            updateImage(image);
+        });
+        // Set export state callbacks to block render loop during export
+        exportPanel.setExportStateCallback(exporting -> {
+            this.exportingAnimation = exporting;
+            if (!exporting) {
+                // Restore viewport size after export
+                updateViewportSize();
+                needsRender = true;
+            }
+        });
         Tab exportTab = new Tab("Export", exportPanel);
 
         // Device tab - GLSL info
         devicePanel = new GLSLDevicePanel(controller);
         Tab deviceTab = new Tab("Device", devicePanel);
-
-        // Animation tab
-        animationPanel = new AnimationPanel(
-            () -> fractalPanel.getParams(),
-            time -> fractalPanel.updatePositionLabel(),
-            this::requestRender
-        );
-        Tab animationTab = new Tab("Anim", animationPanel);
 
         // Post-processing tab
         PostProcessParams postProcessParams = controller.getEngine().getPostProcessParams();
@@ -248,6 +273,9 @@ public class GLSLFractalizerApp extends Application {
         AnimationTimer timer = new AnimationTimer() {
             @Override
             public void handle(long now) {
+                // Skip render loop during animation export
+                if (exportingAnimation) return;
+
                 // Process keyboard input
                 if (navigation.processKeyboardInput()) {
                     needsRender = true;

@@ -66,6 +66,7 @@ public class GLSLFractalizerController implements RenderController {
         engine.loadFractalShader("menger", "/shaders/fractals/menger.glsl");
         engine.loadFractalShader("kaleidoscopic", "/shaders/fractals/kaleidoscopic.glsl");
         engine.loadFractalShader("julia3d", "/shaders/fractals/julia3d.glsl");
+        engine.loadFractalShader("pseudokleinian", "/shaders/fractals/pseudokleinian.glsl");
     }
 
     /**
@@ -86,6 +87,7 @@ public class GLSLFractalizerController implements RenderController {
             case MENGER_SPONGE -> this.currentParams = new MengerSpongeParams();
             case KALEIDOSCOPIC_IFS -> this.currentParams = new KaleidoscopicIFSParams();
             case JULIA_3D -> this.currentParams = new Julia3DParams();
+            case PSEUDO_KLEINIAN -> this.currentParams = new PseudoKleinianParams();
         }
 
         // Preserve camera if switching fractals
@@ -195,6 +197,82 @@ public class GLSLFractalizerController implements RenderController {
                 throw new RuntimeException("Failed to export image", e);
             }
         });
+    }
+
+    /**
+     * Export a single animation frame to a file (synchronous).
+     * Uses viewport size for faster export.
+     *
+     * @param file The file to save the frame to
+     * @param samples Number of samples per frame (lower = faster)
+     */
+    public void exportAnimationFrame(File file, int samples) {
+        exportAnimationFrame(file, viewportWidth, viewportHeight, samples);
+    }
+
+    /**
+     * Export a single animation frame to a file at a specific resolution (synchronous).
+     * Returns the rendered image for visual feedback.
+     *
+     * @param file The file to save the frame to
+     * @param width Export width
+     * @param height Export height
+     * @param samples Number of samples per frame (lower = faster)
+     * @return The rendered image for display
+     */
+    public WritableImage exportAnimationFrame(File file, int width, int height, int samples) {
+        try {
+            // Resize engine to export dimensions
+            engine.resize(width, height);
+            engine.setActiveProgram(currentFractalType.getKernelName());
+            engine.resetAccumulation();
+
+            Map<String, Object> uniforms = buildUniforms();
+
+            // Render with specified samples
+            for (int i = 0; i < samples; i++) {
+                engine.renderSample(uniforms);
+            }
+
+            // Read pixels
+            float[] pixels = engine.readImage();
+
+            // Create BufferedImage for file export
+            BufferedImage bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+
+            // Create WritableImage for display
+            WritableImage fxImage = new WritableImage(width, height);
+            int[] intPixels = new int[width * height];
+
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    int idx = (y * width + x) * 4;
+                    int r = Math.max(0, Math.min(255, (int) (pixels[idx] * 255)));
+                    int g = Math.max(0, Math.min(255, (int) (pixels[idx + 1] * 255)));
+                    int b = Math.max(0, Math.min(255, (int) (pixels[idx + 2] * 255)));
+                    int rgb = (r << 16) | (g << 8) | b;
+                    bufferedImage.setRGB(x, y, rgb);
+                    intPixels[y * width + x] = 0xFF000000 | rgb; // Add alpha for JavaFX
+                }
+            }
+
+            // Write to file
+            ImageIO.write(bufferedImage, "PNG", file);
+
+            // Write to JavaFX image
+            fxImage.getPixelWriter().setPixels(0, 0, width, height,
+                PixelFormat.getIntArgbInstance(), intPixels, 0, width);
+
+            // Restore viewport size
+            engine.resize(viewportWidth, viewportHeight);
+
+            return fxImage;
+
+        } catch (Exception e) {
+            // Restore viewport size on error
+            engine.resize(viewportWidth, viewportHeight);
+            throw new RuntimeException("Failed to export animation frame", e);
+        }
     }
 
     /**
@@ -327,6 +405,19 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("juliaC", new float[]{
                     p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz(), p.getJuliaCw()
                 });
+            }
+            case PSEUDO_KLEINIAN -> {
+                PseudoKleinianParams p = (PseudoKleinianParams) currentParams;
+                uniforms.put("maxIterations", p.getMaxIterations());
+                uniforms.put("size", p.getSize());
+                uniforms.put("cSize", new float[]{
+                    p.getCSizeX(), p.getCSizeY(), p.getCSizeZ()
+                });
+                uniforms.put("juliaC", new float[]{
+                    p.getJuliaX(), p.getJuliaY(), p.getJuliaZ()
+                });
+                uniforms.put("deOffset", p.getDeOffset());
+                uniforms.put("zOffset", p.getZOffset());
             }
         }
 

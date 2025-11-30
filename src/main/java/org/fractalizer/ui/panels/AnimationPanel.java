@@ -15,7 +15,8 @@ import java.util.function.Supplier;
 
 /**
  * UI Panel for animation timeline control.
- * Allows creating keyframes, playing animations, and exporting to video.
+ * Allows creating keyframes and playing animations.
+ * Export functionality is in ExportPanel.
  */
 public class AnimationPanel extends VBox {
 
@@ -29,7 +30,6 @@ public class AnimationPanel extends VBox {
     private Label timeLabel;
     private Label frameLabel;
     private Button playButton;
-    private Button stopButton;
     private Spinner<Double> durationSpinner;
     private Spinner<Integer> fpsSpinner;
     private CheckBox loopCheckbox;
@@ -58,14 +58,18 @@ public class AnimationPanel extends VBox {
         timeline.createTrack("camPos", float[].class, new float[]{0, 0, -3});
         timeline.createTrack("camQuat", float[].class, new float[]{0, 0, 0, 1});
 
-        // Fractal params (common)
-        timeline.createTrack("power", Float.class, 8.0f);
-        timeline.createTrack("scale", Float.class, 2.0f);
+        // Common params
         timeline.createTrack("fov", Float.class, 60.0f);
 
-        // Lighting
-        timeline.createTrack("lightIntensity", Float.class, 1.2f);
-        timeline.createTrack("ambientIntensity", Float.class, 0.3f);
+        // Depth of Field (animatable)
+        timeline.createTrack("focalDistance", Float.class, 2.5f);
+        timeline.createTrack("aperture", Float.class, 0.02f);
+
+        // Light direction (vec3)
+        timeline.createTrack("lightDir", float[].class, new float[]{1.0f, 1.0f, 0.5f});
+
+        // Base hue / material hue (vec3)
+        timeline.createTrack("baseHue", float[].class, new float[]{0.6f, 0.3f, 0.1f});
     }
 
     private void buildUI() {
@@ -87,8 +91,10 @@ public class AnimationPanel extends VBox {
         // Keyframe list
         add(createKeyframeListSection());
 
-        // Export section
-        add(createExportSection());
+        // Info about export
+        Label exportInfo = new Label("Use the Export tab to export animation frames.");
+        exportInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        add(exportInfo);
     }
 
     private TitledPane createSettingsSection() {
@@ -129,21 +135,21 @@ public class AnimationPanel extends VBox {
         HBox transport = new HBox(5);
         transport.setAlignment(Pos.CENTER);
 
-        Button startBtn = new Button("⏮");
+        Button startBtn = new Button("\u23EE");
         startBtn.setOnAction(e -> {
             timeline.goToStart();
             updateUI();
             triggerRender();
         });
 
-        Button prevFrameBtn = new Button("◀");
+        Button prevFrameBtn = new Button("\u25C0");
         prevFrameBtn.setOnAction(e -> {
             timeline.previousFrame();
             updateUI();
             triggerRender();
         });
 
-        playButton = new Button("▶");
+        playButton = new Button("\u25B6");
         playButton.setPrefWidth(50);
         playButton.setOnAction(e -> {
             if (timeline.isPlaying()) {
@@ -154,7 +160,7 @@ public class AnimationPanel extends VBox {
             updatePlayButton();
         });
 
-        stopButton = new Button("⏹");
+        Button stopButton = new Button("\u23F9");
         stopButton.setOnAction(e -> {
             timeline.stop();
             updatePlayButton();
@@ -162,14 +168,14 @@ public class AnimationPanel extends VBox {
             triggerRender();
         });
 
-        Button nextFrameBtn = new Button("▶");
+        Button nextFrameBtn = new Button("\u25B6");
         nextFrameBtn.setOnAction(e -> {
             timeline.nextFrame();
             updateUI();
             triggerRender();
         });
 
-        Button endBtn = new Button("⏭");
+        Button endBtn = new Button("\u23ED");
         endBtn.setOnAction(e -> {
             timeline.goToEnd();
             updateUI();
@@ -234,6 +240,11 @@ public class AnimationPanel extends VBox {
         buttons.getChildren().addAll(addKeyBtn, removeKeyBtn);
         box.getChildren().add(buttons);
 
+        // Info about what gets saved
+        Label infoLabel = new Label("Saves: Camera, FOV, DoF, Light Dir, Base Hue");
+        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        box.getChildren().add(infoLabel);
+
         TitledPane pane = new TitledPane("Keyframes", box);
         pane.setCollapsible(true);
         return pane;
@@ -253,31 +264,6 @@ public class AnimationPanel extends VBox {
         box.getChildren().add(new Label("Keyframes (double-click to jump):"));
         box.getChildren().add(keyframeList);
         return box;
-    }
-
-    private TitledPane createExportSection() {
-        VBox box = new VBox(5);
-
-        Label infoLabel = new Label();
-        updateExportInfo(infoLabel);
-
-        timeline.addTimeChangeListener(t -> updateExportInfo(infoLabel));
-
-        Button exportBtn = new Button("Export Animation...");
-        exportBtn.setOnAction(e -> exportAnimation());
-
-        box.getChildren().addAll(infoLabel, exportBtn);
-
-        TitledPane pane = new TitledPane("Export", box);
-        pane.setCollapsible(true);
-        return pane;
-    }
-
-    private void updateExportInfo(Label label) {
-        int frames = timeline.getTotalFrames();
-        double duration = timeline.getDuration();
-        int fps = (int) timeline.getFrameRate();
-        label.setText(String.format("%d frames (%.1fs @ %dfps)", frames, duration, fps));
     }
 
     private void setupPlaybackTimer() {
@@ -331,6 +317,20 @@ public class AnimationPanel extends VBox {
 
         // FOV
         timeline.setKeyframe("fov", time, (float) Math.toDegrees(params.getFov()), easing);
+
+        // Depth of Field
+        timeline.setKeyframe("focalDistance", time, params.getFocalDistance(), easing);
+        timeline.setKeyframe("aperture", time, params.getAperture(), easing);
+
+        // Light direction
+        timeline.setKeyframe("lightDir", time, new float[]{
+                params.getLightX(), params.getLightY(), params.getLightZ()
+        }, easing);
+
+        // Base hue / material hue
+        timeline.setKeyframe("baseHue", time, new float[]{
+                params.getHueR(), params.getHueG(), params.getHueB()
+        }, easing);
 
         updateKeyframeList();
     }
@@ -397,7 +397,11 @@ public class AnimationPanel extends VBox {
         }
     }
 
-    private void applyTimelineToParams() {
+    /**
+     * Apply timeline values to fractal parameters.
+     * This is called during playback and when setting timeline time.
+     */
+    public void applyTimelineToParams() {
         AbstractFractalParams params = paramsSupplier.get();
         if (params == null) return;
 
@@ -415,11 +419,44 @@ public class AnimationPanel extends VBox {
             camera.setQuaternion(quat[0], quat[1], quat[2], quat[3]);
         }
 
+        // Apply FOV
+        if (timeline.getTrack("fov").hasKeyframes()) {
+            float fovDegrees = timeline.getValue("fov");
+            params.fov(fovDegrees);
+        }
+
+        // Apply DoF parameters
+        if (timeline.getTrack("focalDistance").hasKeyframes()) {
+            float focalDist = timeline.getValue("focalDistance");
+            params.setFocalDistance(focalDist);
+        }
+
+        if (timeline.getTrack("aperture").hasKeyframes()) {
+            float apt = timeline.getValue("aperture");
+            params.setAperture(apt);
+        }
+
+        // Apply light direction
+        if (timeline.getTrack("lightDir").hasKeyframes()) {
+            float[] lightDir = timeline.getValue("lightDir");
+            params.lightDirection(lightDir[0], lightDir[1], lightDir[2]);
+        }
+
+        // Apply base hue
+        if (timeline.getTrack("baseHue").hasKeyframes()) {
+            float[] hue = timeline.getValue("baseHue");
+            params.materialHue(hue[0], hue[1], hue[2]);
+        }
+
         // Notify time change
         if (onTimeChange != null) {
             onTimeChange.accept(timeline.getCurrentTime());
         }
     }
+
+    // ========================================================================
+    // UI Updates
+    // ========================================================================
 
     private void updateUI() {
         updateTimeSlider();
@@ -440,22 +477,13 @@ public class AnimationPanel extends VBox {
     }
 
     private void updatePlayButton() {
-        playButton.setText(timeline.isPlaying() ? "⏸" : "▶");
+        playButton.setText(timeline.isPlaying() ? "\u23F8" : "\u25B6");
     }
 
     private void triggerRender() {
         if (onRenderRequest != null) {
             onRenderRequest.run();
         }
-    }
-
-    private void exportAnimation() {
-        // TODO: Implement video export
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Export Animation");
-        alert.setHeaderText("Feature coming soon!");
-        alert.setContentText("Video export will render each frame and save as PNG sequence or video file.");
-        alert.showAndWait();
     }
 
     public Timeline getTimeline() {
