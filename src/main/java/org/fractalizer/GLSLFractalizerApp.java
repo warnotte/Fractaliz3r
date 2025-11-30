@@ -73,20 +73,32 @@ public class GLSLFractalizerApp extends Application {
         imageView = new ImageView();
         imageView.setPreserveRatio(true);
         imageView.setSmooth(true);
+        // Prevent ImageView from affecting layout calculations
+        imageView.setManaged(false);
 
-        imageContainer = new StackPane(imageView);
+        imageContainer = new StackPane();
         imageContainer.setStyle("-fx-background-color: #1a1a2e;");
         imageContainer.setFocusTraversable(true);
+        imageContainer.getChildren().add(imageView);
 
-        // Bind ImageView size to container size for dynamic filling
-        imageView.fitWidthProperty().bind(imageContainer.widthProperty());
-        imageView.fitHeightProperty().bind(imageContainer.heightProperty());
+        // Position and size ImageView manually when container resizes
+        imageContainer.layoutBoundsProperty().addListener((obs, old, bounds) -> {
+            double w = bounds.getWidth();
+            double h = bounds.getHeight();
+            imageView.setFitWidth(w);
+            imageView.setFitHeight(h);
+            // Center the image
+            imageView.setLayoutX(0);
+            imageView.setLayoutY(0);
+        });
 
         root.setCenter(imageContainer);
 
         // Right: Controls panel with tabs
         TabPane controlTabs = createControlTabs(initialParams);
         controlTabs.setPrefWidth(320);
+        controlTabs.setMinWidth(320);
+        controlTabs.setMaxWidth(320);
         root.setRight(controlTabs);
 
         // Bottom: Status bar
@@ -114,11 +126,43 @@ public class GLSLFractalizerApp extends Application {
         // Initial status
         statusLabel.setText("GPU: " + controller.getDeviceName());
 
+        // Listen for viewport size changes
+        setupViewportSizeListener();
+
         // Start render loop
         startRenderLoop();
 
-        // Initial render
-        renderPreview();
+        // Initial viewport size update (after layout is done)
+        Platform.runLater(() -> {
+            updateViewportSize();
+            renderPreview();
+        });
+    }
+
+    /**
+     * Setup listeners for viewport size changes.
+     * Automatically updates the controller and triggers re-render.
+     */
+    private void setupViewportSizeListener() {
+        // Listen for layout bounds changes (single listener for both dimensions)
+        imageContainer.layoutBoundsProperty().addListener((obs, old, bounds) -> {
+            if (bounds.getWidth() > 0 && bounds.getHeight() > 0) {
+                updateViewportSize();
+                requestRender();
+            }
+        });
+    }
+
+    /**
+     * Update the controller's viewport size from the image container.
+     */
+    private void updateViewportSize() {
+        int width = (int) imageContainer.getLayoutBounds().getWidth();
+        int height = (int) imageContainer.getLayoutBounds().getHeight();
+        if (width > 0 && height > 0) {
+            controller.setViewportSize(width, height);
+            exportPanel.updateViewportInfo();
+        }
     }
 
     private TabPane createControlTabs(AbstractFractalParams initialParams) {
@@ -230,7 +274,6 @@ public class GLSLFractalizerApp extends Application {
     }
 
     private void renderPreview() {
-        exportPanel.updateOutputSize();
         progressBar.setProgress(0);
         sampleLabel.setText("Samples: 0");
 
@@ -249,7 +292,6 @@ public class GLSLFractalizerApp extends Application {
     }
 
     private void renderFull() {
-        exportPanel.updateOutputSize();
         statusLabel.setText("Rendering full quality...");
         progressBar.setProgress(0);
         sampleLabel.setText("Samples: 0");

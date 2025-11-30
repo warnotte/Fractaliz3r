@@ -32,8 +32,15 @@ public class GLSLFractalizerController implements RenderController {
 
     private FractalParams currentParams;
     private FractalType currentFractalType = FractalType.MANDELBULB;
-    private int outputWidth = 1920;
-    private int outputHeight = 1080;
+
+    // Viewport size (for preview rendering - matches UI)
+    private int viewportWidth = 960;
+    private int viewportHeight = 540;
+
+    // Export size (for final render and PNG export)
+    private int exportWidth = 1920;
+    private int exportHeight = 1080;
+
     private int previewSamples = 4;
     private int fullSamples = 64;
 
@@ -43,7 +50,7 @@ public class GLSLFractalizerController implements RenderController {
     private Runnable completeListener;
 
     public GLSLFractalizerController() throws IOException {
-        this.engine = new GLSLEngine(outputWidth, outputHeight);
+        this.engine = new GLSLEngine(viewportWidth, viewportHeight);
         this.progressiveRenderer = new ProgressiveRenderer(engine);
 
         loadAllShaders();
@@ -94,12 +101,12 @@ public class GLSLFractalizerController implements RenderController {
     }
 
     /**
-     * Start a preview render (fewer samples for responsiveness).
+     * Start a preview render (uses viewport size for responsiveness).
      */
     @Override
     public void renderPreview(Consumer<Image> onComplete, Consumer<Double> onProgress) {
         cancelRender();
-        engine.resize(outputWidth, outputHeight);
+        engine.resize(viewportWidth, viewportHeight);
         engine.setActiveProgram(currentFractalType.getKernelName());
 
         Map<String, Object> uniforms = buildUniforms();
@@ -117,13 +124,13 @@ public class GLSLFractalizerController implements RenderController {
     }
 
     /**
-     * Start a full quality render.
+     * Start a full quality render (uses viewport size for interactive display).
      */
     @Override
     public void renderFull(Consumer<Image> onComplete, Consumer<Double> onProgress,
                            Consumer<Object> onTileComplete) {
         cancelRender();
-        engine.resize(outputWidth, outputHeight);
+        engine.resize(viewportWidth, viewportHeight);
         engine.setActiveProgram(currentFractalType.getKernelName());
 
         Map<String, Object> uniforms = buildUniforms();
@@ -143,14 +150,14 @@ public class GLSLFractalizerController implements RenderController {
     }
 
     /**
-     * Export the current render to a PNG file.
+     * Export the current render to a PNG file (uses export size).
      */
     @Override
     public CompletableFuture<Void> exportToPNG(File file, Consumer<Double> onProgress) {
         return CompletableFuture.runAsync(() -> {
             try {
                 cancelRender();
-                engine.resize(outputWidth, outputHeight);
+                engine.resize(exportWidth, exportHeight);
                 engine.setActiveProgram(currentFractalType.getKernelName());
                 engine.resetAccumulation();
 
@@ -168,11 +175,11 @@ public class GLSLFractalizerController implements RenderController {
 
                 // Read and save image
                 float[] pixels = engine.readImage();
-                BufferedImage image = new BufferedImage(outputWidth, outputHeight, BufferedImage.TYPE_INT_RGB);
+                BufferedImage image = new BufferedImage(exportWidth, exportHeight, BufferedImage.TYPE_INT_RGB);
 
-                for (int y = 0; y < outputHeight; y++) {
-                    for (int x = 0; x < outputWidth; x++) {
-                        int idx = (y * outputWidth + x) * 4;
+                for (int y = 0; y < exportHeight; y++) {
+                    for (int x = 0; x < exportWidth; x++) {
+                        int idx = (y * exportWidth + x) * 4;
                         int r = Math.max(0, Math.min(255, (int) (pixels[idx] * 255)));
                         int g = Math.max(0, Math.min(255, (int) (pixels[idx + 1] * 255)));
                         int b = Math.max(0, Math.min(255, (int) (pixels[idx + 2] * 255)));
@@ -324,19 +331,35 @@ public class GLSLFractalizerController implements RenderController {
     }
 
     @Override
-    public void setOutputSize(int width, int height) {
-        this.outputWidth = width;
-        this.outputHeight = height;
+    public void setViewportSize(int width, int height) {
+        this.viewportWidth = Math.max(1, width);
+        this.viewportHeight = Math.max(1, height);
     }
 
     @Override
-    public int getOutputWidth() {
-        return outputWidth;
+    public int getViewportWidth() {
+        return viewportWidth;
     }
 
     @Override
-    public int getOutputHeight() {
-        return outputHeight;
+    public int getViewportHeight() {
+        return viewportHeight;
+    }
+
+    @Override
+    public void setExportSize(int width, int height) {
+        this.exportWidth = Math.max(1, width);
+        this.exportHeight = Math.max(1, height);
+    }
+
+    @Override
+    public int getExportWidth() {
+        return exportWidth;
+    }
+
+    @Override
+    public int getExportHeight() {
+        return exportHeight;
     }
 
     public void setPreviewSamples(int samples) {

@@ -114,7 +114,7 @@
         <artifactId>javafx-maven-plugin</artifactId>
         <version>0.0.8</version>
         <configuration>
-          <mainClass>org.fractalizer.FractalizerApp</mainClass>
+          <mainClass>org.fractalizer.GLSLFractalizerApp</mainClass>
         </configuration>
       </plugin>
 
@@ -123,21 +123,8 @@
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.1.0</version>
         <configuration>
-          <!-- Default: OpenCL version -->
-          <mainClass>org.fractalizer.FractalizerApp</mainClass>
+          <mainClass>org.fractalizer.GLSLFractalizerApp</mainClass>
         </configuration>
-        <executions>
-          <!-- GLSL version: mvn exec:java@run-glsl -->
-          <execution>
-            <id>run-glsl</id>
-            <goals>
-              <goal>java</goal>
-            </goals>
-            <configuration>
-              <mainClass>org.fractalizer.GLSLFractalizerApp</mainClass>
-            </configuration>
-          </execution>
-        </executions>
       </plugin>
 
       <plugin>

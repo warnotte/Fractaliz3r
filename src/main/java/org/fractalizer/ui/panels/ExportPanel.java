@@ -13,7 +13,8 @@ import java.io.File;
 import java.util.function.Consumer;
 
 /**
- * Panel for export settings: output size and export actions.
+ * Panel for export settings: export size and export actions.
+ * Export size is independent from viewport size (which auto-adapts to window).
  */
 public class ExportPanel extends ScrollPane {
 
@@ -24,6 +25,7 @@ public class ExportPanel extends ScrollPane {
 
     private TextField widthField;
     private TextField heightField;
+    private Label viewportInfoLabel;
 
     public ExportPanel(RenderController controller,
                        Runnable renderFullCallback,
@@ -36,14 +38,21 @@ public class ExportPanel extends ScrollPane {
 
         setContent(createContent());
         setFitToWidth(true);
+
+        // Initialize export size
+        updateExportSize();
     }
 
     private VBox createContent() {
         VBox panel = new VBox(8);
         panel.setPadding(new Insets(10));
 
-        // Output size
-        Label sizeLabel = new Label("Output Size:");
+        // Viewport info (read-only)
+        viewportInfoLabel = new Label("Viewport: --");
+        viewportInfoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+
+        // Export size
+        Label sizeLabel = new Label("Export Size:");
         sizeLabel.setStyle("-fx-font-weight: bold;");
 
         // Preset sizes
@@ -63,7 +72,7 @@ public class ExportPanel extends ScrollPane {
                 widthField.setText("7680");
                 heightField.setText("4320");
             }
-            updateOutputSize();
+            updateExportSize();
         });
 
         HBox sizeBox = new HBox(5);
@@ -75,8 +84,8 @@ public class ExportPanel extends ScrollPane {
         sizeBox.getChildren().addAll(widthField, new Label("x"), heightField);
 
         // Apply size button
-        Button applySizeBtn = new Button("Apply Size");
-        applySizeBtn.setOnAction(e -> updateOutputSize());
+        Button applySizeBtn = new Button("Apply Export Size");
+        applySizeBtn.setOnAction(e -> updateExportSize());
         applySizeBtn.setMaxWidth(Double.MAX_VALUE);
 
         // Buttons
@@ -92,15 +101,16 @@ public class ExportPanel extends ScrollPane {
         // Info
         Label infoLabel = new Label(
             "Tips:\n" +
-            "- Use preview to find a good angle\n" +
-            "- Press Space for full quality render\n" +
-            "- Higher iterations = more detail\n" +
-            "- 4K/8K may take several minutes"
+            "- Preview uses viewport size (auto)\n" +
+            "- Export uses the size above\n" +
+            "- 4K/8K export may take minutes"
         );
         infoLabel.setStyle("-fx-font-size: 11px;");
         infoLabel.setWrapText(true);
 
         panel.getChildren().addAll(
+            viewportInfoLabel,
+            new Separator(),
             sizeLabel, presetCombo, sizeBox,
             applySizeBtn,
             new Separator(),
@@ -113,18 +123,30 @@ public class ExportPanel extends ScrollPane {
         return panel;
     }
 
-    public void updateOutputSize() {
+    /**
+     * Update the export size in the controller.
+     */
+    public void updateExportSize() {
         try {
             int width = Integer.parseInt(widthField.getText());
             int height = Integer.parseInt(heightField.getText());
-            controller.setOutputSize(width, height);
+            controller.setExportSize(width, height);
         } catch (NumberFormatException e) {
             // Keep current size
         }
     }
 
+    /**
+     * Update the viewport info label (called when viewport resizes).
+     */
+    public void updateViewportInfo() {
+        int w = controller.getViewportWidth();
+        int h = controller.getViewportHeight();
+        viewportInfoLabel.setText(String.format("Viewport: %dx%d (auto)", w, h));
+    }
+
     private void exportImage() {
-        updateOutputSize();
+        updateExportSize();
 
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Export Image");

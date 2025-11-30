@@ -217,12 +217,20 @@ public class ProgressiveRenderer {
             return;
         }
 
-        float[] pixels = engine.readImage();
+        // Get dimensions first, then read pixels atomically
         int width = engine.getWidth();
         int height = engine.getHeight();
+        float[] pixels = engine.readImage();
+
+        // Validate that pixel array matches expected size (race condition protection)
+        int expectedSize = width * height * 4;
+        if (pixels == null || pixels.length != expectedSize) {
+            // Size mismatch due to resize - skip this frame
+            return;
+        }
 
         // Convert to byte array for JavaFX (BGRA order for getByteBgraInstance)
-        byte[] bytePixels = new byte[width * height * 4];
+        byte[] bytePixels = new byte[expectedSize];
         for (int i = 0; i < width * height; i++) {
             int idx = i * 4;
             int r = Math.min(255, Math.max(0, (int) (pixels[idx] * 255)));
