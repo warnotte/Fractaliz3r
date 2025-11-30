@@ -29,7 +29,7 @@ struct RayHit {
 };
 
 // ============================================================================
-// Normal Calculation (Tetrahedron Method)
+// Normal Calculation (Tetrahedron Method with adaptive epsilon)
 // ============================================================================
 
 vec3 calcNormal(vec3 pos) {
@@ -37,7 +37,11 @@ vec3 calcNormal(vec3 pos) {
     const vec3 k2 = vec3(-1.0, -1.0,  1.0);
     const vec3 k3 = vec3(-1.0,  1.0, -1.0);
     const vec3 k4 = vec3( 1.0,  1.0,  1.0);
-    const float e = NORMAL_EPSILON;
+
+    // Adaptive epsilon based on distance from camera
+    // This prevents precision issues at different scales
+    float distToCamera = length(pos - camPos);
+    float e = max(NORMAL_EPSILON, distToCamera * 0.0001);
 
     return normalize(
         k1 * DE_simple(pos + k1 * e) +
@@ -217,7 +221,7 @@ bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist) {
     return false;
 }
 
-// Path trace with multiple bounces
+// Path trace with multiple bounces - supports Lambertian, Metallic, and Glass materials
 vec3 pathTrace(Ray ray, inout uint seed) {
     vec3 throughput = vec3(1.0);  // Path throughput (accumulated BRDF)
     vec3 radiance = vec3(0.0);    // Accumulated light
@@ -239,30 +243,178 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         // Calculate normal at hit point
         vec3 normal = calcNormal(hitPos);
 
+        // Ensure normal faces the ray (for correct shading)
+        vec3 faceNormal = normal;
+        if (dot(currentRay.direction, normal) > 0.0) {
+            faceNormal = -normal;
+        }
+
         // Get surface color (albedo)
         OrbitTrap trap;
         DE(hitPos, trap);
         vec3 albedo = getColor(trap);
 
-        // Direct lighting (Next Event Estimation)
-        vec3 lightDirNorm = normalize(lightDir);
-        float NdotL = max(dot(normal, lightDirNorm), 0.0);
+        vec3 viewDir = -currentRay.direction;
+        float cosTheta = max(dot(viewDir, faceNormal), 0.0);
 
-        if (NdotL > 0.0) {
-            // Shadow ray
-            Ray shadowRay;
-            shadowRay.origin = hitPos + normal * 0.001;
-            shadowRay.direction = lightDirNorm;
+        // ====================================================================
+        // Material-specific behavior
+        // ====================================================================
 
-            vec3 shadowHitPos;
-            float shadowDist;
-            bool inShadow = rayMarchSimple(shadowRay, shadowHitPos, shadowDist);
+        if (materialType == MATERIAL_GLASS) {
+            // ============================================================
+            // GLASS (Dielectric) - For fractals: Surface refraction effect
+            // ============================================================
+            // Note: True volumetric glass doesn't work well with fractals
+            // because there's no clear "inside" to traverse. Instead, we
+            // simulate a glass-like surface with refraction and reflection.
 
-            if (!inShadow) {
-                // Direct light contribution
-                vec3 directLight = lightColor * lightIntensity * NdotL;
-                radiance += throughput * albedo * directLight / PI;
+            // Fresnel determines reflection vs transmission
+            float fresnel = fresnelDielectric(cosTheta, ior);
+
+            // Add roughness to Fresnel for frosted glass effect
+            if (roughness > 0.01) {
+                fresnel = mix(fresnel, 0.5, roughness * 0.5);
             }
+
+            if (random(seed) < fresnel) {
+                // Reflection path
+                vec3 reflectDir = reflect(currentRay.direction, faceNormal);
+
+                // Add roughness to reflection
+                if (roughness > 0.001) {
+                    vec3 H = randomGGX(seed, faceNormal, roughness);
+                    reflectDir = reflect(-viewDir, H);
+                    if (dot(reflectDir, faceNormal) < 0.0) {
+                        reflectDir = reflect(currentRay.direction, faceNormal);
+                    }
+                }
+
+                currentRay.origin = hitPos + faceNormal * 0.002;
+                currentRay.direction = normalize(reflectDir);
+
+                // Slight tint on reflection
+                throughput *= mix(vec3(1.0), albedo, 0.05);
+            } else {
+                // Transmission path - simulate looking "through" the surface
+                // by bending the ray and continuing into the environment
+                vec3 refractedDir;
+                float eta = 1.0 / ior;
+
+                if (refractRay(currentRay.direction, faceNormal, eta, refractedDir)) {
+                    // For fractals: instead of going "into" the solid,
+                    // we bend the ray and let it continue to the environment
+                    // This simulates the visual distortion of glass
+
+                    // Offset away from surface to avoid self-intersection
+                    currentRay.origin = hitPos + faceNormal * 0.002;
+
+                    // Mix between refracted direction and original direction
+                    // based on IOR - higher IOR = more bending
+                    float bendStrength = clamp((ior - 1.0) * 2.0, 0.0, 1.0);
+                    currentRay.direction = normalize(mix(currentRay.direction, refractedDir, bendStrength));
+
+                    // Add chromatic dispersion effect for realism
+                    vec3 dispersion = vec3(0.98, 1.0, 1.02);
+                    throughput *= dispersion;
+                } else {
+                    // Total internal reflection
+                    vec3 reflectDir = reflect(currentRay.direction, faceNormal);
+                    currentRay.origin = hitPos + faceNormal * 0.002;
+                    currentRay.direction = normalize(reflectDir);
+                }
+
+                // Glass tint (more transparent than reflective path)
+                throughput *= mix(vec3(1.0), albedo, 0.02);
+            }
+
+        } else if (materialType == MATERIAL_METALLIC) {
+            // ============================================================
+            // METALLIC - Specular reflection with roughness
+            // ============================================================
+
+            // Direct lighting for metals (specular only)
+            vec3 lightDirNorm = normalize(lightDir);
+            vec3 H_light = normalize(lightDirNorm + viewDir);
+            float NdotH = max(dot(faceNormal, H_light), 0.0);
+            float NdotL = max(dot(faceNormal, lightDirNorm), 0.0);
+
+            if (NdotL > 0.0) {
+                // Shadow ray
+                Ray shadowRay;
+                shadowRay.origin = hitPos + faceNormal * 0.001;
+                shadowRay.direction = lightDirNorm;
+
+                vec3 shadowHitPos;
+                float shadowDist;
+                bool inShadow = rayMarchSimple(shadowRay, shadowHitPos, shadowDist);
+
+                if (!inShadow) {
+                    // Metal F0 is the albedo color (colored metals)
+                    vec3 F0 = mix(vec3(0.04), albedo, metalness);
+                    vec3 F = fresnelSchlickVec(max(dot(H_light, viewDir), 0.0), F0);
+
+                    // Simplified specular term
+                    float a = roughness * roughness;
+                    float D = a * a / (PI * pow(NdotH * NdotH * (a * a - 1.0) + 1.0, 2.0));
+
+                    vec3 specular = F * D * NdotL * lightColor * lightIntensity;
+                    radiance += throughput * specular;
+                }
+            }
+
+            // Sample reflection direction with GGX
+            vec3 H = randomGGX(seed, faceNormal, max(roughness, 0.001));
+            vec3 reflectDir = reflect(-viewDir, H);
+
+            // Ensure reflection is in correct hemisphere
+            if (dot(reflectDir, faceNormal) < 0.0) {
+                reflectDir = reflect(currentRay.direction, faceNormal);
+            }
+
+            // Fresnel for metals (F0 = albedo for metallic materials)
+            vec3 F0 = mix(vec3(0.04), albedo, metalness);
+            vec3 F = fresnelSchlickVec(cosTheta, F0);
+
+            throughput *= F;
+
+            currentRay.origin = hitPos + faceNormal * 0.001;
+            currentRay.direction = normalize(reflectDir);
+
+        } else {
+            // ============================================================
+            // LAMBERTIAN (Diffuse) - Original behavior
+            // ============================================================
+
+            // Direct lighting (Next Event Estimation)
+            vec3 lightDirNorm = normalize(lightDir);
+            float NdotL = max(dot(faceNormal, lightDirNorm), 0.0);
+
+            if (NdotL > 0.0) {
+                // Shadow ray
+                Ray shadowRay;
+                shadowRay.origin = hitPos + faceNormal * 0.001;
+                shadowRay.direction = lightDirNorm;
+
+                vec3 shadowHitPos;
+                float shadowDist;
+                bool inShadow = rayMarchSimple(shadowRay, shadowHitPos, shadowDist);
+
+                if (!inShadow) {
+                    // Direct light contribution
+                    vec3 directLight = lightColor * lightIntensity * NdotL;
+                    radiance += throughput * albedo * directLight / PI;
+                }
+            }
+
+            // Sample new direction (cosine-weighted hemisphere)
+            vec3 newDir = randomCosineHemisphere(seed, faceNormal);
+
+            // Update throughput with BRDF (Lambertian: albedo/PI, cosine already in sampling)
+            throughput *= albedo;
+
+            currentRay.origin = hitPos + faceNormal * 0.001;
+            currentRay.direction = newDir;
         }
 
         // Russian Roulette for path termination
@@ -271,16 +423,6 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             if (random(seed) > p) break;
             throughput /= p;
         }
-
-        // Sample new direction (cosine-weighted hemisphere)
-        vec3 newDir = randomCosineHemisphere(seed, normal);
-
-        // Update throughput with BRDF (Lambertian: albedo/PI, cosine already in sampling)
-        throughput *= albedo;
-
-        // Setup next ray
-        currentRay.origin = hitPos + normal * 0.001;
-        currentRay.direction = newDir;
     }
 
     return radiance;
