@@ -231,7 +231,17 @@ public class QualityPanel extends ScrollPane {
             renderCallback.requestRender();
         });
 
-        Label pathTracingInfo = new Label("Path tracing adds global illumination\n(soft indirect lighting). Slower but\nmore realistic. Works best with\nmany samples.");
+        Label indirectLabel = new Label("Indirect Light: 50%");
+        Slider indirectSlider = new Slider(0.0, 1.0, 0.5);
+        indirectSlider.valueProperty().addListener((obs, old, val) -> {
+            indirectLabel.setText(String.format("Indirect Light: %.0f%%", val.doubleValue() * 100));
+            getParams().setIndirectMultiplier(val.floatValue());
+            renderCallback.requestRender();
+        });
+        Label indirectInfo = new Label("0% = Hard shadows (direct only)\n100% = Soft shadows (full GI)");
+        indirectInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        Label pathTracingInfo = new Label("Path tracing adds global illumination.\nSlower but more realistic.");
         pathTracingInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
         // Quality presets
@@ -295,6 +305,7 @@ public class QualityPanel extends ScrollPane {
             pathTracingLabel, pathTracingCheck,
             bouncesLabel, bouncesSlider,
             skyIntensityLabel, skyIntensitySlider,
+            indirectLabel, indirectSlider, indirectInfo,
             pathTracingInfo,
             new Separator(),
             presetLabel, presetBox

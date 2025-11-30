@@ -274,6 +274,7 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("maxBounces", params.getMaxBounces());
             uniforms.put("roughness", params.getRoughness());
             uniforms.put("skyIntensity", params.getSkyIntensity());
+            uniforms.put("indirectMultiplier", params.getIndirectMultiplier());
 
             // Render mode
             uniforms.put("renderMode", params.getRenderMode());
@@ -309,10 +310,8 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("scale", p.getScale());
                 uniforms.put("foldAngleX", (float) Math.toRadians(p.getFoldAngleX()));
                 uniforms.put("foldAngleY", (float) Math.toRadians(p.getFoldAngleY()));
-                uniforms.put("offset", new float[]{
-                    p.getOffsetX(), p.getOffsetY(), p.getOffsetZ()
-                });
-                uniforms.put("minRadius", p.getMinRadius());
+                // ifsOffset is a scalar in the shader (classic KIFS uses offsetX only)
+                uniforms.put("ifsOffset", p.getOffsetX());
             }
         }
 

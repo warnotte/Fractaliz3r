@@ -152,18 +152,26 @@ vec3 shade(RayHit hit, Ray ray) {
     // Ambient occlusion
     float ao = calcAO(hit.pos, normal);
 
-    // Combine lighting
-    vec3 ambient = ambientColor * ambientIntensity * baseColor * ao;
+    // Combine lighting - use environment-aware ambient
+    vec3 ambient = getAmbientLighting(normal) * baseColor * ao;
     vec3 diffuse = lightColor * lightIntensity * baseColor * NdotL * shadow;
     vec3 specular = lightColor * spec * specularIntensity * shadow;
+
+    // Environment reflection for specular (if HDRI loaded)
+    if (useEnvMap != 0 && envLightingMix > 0.0) {
+        vec3 reflectDir = reflect(ray.direction, normal);
+        vec3 envReflect = sampleEnvironment(reflectDir);
+        float fresnelFactor = fresnel(viewDir, normal, 5.0);
+        specular = mix(specular, envReflect * specularIntensity * fresnelFactor, envLightingMix * 0.5);
+    }
 
     // Fresnel rim lighting
     float rim = fresnel(viewDir, normal, 3.0);
     vec3 rimLight = lightColor * rim * 0.15;
 
-    // Distance fog
+    // Distance fog - use environment color for fog if available
     float fogFactor = 1.0 - exp(-hit.dist * 0.05);
-    vec3 fogColor = ambientColor * 0.5;
+    vec3 fogColor = (useEnvMap != 0) ? sampleEnvironment(ray.direction) * 0.3 : ambientColor * 0.5;
 
     vec3 color = ambient + diffuse + specular + rimLight;
     color = mix(color, fogColor, fogFactor * 0.3);
@@ -174,41 +182,9 @@ vec3 shade(RayHit hit, Ray ray) {
 // ============================================================================
 // Background / Environment
 // ============================================================================
-
-vec3 background(Ray ray, float minDist) {
-    // Gradient background
-    float t = 0.5 + 0.5 * ray.direction.y;
-    vec3 bg = mix(vec3(0.1, 0.1, 0.15), vec3(0.02, 0.02, 0.05), t);
-
-    // Glow effect based on how close we got
-    float glow = exp(-minDist * 10.0) * glowIntensity;
-    bg += fractalPalette(minDist * 2.0) * glow;
-
-    // Simple stars
-    vec3 starDir = normalize(ray.direction);
-    float stars = pow(max(0.0, sin(starDir.x * 100.0) * sin(starDir.y * 100.0) * sin(starDir.z * 100.0)), 20.0);
-    bg += vec3(stars * 0.3);
-
-    return bg;
-}
-
-// Environment lighting for path tracing (HDR-like)
-vec3 envLight(vec3 dir) {
-    // Gradient sky
-    float t = 0.5 + 0.5 * dir.y;
-    vec3 sky = mix(vec3(0.4, 0.4, 0.5), vec3(0.7, 0.8, 1.0), t);
-
-    // Sun contribution
-    float sunAngle = max(0.0, dot(dir, normalize(lightDir)));
-    vec3 sun = lightColor * pow(sunAngle, 64.0) * 5.0;
-
-    // Ground reflection (dark below horizon)
-    if (dir.y < 0.0) {
-        sky = mix(sky, vec3(0.1, 0.08, 0.06), smoothstep(0.0, -0.3, dir.y));
-    }
-
-    return (sky + sun) * skyIntensity;
-}
+// Note: Environment sampling functions are now in common.glsl:
+// - sampleEnvironment(dir) - for path tracing (HDRI or procedural)
+// - sampleEnvironmentWithGlow(dir, minDist) - for raytracing with glow effect
 
 // ============================================================================
 // Path Tracing
@@ -254,7 +230,9 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 
         if (!rayMarchSimple(currentRay, hitPos, hitDist)) {
             // Ray escaped - add environment light
-            radiance += throughput * envLight(currentRay.direction);
+            // First bounce gets full environment, subsequent bounces are scaled by indirectMultiplier
+            float envScale = (bounce == 0) ? 1.0 : indirectMultiplier;
+            radiance += throughput * sampleEnvironment(currentRay.direction) * envScale;
             break;
         }
 
@@ -387,7 +365,7 @@ void main() {
         } else {
             // For debug modes, use simple background; for final mode use fancy background with glow
             if (renderMode == RENDER_MODE_FINAL) {
-                color = background(ray, hit.minDist);
+                color = sampleEnvironmentWithGlow(ray.direction, hit.minDist);
             } else {
                 // True black background for debug modes
                 color = vec3(0.0);

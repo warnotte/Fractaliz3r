@@ -75,6 +75,7 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected int maxBounces;
     protected float roughness;
     protected float skyIntensity;
+    protected float indirectMultiplier;  // Controls indirect light contribution (0 = no GI, 1 = full GI)
 
     /**
      * Initialize common parameters with sensible defaults.
@@ -132,6 +133,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.maxBounces = 4;
         this.roughness = 0.5f;
         this.skyIntensity = 1.0f;
+        this.indirectMultiplier = 0.5f;  // 50% indirect light by default (darker shadows)
     }
 
     /**
@@ -185,6 +187,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.maxBounces = this.maxBounces;
         target.roughness = this.roughness;
         target.skyIntensity = this.skyIntensity;
+        target.indirectMultiplier = this.indirectMultiplier;
     }
 
     /**
@@ -323,6 +326,8 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setRoughness(float roughness) { this.roughness = roughness; }
     public float getSkyIntensity() { return skyIntensity; }
     public void setSkyIntensity(float intensity) { this.skyIntensity = intensity; }
+    public float getIndirectMultiplier() { return indirectMultiplier; }
+    public void setIndirectMultiplier(float multiplier) { this.indirectMultiplier = Math.max(0, Math.min(1, multiplier)); }
 
     // ========================================================================
     // Builder-style setters (return this for chaining)

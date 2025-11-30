@@ -43,6 +43,12 @@ public class GLSLEngine implements AutoCloseable {
     private int bloomTexture1, bloomTexture2;
     private int bloomWidth, bloomHeight;  // Half resolution for performance
 
+    // Environment map
+    private int envMapTexture;
+    private boolean envMapLoaded = false;
+    private float envRotation = 0.0f;
+    private float envLightingMix = 0.5f;  // 0 = directional only, 1 = full HDRI lighting
+
     // Fullscreen quad VAO
     private int quadVAO;
     private int quadVBO;
@@ -135,6 +141,7 @@ public class GLSLEngine implements AutoCloseable {
         createFullscreenQuad();
         createFramebuffer(currentWidth, currentHeight);
         createBloomFramebuffers(currentWidth, currentHeight);
+        createDefaultEnvMap();
         loadDisplayShader();
         loadPostProcessShaders();
 
@@ -242,6 +249,14 @@ public class GLSLEngine implements AutoCloseable {
             program.setUniform("resolution", (float) currentWidth, (float) currentHeight);
             program.setUniform("sampleIndex", sampleCount);
             program.setUniform("time", (float) glfwGetTime());
+
+            // Environment map
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, envMapTexture);
+            program.setUniform("envMap", 0);
+            program.setUniform("useEnvMap", envMapLoaded ? 1 : 0);
+            program.setUniform("envRotation", envRotation);
+            program.setUniform("envLightingMix", envLightingMix);
 
             // Set user uniforms
             for (Map.Entry<String, Object> entry : uniforms.entrySet()) {
@@ -627,6 +642,229 @@ public class GLSLEngine implements AutoCloseable {
         return postProcessParams;
     }
 
+    // ========================================================================
+    // Environment Map
+    // ========================================================================
+
+    /**
+     * Create a default 1x1 black environment texture.
+     */
+    private void createDefaultEnvMap() {
+        envMapTexture = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, envMapTexture);
+
+        // 1x1 black pixel
+        ByteBuffer pixel = MemoryUtil.memAlloc(4);
+        pixel.put((byte) 0).put((byte) 0).put((byte) 0).put((byte) -1);
+        pixel.flip();
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        MemoryUtil.memFree(pixel);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        envMapLoaded = false;
+    }
+
+    /**
+     * Load an environment map from file (supports PNG, JPG, HDR).
+     * Uses STB image loading via LWJGL.
+     */
+    public void loadEnvironmentMap(String filePath) {
+        runOnGLThread(() -> {
+            try {
+                IntBuffer width = MemoryUtil.memAllocInt(1);
+                IntBuffer height = MemoryUtil.memAllocInt(1);
+                IntBuffer channels = MemoryUtil.memAllocInt(1);
+
+                boolean isHDR = filePath.toLowerCase().endsWith(".hdr");
+
+                // Delete old texture and create new one
+                glDeleteTextures(envMapTexture);
+                envMapTexture = glGenTextures();
+                glBindTexture(GL_TEXTURE_2D, envMapTexture);
+
+                if (isHDR) {
+                    // Load HDR as float data
+                    FloatBuffer imageData = org.lwjgl.stb.STBImage.stbi_loadf(filePath, width, height, channels, 3);
+
+                    if (imageData == null) {
+                        System.err.println("Failed to load HDR: " + filePath);
+                        System.err.println("STB Error: " + org.lwjgl.stb.STBImage.stbi_failure_reason());
+                        createDefaultEnvMap();
+                        MemoryUtil.memFree(width);
+                        MemoryUtil.memFree(height);
+                        MemoryUtil.memFree(channels);
+                        return;
+                    }
+
+                    int w = width.get(0);
+                    int h = height.get(0);
+
+                    // Use RGB16F for HDR data
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, w, h, 0, GL_RGB, GL_FLOAT, imageData);
+
+                    org.lwjgl.stb.STBImage.stbi_image_free(imageData);
+
+                    System.out.println("Loaded HDR environment map: " + filePath + " (" + w + "x" + h + ")");
+                } else {
+                    // Load LDR (PNG, JPG) as byte data
+                    ByteBuffer imageData = org.lwjgl.stb.STBImage.stbi_load(filePath, width, height, channels, 4);
+
+                    if (imageData == null) {
+                        System.err.println("Failed to load environment map: " + filePath);
+                        System.err.println("STB Error: " + org.lwjgl.stb.STBImage.stbi_failure_reason());
+                        createDefaultEnvMap();
+                        MemoryUtil.memFree(width);
+                        MemoryUtil.memFree(height);
+                        MemoryUtil.memFree(channels);
+                        return;
+                    }
+
+                    int w = width.get(0);
+                    int h = height.get(0);
+
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, imageData);
+
+                    org.lwjgl.stb.STBImage.stbi_image_free(imageData);
+
+                    System.out.println("Loaded environment map: " + filePath + " (" + w + "x" + h + ")");
+                }
+
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+                glGenerateMipmap(GL_TEXTURE_2D);
+
+                MemoryUtil.memFree(width);
+                MemoryUtil.memFree(height);
+                MemoryUtil.memFree(channels);
+
+                glBindTexture(GL_TEXTURE_2D, 0);
+
+                envMapLoaded = true;
+
+            } catch (Exception e) {
+                System.err.println("Error loading environment map: " + e.getMessage());
+                e.printStackTrace();
+            }
+        });
+    }
+
+    /**
+     * Load an environment map from resources.
+     */
+    public void loadEnvironmentMapFromResource(String resourcePath) {
+        runOnGLThread(() -> {
+            try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
+                if (is == null) {
+                    System.err.println("Environment map resource not found: " + resourcePath);
+                    return;
+                }
+
+                byte[] bytes = is.readAllBytes();
+                ByteBuffer buffer = MemoryUtil.memAlloc(bytes.length);
+                buffer.put(bytes).flip();
+
+                IntBuffer width = MemoryUtil.memAllocInt(1);
+                IntBuffer height = MemoryUtil.memAllocInt(1);
+                IntBuffer channels = MemoryUtil.memAllocInt(1);
+
+                ByteBuffer imageData = org.lwjgl.stb.STBImage.stbi_load_from_memory(buffer, width, height, channels, 4);
+
+                MemoryUtil.memFree(buffer);
+
+                if (imageData == null) {
+                    System.err.println("Failed to decode environment map: " + resourcePath);
+                    MemoryUtil.memFree(width);
+                    MemoryUtil.memFree(height);
+                    MemoryUtil.memFree(channels);
+                    return;
+                }
+
+                int w = width.get(0);
+                int h = height.get(0);
+
+                glDeleteTextures(envMapTexture);
+                envMapTexture = glGenTextures();
+                glBindTexture(GL_TEXTURE_2D, envMapTexture);
+
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, imageData);
+
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+                glGenerateMipmap(GL_TEXTURE_2D);
+
+                org.lwjgl.stb.STBImage.stbi_image_free(imageData);
+                MemoryUtil.memFree(width);
+                MemoryUtil.memFree(height);
+                MemoryUtil.memFree(channels);
+
+                glBindTexture(GL_TEXTURE_2D, 0);
+
+                envMapLoaded = true;
+                System.out.println("Loaded environment map: " + resourcePath + " (" + w + "x" + h + ")");
+
+            } catch (Exception e) {
+                System.err.println("Error loading environment map: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Clear the environment map (use procedural sky).
+     */
+    public void clearEnvironmentMap() {
+        runOnGLThread(() -> {
+            glDeleteTextures(envMapTexture);
+            createDefaultEnvMap();
+        });
+    }
+
+    /**
+     * Check if an environment map is loaded.
+     */
+    public boolean isEnvMapLoaded() {
+        return envMapLoaded;
+    }
+
+    /**
+     * Set environment rotation (in radians).
+     */
+    public void setEnvRotation(float radians) {
+        this.envRotation = radians;
+    }
+
+    /**
+     * Get environment rotation.
+     */
+    public float getEnvRotation() {
+        return envRotation;
+    }
+
+    /**
+     * Set environment lighting mix (0 = directional only, 1 = full HDRI).
+     */
+    public void setEnvLightingMix(float mix) {
+        this.envLightingMix = Math.max(0, Math.min(1, mix));
+    }
+
+    /**
+     * Get environment lighting mix.
+     */
+    public float getEnvLightingMix() {
+        return envLightingMix;
+    }
+
     private void setUniformValue(ShaderProgram program, String name, Object value) {
         if (value instanceof Float f) {
             program.setUniform(name, f);
@@ -722,6 +960,7 @@ public class GLSLEngine implements AutoCloseable {
             glDeleteFramebuffers(bloomFBO2);
             glDeleteTextures(bloomTexture1);
             glDeleteTextures(bloomTexture2);
+            glDeleteTextures(envMapTexture);
             glDeleteVertexArrays(quadVAO);
             glDeleteBuffers(quadVBO);
             glDeleteBuffers(quadEBO);

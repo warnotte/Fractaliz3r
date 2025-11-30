@@ -74,6 +74,13 @@ uniform int pathTracingEnabled;
 uniform int maxBounces;
 uniform float roughness;        // Surface roughness for GGX
 uniform float skyIntensity;     // Environment light intensity
+uniform float indirectMultiplier; // Multiplier for indirect/bounced light (0 = direct only, 1 = full GI)
+
+// Environment Map
+uniform sampler2D envMap;       // Equirectangular environment map
+uniform int useEnvMap;          // 0 = procedural, 1 = HDRI
+uniform float envRotation;      // Rotation angle in radians
+uniform float envLightingMix;   // 0 = directional only, 1 = full HDRI lighting
 
 // ============================================================================
 // Random Number Generation (PCG-based)
@@ -289,3 +296,106 @@ const int RENDER_MODE_ITERATIONS = 5;
 const int RENDER_MODE_ORBIT_TRAP = 6;
 const int RENDER_MODE_DIFFUSE = 7;
 const int RENDER_MODE_SPECULAR = 8;
+
+// ============================================================================
+// Environment Sampling (Unified for raytracing and path tracing)
+// ============================================================================
+
+// Convert direction to equirectangular UV coordinates
+vec2 dirToEquirectangular(vec3 dir) {
+    // Apply rotation around Y axis
+    float cosR = cos(envRotation);
+    float sinR = sin(envRotation);
+    vec3 rotDir = vec3(
+        dir.x * cosR - dir.z * sinR,
+        dir.y,
+        dir.x * sinR + dir.z * cosR
+    );
+
+    float u = atan(rotDir.z, rotDir.x) / TAU + 0.5;
+    float v = asin(clamp(rotDir.y, -1.0, 1.0)) / PI + 0.5;
+    return vec2(u, v);
+}
+
+// Procedural sky with sun (used when no HDRI is loaded)
+vec3 proceduralSky(vec3 dir) {
+    // Gradient sky
+    float t = 0.5 + 0.5 * dir.y;
+    vec3 sky = mix(vec3(0.4, 0.4, 0.5), vec3(0.7, 0.8, 1.0), t);
+
+    // Sun contribution
+    float sunAngle = max(0.0, dot(dir, normalize(lightDir)));
+    vec3 sun = lightColor * pow(sunAngle, 64.0) * 5.0;
+
+    // Ground reflection (dark below horizon)
+    if (dir.y < 0.0) {
+        sky = mix(sky, vec3(0.1, 0.08, 0.06), smoothstep(0.0, -0.3, dir.y));
+    }
+
+    return sky + sun;
+}
+
+// Sample environment (HDRI or procedural)
+vec3 sampleEnvironment(vec3 dir) {
+    vec3 envColor;
+
+    if (useEnvMap != 0) {
+        // Sample HDRI (equirectangular)
+        vec2 uv = dirToEquirectangular(dir);
+        envColor = texture(envMap, uv).rgb;
+    } else {
+        // Procedural sky
+        envColor = proceduralSky(dir);
+    }
+
+    return envColor * skyIntensity;
+}
+
+// Background with glow effect (for raytracing when ray misses)
+vec3 sampleEnvironmentWithGlow(vec3 dir, float minDist) {
+    vec3 bg = sampleEnvironment(dir);
+
+    // Add glow effect based on how close we got to the fractal
+    float glow = exp(-minDist * 10.0) * glowIntensity;
+    bg += fractalPalette(minDist * 2.0) * glow;
+
+    // Add stars (only for procedural sky or as overlay)
+    if (useEnvMap == 0) {
+        vec3 starDir = normalize(dir);
+        float stars = pow(max(0.0, sin(starDir.x * 100.0) * sin(starDir.y * 100.0) * sin(starDir.z * 100.0)), 20.0);
+        bg += vec3(stars * 0.3);
+    }
+
+    return bg;
+}
+
+// Sample environment for diffuse lighting (hemisphere average)
+// This provides environment-based ambient/diffuse lighting
+vec3 sampleEnvironmentDiffuse(vec3 normal) {
+    // Simple approximation: sample in normal direction + a few offset directions
+    // For proper irradiance, we'd need precomputed irradiance maps
+    vec3 up = abs(normal.y) < 0.99 ? vec3(0, 1, 0) : vec3(1, 0, 0);
+    vec3 right = normalize(cross(up, normal));
+    up = cross(normal, right);
+
+    // Sample in 5 directions (normal + 4 around it at 45 degrees)
+    vec3 irradiance = sampleEnvironment(normal);
+    irradiance += sampleEnvironment(normalize(normal + right * 0.7));
+    irradiance += sampleEnvironment(normalize(normal - right * 0.7));
+    irradiance += sampleEnvironment(normalize(normal + up * 0.7));
+    irradiance += sampleEnvironment(normalize(normal - up * 0.7));
+
+    return irradiance * 0.2; // Average of 5 samples
+}
+
+// Get combined ambient lighting (mix of traditional ambient and environment)
+vec3 getAmbientLighting(vec3 normal) {
+    vec3 traditionalAmbient = ambientColor * ambientIntensity;
+
+    if (useEnvMap != 0 && envLightingMix > 0.0) {
+        vec3 envAmbient = sampleEnvironmentDiffuse(normal);
+        return mix(traditionalAmbient, envAmbient, envLightingMix);
+    }
+
+    return traditionalAmbient;
+}

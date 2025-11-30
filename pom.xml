@@ -72,6 +72,17 @@
       <classifier>natives-windows</classifier>
     </dependency>
 
+    <!-- LWJGL STB (image loading) -->
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl-stb</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl-stb</artifactId>
+      <classifier>natives-windows</classifier>
+    </dependency>
+
     <!-- JavaFX -->
     <dependency>
       <groupId>org.openjfx</groupId>

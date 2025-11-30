@@ -43,6 +43,7 @@ public class GLSLFractalizerApp extends Application {
     private GLSLDevicePanel devicePanel;
     private AnimationPanel animationPanel;
     private PostProcessingPanel postProcessPanel;
+    private EnvironmentPanel environmentPanel;
 
     // Rendering state
     private boolean needsRender = true;
@@ -216,7 +217,11 @@ public class GLSLFractalizerApp extends Application {
         postProcessPanel = new PostProcessingPanel(postProcessParams, this::requestRender);
         Tab postProcessTab = new Tab("FX", postProcessPanel);
 
-        tabPane.getTabs().addAll(fractalTab, lightingTab, qualityTab, postProcessTab, animationTab, exportTab, deviceTab);
+        // Environment tab
+        environmentPanel = new EnvironmentPanel(controller.getEngine(), this::requestRender);
+        Tab environmentTab = new Tab("Env", environmentPanel);
+
+        tabPane.getTabs().addAll(fractalTab, lightingTab, qualityTab, postProcessTab, environmentTab, animationTab, exportTab, deviceTab);
 
         return tabPane;
     }
