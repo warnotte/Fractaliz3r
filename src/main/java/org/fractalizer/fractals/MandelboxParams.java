@@ -1,7 +1,5 @@
 package org.fractalizer.fractals;
 
-import org.fractalizer.engine.OpenCLEngine;
-
 /**
  * Parameters specific to Mandelbox fractal rendering.
  * The Mandelbox is a box-like fractal with folding and spherical inversion.
@@ -42,28 +40,6 @@ public class MandelboxParams extends AbstractFractalParams {
     @Override
     public FractalType getType() {
         return FractalType.MANDELBOX;
-    }
-
-    @Override
-    public int setKernelParams(OpenCLEngine engine, String kernelName, int startIndex) {
-        int idx = startIndex;
-
-        // Set common camera params
-        idx += setCommonKernelParams(engine, kernelName, idx);
-
-        // Mandelbox-specific parameters
-        engine.setKernelArgFloat(kernelName, idx++, scale);
-        engine.setKernelArgFloat(kernelName, idx++, minRadius);
-        engine.setKernelArgFloat(kernelName, idx++, fixedRadius);
-        engine.setKernelArgFloat(kernelName, idx++, foldingLimit);
-        engine.setKernelArgInt(kernelName, idx++, maxIterations);
-        engine.setKernelArgInt(kernelName, idx++, maxRaySteps);
-        engine.setKernelArgFloat(kernelName, idx++, epsilon);
-
-        // Set lighting and effects params
-        idx += setLightingKernelParams(engine, kernelName, idx);
-
-        return idx - startIndex;
     }
 
     @Override

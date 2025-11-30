@@ -1,7 +1,6 @@
 package org.fractalizer.fractals;
 
 import org.fractalizer.engine.Camera;
-import org.fractalizer.engine.OpenCLEngine;
 
 /**
  * Abstract base class for fractal parameters.
@@ -121,70 +120,6 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.focalDistance = 2.5f;
         this.aperture = 0.02f;
         this.dofSamples = 16;
-    }
-
-    /**
-     * Set common kernel parameters (camera, lighting, shadows, etc.)
-     * @return The number of parameters set
-     */
-    protected int setCommonKernelParams(OpenCLEngine engine, String kernelName, int startIndex) {
-        int idx = startIndex;
-
-        // Camera position
-        float[] pos = camera.getPosition();
-        engine.setKernelArgFloats(kernelName, idx++, pos[0], pos[1], pos[2], 0f);
-
-        // Camera quaternion for orientation
-        float[] quat = camera.getQuaternion();
-        engine.setKernelArgFloats(kernelName, idx++, quat[0], quat[1], quat[2], quat[3]);
-
-        // FOV
-        engine.setKernelArgFloat(kernelName, idx++, fov);
-
-        return idx - startIndex;
-    }
-
-    /**
-     * Set lighting kernel parameters.
-     * @return The number of parameters set
-     */
-    protected int setLightingKernelParams(OpenCLEngine engine, String kernelName, int startIndex) {
-        int idx = startIndex;
-
-        // Light direction
-        engine.setKernelArgFloats(kernelName, idx++, lightX, lightY, lightZ, 0f);
-
-        // Light color + intensity
-        engine.setKernelArgFloats(kernelName, idx++, lightR, lightG, lightB, lightIntensity);
-
-        // Ambient color + intensity
-        engine.setKernelArgFloats(kernelName, idx++, ambientR, ambientG, ambientB, ambientIntensity);
-
-        // Material hue
-        engine.setKernelArgFloats(kernelName, idx++, hueR, hueG, hueB, 0f);
-
-        // Rendering quality
-        engine.setKernelArgFloat(kernelName, idx++, shadowSoftness);
-        engine.setKernelArgInt(kernelName, idx++, shadowSteps);
-        engine.setKernelArgInt(kernelName, idx++, aoSteps);
-        engine.setKernelArgFloat(kernelName, idx++, aoIntensity);
-        engine.setKernelArgFloat(kernelName, idx++, glowIntensity);
-        engine.setKernelArgFloat(kernelName, idx++, qualityMultiplier);
-
-        // Specular
-        engine.setKernelArgFloat(kernelName, idx++, specularIntensity);
-        engine.setKernelArgFloat(kernelName, idx++, specularPower);
-
-        // Render mode
-        engine.setKernelArgInt(kernelName, idx++, renderMode);
-
-        // DoF parameters
-        engine.setKernelArgInt(kernelName, idx++, dofEnabled ? 1 : 0);
-        engine.setKernelArgFloat(kernelName, idx++, focalDistance);
-        engine.setKernelArgFloat(kernelName, idx++, aperture);
-        engine.setKernelArgInt(kernelName, idx++, dofSamples);
-
-        return idx - startIndex;
     }
 
     /**

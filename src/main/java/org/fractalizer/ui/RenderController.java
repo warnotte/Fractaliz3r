@@ -9,80 +9,31 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * Interface for fractal render controllers.
- * Both OpenCL-based and GLSL-based controllers implement this interface,
- * allowing UI panels to work with either renderer.
+ * Interface for render controllers.
+ * Abstracts the rendering backend (GLSL, OpenCL, etc.)
  */
-public interface RenderController extends AutoCloseable {
+public interface RenderController {
 
-    /**
-     * Switch to a different fractal type.
-     */
     void setFractalType(FractalType type);
-
-    /**
-     * Get the current fractal type.
-     */
     FractalType getFractalType();
 
-    /**
-     * Start a preview render (fast, lower quality).
-     */
-    void renderPreview(Consumer<Image> onComplete, Consumer<Double> onProgress);
-
-    /**
-     * Start a full quality render.
-     */
-    void renderFull(Consumer<Image> onComplete, Consumer<Double> onProgress,
-                    Consumer<Object> onTileComplete);
-
-    /**
-     * Export the current render to a PNG file.
-     */
-    CompletableFuture<Void> exportToPNG(File file, Consumer<Double> onProgress);
-
-    /**
-     * Cancel current rendering.
-     */
-    void cancelRender();
-
-    /**
-     * Check if currently rendering.
-     */
-    boolean isRendering();
-
-    /**
-     * Set current fractal parameters.
-     */
     void setParams(FractalParams params);
-
-    /**
-     * Get current fractal parameters.
-     */
     FractalParams getParams();
 
-    /**
-     * Set output resolution.
-     */
     void setOutputSize(int width, int height);
-
-    /**
-     * Get output width.
-     */
     int getOutputWidth();
-
-    /**
-     * Get output height.
-     */
     int getOutputHeight();
 
-    /**
-     * Get device name (GPU/renderer name).
-     */
-    String getDeviceName();
+    void renderPreview(Consumer<Image> onComplete, Consumer<Double> onProgress);
+    void renderFull(Consumer<Image> onComplete, Consumer<Double> onProgress, Consumer<Object> onTileComplete);
 
-    /**
-     * Get device type description.
-     */
+    CompletableFuture<Void> exportToPNG(File file, Consumer<Double> onProgress);
+
+    void cancelRender();
+    boolean isRendering();
+
+    String getDeviceName();
     String getDeviceType();
+
+    void close();
 }
