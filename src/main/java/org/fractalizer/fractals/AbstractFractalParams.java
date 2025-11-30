@@ -77,6 +77,16 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float skyIntensity;
     protected float indirectMultiplier;  // Controls indirect light contribution (0 = no GI, 1 = full GI)
 
+    // Material System
+    // Type: 0 = Lambertian (diffuse), 1 = Metallic, 2 = Glass (dielectric)
+    public static final int MATERIAL_LAMBERTIAN = 0;
+    public static final int MATERIAL_METALLIC = 1;
+    public static final int MATERIAL_GLASS = 2;
+
+    protected int materialType;
+    protected float metalness;       // For metallic: blend between dielectric and metal (0-1)
+    protected float ior;             // Index of refraction for glass (typically 1.5)
+
     /**
      * Initialize common parameters with sensible defaults.
      */
@@ -134,6 +144,11 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.roughness = 0.5f;
         this.skyIntensity = 1.0f;
         this.indirectMultiplier = 0.5f;  // 50% indirect light by default (darker shadows)
+
+        // Material defaults (Lambertian diffuse)
+        this.materialType = MATERIAL_LAMBERTIAN;
+        this.metalness = 0.9f;
+        this.ior = 1.5f;  // Glass IOR
     }
 
     /**
@@ -188,6 +203,11 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.roughness = this.roughness;
         target.skyIntensity = this.skyIntensity;
         target.indirectMultiplier = this.indirectMultiplier;
+
+        // Copy material
+        target.materialType = this.materialType;
+        target.metalness = this.metalness;
+        target.ior = this.ior;
     }
 
     /**
@@ -328,6 +348,14 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setSkyIntensity(float intensity) { this.skyIntensity = intensity; }
     public float getIndirectMultiplier() { return indirectMultiplier; }
     public void setIndirectMultiplier(float multiplier) { this.indirectMultiplier = Math.max(0, Math.min(1, multiplier)); }
+
+    // Material
+    public int getMaterialType() { return materialType; }
+    public void setMaterialType(int type) { this.materialType = Math.max(0, Math.min(2, type)); }
+    public float getMetalness() { return metalness; }
+    public void setMetalness(float metalness) { this.metalness = Math.max(0, Math.min(1, metalness)); }
+    public float getIor() { return ior; }
+    public void setIor(float ior) { this.ior = Math.max(1.0f, Math.min(3.0f, ior)); }
 
     // ========================================================================
     // Builder-style setters (return this for chaining)

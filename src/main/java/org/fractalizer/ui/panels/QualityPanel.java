@@ -244,6 +244,50 @@ public class QualityPanel extends ScrollPane {
         Label pathTracingInfo = new Label("Path tracing adds global illumination.\nSlower but more realistic.");
         pathTracingInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
+        // === Material System ===
+        Label materialLabel = new Label("Material Type:");
+        materialLabel.setStyle("-fx-font-weight: bold;");
+
+        ComboBox<String> materialCombo = new ComboBox<>();
+        materialCombo.getItems().addAll("Lambertian (Diffuse)", "Metallic", "Glass");
+        materialCombo.getSelectionModel().select(0);
+        materialCombo.setMaxWidth(Double.MAX_VALUE);
+        materialCombo.setOnAction(e -> {
+            getParams().setMaterialType(materialCombo.getSelectionModel().getSelectedIndex());
+            renderCallback.requestRender();
+        });
+
+        Label metalnessLabel = new Label("Metalness: 0.90");
+        Slider metalnessSlider = new Slider(0.0, 1.0, 0.9);
+        metalnessSlider.valueProperty().addListener((obs, old, val) -> {
+            metalnessLabel.setText(String.format("Metalness: %.2f", val.doubleValue()));
+            getParams().setMetalness(val.floatValue());
+            renderCallback.requestRender();
+        });
+
+        Label iorLabel = new Label("IOR (Glass): 1.50");
+        Slider iorSlider = new Slider(1.0, 2.5, 1.5);
+        iorSlider.valueProperty().addListener((obs, old, val) -> {
+            iorLabel.setText(String.format("IOR (Glass): %.2f", val.doubleValue()));
+            getParams().setIor(val.floatValue());
+            renderCallback.requestRender();
+        });
+
+        Label roughnessLabel = new Label("Roughness: 0.50");
+        Slider roughnessSlider = new Slider(0.0, 1.0, 0.5);
+        roughnessSlider.valueProperty().addListener((obs, old, val) -> {
+            roughnessLabel.setText(String.format("Roughness: %.2f", val.doubleValue()));
+            getParams().setRoughness(val.floatValue());
+            renderCallback.requestRender();
+        });
+
+        Label materialInfo = new Label(
+            "Lambertian: Classic diffuse\n" +
+            "Metallic: Reflective with roughness\n" +
+            "Glass: Transparent with refraction"
+        );
+        materialInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
         // Quality presets
         Label presetLabel = new Label("Quality Presets:");
         presetLabel.setStyle("-fx-font-weight: bold;");
@@ -307,6 +351,12 @@ public class QualityPanel extends ScrollPane {
             skyIntensityLabel, skyIntensitySlider,
             indirectLabel, indirectSlider, indirectInfo,
             pathTracingInfo,
+            new Separator(),
+            materialLabel, materialCombo,
+            metalnessLabel, metalnessSlider,
+            iorLabel, iorSlider,
+            roughnessLabel, roughnessSlider,
+            materialInfo,
             new Separator(),
             presetLabel, presetBox
         );

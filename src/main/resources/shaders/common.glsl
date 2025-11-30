@@ -76,6 +76,12 @@ uniform float roughness;        // Surface roughness for GGX
 uniform float skyIntensity;     // Environment light intensity
 uniform float indirectMultiplier; // Multiplier for indirect/bounced light (0 = direct only, 1 = full GI)
 
+// Material System
+// Type: 0 = Lambertian (diffuse), 1 = Metallic, 2 = Glass (dielectric)
+uniform int materialType;
+uniform float metalness;        // For metallic: blend between dielectric and metal (0-1)
+uniform float ior;              // Index of refraction for glass (typically 1.5)
+
 // Environment Map
 uniform sampler2D envMap;       // Equirectangular environment map
 uniform int useEnvMap;          // 0 = procedural, 1 = HDRI
@@ -117,7 +123,7 @@ vec2 randomDisk(inout uint seed) {
     return r * vec2(cos(theta), sin(theta));
 }
 
-// Cosine-weighted hemisphere sampling (for future path tracing)
+// Cosine-weighted hemisphere sampling (for diffuse)
 vec3 randomCosineHemisphere(inout uint seed, vec3 normal) {
     float r1 = random(seed);
     float r2 = random(seed);
@@ -132,6 +138,75 @@ vec3 randomCosineHemisphere(inout uint seed, vec3 normal) {
     vec3 v = cross(w, u);
 
     return normalize(u * cos(phi) * sinTheta + v * sin(phi) * sinTheta + w * cosTheta);
+}
+
+// ============================================================================
+// Material System Constants and Functions
+// ============================================================================
+
+const int MATERIAL_LAMBERTIAN = 0;
+const int MATERIAL_METALLIC = 1;
+const int MATERIAL_GLASS = 2;
+
+// GGX/Trowbridge-Reitz microfacet distribution for metallic materials
+vec3 randomGGX(inout uint seed, vec3 normal, float roughness) {
+    float r1 = random(seed);
+    float r2 = random(seed);
+
+    float a = roughness * roughness;
+    float a2 = a * a;
+
+    float phi = TAU * r1;
+    float cosTheta = sqrt((1.0 - r2) / (1.0 + (a2 - 1.0) * r2));
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+    // Half-vector in tangent space
+    vec3 H = vec3(
+        sinTheta * cos(phi),
+        sinTheta * sin(phi),
+        cosTheta
+    );
+
+    // Create basis
+    vec3 w = normal;
+    vec3 u = normalize(cross(abs(w.x) > 0.1 ? vec3(0, 1, 0) : vec3(1, 0, 0), w));
+    vec3 v = cross(w, u);
+
+    // Transform to world space
+    return normalize(u * H.x + v * H.y + w * H.z);
+}
+
+// Schlick Fresnel approximation
+float fresnelSchlick(float cosTheta, float F0) {
+    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+vec3 fresnelSchlickVec(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+// Refraction using Snell's law
+// Returns true if refraction occurs, false if total internal reflection
+bool refractRay(vec3 incident, vec3 normal, float eta, out vec3 refracted) {
+    float cosI = -dot(incident, normal);
+    float sin2T = eta * eta * (1.0 - cosI * cosI);
+
+    if (sin2T > 1.0) {
+        // Total internal reflection
+        return false;
+    }
+
+    float cosT = sqrt(1.0 - sin2T);
+    refracted = eta * incident + (eta * cosI - cosT) * normal;
+    return true;
+}
+
+// Fresnel for dielectrics (Schlick approximation with correct IOR)
+float fresnelDielectric(float cosTheta, float ior) {
+    // F0 for dielectric based on IOR
+    float r0 = (1.0 - ior) / (1.0 + ior);
+    float F0 = r0 * r0;
+    return fresnelSchlick(cosTheta, F0);
 }
 
 // ============================================================================

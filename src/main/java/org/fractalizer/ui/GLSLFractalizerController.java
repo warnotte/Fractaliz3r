@@ -65,6 +65,7 @@ public class GLSLFractalizerController implements RenderController {
         engine.loadFractalShader("mandelbox", "/shaders/fractals/mandelbox.glsl");
         engine.loadFractalShader("menger", "/shaders/fractals/menger.glsl");
         engine.loadFractalShader("kaleidoscopic", "/shaders/fractals/kaleidoscopic.glsl");
+        engine.loadFractalShader("julia3d", "/shaders/fractals/julia3d.glsl");
     }
 
     /**
@@ -84,6 +85,7 @@ public class GLSLFractalizerController implements RenderController {
             case MANDELBOX -> this.currentParams = new MandelboxParams();
             case MENGER_SPONGE -> this.currentParams = new MengerSpongeParams();
             case KALEIDOSCOPIC_IFS -> this.currentParams = new KaleidoscopicIFSParams();
+            case JULIA_3D -> this.currentParams = new Julia3DParams();
         }
 
         // Preserve camera if switching fractals
@@ -276,6 +278,11 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("skyIntensity", params.getSkyIntensity());
             uniforms.put("indirectMultiplier", params.getIndirectMultiplier());
 
+            // Material System
+            uniforms.put("materialType", params.getMaterialType());
+            uniforms.put("metalness", params.getMetalness());
+            uniforms.put("ior", params.getIor());
+
             // Render mode
             uniforms.put("renderMode", params.getRenderMode());
         }
@@ -312,6 +319,14 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("foldAngleY", (float) Math.toRadians(p.getFoldAngleY()));
                 // ifsOffset is a scalar in the shader (classic KIFS uses offsetX only)
                 uniforms.put("ifsOffset", p.getOffsetX());
+            }
+            case JULIA_3D -> {
+                Julia3DParams p = (Julia3DParams) currentParams;
+                uniforms.put("maxIterations", p.getMaxIterations());
+                uniforms.put("bailout", p.getBailout());
+                uniforms.put("juliaC", new float[]{
+                    p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz(), p.getJuliaCw()
+                });
             }
         }
 

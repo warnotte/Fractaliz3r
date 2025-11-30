@@ -24,6 +24,7 @@ public class FractalPanel extends ScrollPane {
     private VBox mandelboxControls;
     private VBox mengerControls;
     private VBox kaleidoscopicControls;
+    private VBox julia3dControls;
 
     // Common controls
     private Slider speedSlider;
@@ -53,6 +54,7 @@ public class FractalPanel extends ScrollPane {
         createMandelboxControls();
         createMengerControls();
         createKaleidoscopicControls();
+        createJulia3dControls();
 
         // Movement speed
         Label speedLabel = new Label("Move Speed: 0.10");
@@ -96,6 +98,7 @@ public class FractalPanel extends ScrollPane {
             mandelboxControls,
             mengerControls,
             kaleidoscopicControls,
+            julia3dControls,
             speedLabel, speedSlider,
             new Separator(),
             positionLabel,
@@ -111,7 +114,8 @@ public class FractalPanel extends ScrollPane {
     private ComboBox<FractalType> createTypeComboBox() {
         ComboBox<FractalType> typeCombo = new ComboBox<>();
         typeCombo.getItems().addAll(FractalType.MANDELBULB, FractalType.MANDELBOX,
-                                    FractalType.MENGER_SPONGE, FractalType.KALEIDOSCOPIC_IFS);
+                                    FractalType.MENGER_SPONGE, FractalType.KALEIDOSCOPIC_IFS,
+                                    FractalType.JULIA_3D);
         typeCombo.setValue(FractalType.MANDELBULB);
         typeCombo.setMaxWidth(Double.MAX_VALUE);
 
@@ -147,6 +151,8 @@ public class FractalPanel extends ScrollPane {
             mengerControls.setManaged(false);
             kaleidoscopicControls.setVisible(false);
             kaleidoscopicControls.setManaged(false);
+            julia3dControls.setVisible(false);
+            julia3dControls.setManaged(false);
 
             // Show only the relevant controls
             switch (selectedType) {
@@ -165,6 +171,10 @@ public class FractalPanel extends ScrollPane {
                 case KALEIDOSCOPIC_IFS -> {
                     kaleidoscopicControls.setVisible(true);
                     kaleidoscopicControls.setManaged(true);
+                }
+                case JULIA_3D -> {
+                    julia3dControls.setVisible(true);
+                    julia3dControls.setManaged(true);
                 }
             }
 
@@ -418,6 +428,128 @@ public class FractalPanel extends ScrollPane {
         );
         kaleidoscopicControls.setVisible(false);
         kaleidoscopicControls.setManaged(false);
+    }
+
+    private void createJulia3dControls() {
+        julia3dControls = new VBox(8);
+
+        Label titleLabel = new Label("Julia 3D (Quaternion)");
+        titleLabel.setStyle("-fx-font-weight: bold;");
+
+        Label infoLabel = new Label("q' = q² + c (quaternion iteration)");
+        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        // Iterations
+        Label iterLabel = new Label("Iterations: 12");
+        Slider iterSlider = new Slider(4, 20, 12);
+        iterSlider.setShowTickLabels(true);
+        iterSlider.setMajorTickUnit(4);
+        iterSlider.valueProperty().addListener((obs, old, val) -> {
+            int iter = val.intValue();
+            iterLabel.setText(String.format("Iterations: %d", iter));
+            if (params instanceof Julia3DParams jParams) {
+                jParams.setMaxIterations(iter);
+                renderCallback.requestRender();
+            }
+        });
+
+        // Julia constant C components
+        Label cLabel = new Label("Julia Constant (c):");
+        cLabel.setStyle("-fx-font-weight: bold;");
+
+        Label cxLabel = new Label("cx: -0.20");
+        Slider cxSlider = new Slider(-1.0, 1.0, -0.2);
+        cxSlider.valueProperty().addListener((obs, old, val) -> {
+            cxLabel.setText(String.format("cx: %.2f", val.doubleValue()));
+            if (params instanceof Julia3DParams jParams) {
+                jParams.setJuliaCx(val.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        Label cyLabel = new Label("cy: 0.80");
+        Slider cySlider = new Slider(-1.0, 1.0, 0.8);
+        cySlider.valueProperty().addListener((obs, old, val) -> {
+            cyLabel.setText(String.format("cy: %.2f", val.doubleValue()));
+            if (params instanceof Julia3DParams jParams) {
+                jParams.setJuliaCy(val.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        Label czLabel = new Label("cz: 0.00");
+        Slider czSlider = new Slider(-1.0, 1.0, 0.0);
+        czSlider.valueProperty().addListener((obs, old, val) -> {
+            czLabel.setText(String.format("cz: %.2f", val.doubleValue()));
+            if (params instanceof Julia3DParams jParams) {
+                jParams.setJuliaCz(val.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        Label cwLabel = new Label("cw: 0.00");
+        Slider cwSlider = new Slider(-1.0, 1.0, 0.0);
+        cwSlider.valueProperty().addListener((obs, old, val) -> {
+            cwLabel.setText(String.format("cw: %.2f", val.doubleValue()));
+            if (params instanceof Julia3DParams jParams) {
+                jParams.setJuliaCw(val.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        // Preset buttons
+        Label presetLabel = new Label("Presets:");
+        presetLabel.setStyle("-fx-font-weight: bold;");
+
+        Button classicBtn = new Button("Classic");
+        classicBtn.setOnAction(e -> {
+            cxSlider.setValue(-0.2);
+            cySlider.setValue(0.8);
+            czSlider.setValue(0.0);
+            cwSlider.setValue(0.0);
+        });
+
+        Button organicBtn = new Button("Organic");
+        organicBtn.setOnAction(e -> {
+            cxSlider.setValue(-0.291);
+            cySlider.setValue(-0.399);
+            czSlider.setValue(0.339);
+            cwSlider.setValue(0.437);
+        });
+
+        Button spikyBtn = new Button("Spiky");
+        spikyBtn.setOnAction(e -> {
+            cxSlider.setValue(-0.125);
+            cySlider.setValue(-0.256);
+            czSlider.setValue(0.847);
+            cwSlider.setValue(0.0895);
+        });
+
+        Button spiralBtn = new Button("Spiral");
+        spiralBtn.setOnAction(e -> {
+            cxSlider.setValue(-0.4);
+            cySlider.setValue(0.6);
+            czSlider.setValue(0.2);
+            cwSlider.setValue(-0.1);
+        });
+
+        javafx.scene.layout.HBox presetBox = new javafx.scene.layout.HBox(5);
+        presetBox.getChildren().addAll(classicBtn, organicBtn, spikyBtn, spiralBtn);
+
+        julia3dControls.getChildren().addAll(
+            titleLabel, infoLabel,
+            iterLabel, iterSlider,
+            new Separator(),
+            cLabel,
+            cxLabel, cxSlider,
+            cyLabel, cySlider,
+            czLabel, czSlider,
+            cwLabel, cwSlider,
+            new Separator(),
+            presetLabel, presetBox
+        );
+        julia3dControls.setVisible(false);
+        julia3dControls.setManaged(false);
     }
 
     // Public methods for external access
