@@ -38,6 +38,11 @@ public class GLSLEngine implements AutoCloseable {
     private int currentWidth;
     private int currentHeight;
 
+    // Bloom framebuffers (ping-pong for blur passes)
+    private int bloomFBO1, bloomFBO2;
+    private int bloomTexture1, bloomTexture2;
+    private int bloomWidth, bloomHeight;  // Half resolution for performance
+
     // Fullscreen quad VAO
     private int quadVAO;
     private int quadVBO;
@@ -53,8 +58,14 @@ public class GLSLEngine implements AutoCloseable {
     private boolean needsReset = true;
     private int currentRenderMode = 0;  // Track render mode for display shader
 
-    // Display shader (for tone mapping)
-    private ShaderProgram displayProgram;
+    // Post-processing shaders
+    private ShaderProgram displayProgram;      // Legacy (kept for compatibility)
+    private ShaderProgram postProcessProgram;  // Main post-processing
+    private ShaderProgram bloomExtractProgram; // Bright pixel extraction
+    private ShaderProgram bloomBlurProgram;    // Gaussian blur
+
+    // Post-processing parameters (with defaults)
+    private PostProcessParams postProcessParams = new PostProcessParams();
 
     // Thread safety - GL context is single-threaded
     private final ExecutorService glThread;
@@ -123,7 +134,9 @@ public class GLSLEngine implements AutoCloseable {
         // Create resources
         createFullscreenQuad();
         createFramebuffer(currentWidth, currentHeight);
+        createBloomFramebuffers(currentWidth, currentHeight);
         loadDisplayShader();
+        loadPostProcessShaders();
 
         initialized = true;
     }
@@ -271,23 +284,58 @@ public class GLSLEngine implements AutoCloseable {
 
     /**
      * Read the accumulated image as RGBA float array.
-     * Applies tone mapping and gamma correction.
+     * Applies full post-processing pipeline: bloom, tone mapping, effects.
      */
     public float[] readImage() {
         float[] result = new float[currentWidth * currentHeight * 4];
 
         runOnGLThread(() -> {
-            // Render to display FBO (not default framebuffer - hidden windows may have issues)
+            // Step 1: Render bloom (if enabled)
+            renderBloom();
+
+            // Step 2: Final composite with post-processing
             glBindFramebuffer(GL_FRAMEBUFFER, displayFBO);
             glViewport(0, 0, currentWidth, currentHeight);
             glClear(GL_COLOR_BUFFER_BIT);
 
-            displayProgram.use();
+            postProcessProgram.use();
+
+            // Bind textures
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, accumTexture);
-            displayProgram.setUniform("accumTexture", 0);
-            displayProgram.setUniform("sampleCount", Math.max(1, sampleCount));
-            displayProgram.setUniform("renderMode", currentRenderMode);
+            postProcessProgram.setUniform("accumTexture", 0);
+
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, bloomTexture1);
+            postProcessProgram.setUniform("bloomTexture", 1);
+
+            // Set uniforms
+            postProcessProgram.setUniform("sampleCount", Math.max(1, sampleCount));
+            postProcessProgram.setUniform("renderMode", currentRenderMode);
+            postProcessProgram.setUniform("resolution", (float) currentWidth, (float) currentHeight);
+
+            // Post-processing parameters
+            PostProcessParams pp = postProcessParams;
+            postProcessProgram.setUniform("toneMapMode", pp.toneMapMode);
+            postProcessProgram.setUniform("exposure", pp.exposure);
+
+            postProcessProgram.setUniform("bloomEnabled", pp.bloomEnabled ? 1 : 0);
+            postProcessProgram.setUniform("bloomIntensity", pp.bloomIntensity);
+            postProcessProgram.setUniform("bloomThreshold", pp.bloomThreshold);
+
+            postProcessProgram.setUniform("chromaticAberrationEnabled", pp.chromaticAberrationEnabled ? 1 : 0);
+            postProcessProgram.setUniform("chromaticAberrationIntensity", pp.chromaticAberrationIntensity);
+
+            postProcessProgram.setUniform("vignetteEnabled", pp.vignetteEnabled ? 1 : 0);
+            postProcessProgram.setUniform("vignetteIntensity", pp.vignetteIntensity);
+            postProcessProgram.setUniform("vignetteSoftness", pp.vignetteSoftness);
+
+            postProcessProgram.setUniform("filmGrainEnabled", pp.filmGrainEnabled ? 1 : 0);
+            postProcessProgram.setUniform("filmGrainIntensity", pp.filmGrainIntensity);
+            postProcessProgram.setUniform("filmGrainTime", (float) glfwGetTime());
+
+            postProcessProgram.setUniform("sharpenEnabled", pp.sharpenEnabled ? 1 : 0);
+            postProcessProgram.setUniform("sharpenIntensity", pp.sharpenIntensity);
 
             glBindVertexArray(quadVAO);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -425,6 +473,14 @@ public class GLSLEngine implements AutoCloseable {
         glDeleteTextures(displayTexture);
         glDeleteFramebuffers(displayFBO);
         createFramebuffer(currentWidth, currentHeight);
+
+        // Also recreate bloom buffers
+        glDeleteTextures(bloomTexture1);
+        glDeleteTextures(bloomTexture2);
+        glDeleteFramebuffers(bloomFBO1);
+        glDeleteFramebuffers(bloomFBO2);
+        createBloomFramebuffers(currentWidth, currentHeight);
+
         sampleCount = 0;
     }
 
@@ -444,6 +500,131 @@ public class GLSLEngine implements AutoCloseable {
         } catch (Exception e) {
             throw new RuntimeException("Failed to load display shader", e);
         }
+    }
+
+    private void loadPostProcessShaders() {
+        try {
+            String vertexSource = loadResource("/shaders/fullscreen.vert");
+
+            String postProcessSource = loadResource("/shaders/postprocess.glsl");
+            postProcessProgram = new ShaderProgram(vertexSource, postProcessSource);
+
+            String bloomExtractSource = loadResource("/shaders/bloom_extract.glsl");
+            bloomExtractProgram = new ShaderProgram(vertexSource, bloomExtractSource);
+
+            String bloomBlurSource = loadResource("/shaders/bloom_blur.glsl");
+            bloomBlurProgram = new ShaderProgram(vertexSource, bloomBlurSource);
+
+            System.out.println("Post-processing shaders loaded");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to load post-processing shaders", e);
+        }
+    }
+
+    private void createBloomFramebuffers(int width, int height) {
+        // Use half resolution for bloom (performance)
+        bloomWidth = Math.max(1, width / 2);
+        bloomHeight = Math.max(1, height / 2);
+
+        // Bloom texture 1
+        bloomTexture1 = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, bloomTexture1);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, bloomWidth, bloomHeight, 0, GL_RGBA, GL_FLOAT, (ByteBuffer) null);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        bloomFBO1 = glGenFramebuffers();
+        glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO1);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloomTexture1, 0);
+
+        // Bloom texture 2 (for ping-pong blur)
+        bloomTexture2 = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, bloomTexture2);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, bloomWidth, bloomHeight, 0, GL_RGBA, GL_FLOAT, (ByteBuffer) null);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        bloomFBO2 = glGenFramebuffers();
+        glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO2);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloomTexture2, 0);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    /**
+     * Render bloom effect (extract bright pixels + blur).
+     */
+    private void renderBloom() {
+        if (!postProcessParams.bloomEnabled) {
+            // Clear bloom texture if disabled
+            glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO1);
+            glClearColor(0, 0, 0, 0);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            return;
+        }
+
+        // Step 1: Extract bright pixels
+        glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO1);
+        glViewport(0, 0, bloomWidth, bloomHeight);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        bloomExtractProgram.use();
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, accumTexture);
+        bloomExtractProgram.setUniform("accumTexture", 0);
+        bloomExtractProgram.setUniform("sampleCount", Math.max(1, sampleCount));
+        bloomExtractProgram.setUniform("threshold", postProcessParams.bloomThreshold);
+        bloomExtractProgram.setUniform("softThreshold", 0.5f);
+
+        glBindVertexArray(quadVAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        // Step 2: Blur passes (ping-pong)
+        int blurPasses = postProcessParams.bloomRadius;
+        for (int i = 0; i < blurPasses; i++) {
+            // Horizontal blur: bloomTexture1 -> bloomTexture2
+            glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO2);
+            glClear(GL_COLOR_BUFFER_BIT);
+
+            bloomBlurProgram.use();
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, bloomTexture1);
+            bloomBlurProgram.setUniform("inputTexture", 0);
+            bloomBlurProgram.setUniform("direction", 1.0f, 0.0f);
+            bloomBlurProgram.setUniform("resolution", (float) bloomWidth, (float) bloomHeight);
+
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+            // Vertical blur: bloomTexture2 -> bloomTexture1
+            glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO1);
+            glClear(GL_COLOR_BUFFER_BIT);
+
+            glBindTexture(GL_TEXTURE_2D, bloomTexture2);
+            bloomBlurProgram.setUniform("direction", 0.0f, 1.0f);
+
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    /**
+     * Set post-processing parameters.
+     */
+    public void setPostProcessParams(PostProcessParams params) {
+        this.postProcessParams = params;
+    }
+
+    /**
+     * Get current post-processing parameters.
+     */
+    public PostProcessParams getPostProcessParams() {
+        return postProcessParams;
     }
 
     private void setUniformValue(ShaderProgram program, String name, Object value) {
@@ -523,11 +704,24 @@ public class GLSLEngine implements AutoCloseable {
             if (displayProgram != null) {
                 displayProgram.delete();
             }
+            if (postProcessProgram != null) {
+                postProcessProgram.delete();
+            }
+            if (bloomExtractProgram != null) {
+                bloomExtractProgram.delete();
+            }
+            if (bloomBlurProgram != null) {
+                bloomBlurProgram.delete();
+            }
 
             glDeleteFramebuffers(accumFBO);
             glDeleteTextures(accumTexture);
             glDeleteFramebuffers(displayFBO);
             glDeleteTextures(displayTexture);
+            glDeleteFramebuffers(bloomFBO1);
+            glDeleteFramebuffers(bloomFBO2);
+            glDeleteTextures(bloomTexture1);
+            glDeleteTextures(bloomTexture2);
             glDeleteVertexArrays(quadVAO);
             glDeleteBuffers(quadVBO);
             glDeleteBuffers(quadEBO);
@@ -613,6 +807,148 @@ public class GLSLEngine implements AutoCloseable {
 
         public void delete() {
             glDeleteProgram(programId);
+        }
+    }
+
+    // ========================================================================
+    // Inner class: PostProcessParams
+    // ========================================================================
+
+    /**
+     * Post-processing parameters.
+     * Controls all visual effects applied after rendering.
+     */
+    public static class PostProcessParams {
+        // Tone mapping
+        public int toneMapMode = 0;    // 0=ACES, 1=Reinhard, 2=Filmic, 3=None
+        public float exposure = 1.0f;
+
+        // Bloom
+        public boolean bloomEnabled = false;
+        public float bloomIntensity = 0.5f;
+        public float bloomThreshold = 1.0f;
+        public int bloomRadius = 3;      // Number of blur passes
+
+        // Chromatic Aberration
+        public boolean chromaticAberrationEnabled = false;
+        public float chromaticAberrationIntensity = 0.005f;
+
+        // Vignette
+        public boolean vignetteEnabled = false;
+        public float vignetteIntensity = 0.3f;
+        public float vignetteSoftness = 0.5f;
+
+        // Film Grain
+        public boolean filmGrainEnabled = false;
+        public float filmGrainIntensity = 0.03f;
+
+        // Sharpening
+        public boolean sharpenEnabled = false;
+        public float sharpenIntensity = 0.3f;
+
+        /**
+         * Create default parameters (no effects).
+         */
+        public PostProcessParams() {}
+
+        /**
+         * Create a copy of these parameters.
+         */
+        public PostProcessParams copy() {
+            PostProcessParams copy = new PostProcessParams();
+            copy.toneMapMode = this.toneMapMode;
+            copy.exposure = this.exposure;
+            copy.bloomEnabled = this.bloomEnabled;
+            copy.bloomIntensity = this.bloomIntensity;
+            copy.bloomThreshold = this.bloomThreshold;
+            copy.bloomRadius = this.bloomRadius;
+            copy.chromaticAberrationEnabled = this.chromaticAberrationEnabled;
+            copy.chromaticAberrationIntensity = this.chromaticAberrationIntensity;
+            copy.vignetteEnabled = this.vignetteEnabled;
+            copy.vignetteIntensity = this.vignetteIntensity;
+            copy.vignetteSoftness = this.vignetteSoftness;
+            copy.filmGrainEnabled = this.filmGrainEnabled;
+            copy.filmGrainIntensity = this.filmGrainIntensity;
+            copy.sharpenEnabled = this.sharpenEnabled;
+            copy.sharpenIntensity = this.sharpenIntensity;
+            return copy;
+        }
+
+        /**
+         * Apply "Cinematic" preset.
+         */
+        public void applyCinematicPreset() {
+            toneMapMode = 2;  // Filmic
+            exposure = 1.1f;
+            bloomEnabled = true;
+            bloomIntensity = 0.4f;
+            bloomThreshold = 0.8f;
+            bloomRadius = 4;
+            chromaticAberrationEnabled = true;
+            chromaticAberrationIntensity = 0.003f;
+            vignetteEnabled = true;
+            vignetteIntensity = 0.4f;
+            vignetteSoftness = 0.6f;
+            filmGrainEnabled = true;
+            filmGrainIntensity = 0.02f;
+            sharpenEnabled = false;
+        }
+
+        /**
+         * Apply "Clean" preset.
+         */
+        public void applyCleanPreset() {
+            toneMapMode = 0;  // ACES
+            exposure = 1.0f;
+            bloomEnabled = true;
+            bloomIntensity = 0.2f;
+            bloomThreshold = 1.2f;
+            bloomRadius = 2;
+            chromaticAberrationEnabled = false;
+            vignetteEnabled = false;
+            filmGrainEnabled = false;
+            sharpenEnabled = true;
+            sharpenIntensity = 0.2f;
+        }
+
+        /**
+         * Apply "Vibrant" preset.
+         */
+        public void applyVibrantPreset() {
+            toneMapMode = 0;  // ACES
+            exposure = 1.2f;
+            bloomEnabled = true;
+            bloomIntensity = 0.6f;
+            bloomThreshold = 0.7f;
+            bloomRadius = 5;
+            chromaticAberrationEnabled = true;
+            chromaticAberrationIntensity = 0.008f;
+            vignetteEnabled = true;
+            vignetteIntensity = 0.2f;
+            vignetteSoftness = 0.4f;
+            filmGrainEnabled = false;
+            sharpenEnabled = false;
+        }
+
+        /**
+         * Reset to defaults (no effects).
+         */
+        public void reset() {
+            toneMapMode = 0;
+            exposure = 1.0f;
+            bloomEnabled = false;
+            bloomIntensity = 0.5f;
+            bloomThreshold = 1.0f;
+            bloomRadius = 3;
+            chromaticAberrationEnabled = false;
+            chromaticAberrationIntensity = 0.005f;
+            vignetteEnabled = false;
+            vignetteIntensity = 0.3f;
+            vignetteSoftness = 0.5f;
+            filmGrainEnabled = false;
+            filmGrainIntensity = 0.03f;
+            sharpenEnabled = false;
+            sharpenIntensity = 0.3f;
         }
     }
 }

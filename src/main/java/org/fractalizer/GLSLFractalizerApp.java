@@ -11,6 +11,7 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
+import org.fractalizer.engine.GLSLEngine.PostProcessParams;
 import org.fractalizer.fractals.AbstractFractalParams;
 import org.fractalizer.fractals.MandelbulbParams;
 import org.fractalizer.ui.GLSLFractalizerController;
@@ -41,6 +42,7 @@ public class GLSLFractalizerApp extends Application {
     private ExportPanel exportPanel;
     private GLSLDevicePanel devicePanel;
     private AnimationPanel animationPanel;
+    private PostProcessingPanel postProcessPanel;
 
     // Rendering state
     private boolean needsRender = true;
@@ -209,7 +211,12 @@ public class GLSLFractalizerApp extends Application {
         );
         Tab animationTab = new Tab("Anim", animationPanel);
 
-        tabPane.getTabs().addAll(fractalTab, lightingTab, qualityTab, animationTab, exportTab, deviceTab);
+        // Post-processing tab
+        PostProcessParams postProcessParams = controller.getEngine().getPostProcessParams();
+        postProcessPanel = new PostProcessingPanel(postProcessParams, this::requestRender);
+        Tab postProcessTab = new Tab("FX", postProcessPanel);
+
+        tabPane.getTabs().addAll(fractalTab, lightingTab, qualityTab, postProcessTab, animationTab, exportTab, deviceTab);
 
         return tabPane;
     }
