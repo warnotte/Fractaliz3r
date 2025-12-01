@@ -27,100 +27,111 @@ mvn clean install
 
 ```
 org.fractalizer
-├── FractalizerApp.java              # JavaFX entry point with FPS navigation
+├── GLSLFractalizerApp.java          # JavaFX entry point with FPS navigation
 ├── engine/
-│   ├── OpenCLEngine.java            # GPU compute abstraction (LWJGL/OpenCL)
+│   ├── GLSLEngine.java              # GPU compute abstraction (LWJGL/OpenGL)
 │   └── Camera.java                  # Quaternion-based FPS camera (no gimbal lock)
 ├── fractals/
 │   ├── FractalParams.java           # Interface for fractal parameters
 │   ├── FractalType.java             # Enum of available fractal types
-│   ├── AbstractFractalParams.java   # Base class with common params (camera, lighting, DoF, etc.)
+│   ├── AbstractFractalParams.java   # Base class with common params (camera, lighting, DoF, motion blur, etc.)
 │   ├── MandelbulbParams.java        # Mandelbulb: power, iterations, bailout
-│   └── MandelboxParams.java         # Mandelbox: scale, minRadius, fixedRadius, foldingLimit
+│   ├── MandelboxParams.java         # Mandelbox: scale, minRadius, fixedRadius, foldingLimit
+│   ├── MengerSpongeParams.java      # Menger Sponge: iterations, scale, offset
+│   ├── KaleidoscopicIFSParams.java  # KIFS: scale, offset, fold angles
+│   ├── Julia3DParams.java           # 3D Julia: quaternion c parameter
+│   └── PseudoKleinianParams.java    # Pseudo-Kleinian: size, cSize, julia
 ├── render/
-│   ├── TileRenderer.java            # Tile-based rendering to avoid GPU watchdog
-│   └── ImageExporter.java           # PNG export utilities
+│   ├── ProgressiveRenderer.java     # Progressive sample accumulation
+│   └── FFmpegExporter.java          # MP4 video export via FFmpeg
+├── animation/
+│   ├── Timeline.java                # Animation timeline with tracks
+│   ├── Track.java                   # Keyframe track for a parameter
+│   └── Keyframe.java                # Single keyframe (time, value, easing)
 └── ui/
-    └── FractalizerController.java   # Bridges UI with render engine, loads all kernels
+    ├── GLSLFractalizerController.java  # Bridges UI with GLSL engine
+    ├── AnimationManager.java           # Manages timeline and keyframe editing
+    ├── panels/
+    │   ├── FractalPanel.java           # Fractal type and parameters
+    │   ├── LightingPanel.java          # Light direction, colors, intensity
+    │   ├── QualityPanel.java           # Ray steps, DoF, path tracing
+    │   ├── ExportPanel.java            # Image/animation export with motion blur
+    │   └── ...
+    └── timeline/
+        └── TimelineWidget.java         # Visual timeline editor
 ```
 
-### OpenCL Kernels
+### GLSL Shaders
 
-Located in `src/main/resources/kernels/`:
+Located in `src/main/resources/shaders/`:
 
 ```
-kernels/
-├── common.cl              # Shared utilities + rendering pipeline
-└── fractals/
-    ├── mandelbulb.cl      # Mandelbulb (power-based spherical folding)
-    ├── mandelbox.cl       # Mandelbox (box fold + sphere fold)
-    ├── menger.cl          # Menger Sponge (IQ algorithm)
-    └── kaleidoscopic.cl   # Kaleidoscopic IFS (reflection-based)
+shaders/
+├── raytracer.glsl         # Main raymarcher with all fractals (uber-shader)
+├── accumulate.glsl        # Progressive sample accumulation
+└── display.glsl           # Tone mapping, post-processing, final output
 ```
 
-**`common.cl`** - Shared utilities and rendering pipeline:
-  - Vector operations (normalize3, length3, dot3, cross3)
-  - Quaternion operations (rotateByQuaternion, getCameraRay)
-  - Constants (RENDER_*, STEP_FACTOR, MIN_EPSILON, etc.)
-  - Color utilities (palette, fresnel, iterationColor)
-  - DoF helpers (DofSetup, initDofSetup, getDofSampleRay)
-  - **Rendering pipeline** (renderByMode, calculateShading, renderBackground, toneMapAndGamma)
+**`raytracer.glsl`** - Main rendering shader:
+  - All fractal Distance Estimators (DE) in one file
+  - Fractal selection via uniform `u_fractalType`
+  - Ray marching with soft shadows and AO
+  - Orbit trap coloring
+  - DoF (Depth of Field) support
+  - Path tracing option
 
-**`fractals/*.cl`** - Each fractal defines only:
-  - OrbitTraps structure (for coloring data)
-  - `fractalDE()` - Full DE with orbit traps
-  - `fractalDE_simple()` - Simplified DE for shadows/AO
-  - `calcNormal*()`, `calcShadow*()`, `calcAO*()` - Using DE_simple
-  - `get*Color()` - Color from orbit traps
-  - `render*()` kernel - Calls common rendering pipeline
+**`accumulate.glsl`** - Progressive rendering:
+  - Accumulates samples over time
+  - Weighted averaging for smooth convergence
 
-### Kernel Structure Pattern
+**`display.glsl`** - Final output:
+  - Tone mapping (ACES, Reinhard, etc.)
+  - Gamma correction
+  - Vignette, chromatic aberration
+  - HDRI environment blending
 
-Each fractal kernel follows this pattern:
+### Shader Structure Pattern
 
-```c
-// 1. OrbitTraps struct for coloring data
-typedef struct { float plane, sphere, axis, cube; int iterations; } OrbitTraps;
+The uber-shader uses a switch on fractal type:
 
-// 2. Full DE with orbit traps (for primary ray hit)
-float fractalDE(float3 pos, params..., OrbitTraps* traps) { ... }
+```glsl
+// Distance Estimator dispatch by fractal type
+float sceneSDF(vec3 pos, out OrbitTrap trap) {
+    switch (u_fractalType) {
+        case 0: return mandelbulbDE(pos, trap);
+        case 1: return mandelboxDE(pos, trap);
+        case 2: return mengerDE(pos, trap);
+        // ... more fractals
+    }
+}
 
-// 3. Simple DE without traps (for shadows, AO, normals - ~95% of calls)
-float fractalDE_simple(float3 pos, params...) { ... }
-
-// 4. Normal calculation using simple DE (tetrahedron method)
-float3 calcNormalTetra(float3 pos, params...) { ... }
-
-// 5. Soft shadows using simple DE
-float calcSoftShadow(float3 ro, float3 rd, params...) { ... }
-
-// 6. Ambient occlusion using simple DE
-float calcAO(float3 pos, float3 normal, params...) { ... }
-
-// 7. Material color from orbit traps
-float3 getOrbitColor(OrbitTraps traps, float3 baseHue) { ... }
-
-// 8. Main render kernel
-__kernel void renderFractal(...) { ... }
+// Ray marching loop
+float rayMarch(vec3 ro, vec3 rd, out OrbitTrap trap) {
+    float t = 0.0;
+    for (int i = 0; i < u_maxSteps; i++) {
+        vec3 p = ro + rd * t;
+        float d = sceneSDF(p, trap);
+        if (d < u_epsilon) return t;
+        t += d * u_stepFactor;
+    }
+    return -1.0;
+}
 ```
 
-**Why two DE versions?** Performance optimization:
-- Full DE calculates orbit traps for rich coloring
-- Simple DE only returns distance (much faster)
-- Shadows/AO/normals don't need color data, so use simple DE
-- For a typical pixel: 1 full DE + ~137 simple DE calls
+**Performance notes:**
+- Uber-shader avoids recompilation when switching fractals
+- Simple DE variant for shadows/AO (no orbit trap overhead)
+- Progressive rendering accumulates samples over frames
 
 ### Key Design Decisions
 
 1. **Quaternion camera**: Uses quaternions for rotation to avoid gimbal lock, enabling spaceship-like 6DOF navigation inside fractals.
 
-2. **Tile-based rendering**: Images split into 256x256 tiles to avoid GPU watchdog timeouts (~2s limit).
+2. **Progressive rendering**: Samples accumulated over multiple frames for high quality without blocking UI.
 
-3. **Preview system**: Uses 1/4 resolution and fewer iterations for fast parameter adjustment during navigation.
+3. **Uber-shader**: All fractals in one shader, selected by uniform. Avoids shader switching overhead.
 
-4. **Modular kernels**: common.cl is loaded first, then fractal-specific kernel. Use `loadKernelFromSources()`.
-
-5. **AbstractFractalParams**: Common parameters (camera, lighting, shadows, AO, DoF, specular, glow) inherited by all fractal types.
+4. **AbstractFractalParams**: Common parameters (camera, lighting, shadows, AO, DoF, motion blur) inherited by all fractal types.
 
 ## Navigation Controls
 
@@ -275,22 +286,90 @@ return length(z) * pow(scale, -n);
 - [x] Kaleidoscopic IFS - Configurable reflection-based IFS
 
 ### Recent Improvements
-- [x] **Refactor to modular pipeline architecture**
+- [x] **GLSL migration** from OpenCL for better compatibility
+- [x] **Animation system** with timeline, keyframes, and easing
+- [x] **Motion blur** for animation export (shutter angle 0-360°)
+- [x] **Video export** via FFmpeg (MP4 with CRF quality control)
+- [x] **MP4 on cancel** - creates video from rendered frames even when cancelled
 - [x] **Quality Multiplier system** for ultimate detail at any distance
-- [x] **Kaleidoscopic IFS rewrite** with correct KIFS algorithm
 - [x] **Auto Full Quality** enabled by default
-- [x] **Dynamic image view** fills available space
-- [x] **KIFS UI improvements** - Offset slider, rotation limits, presets
 
 ### Planned Improvements
-- [ ] Animation system for parameter interpolation
 - [ ] Save/load fractal configurations
-- [ ] Video export
-- [ ] Auto-adapt render resolution to view size
+- [ ] More easing functions for keyframes
+- [ ] Audio-reactive animation
 
 ---
 
-## Kernel Architecture (Implemented)
+## Animation System
+
+The animation system allows keyframe-based animation of any fractal parameter.
+
+### Components
+- **Timeline** (`animation/Timeline.java`) - Manages time, FPS, and tracks
+- **Track** (`animation/Track.java`) - Keyframes for a single parameter
+- **Keyframe** (`animation/Keyframe.java`) - Time, value, easing function
+- **AnimationManager** (`ui/AnimationManager.java`) - UI integration
+- **TimelineWidget** (`ui/timeline/TimelineWidget.java`) - Visual editor
+
+### Animatable Parameters
+- Camera position (X, Y, Z)
+- Camera rotation (quaternion)
+- Fractal-specific params (power, scale, iterations, etc.)
+- Lighting (direction, colors, intensity)
+- DoF (focal distance, aperture)
+
+### Usage
+1. Navigate to desired camera position
+2. Click "Add Keyframe" in Animation panel
+3. Move timeline, adjust parameters, add more keyframes
+4. Play animation or export to video
+
+---
+
+## Motion Blur
+
+Motion blur simulates camera shutter for smoother animation.
+
+### How It Works
+- **Per-sample temporal jitter**: Each sample rendered at slightly different time
+- Time offset randomly distributed within shutter window
+- Samples accumulate naturally, creating blur
+
+### Shutter Angle
+| Angle | Effect |
+|-------|--------|
+| 0° | No blur (sharp frames) |
+| 90° | Subtle blur |
+| 180° | Cinematic film standard |
+| 270° | Heavy blur |
+| 360° | Maximum blur (full frame) |
+
+### Implementation
+- `AbstractFractalParams.shutterAngle` - 0 to 360 degrees
+- `GLSLFractalizerController.exportAnimationFrameWithMotionBlur()` - Jitters time per sample
+- `ExportPanel` - UI spinner in Animation export section
+
+---
+
+## Video Export
+
+Animation export supports PNG sequence and MP4 video creation.
+
+### Features
+- **PNG sequence**: Individual frames as `frame_00000.png`, etc.
+- **MP4 export**: Via FFmpeg (must be in PATH)
+- **CRF quality**: 0 (lossless) to 51 (worst), default 23
+- **Cancel recovery**: MP4 created from whatever frames were rendered
+
+### FFmpeg Integration
+- Auto-detected from system PATH
+- Status shown in Export panel (version or "not found")
+- Creates MP4 in-place after PNG export completes
+
+---
+
+## Legacy: OpenCL Kernel Architecture
 
 ### Problem Solved: Code Duplication
 
@@ -393,6 +472,7 @@ __kernel void renderMandelbulb(...) {
 
 ## Dependencies
 
-- **LWJGL 3.3.3** - OpenCL bindings for GPU compute
+- **LWJGL 3.3.3** - OpenGL bindings for GPU rendering
 - **JavaFX 21.0.2** - UI framework
 - **Java 21+** required
+- **FFmpeg** (optional) - For MP4 video export (must be in system PATH)

@@ -1,7 +1,5 @@
 package org.fractalizer.fractals;
 
-import org.fractalizer.engine.OpenCLEngine;
-
 /**
  * Parameters specific to Kaleidoscopic IFS fractal rendering.
  * Based on the classic Sierpinski tetrahedron folding algorithm.
@@ -63,36 +61,6 @@ public class KaleidoscopicIFSParams extends AbstractFractalParams {
     @Override
     public FractalType getType() {
         return FractalType.KALEIDOSCOPIC_IFS;
-    }
-
-    @Override
-    public int setKernelParams(OpenCLEngine engine, String kernelName, int startIndex) {
-        int idx = startIndex;
-
-        // Set common camera params
-        idx += setCommonKernelParams(engine, kernelName, idx);
-
-        // Kaleidoscopic IFS-specific parameters
-        engine.setKernelArgInt(kernelName, idx++, maxIterations);
-        engine.setKernelArgFloat(kernelName, idx++, scale);
-
-        // Fold angles (convert to radians)
-        engine.setKernelArgFloat(kernelName, idx++, (float) Math.toRadians(foldAngleX));
-        engine.setKernelArgFloat(kernelName, idx++, (float) Math.toRadians(foldAngleY));
-
-        // Offset as float4 (kernel uses offsetVec.x as scalar)
-        engine.setKernelArgFloats(kernelName, idx++, offsetX, offsetY, offsetZ, 0f);
-
-        // Min radius (unused but needed for signature)
-        engine.setKernelArgFloat(kernelName, idx++, minRadius);
-
-        engine.setKernelArgInt(kernelName, idx++, maxRaySteps);
-        engine.setKernelArgFloat(kernelName, idx++, epsilon);
-
-        // Set lighting and effects params
-        idx += setLightingKernelParams(engine, kernelName, idx);
-
-        return idx - startIndex;
     }
 
     @Override

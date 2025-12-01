@@ -1,7 +1,5 @@
 package org.fractalizer.fractals;
 
-import org.fractalizer.engine.OpenCLEngine;
-
 /**
  * Parameters specific to Menger Sponge fractal rendering.
  * The Menger Sponge is a classic fractal based on recursive cube subdivision.
@@ -43,26 +41,6 @@ public class MengerSpongeParams extends AbstractFractalParams {
     @Override
     public FractalType getType() {
         return FractalType.MENGER_SPONGE;
-    }
-
-    @Override
-    public int setKernelParams(OpenCLEngine engine, String kernelName, int startIndex) {
-        int idx = startIndex;
-
-        // Set common camera params
-        idx += setCommonKernelParams(engine, kernelName, idx);
-
-        // Menger Sponge-specific parameters
-        engine.setKernelArgInt(kernelName, idx++, maxIterations);
-        engine.setKernelArgFloat(kernelName, idx++, scale);
-        engine.setKernelArgFloats(kernelName, idx++, offsetX, offsetY, offsetZ, 0f);
-        engine.setKernelArgInt(kernelName, idx++, maxRaySteps);
-        engine.setKernelArgFloat(kernelName, idx++, epsilon);
-
-        // Set lighting and effects params
-        idx += setLightingKernelParams(engine, kernelName, idx);
-
-        return idx - startIndex;
     }
 
     @Override

@@ -1,7 +1,5 @@
 package org.fractalizer.fractals;
 
-import org.fractalizer.engine.OpenCLEngine;
-
 /**
  * Parameters specific to Mandelbulb fractal rendering.
  * Inherits common rendering parameters from AbstractFractalParams.
@@ -31,26 +29,6 @@ public class MandelbulbParams extends AbstractFractalParams {
     @Override
     public FractalType getType() {
         return FractalType.MANDELBULB;
-    }
-
-    @Override
-    public int setKernelParams(OpenCLEngine engine, String kernelName, int startIndex) {
-        int idx = startIndex;
-
-        // Set common camera params
-        idx += setCommonKernelParams(engine, kernelName, idx);
-
-        // Mandelbulb-specific parameters
-        engine.setKernelArgFloat(kernelName, idx++, power);
-        engine.setKernelArgInt(kernelName, idx++, maxIterations);
-        engine.setKernelArgInt(kernelName, idx++, maxRaySteps);
-        engine.setKernelArgFloat(kernelName, idx++, bailout);
-        engine.setKernelArgFloat(kernelName, idx++, epsilon);
-
-        // Set lighting and effects params
-        idx += setLightingKernelParams(engine, kernelName, idx);
-
-        return idx - startIndex;
     }
 
     @Override

@@ -11,12 +11,17 @@ import java.util.function.Supplier;
 
 /**
  * Panel for quality settings: shadows, AO, specular, DoF, render modes.
+ * Uses collapsible TitledPane sections for better organization.
  */
 public class QualityPanel extends ScrollPane {
 
     private final Supplier<AbstractFractalParams> paramsSupplier;
     private final RenderCallback renderCallback;
     private final Consumer<Boolean> autoFullQualityCallback;
+
+    // DoF controls (stored for external updates)
+    private Slider focalDistSlider;
+    private Label focalDistLabel;
 
     public QualityPanel(Supplier<AbstractFractalParams> paramsSupplier,
                         RenderCallback renderCallback,
@@ -30,10 +35,33 @@ public class QualityPanel extends ScrollPane {
     }
 
     private VBox createContent() {
-        VBox panel = new VBox(8);
+        VBox panel = new VBox(5);
         panel.setPadding(new Insets(10));
 
-        // === Render Pass Visualization ===
+        // Top-level controls (always visible)
+        panel.getChildren().add(createRenderPassSection());
+        panel.getChildren().add(createQualitySection());
+
+        // Collapsible sections
+        panel.getChildren().add(createShadowsPane());
+        panel.getChildren().add(createAOPane());
+        panel.getChildren().add(createSpecularPane());
+        panel.getChildren().add(createGlowPane());
+        panel.getChildren().add(createDoFPane());
+        panel.getChildren().add(createPathTracingPane());
+        panel.getChildren().add(createMaterialPane());
+        panel.getChildren().add(createPresetsPane());
+
+        return panel;
+    }
+
+    // ========================================================================
+    // Top-level sections (always visible)
+    // ========================================================================
+
+    private VBox createRenderPassSection() {
+        VBox box = new VBox(5);
+
         Label passLabel = new Label("Render Pass:");
         passLabel.setStyle("-fx-font-weight: bold;");
 
@@ -57,19 +85,20 @@ public class QualityPanel extends ScrollPane {
             renderCallback.requestRender();
         });
 
-        // === Auto Full Quality ===
         CheckBox autoFullQualityCheck = new CheckBox("Auto Full Quality (slower)");
-        autoFullQualityCheck.setSelected(true);  // Enabled by default
-        // Trigger callback to apply the default value
+        autoFullQualityCheck.setSelected(true);
         autoFullQualityCallback.accept(true);
         autoFullQualityCheck.setOnAction(e -> {
             autoFullQualityCallback.accept(autoFullQualityCheck.isSelected());
             renderCallback.requestRender();
         });
 
-        // === Quality Multiplier (Ultimate Quality) ===
-        Label qualityLabel = new Label("Quality Multiplier:");
-        qualityLabel.setStyle("-fx-font-weight: bold;");
+        box.getChildren().addAll(passLabel, passCombo, autoFullQualityCheck);
+        return box;
+    }
+
+    private TitledPane createQualitySection() {
+        VBox box = new VBox(5);
 
         Label qualityValueLabel = new Label("Quality: 1.0x (Normal)");
         Slider qualitySlider = new Slider(0.5, 5.0, 1.0);
@@ -88,12 +117,22 @@ public class QualityPanel extends ScrollPane {
             renderCallback.requestRender();
         });
 
-        Label qualityInfoLabel = new Label("Higher = more detail when close to surface.\nWarning: >2x is slow!");
-        qualityInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        Label infoLabel = new Label("Higher = more detail when close to surface.\nWarning: >2x is slow!");
+        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        // === Shadows ===
-        Label shadowLabel = new Label("Shadows:");
-        shadowLabel.setStyle("-fx-font-weight: bold;");
+        box.getChildren().addAll(qualityValueLabel, qualitySlider, infoLabel);
+
+        TitledPane pane = new TitledPane("Quality Multiplier", box);
+        pane.setExpanded(false);
+        return pane;
+    }
+
+    // ========================================================================
+    // Collapsible sections
+    // ========================================================================
+
+    private TitledPane createShadowsPane() {
+        VBox box = new VBox(5);
 
         Label shadowSoftLabel = new Label("Shadow Softness: 16");
         Slider shadowSoftnessSlider = new Slider(1, 64, 16);
@@ -114,9 +153,15 @@ public class QualityPanel extends ScrollPane {
             renderCallback.requestRender();
         });
 
-        // === Ambient Occlusion ===
-        Label aoLabel = new Label("Ambient Occlusion:");
-        aoLabel.setStyle("-fx-font-weight: bold;");
+        box.getChildren().addAll(shadowSoftLabel, shadowSoftnessSlider, shadowStepsLabel, shadowStepsSlider);
+
+        TitledPane pane = new TitledPane("Shadows", box);
+        pane.setExpanded(false);
+        return pane;
+    }
+
+    private TitledPane createAOPane() {
+        VBox box = new VBox(5);
 
         Label aoIntLabel = new Label("AO Intensity: 0.5");
         Slider aoIntensitySlider = new Slider(0, 1, 0.5);
@@ -126,9 +171,15 @@ public class QualityPanel extends ScrollPane {
             renderCallback.requestRender();
         });
 
-        // === Specular ===
-        Label specLabel = new Label("Specular:");
-        specLabel.setStyle("-fx-font-weight: bold;");
+        box.getChildren().addAll(aoIntLabel, aoIntensitySlider);
+
+        TitledPane pane = new TitledPane("Ambient Occlusion", box);
+        pane.setExpanded(false);
+        return pane;
+    }
+
+    private TitledPane createSpecularPane() {
+        VBox box = new VBox(5);
 
         Label specIntLabel = new Label("Specular Intensity: 0.5");
         Slider specularIntensitySlider = new Slider(0, 2, 0.5);
@@ -146,9 +197,15 @@ public class QualityPanel extends ScrollPane {
             renderCallback.requestRender();
         });
 
-        // === Glow ===
-        Label glowLabel = new Label("Glow:");
-        glowLabel.setStyle("-fx-font-weight: bold;");
+        box.getChildren().addAll(specIntLabel, specularIntensitySlider, specPowLabel, specularPowerSlider);
+
+        TitledPane pane = new TitledPane("Specular", box);
+        pane.setExpanded(false);
+        return pane;
+    }
+
+    private TitledPane createGlowPane() {
+        VBox box = new VBox(5);
 
         Label glowIntLabel = new Label("Glow Intensity: 0.15");
         Slider glowIntensitySlider = new Slider(0, 1, 0.15);
@@ -158,9 +215,15 @@ public class QualityPanel extends ScrollPane {
             renderCallback.requestRender();
         });
 
-        // === Depth of Field ===
-        Label dofLabel = new Label("Depth of Field:");
-        dofLabel.setStyle("-fx-font-weight: bold;");
+        box.getChildren().addAll(glowIntLabel, glowIntensitySlider);
+
+        TitledPane pane = new TitledPane("Glow", box);
+        pane.setExpanded(false);
+        return pane;
+    }
+
+    private TitledPane createDoFPane() {
+        VBox box = new VBox(5);
 
         CheckBox dofEnabledCheck = new CheckBox("Enable DoF");
         dofEnabledCheck.setSelected(false);
@@ -169,8 +232,8 @@ public class QualityPanel extends ScrollPane {
             renderCallback.requestRender();
         });
 
-        Label focalDistLabel = new Label("Focal Distance: 2.5");
-        Slider focalDistSlider = new Slider(0.1, 10, 2.5);
+        focalDistLabel = new Label("Focal Distance: 2.5");
+        focalDistSlider = new Slider(0.1, 10, 2.5);
         focalDistSlider.valueProperty().addListener((obs, old, val) -> {
             focalDistLabel.setText(String.format("Focal Distance: %.2f", val.doubleValue()));
             getParams().setFocalDistance(val.floatValue());
@@ -196,71 +259,168 @@ public class QualityPanel extends ScrollPane {
             renderCallback.requestRender();
         });
 
-        Label dofInfoLabel = new Label("Note: DoF is slow. Use low samples\nfor preview, increase for final.");
+        Label dofInfoLabel = new Label("Middle-click or Ctrl+click to pick\nfocal distance from the image.");
         dofInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        // Quality presets
-        Label presetLabel = new Label("Quality Presets:");
-        presetLabel.setStyle("-fx-font-weight: bold;");
+        box.getChildren().addAll(dofEnabledCheck, focalDistLabel, focalDistSlider,
+                apertureLabel, apertureSlider, dofSamplesLabel, dofSamplesSlider, dofInfoLabel);
+
+        TitledPane pane = new TitledPane("Depth of Field", box);
+        pane.setExpanded(false);
+        return pane;
+    }
+
+    /**
+     * Update the focal distance display from an external source (e.g., click-to-focus).
+     * @param distance The new focal distance value
+     */
+    public void updateFocalDistanceDisplay(float distance) {
+        if (focalDistSlider != null && focalDistLabel != null) {
+            // Clamp to slider range
+            double clampedDistance = Math.max(focalDistSlider.getMin(),
+                    Math.min(focalDistSlider.getMax(), distance));
+            focalDistSlider.setValue(clampedDistance);
+            focalDistLabel.setText(String.format("Focal Distance: %.2f", clampedDistance));
+        }
+    }
+
+    private TitledPane createPathTracingPane() {
+        VBox box = new VBox(5);
+
+        CheckBox pathTracingCheck = new CheckBox("Enable Path Tracing");
+        pathTracingCheck.setSelected(false);
+        pathTracingCheck.setOnAction(e -> {
+            getParams().setPathTracingEnabled(pathTracingCheck.isSelected());
+            renderCallback.requestRender();
+        });
+
+        Label bouncesLabel = new Label("Max Bounces: 4");
+        Slider bouncesSlider = new Slider(1, 8, 4);
+        bouncesSlider.setMajorTickUnit(1);
+        bouncesSlider.setMinorTickCount(0);
+        bouncesSlider.setSnapToTicks(true);
+        bouncesSlider.setShowTickLabels(true);
+        bouncesSlider.valueProperty().addListener((obs, old, val) -> {
+            int bounces = val.intValue();
+            bouncesLabel.setText(String.format("Max Bounces: %d", bounces));
+            getParams().setMaxBounces(bounces);
+            renderCallback.requestRender();
+        });
+
+        Label skyIntensityLabel = new Label("Sky Intensity: 1.0");
+        Slider skyIntensitySlider = new Slider(0.0, 3.0, 1.0);
+        skyIntensitySlider.valueProperty().addListener((obs, old, val) -> {
+            skyIntensityLabel.setText(String.format("Sky Intensity: %.2f", val.doubleValue()));
+            getParams().setSkyIntensity(val.floatValue());
+            renderCallback.requestRender();
+        });
+
+        Label indirectLabel = new Label("Indirect Light: 50%");
+        Slider indirectSlider = new Slider(0.0, 1.0, 0.5);
+        indirectSlider.valueProperty().addListener((obs, old, val) -> {
+            indirectLabel.setText(String.format("Indirect Light: %.0f%%", val.doubleValue() * 100));
+            getParams().setIndirectMultiplier(val.floatValue());
+            renderCallback.requestRender();
+        });
+
+        Label indirectInfo = new Label("0% = Hard shadows (direct only)\n100% = Soft shadows (full GI)");
+        indirectInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        Label pathTracingInfo = new Label("Path tracing adds global illumination.\nSlower but more realistic.");
+        pathTracingInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        box.getChildren().addAll(pathTracingCheck, bouncesLabel, bouncesSlider,
+                skyIntensityLabel, skyIntensitySlider, indirectLabel, indirectSlider,
+                indirectInfo, pathTracingInfo);
+
+        TitledPane pane = new TitledPane("Path Tracing (GI)", box);
+        pane.setExpanded(false);
+        return pane;
+    }
+
+    private TitledPane createMaterialPane() {
+        VBox box = new VBox(5);
+
+        ComboBox<String> materialCombo = new ComboBox<>();
+        materialCombo.getItems().addAll("Lambertian (Diffuse)", "Metallic", "Glass");
+        materialCombo.getSelectionModel().select(0);
+        materialCombo.setMaxWidth(Double.MAX_VALUE);
+        materialCombo.setOnAction(e -> {
+            getParams().setMaterialType(materialCombo.getSelectionModel().getSelectedIndex());
+            renderCallback.requestRender();
+        });
+
+        Label metalnessLabel = new Label("Metalness: 0.90");
+        Slider metalnessSlider = new Slider(0.0, 1.0, 0.9);
+        metalnessSlider.valueProperty().addListener((obs, old, val) -> {
+            metalnessLabel.setText(String.format("Metalness: %.2f", val.doubleValue()));
+            getParams().setMetalness(val.floatValue());
+            renderCallback.requestRender();
+        });
+
+        Label iorLabel = new Label("IOR (Glass): 1.50");
+        Slider iorSlider = new Slider(1.0, 2.5, 1.5);
+        iorSlider.valueProperty().addListener((obs, old, val) -> {
+            iorLabel.setText(String.format("IOR (Glass): %.2f", val.doubleValue()));
+            getParams().setIor(val.floatValue());
+            renderCallback.requestRender();
+        });
+
+        Label roughnessLabel = new Label("Roughness: 0.50");
+        Slider roughnessSlider = new Slider(0.0, 1.0, 0.5);
+        roughnessSlider.valueProperty().addListener((obs, old, val) -> {
+            roughnessLabel.setText(String.format("Roughness: %.2f", val.doubleValue()));
+            getParams().setRoughness(val.floatValue());
+            renderCallback.requestRender();
+        });
+
+        Label materialInfo = new Label(
+            "Lambertian: Classic diffuse\n" +
+            "Metallic: Reflective with roughness\n" +
+            "Glass: Transparent with refraction"
+        );
+        materialInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        box.getChildren().addAll(materialCombo, metalnessLabel, metalnessSlider,
+                iorLabel, iorSlider, roughnessLabel, roughnessSlider, materialInfo);
+
+        TitledPane pane = new TitledPane("Materials", box);
+        pane.setExpanded(false);
+        return pane;
+    }
+
+    private TitledPane createPresetsPane() {
+        VBox box = new VBox(5);
 
         HBox presetBox = new HBox(5);
+
         Button fastBtn = new Button("Fast");
-        fastBtn.setOnAction(e -> {
-            qualitySlider.setValue(0.5);
-            shadowSoftnessSlider.setValue(8);
-            aoIntensitySlider.setValue(0.3);
-            specularIntensitySlider.setValue(0.3);
-        });
+        fastBtn.setOnAction(e -> applyPreset(0.5f, 8, 0.3f, 0.3f));
+
         Button balancedBtn = new Button("Balanced");
-        balancedBtn.setOnAction(e -> {
-            qualitySlider.setValue(1.0);
-            shadowSoftnessSlider.setValue(16);
-            aoIntensitySlider.setValue(0.5);
-            specularIntensitySlider.setValue(0.5);
-        });
+        balancedBtn.setOnAction(e -> applyPreset(1.0f, 16, 0.5f, 0.5f));
+
         Button highBtn = new Button("High");
-        highBtn.setOnAction(e -> {
-            qualitySlider.setValue(2.0);
-            shadowSoftnessSlider.setValue(32);
-            aoIntensitySlider.setValue(0.7);
-            specularIntensitySlider.setValue(0.6);
-        });
+        highBtn.setOnAction(e -> applyPreset(2.0f, 32, 0.7f, 0.6f));
+
         Button ultimateBtn = new Button("Ultimate");
-        ultimateBtn.setOnAction(e -> {
-            qualitySlider.setValue(5.0);
-            shadowSoftnessSlider.setValue(48);
-            aoIntensitySlider.setValue(0.8);
-            specularIntensitySlider.setValue(0.7);
-        });
+        ultimateBtn.setOnAction(e -> applyPreset(5.0f, 48, 0.8f, 0.7f));
+
         presetBox.getChildren().addAll(fastBtn, balancedBtn, highBtn, ultimateBtn);
+        box.getChildren().add(presetBox);
 
-        panel.getChildren().addAll(
-            passLabel, passCombo,
-            autoFullQualityCheck,
-            new Separator(),
-            qualityLabel, qualityValueLabel, qualitySlider, qualityInfoLabel,
-            new Separator(),
-            shadowLabel, shadowSoftLabel, shadowSoftnessSlider,
-            shadowStepsLabel, shadowStepsSlider,
-            new Separator(),
-            aoLabel, aoIntLabel, aoIntensitySlider,
-            new Separator(),
-            specLabel,
-            specIntLabel, specularIntensitySlider,
-            specPowLabel, specularPowerSlider,
-            new Separator(),
-            glowLabel, glowIntLabel, glowIntensitySlider,
-            new Separator(),
-            dofLabel, dofEnabledCheck,
-            focalDistLabel, focalDistSlider,
-            apertureLabel, apertureSlider,
-            dofSamplesLabel, dofSamplesSlider,
-            dofInfoLabel,
-            new Separator(),
-            presetLabel, presetBox
-        );
+        TitledPane pane = new TitledPane("Quality Presets", box);
+        pane.setExpanded(false);
+        return pane;
+    }
 
-        return panel;
+    private void applyPreset(float quality, float shadowSoftness, float aoIntensity, float specIntensity) {
+        AbstractFractalParams params = getParams();
+        params.setQualityMultiplier(quality);
+        params.shadowSoftness(shadowSoftness);
+        params.aoIntensity(aoIntensity);
+        params.specularIntensity(specIntensity);
+        renderCallback.requestRender();
     }
 
     private AbstractFractalParams getParams() {

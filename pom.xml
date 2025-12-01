@@ -20,7 +20,6 @@
     <javafx.version>25.0.1</javafx.version>
   </properties>
 
-  <!-- LWJGL BOM for dependency management -->
   <dependencyManagement>
     <dependencies>
       <dependency>
@@ -51,6 +50,39 @@
       <artifactId>lwjgl-opencl</artifactId>
     </dependency>
 
+    <!-- LWJGL GLFW -->
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl-glfw</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl-glfw</artifactId>
+      <classifier>natives-windows</classifier>
+    </dependency>
+
+    <!-- LWJGL OpenGL -->
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl-opengl</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl-opengl</artifactId>
+      <classifier>natives-windows</classifier>
+    </dependency>
+
+    <!-- LWJGL STB (image loading) -->
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl-stb</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.lwjgl</groupId>
+      <artifactId>lwjgl-stb</artifactId>
+      <classifier>natives-windows</classifier>
+    </dependency>
+
     <!-- JavaFX -->
     <dependency>
       <groupId>org.openjfx</groupId>
@@ -79,7 +111,6 @@
 
   <build>
     <plugins>
-      <!-- Compiler plugin -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -89,34 +120,30 @@
         </configuration>
       </plugin>
 
-      <!-- JavaFX plugin -->
       <plugin>
         <groupId>org.openjfx</groupId>
         <artifactId>javafx-maven-plugin</artifactId>
         <version>0.0.8</version>
         <configuration>
-          <mainClass>org.fractalizer.FractalizerApp</mainClass>
+          <mainClass>org.fractalizer.GLSLFractalizerApp</mainClass>
         </configuration>
       </plugin>
 
-      <!-- Exec plugin for running -->
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.1.0</version>
         <configuration>
-          <mainClass>org.fractalizer.FractalizerApp</mainClass>
+          <mainClass>org.fractalizer.GLSLFractalizerApp</mainClass>
         </configuration>
       </plugin>
 
-      <!-- Surefire for JUnit 5 -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.2.2</version>
       </plugin>
 
-      <!-- Fat JAR with all dependencies -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>

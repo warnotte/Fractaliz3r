@@ -1,7 +1,6 @@
 package org.fractalizer.fractals;
 
 import org.fractalizer.engine.Camera;
-import org.fractalizer.engine.OpenCLEngine;
 
 /**
  * Abstract base class for fractal parameters.
@@ -71,6 +70,27 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float aperture;
     protected int dofSamples;
 
+    // Path Tracing
+    protected boolean pathTracingEnabled;
+    protected int maxBounces;
+    protected float roughness;
+    protected float skyIntensity;
+    protected float indirectMultiplier;  // Controls indirect light contribution (0 = no GI, 1 = full GI)
+
+    // Material System
+    // Type: 0 = Lambertian (diffuse), 1 = Metallic, 2 = Glass (dielectric)
+    public static final int MATERIAL_LAMBERTIAN = 0;
+    public static final int MATERIAL_METALLIC = 1;
+    public static final int MATERIAL_GLASS = 2;
+
+    protected int materialType;
+    protected float metalness;       // For metallic: blend between dielectric and metal (0-1)
+    protected float ior;             // Index of refraction for glass (typically 1.5)
+
+    // Motion Blur (for animation export)
+    // shutterAngle: 0 = no blur, 180 = half frame, 360 = full frame blur (cinematic default)
+    protected float shutterAngle;
+
     /**
      * Initialize common parameters with sensible defaults.
      */
@@ -121,70 +141,21 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.focalDistance = 2.5f;
         this.aperture = 0.02f;
         this.dofSamples = 16;
-    }
 
-    /**
-     * Set common kernel parameters (camera, lighting, shadows, etc.)
-     * @return The number of parameters set
-     */
-    protected int setCommonKernelParams(OpenCLEngine engine, String kernelName, int startIndex) {
-        int idx = startIndex;
+        // Path tracing defaults (disabled by default)
+        this.pathTracingEnabled = false;
+        this.maxBounces = 4;
+        this.roughness = 0.5f;
+        this.skyIntensity = 1.0f;
+        this.indirectMultiplier = 0.5f;  // 50% indirect light by default (darker shadows)
 
-        // Camera position
-        float[] pos = camera.getPosition();
-        engine.setKernelArgFloats(kernelName, idx++, pos[0], pos[1], pos[2], 0f);
+        // Material defaults (Lambertian diffuse)
+        this.materialType = MATERIAL_LAMBERTIAN;
+        this.metalness = 0.9f;
+        this.ior = 1.5f;  // Glass IOR
 
-        // Camera quaternion for orientation
-        float[] quat = camera.getQuaternion();
-        engine.setKernelArgFloats(kernelName, idx++, quat[0], quat[1], quat[2], quat[3]);
-
-        // FOV
-        engine.setKernelArgFloat(kernelName, idx++, fov);
-
-        return idx - startIndex;
-    }
-
-    /**
-     * Set lighting kernel parameters.
-     * @return The number of parameters set
-     */
-    protected int setLightingKernelParams(OpenCLEngine engine, String kernelName, int startIndex) {
-        int idx = startIndex;
-
-        // Light direction
-        engine.setKernelArgFloats(kernelName, idx++, lightX, lightY, lightZ, 0f);
-
-        // Light color + intensity
-        engine.setKernelArgFloats(kernelName, idx++, lightR, lightG, lightB, lightIntensity);
-
-        // Ambient color + intensity
-        engine.setKernelArgFloats(kernelName, idx++, ambientR, ambientG, ambientB, ambientIntensity);
-
-        // Material hue
-        engine.setKernelArgFloats(kernelName, idx++, hueR, hueG, hueB, 0f);
-
-        // Rendering quality
-        engine.setKernelArgFloat(kernelName, idx++, shadowSoftness);
-        engine.setKernelArgInt(kernelName, idx++, shadowSteps);
-        engine.setKernelArgInt(kernelName, idx++, aoSteps);
-        engine.setKernelArgFloat(kernelName, idx++, aoIntensity);
-        engine.setKernelArgFloat(kernelName, idx++, glowIntensity);
-        engine.setKernelArgFloat(kernelName, idx++, qualityMultiplier);
-
-        // Specular
-        engine.setKernelArgFloat(kernelName, idx++, specularIntensity);
-        engine.setKernelArgFloat(kernelName, idx++, specularPower);
-
-        // Render mode
-        engine.setKernelArgInt(kernelName, idx++, renderMode);
-
-        // DoF parameters
-        engine.setKernelArgInt(kernelName, idx++, dofEnabled ? 1 : 0);
-        engine.setKernelArgFloat(kernelName, idx++, focalDistance);
-        engine.setKernelArgFloat(kernelName, idx++, aperture);
-        engine.setKernelArgInt(kernelName, idx++, dofSamples);
-
-        return idx - startIndex;
+        // Motion blur defaults (180° = cinematic film standard)
+        this.shutterAngle = 180.0f;
     }
 
     /**
@@ -232,6 +203,18 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.focalDistance = this.focalDistance;
         target.aperture = this.aperture;
         target.dofSamples = this.dofSamples;
+
+        // Copy path tracing
+        target.pathTracingEnabled = this.pathTracingEnabled;
+        target.maxBounces = this.maxBounces;
+        target.roughness = this.roughness;
+        target.skyIntensity = this.skyIntensity;
+        target.indirectMultiplier = this.indirectMultiplier;
+
+        // Copy material
+        target.materialType = this.materialType;
+        target.metalness = this.metalness;
+        target.ior = this.ior;
     }
 
     /**
@@ -360,6 +343,30 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setAperture(float aperture) { this.aperture = aperture; }
     public int getDofSamples() { return dofSamples; }
     public void setDofSamples(int samples) { this.dofSamples = samples; }
+
+    // Path Tracing
+    public boolean isPathTracingEnabled() { return pathTracingEnabled; }
+    public void setPathTracingEnabled(boolean enabled) { this.pathTracingEnabled = enabled; }
+    public int getMaxBounces() { return maxBounces; }
+    public void setMaxBounces(int bounces) { this.maxBounces = bounces; }
+    public float getRoughness() { return roughness; }
+    public void setRoughness(float roughness) { this.roughness = roughness; }
+    public float getSkyIntensity() { return skyIntensity; }
+    public void setSkyIntensity(float intensity) { this.skyIntensity = intensity; }
+    public float getIndirectMultiplier() { return indirectMultiplier; }
+    public void setIndirectMultiplier(float multiplier) { this.indirectMultiplier = Math.max(0, Math.min(1, multiplier)); }
+
+    // Material
+    public int getMaterialType() { return materialType; }
+    public void setMaterialType(int type) { this.materialType = Math.max(0, Math.min(2, type)); }
+    public float getMetalness() { return metalness; }
+    public void setMetalness(float metalness) { this.metalness = Math.max(0, Math.min(1, metalness)); }
+    public float getIor() { return ior; }
+    public void setIor(float ior) { this.ior = Math.max(1.0f, Math.min(3.0f, ior)); }
+
+    // Motion Blur
+    public float getShutterAngle() { return shutterAngle; }
+    public void setShutterAngle(float angle) { this.shutterAngle = Math.max(0, Math.min(360, angle)); }
 
     // ========================================================================
     // Builder-style setters (return this for chaining)
