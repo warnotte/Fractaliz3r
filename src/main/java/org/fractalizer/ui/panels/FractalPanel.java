@@ -219,9 +219,21 @@ public class FractalPanel extends ScrollPane {
             }
         });
 
+        Label bailoutLabel = new Label("Bailout: "+((MandelbulbParams)params).getBailout());
+        Slider bailoutSlider = new Slider(1, 16, ((MandelbulbParams)params).getBailout());
+        bailoutSlider.setShowTickLabels(true);
+        bailoutSlider.valueProperty().addListener((obs, old, val) -> {
+            bailoutLabel.setText(String.format("Bailout: %.2f", val.floatValue()));
+            if (params instanceof MandelbulbParams mbParams) {
+                mbParams.setBailout(val.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
         mandelbulbControls.getChildren().addAll(
             powerLabel, powerSlider,
-            iterLabel, iterSlider
+            iterLabel, iterSlider,
+            bailoutLabel, bailoutSlider
         );
     }
 
