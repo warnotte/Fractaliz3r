@@ -167,6 +167,17 @@ public class GLSLFractalizerApp extends Application {
             javafx.scene.image.Image image = controller.exportAnimationFrame(file, width, height, samples);
             updateImage(image);
         });
+        exportPanel.setMotionBlurExportCallback((file, width, height, samples, frameTime, fps, shutterAngle) -> {
+            // Motion blur: render samples at jittered times
+            javafx.scene.image.Image image = controller.exportAnimationFrameWithMotionBlur(
+                file, width, height, samples, frameTime, fps, shutterAngle,
+                time -> {
+                    // Apply animation params at the jittered time
+                    animationManager.getTimeline().setCurrentTime(time);
+                    animationManager.applyTimelineToParams();
+                });
+            updateImage(image);
+        });
         exportPanel.setExportStateCallback(exporting -> {
             this.exportingAnimation = exporting;
             if (!exporting) {

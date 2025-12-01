@@ -87,6 +87,10 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float metalness;       // For metallic: blend between dielectric and metal (0-1)
     protected float ior;             // Index of refraction for glass (typically 1.5)
 
+    // Motion Blur (for animation export)
+    // shutterAngle: 0 = no blur, 180 = half frame, 360 = full frame blur (cinematic default)
+    protected float shutterAngle;
+
     /**
      * Initialize common parameters with sensible defaults.
      */
@@ -149,6 +153,9 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.materialType = MATERIAL_LAMBERTIAN;
         this.metalness = 0.9f;
         this.ior = 1.5f;  // Glass IOR
+
+        // Motion blur defaults (180° = cinematic film standard)
+        this.shutterAngle = 180.0f;
     }
 
     /**
@@ -356,6 +363,10 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setMetalness(float metalness) { this.metalness = Math.max(0, Math.min(1, metalness)); }
     public float getIor() { return ior; }
     public void setIor(float ior) { this.ior = Math.max(1.0f, Math.min(3.0f, ior)); }
+
+    // Motion Blur
+    public float getShutterAngle() { return shutterAngle; }
+    public void setShutterAngle(float angle) { this.shutterAngle = Math.max(0, Math.min(360, angle)); }
 
     // ========================================================================
     // Builder-style setters (return this for chaining)

@@ -40,6 +40,15 @@ public class ExportPanel extends ScrollPane {
         void exportFrame(File file, int width, int height, int samples);
     }
 
+    @FunctionalInterface
+    public interface MotionBlurExportCallback {
+        void exportFrameWithMotionBlur(File file, int width, int height, int samples,
+                                        double frameTime, double fps, float shutterAngle);
+    }
+
+    // Motion blur callback
+    private MotionBlurExportCallback motionBlurExportCallback;
+
     // UI Components
     private TextField widthField;
     private TextField heightField;
@@ -53,6 +62,7 @@ public class ExportPanel extends ScrollPane {
     private Button exportAnimButton;
     private Button cancelAnimButton;
     private Spinner<Integer> exportSamplesSpinner;
+    private Spinner<Integer> motionBlurSpinner;  // Shutter angle 0-360
     private CheckBox createMP4Checkbox;
     private Spinner<Integer> crfSpinner;
     private Label ffmpegStatusLabel;
@@ -103,6 +113,13 @@ public class ExportPanel extends ScrollPane {
      */
     public void setExportStateCallback(Consumer<Boolean> callback) {
         this.exportStateCallback = callback;
+    }
+
+    /**
+     * Set the callback for exporting animation frames with motion blur.
+     */
+    public void setMotionBlurExportCallback(MotionBlurExportCallback callback) {
+        this.motionBlurExportCallback = callback;
     }
 
     private VBox createContent() {
@@ -224,6 +241,16 @@ public class ExportPanel extends ScrollPane {
         exportSamplesSpinner.setEditable(true);
         samplesBox.getChildren().add(exportSamplesSpinner);
 
+        // Motion blur (shutter angle)
+        HBox motionBlurBox = new HBox(5);
+        motionBlurBox.setAlignment(Pos.CENTER_LEFT);
+        motionBlurBox.getChildren().add(new Label("Motion blur:"));
+        motionBlurSpinner = new Spinner<>(0, 360, 180, 30);
+        motionBlurSpinner.setPrefWidth(70);
+        motionBlurSpinner.setEditable(true);
+        motionBlurSpinner.setTooltip(new Tooltip("Shutter angle: 0=none, 180=cinematic, 360=full frame blur"));
+        motionBlurBox.getChildren().addAll(motionBlurSpinner, new Label("\u00B0"));
+
         // Progress indicators
         frameProgressLabel = new Label("Frame 0/0");
         frameProgressLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
@@ -280,6 +307,7 @@ public class ExportPanel extends ScrollPane {
         box.getChildren().addAll(
             animInfoLabel,
             samplesBox,
+            motionBlurBox,
             frameProgressLabel,
             frameProgress,
             totalProgress,
@@ -420,9 +448,11 @@ public class ExportPanel extends ScrollPane {
         int exportHeight = getOutputHeight();
         int totalFrames = timeline.getTotalFrames();
         int exportSamples = exportSamplesSpinner.getValue();
+        int shutterAngle = motionBlurSpinner.getValue();
         boolean shouldCreateMP4 = createMP4Checkbox.isSelected() && FFmpegExporter.isFFmpegAvailable();
         int crf = crfSpinner.getValue();
         int fps = (int) timeline.getFrameRate();
+        boolean useMotionBlur = shutterAngle > 0 && motionBlurExportCallback != null;
 
         // Start export
         exporting = true;
@@ -472,11 +502,18 @@ public class ExportPanel extends ScrollPane {
 
                     // Render and save frame (synchronous call on JavaFX thread)
                     java.util.concurrent.CountDownLatch renderLatch = new java.util.concurrent.CountDownLatch(1);
+                    final double frameTime = time;
                     Platform.runLater(() -> {
                         try {
-                            animationExportCallback.exportFrame(frameFile, exportWidth, exportHeight, exportSamples);
-                            // Update image view for visual feedback
-                            // This is handled in the callback now
+                            if (useMotionBlur) {
+                                // Use motion blur callback with temporal jittering
+                                motionBlurExportCallback.exportFrameWithMotionBlur(
+                                    frameFile, exportWidth, exportHeight, exportSamples,
+                                    frameTime, fps, shutterAngle);
+                            } else {
+                                // Normal export without motion blur
+                                animationExportCallback.exportFrame(frameFile, exportWidth, exportHeight, exportSamples);
+                            }
                         } finally {
                             renderLatch.countDown();
                         }
@@ -513,12 +550,33 @@ public class ExportPanel extends ScrollPane {
                         }
                         finishAnimationExport();
                     });
+                } else if (exportCancelled && shouldCreateMP4) {
+                    // Cancelled but create MP4 from rendered frames
+                    Platform.runLater(() -> {
+                        animExportStatusLabel.setText("Creating MP4 from rendered frames...");
+                        frameProgressLabel.setText("Encoding...");
+                        frameProgress.setProgress(-1);
+                    });
+
+                    FFmpegExporter.ExportResult result = FFmpegExporter.createMP4InPlace(
+                            exportDir, fps, crf,
+                            progress -> Platform.runLater(() -> frameProgress.setProgress(progress))
+                    );
+
+                    Platform.runLater(() -> {
+                        if (result.success) {
+                            animExportStatusLabel.setText("Export cancelled. MP4 created:\n" + result.outputFile.getAbsolutePath());
+                        } else {
+                            animExportStatusLabel.setText("Export cancelled. MP4 failed:\n" + result.message);
+                        }
+                        finishAnimationExport();
+                    });
                 } else {
-                    // Done (PNG only)
+                    // Done (PNG only) or cancelled without MP4
                     final int finalTotalFrames = totalFrames;
                     Platform.runLater(() -> {
                         if (exportCancelled) {
-                            animExportStatusLabel.setText("Export cancelled.");
+                            animExportStatusLabel.setText("Export cancelled. Frames in:\n" + exportDir.getAbsolutePath());
                         } else {
                             animExportStatusLabel.setText("Export complete! " + finalTotalFrames + " frames saved to:\n" + exportDir.getAbsolutePath());
                         }

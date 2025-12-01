@@ -15,6 +15,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -272,6 +273,97 @@ public class GLSLFractalizerController implements RenderController {
             // Restore viewport size on error
             engine.resize(viewportWidth, viewportHeight);
             throw new RuntimeException("Failed to export animation frame", e);
+        }
+    }
+
+    /**
+     * Export a single animation frame with motion blur support.
+     * Renders samples at different time offsets to simulate camera shutter blur.
+     *
+     * @param file The file to save the frame to
+     * @param width Export width
+     * @param height Export height
+     * @param samples Number of samples per frame
+     * @param frameTime Current frame time in seconds
+     * @param fps Frames per second (for shutter duration calculation)
+     * @param shutterAngle Shutter angle in degrees (0 = no blur, 180 = half frame, 360 = full frame)
+     * @param timeApplier Callback to apply animation parameters at a given time
+     * @return The rendered image for display
+     */
+    public WritableImage exportAnimationFrameWithMotionBlur(
+            File file, int width, int height, int samples,
+            double frameTime, double fps, float shutterAngle,
+            Consumer<Double> timeApplier) {
+        try {
+            // Resize engine to export dimensions
+            engine.resize(width, height);
+            engine.setActiveProgram(currentFractalType.getKernelName());
+            engine.resetAccumulation();
+
+            // Calculate shutter window
+            // Shutter angle 180° = shutter open for half the frame duration
+            double frameDuration = 1.0 / fps;
+            double shutterDuration = frameDuration * (shutterAngle / 360.0);
+
+            Random random = new Random();
+
+            // Render samples with time jittering for motion blur
+            for (int i = 0; i < samples; i++) {
+                // Jitter time within shutter window (centered on frame time)
+                double jitteredTime;
+                if (shutterAngle > 0) {
+                    jitteredTime = frameTime + (random.nextDouble() - 0.5) * shutterDuration;
+                } else {
+                    jitteredTime = frameTime;
+                }
+
+                // Apply animation parameters at the jittered time
+                timeApplier.accept(jitteredTime);
+
+                // Rebuild uniforms with the new parameters
+                Map<String, Object> uniforms = buildUniforms();
+
+                // Render this sample
+                engine.renderSample(uniforms);
+            }
+
+            // Read pixels
+            float[] pixels = engine.readImage();
+
+            // Create BufferedImage for file export
+            BufferedImage bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+
+            // Create WritableImage for display
+            WritableImage fxImage = new WritableImage(width, height);
+            int[] intPixels = new int[width * height];
+
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    int idx = (y * width + x) * 4;
+                    int r = Math.max(0, Math.min(255, (int) (pixels[idx] * 255)));
+                    int g = Math.max(0, Math.min(255, (int) (pixels[idx + 1] * 255)));
+                    int b = Math.max(0, Math.min(255, (int) (pixels[idx + 2] * 255)));
+                    int rgb = (r << 16) | (g << 8) | b;
+                    bufferedImage.setRGB(x, y, rgb);
+                    intPixels[y * width + x] = 0xFF000000 | rgb;
+                }
+            }
+
+            // Write to file
+            ImageIO.write(bufferedImage, "PNG", file);
+
+            // Write to JavaFX image
+            fxImage.getPixelWriter().setPixels(0, 0, width, height,
+                PixelFormat.getIntArgbInstance(), intPixels, 0, width);
+
+            // Restore viewport size
+            engine.resize(viewportWidth, viewportHeight);
+
+            return fxImage;
+
+        } catch (Exception e) {
+            engine.resize(viewportWidth, viewportHeight);
+            throw new RuntimeException("Failed to export animation frame with motion blur", e);
         }
     }
 
