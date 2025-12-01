@@ -10,13 +10,16 @@ import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
+import javafx.geometry.Orientation;
 import javafx.stage.Stage;
 import org.fractalizer.engine.GLSLEngine.PostProcessParams;
 import org.fractalizer.fractals.AbstractFractalParams;
 import org.fractalizer.fractals.MandelbulbParams;
+import org.fractalizer.ui.AnimationManager;
 import org.fractalizer.ui.GLSLFractalizerController;
 import org.fractalizer.ui.NavigationController;
 import org.fractalizer.ui.panels.*;
+import org.fractalizer.ui.timeline.TimelineWidget;
 
 /**
  * GLSL-based JavaFX application for Fractaliz3r.
@@ -41,9 +44,11 @@ public class GLSLFractalizerApp extends Application {
     private QualityPanel qualityPanel;
     private ExportPanel exportPanel;
     private GLSLDevicePanel devicePanel;
-    private AnimationPanel animationPanel;
     private PostProcessingPanel postProcessPanel;
     private EnvironmentPanel environmentPanel;
+
+    // Animation manager (handles timeline and keyframes)
+    private AnimationManager animationManager;
 
     // Rendering state
     private boolean needsRender = true;
@@ -69,15 +74,10 @@ public class GLSLFractalizerApp extends Application {
 
         primaryStage.setTitle("Fractaliz3r GLSL - 3D Fractal Renderer");
 
-        // Main layout
-        BorderPane root = new BorderPane();
-        root.setPadding(new Insets(10));
-
         // Center: Image view - fills available space dynamically
         imageView = new ImageView();
         imageView.setPreserveRatio(true);
         imageView.setSmooth(true);
-        // Prevent ImageView from affecting layout calculations
         imageView.setManaged(false);
 
         imageContainer = new StackPane();
@@ -91,25 +91,52 @@ public class GLSLFractalizerApp extends Application {
             double h = bounds.getHeight();
             imageView.setFitWidth(w);
             imageView.setFitHeight(h);
-            // Center the image
             imageView.setLayoutX(0);
             imageView.setLayoutY(0);
         });
 
-        root.setCenter(imageContainer);
-
         // Right: Controls panel with tabs
         TabPane controlTabs = createControlTabs(initialParams);
+        controlTabs.setMinWidth(250);
         controlTabs.setPrefWidth(320);
-        controlTabs.setMinWidth(320);
-        controlTabs.setMaxWidth(320);
-        root.setRight(controlTabs);
 
-        // Bottom: Status bar
+        // Horizontal SplitPane: 3D View | Parameters
+        SplitPane horizontalSplit = new SplitPane();
+        horizontalSplit.setOrientation(Orientation.HORIZONTAL);
+        horizontalSplit.getItems().addAll(imageContainer, controlTabs);
+        horizontalSplit.setDividerPositions(0.75);
+        SplitPane.setResizableWithParent(controlTabs, false);
+
+        // Set minimum sizes to prevent crashes during resize
+        imageContainer.setMinWidth(100);
+        imageContainer.setMinHeight(100);
+        controlTabs.setMinWidth(200);
+
+        // Timeline panel (separate from status bar)
+        TimelineWidget timelinePanel = createTimelinePanel();
+        timelinePanel.setMinHeight(100);
+        timelinePanel.setPrefHeight(180);
+
+        // Vertical SplitPane: Top (3D + params) | Bottom (Timeline only)
+        SplitPane verticalSplit = new SplitPane();
+        verticalSplit.setOrientation(Orientation.VERTICAL);
+        verticalSplit.getItems().addAll(horizontalSplit, timelinePanel);
+        verticalSplit.setDividerPositions(0.72);
+        SplitPane.setResizableWithParent(timelinePanel, false);
+
+        // Minimum size for top area
+        horizontalSplit.setMinHeight(150);
+
+        // Status bar - always at bottom, outside SplitPane
         HBox statusBar = createStatusBar();
+
+        // Main layout
+        BorderPane root = new BorderPane();
+        root.setPadding(new Insets(5, 5, 0, 5));  // No bottom padding (status bar has its own)
+        root.setCenter(verticalSplit);
         root.setBottom(statusBar);
 
-        Scene scene = new Scene(root, 1280, 750);
+        Scene scene = new Scene(root, 1400, 850);
 
         // Setup navigation controller
         navigation = new NavigationController(
@@ -132,6 +159,21 @@ public class GLSLFractalizerApp extends Application {
 
         // Initial status
         statusLabel.setText("GPU: " + controller.getDeviceName());
+
+        // Connect export panel to timeline (after animationManager is created)
+        exportPanel.setTimelineSupplier(() -> animationManager.getTimeline());
+        exportPanel.setAnimationExportCallback((file, width, height, samples) -> {
+            animationManager.applyTimelineToParams();
+            javafx.scene.image.Image image = controller.exportAnimationFrame(file, width, height, samples);
+            updateImage(image);
+        });
+        exportPanel.setExportStateCallback(exporting -> {
+            this.exportingAnimation = exporting;
+            if (!exporting) {
+                updateViewportSize();
+                needsRender = true;
+            }
+        });
 
         // Listen for viewport size changes
         setupViewportSizeListener();
@@ -166,11 +208,13 @@ public class GLSLFractalizerApp extends Application {
 
     /**
      * Update the controller's viewport size from the image container.
+     * Minimum size enforced to prevent OpenGL crashes.
      */
     private void updateViewportSize() {
         int width = (int) imageContainer.getLayoutBounds().getWidth();
         int height = (int) imageContainer.getLayoutBounds().getHeight();
-        if (width > 0 && height > 0) {
+        // Enforce minimum size to prevent OpenGL crashes during SplitPane resize
+        if (width >= 64 && height >= 64) {
             controller.setViewportSize(width, height);
             exportPanel.updateViewportInfo();
         }
@@ -229,14 +273,6 @@ public class GLSLFractalizerApp extends Application {
         );
         Tab qualityTab = new Tab("Quality", qualityPanel);
 
-        // Animation tab (created first so ExportPanel can reference it)
-        animationPanel = new AnimationPanel(
-            () -> fractalPanel.getParams(),
-            time -> fractalPanel.updatePositionLabel(),
-            this::requestRender
-        );
-        Tab animationTab = new Tab("Anim", animationPanel);
-
         // Export tab
         exportPanel = new ExportPanel(
             controller,
@@ -244,26 +280,8 @@ public class GLSLFractalizerApp extends Application {
             progress -> progressBar.setProgress(progress),
             status -> statusLabel.setText(status)
         );
-        // Connect ExportPanel to AnimationPanel's timeline
-        exportPanel.setTimelineSupplier(() -> animationPanel.getTimeline());
-        // Set animation export callback with visual feedback
-        exportPanel.setAnimationExportCallback((file, width, height, samples) -> {
-            // Apply timeline params before rendering
-            animationPanel.applyTimelineToParams();
-            // Export frame and get image for visual feedback
-            javafx.scene.image.Image image = controller.exportAnimationFrame(file, width, height, samples);
-            // Update image view for visual feedback
-            updateImage(image);
-        });
-        // Set export state callbacks to block render loop during export
-        exportPanel.setExportStateCallback(exporting -> {
-            this.exportingAnimation = exporting;
-            if (!exporting) {
-                // Restore viewport size after export
-                updateViewportSize();
-                needsRender = true;
-            }
-        });
+        // Connect ExportPanel to timeline (will be set after timeline is created)
+        // Note: timeline is created in createBottomPanel which is called after this
         Tab exportTab = new Tab("Export", exportPanel);
 
         // Device tab - GLSL info
@@ -279,21 +297,35 @@ public class GLSLFractalizerApp extends Application {
         environmentPanel = new EnvironmentPanel(controller.getEngine(), this::requestRender);
         Tab environmentTab = new Tab("Env", environmentPanel);
 
-        tabPane.getTabs().addAll(fractalTab, lightingTab, qualityTab, postProcessTab, environmentTab, animationTab, exportTab, deviceTab);
+        tabPane.getTabs().addAll(fractalTab, lightingTab, qualityTab, postProcessTab, environmentTab, exportTab, deviceTab);
 
         return tabPane;
     }
 
+    private TimelineWidget createTimelinePanel() {
+        // Create animation manager (handles timeline, tracks, and keyframes)
+        animationManager = new AnimationManager(
+            () -> fractalPanel.getParams(),
+            this::requestRender,
+            () -> fractalPanel.updatePositionLabel(),
+            status -> statusLabel.setText(status)
+        );
+
+        return animationManager.getWidget();
+    }
+
     private HBox createStatusBar() {
         HBox statusBar = new HBox(10);
-        statusBar.setPadding(new Insets(5));
+        statusBar.setPadding(new Insets(3, 10, 3, 10));
         statusBar.setAlignment(Pos.CENTER_LEFT);
+        statusBar.setStyle("-fx-background-color: #2a2a35;");
 
         statusLabel = new Label("Ready");
+        statusLabel.setStyle("-fx-text-fill: #ccc;");
         sampleLabel = new Label("Samples: 0");
-        sampleLabel.setStyle("-fx-font-family: monospace;");
+        sampleLabel.setStyle("-fx-font-family: monospace; -fx-text-fill: #aaa;");
         progressBar = new ProgressBar(0);
-        progressBar.setPrefWidth(200);
+        progressBar.setPrefWidth(150);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -309,8 +341,14 @@ public class GLSLFractalizerApp extends Application {
                 // Skip render loop during animation export
                 if (exportingAnimation) return;
 
-                // Process keyboard input
-                if (navigation.processKeyboardInput()) {
+                // Handle timeline playback via AnimationManager
+                if (animationManager != null && animationManager.updatePlayback(now)) {
+                    fractalPanel.updatePositionLabel();
+                    needsRender = true;
+                }
+
+                // Process keyboard input (only when not playing animation)
+                if ((animationManager == null || !animationManager.isPlaying()) && navigation.processKeyboardInput()) {
                     needsRender = true;
                     fractalPanel.updatePositionLabel();
                 }

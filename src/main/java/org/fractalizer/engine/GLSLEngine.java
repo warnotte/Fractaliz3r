@@ -355,6 +355,11 @@ public class GLSLEngine implements AutoCloseable {
             glBindVertexArray(quadVAO);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
+            // Force GPU to complete all pending operations before reading
+            // This prevents black tiles at high resolutions where the GPU
+            // may not have finished processing all regions
+            glFinish();
+
             // Read pixels from display FBO
             FloatBuffer buffer = MemoryUtil.memAllocFloat(result.length);
             glReadPixels(0, 0, currentWidth, currentHeight, GL_RGBA, GL_FLOAT, buffer);
@@ -932,6 +937,14 @@ public class GLSLEngine implements AutoCloseable {
 
     private void flipImageY(float[] image, int width, int height) {
         int rowSize = width * 4;
+        int expectedSize = width * height * 4;
+
+        // Safety check: verify array size matches expected dimensions
+        // This prevents crashes when viewport resizes during rendering
+        if (image.length != expectedSize || width <= 0 || height <= 0) {
+            return; // Skip flip if size mismatch (viewport was resized)
+        }
+
         float[] tempRow = new float[rowSize];
 
         for (int y = 0; y < height / 2; y++) {
