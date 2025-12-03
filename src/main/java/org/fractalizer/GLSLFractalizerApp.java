@@ -9,17 +9,25 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.*;
 import javafx.geometry.Orientation;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import org.fractalizer.config.FractalConfig;
+import org.fractalizer.config.FractalConfigManager;
 import org.fractalizer.engine.GLSLEngine.PostProcessParams;
-import org.fractalizer.fractals.AbstractFractalParams;
-import org.fractalizer.fractals.MandelbulbParams;
+import org.fractalizer.fractals.*;
 import org.fractalizer.ui.AnimationManager;
 import org.fractalizer.ui.GLSLFractalizerController;
 import org.fractalizer.ui.NavigationController;
 import org.fractalizer.ui.panels.*;
 import org.fractalizer.ui.timeline.TimelineWidget;
+
+import java.io.File;
+import java.io.IOException;
 
 /**
  * GLSL-based JavaFX application for Fractaliz3r.
@@ -30,6 +38,7 @@ public class GLSLFractalizerApp extends Application {
     // Core components
     private GLSLFractalizerController controller;
     private NavigationController navigation;
+    private Stage primaryStage;
 
     // UI components
     private ImageView imageView;
@@ -37,6 +46,10 @@ public class GLSLFractalizerApp extends Application {
     private Label statusLabel;
     private Label sampleLabel;
     private StackPane imageContainer;
+
+    // File handling
+    private File currentConfigFile;
+    private final FileChooser fileChooser = new FileChooser();
 
     // Panels
     private FractalPanel fractalPanel;
@@ -72,7 +85,16 @@ public class GLSLFractalizerApp extends Application {
         AbstractFractalParams initialParams = new MandelbulbParams();
         controller.setParams(initialParams);
 
+        // Store stage reference
+        this.primaryStage = primaryStage;
         primaryStage.setTitle("Fractaliz3r GLSL - 3D Fractal Renderer");
+
+        // Initialize file chooser
+        fileChooser.setTitle("Fractal Configuration");
+        fileChooser.getExtensionFilters().addAll(
+            new FileChooser.ExtensionFilter(FractalConfigManager.getFileFilterDescription(), "*" + FractalConfigManager.getFileExtension()),
+            new FileChooser.ExtensionFilter("All Files", "*.*")
+        );
 
         // Center: Image view - fills available space dynamically
         imageView = new ImageView();
@@ -130,9 +152,13 @@ public class GLSLFractalizerApp extends Application {
         // Status bar - always at bottom, outside SplitPane
         HBox statusBar = createStatusBar();
 
+        // Create menu bar
+        MenuBar menuBar = createMenuBar();
+
         // Main layout
         BorderPane root = new BorderPane();
-        root.setPadding(new Insets(5, 5, 0, 5));  // No bottom padding (status bar has its own)
+        root.setPadding(new Insets(0, 5, 0, 5));  // No top/bottom padding
+        root.setTop(menuBar);
         root.setCenter(verticalSplit);
         root.setBottom(statusBar);
 
@@ -445,6 +471,124 @@ public class GLSLFractalizerApp extends Application {
     public void stop() {
         if (controller != null) {
             controller.close();
+        }
+    }
+
+    // ========================================================================
+    // Menu Bar and File Operations
+    // ========================================================================
+
+    private MenuBar createMenuBar() {
+        MenuBar menuBar = new MenuBar();
+
+        // File menu
+        Menu fileMenu = new Menu("_File");
+
+        MenuItem saveItem = new MenuItem("_Save Configuration");
+        saveItem.setAccelerator(new KeyCodeCombination(KeyCode.S, KeyCombination.CONTROL_DOWN));
+        saveItem.setOnAction(e -> saveConfiguration(false));
+
+        MenuItem saveAsItem = new MenuItem("Save Configuration _As...");
+        saveAsItem.setAccelerator(new KeyCodeCombination(KeyCode.S, KeyCombination.CONTROL_DOWN, KeyCombination.SHIFT_DOWN));
+        saveAsItem.setOnAction(e -> saveConfiguration(true));
+
+        MenuItem loadItem = new MenuItem("_Load Configuration...");
+        loadItem.setAccelerator(new KeyCodeCombination(KeyCode.O, KeyCombination.CONTROL_DOWN));
+        loadItem.setOnAction(e -> loadConfiguration());
+
+        SeparatorMenuItem sep1 = new SeparatorMenuItem();
+
+        MenuItem exitItem = new MenuItem("E_xit");
+        exitItem.setOnAction(e -> Platform.exit());
+
+        fileMenu.getItems().addAll(saveItem, saveAsItem, loadItem, sep1, exitItem);
+
+        menuBar.getMenus().add(fileMenu);
+        return menuBar;
+    }
+
+    /**
+     * Save current configuration to file.
+     * @param forceDialog If true, always show file dialog; if false, use current file if set
+     */
+    private void saveConfiguration(boolean forceDialog) {
+        try {
+            File targetFile = currentConfigFile;
+
+            if (forceDialog || targetFile == null) {
+                if (currentConfigFile != null) {
+                    fileChooser.setInitialDirectory(currentConfigFile.getParentFile());
+                    fileChooser.setInitialFileName(currentConfigFile.getName());
+                }
+                targetFile = fileChooser.showSaveDialog(primaryStage);
+                if (targetFile == null) return; // User cancelled
+            }
+
+            // Ensure .frac extension
+            if (!targetFile.getName().endsWith(FractalConfigManager.getFileExtension())) {
+                targetFile = new File(targetFile.getAbsolutePath() + FractalConfigManager.getFileExtension());
+            }
+
+            // Create config from current params
+            AbstractFractalParams params = fractalPanel.getParams();
+            FractalConfig config = FractalConfig.fromParams(params);
+            config.name = targetFile.getName().replace(FractalConfigManager.getFileExtension(), "");
+
+            // Save to file
+            FractalConfigManager.save(config, targetFile);
+            currentConfigFile = targetFile;
+
+            statusLabel.setText("Saved: " + targetFile.getName());
+            primaryStage.setTitle("Fractaliz3r GLSL - " + targetFile.getName());
+
+        } catch (IOException ex) {
+            showError("Save Error", "Failed to save configuration: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Load configuration from file.
+     */
+    private void loadConfiguration() {
+        try {
+            if (currentConfigFile != null) {
+                fileChooser.setInitialDirectory(currentConfigFile.getParentFile());
+            }
+            File file = fileChooser.showOpenDialog(primaryStage);
+            if (file == null) return; // User cancelled
+
+            // Load config from file
+            FractalConfig config = FractalConfigManager.load(file);
+
+            // Get fractal type and switch if needed
+            FractalType type = config.getFractalTypeEnum();
+            if (type != controller.getFractalType()) {
+                controller.setFractalType(type);
+            }
+
+            // Apply config to current params
+            AbstractFractalParams params = (AbstractFractalParams) controller.getParams();
+            config.applyTo(params);
+
+            // Update fractal panel reference
+            fractalPanel.setParams(params);
+
+            // Refresh all UI panels
+            fractalPanel.refreshFromParams();
+            lightingPanel.refreshFromParams();
+            qualityPanel.refreshFromParams();
+
+            currentConfigFile = file;
+            statusLabel.setText("Loaded: " + file.getName());
+            primaryStage.setTitle("Fractaliz3r GLSL - " + file.getName());
+
+            // Trigger render
+            requestRender();
+
+        } catch (IOException ex) {
+            showError("Load Error", "Failed to load configuration: " + ex.getMessage());
+        } catch (Exception ex) {
+            showError("Load Error", "Invalid configuration file: " + ex.getMessage());
         }
     }
 

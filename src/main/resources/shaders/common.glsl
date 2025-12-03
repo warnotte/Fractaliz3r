@@ -367,10 +367,11 @@ const int RENDER_MODE_NORMALS = 1;
 const int RENDER_MODE_DEPTH = 2;
 const int RENDER_MODE_AO = 3;
 const int RENDER_MODE_SHADOW = 4;
-const int RENDER_MODE_ITERATIONS = 5;
-const int RENDER_MODE_ORBIT_TRAP = 6;
-const int RENDER_MODE_DIFFUSE = 7;
-const int RENDER_MODE_SPECULAR = 8;
+// Keep these in sync with AbstractFractalParams render mode constants
+const int RENDER_MODE_DIFFUSE = 5;
+const int RENDER_MODE_SPECULAR = 6;
+const int RENDER_MODE_ORBIT_TRAP = 7;
+const int RENDER_MODE_ITERATIONS = 8;
 
 // ============================================================================
 // Environment Sampling (Unified for raytracing and path tracing)

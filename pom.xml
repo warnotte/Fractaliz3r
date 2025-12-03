@@ -107,6 +107,13 @@
       <version>5.10.1</version>
       <scope>test</scope>
     </dependency>
+
+    <!-- Gson for JSON serialization (save/load configurations) -->
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.10.1</version>
+    </dependency>
   </dependencies>
 
   <build>

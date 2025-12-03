@@ -249,7 +249,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             faceNormal = -normal;
         }
 
-        // Get surface color (albedo)
+        // Get surface color (albedo) from orbit traps at hit position
         OrbitTrap trap;
         DE(hitPos, trap);
         vec3 albedo = getColor(trap);

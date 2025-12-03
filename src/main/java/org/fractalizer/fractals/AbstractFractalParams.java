@@ -8,7 +8,7 @@ import org.fractalizer.engine.Camera;
  */
 public abstract class AbstractFractalParams implements FractalParams {
 
-    // Render mode constants (must match kernel defines)
+    // Render mode constants (must match shaders/common.glsl RENDER_MODE_* defines)
     public static final int RENDER_FINAL = 0;
     public static final int RENDER_NORMALS = 1;
     public static final int RENDER_DEPTH = 2;
