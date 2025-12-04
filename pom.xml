@@ -171,6 +171,36 @@
           </execution>
         </executions>
       </plugin>
+
+
+        <plugin>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-maven-plugin</artifactId>
+            <version>0.0.8</version>
+
+            <configuration>
+                <!-- module + classe de lancement -->
+                <mainClass>Fractaliz3r/org.fractalizer.Launcher</mainClass>
+                <!-- script généré dans target/image/bin -->
+                <launcher>fractaliz3r</launcher>
+                <!-- embarquer tous les modules présents sur le module-path -->
+                <addModules>ALL-MODULE-PATH</addModules>
+                <stripDebug>true</stripDebug>
+                <noHeaderFiles>true</noHeaderFiles>
+                <noManPages>true</noManPages>
+                <compress>2</compress>
+            </configuration>
+
+            <executions>
+                <execution>
+                    <id>create-image</id>
+                    <goals>
+                        <goal>jlink</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
+
     </plugins>
   </build>
 </project>
