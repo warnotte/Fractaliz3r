@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "timestamp": "2024-12-04T00:00:00Z",
+  "name": "Mandelbulb Showcase",
+  "description": "Beautiful Mandelbulb with DOF - perfect starting point for cinematic animation",
+  "fractalType": "MANDELBULB",
+  "camera": {
+    "position": [-2.5, 0.8, -1.8],
+    "quaternion": [0.92, 0.15, 0.35, 0.08],
+    "fov": 50.0,
+    "moveSpeed": 0.05
+  },
+  "rendering": {
+    "maxRaySteps": 200,
+    "epsilon": 0.0001,
+    "qualityMultiplier": 2.0,
+    "renderMode": 0,
+    "shadowSoftness": 24.0,
+    "shadowSteps": 128,
+    "aoSteps": 5,
+    "aoIntensity": 0.6,
+    "glowIntensity": 0.12,
+    "specularIntensity": 0.7,
+    "specularPower": 48.0
+  },
+  "lighting": {
+    "direction": [2.5, 4.0, -1.5],
+    "color": [1.0, 0.95, 0.88],
+    "intensity": 1.4,
+    "ambientColor": [0.08, 0.12, 0.2],
+    "ambientIntensity": 0.35
+  },
+  "material": {
+    "hue": [0.05, 0.35, 0.65],
+    "type": 0,
+    "metalness": 0.3,
+    "ior": 1.5
+  },
+  "effects": {
+    "dofEnabled": true,
+    "focalDistance": 3.2,
+    "aperture": 0.025,
+    "dofSamples": 32,
+    "pathTracingEnabled": false,
+    "maxBounces": 4,
+    "roughness": 0.5,
+    "skyIntensity": 1.0,
+    "indirectMultiplier": 0.5,
+    "shutterAngle": 180.0
+  },
+  "fractalParams": {
+    "power": 8.0,
+    "maxIterations": 12,
+    "bailout": 2.0
+  }
+}
