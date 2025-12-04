@@ -4,7 +4,9 @@ import org.fractalizer.engine.Camera;
 import org.fractalizer.fractals.*;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,6 +41,9 @@ public class FractalConfig {
 
     // Fractal-specific parameters (dynamic based on type)
     public Map<String, Object> fractalParams = new HashMap<>();
+
+    // Animation (optional - only present if animation has keyframes)
+    public AnimationConfig animation;
 
     // ========================================================================
     // Nested configuration classes
@@ -105,6 +110,26 @@ public class FractalConfig {
 
         // Motion Blur
         public float shutterAngle = 180f;
+    }
+
+    public static class AnimationConfig {
+        public double duration = 10.0;
+        public double frameRate = 30.0;
+        public boolean looping = false;
+        public List<TrackConfig> tracks = new ArrayList<>();
+    }
+
+    public static class TrackConfig {
+        public String name;
+        public String valueType;  // "Float", "Double", "Integer", "float[]"
+        public Object defaultValue;
+        public List<KeyframeConfig> keyframes = new ArrayList<>();
+    }
+
+    public static class KeyframeConfig {
+        public double time;
+        public Object value;
+        public String easing = "LINEAR";
     }
 
     // ========================================================================

@@ -174,8 +174,16 @@ public class TimelineWidget extends VBox {
         // Easing combo
         easingCombo = new ComboBox<>();
         easingCombo.getItems().addAll(Easing.values());
-        easingCombo.setValue(Easing.EASE_IN_OUT_CUBIC);
-        easingCombo.setMaxWidth(130);
+        easingCombo.setValue(Easing.LINEAR);
+        easingCombo.setMaxWidth(150);
+        easingCombo.setTooltip(new Tooltip("Easing for new keyframes.\nChange to update selected keyframe."));
+
+        // Update selected keyframe's easing when combo changes
+        easingCombo.setOnAction(e -> {
+            if (selectedKeyframe != null) {
+                updateSelectedKeyframeEasing(easingCombo.getValue());
+            }
+        });
 
         // Duration spinner
         durationSpinner = new Spinner<>(1.0, 300.0, timeline.getDuration(), 1.0);
@@ -623,6 +631,7 @@ public class TimelineWidget extends VBox {
                 isDragging = true;
                 dragStartX = x;
                 dragStartTime = handle.time;
+                updateEasingComboFromSelection();
                 redraw();
             } else if (y < RULER_HEIGHT || x < TRACK_LABEL_WIDTH) {
                 // Click on ruler - seek to time
@@ -743,6 +752,49 @@ public class TimelineWidget extends VBox {
                 track.removeKeyframe(selectedKeyframe.time);
                 selectedKeyframe = null;
                 redraw();
+            }
+        }
+    }
+
+    /**
+     * Update the easing of the currently selected keyframe.
+     */
+    @SuppressWarnings("unchecked")
+    private void updateSelectedKeyframeEasing(Easing newEasing) {
+        if (selectedKeyframe == null || newEasing == null) return;
+
+        AnimationTrack<Object> track = timeline.getTrack(selectedKeyframe.trackName);
+        if (track != null) {
+            Keyframe<?> kf = track.getKeyframeAt(selectedKeyframe.time);
+            if (kf != null) {
+                // Re-add keyframe with new easing
+                Object value = kf.getValue();
+                track.removeKeyframe(selectedKeyframe.time);
+                track.setKeyframe(selectedKeyframe.time, value, newEasing);
+                redraw();
+                // Trigger re-render to show updated interpolation
+                if (onRenderRequest != null) {
+                    onRenderRequest.run();
+                }
+            }
+        }
+    }
+
+    /**
+     * Update the easing combo to show the selected keyframe's easing.
+     */
+    private void updateEasingComboFromSelection() {
+        if (selectedKeyframe != null) {
+            AnimationTrack<?> track = timeline.getTrack(selectedKeyframe.trackName);
+            if (track != null) {
+                Keyframe<?> kf = track.getKeyframeAt(selectedKeyframe.time);
+                if (kf != null) {
+                    // Temporarily disable the action to avoid triggering update
+                    var handler = easingCombo.getOnAction();
+                    easingCombo.setOnAction(null);
+                    easingCombo.setValue(kf.getEasing());
+                    easingCombo.setOnAction(handler);
+                }
             }
         }
     }

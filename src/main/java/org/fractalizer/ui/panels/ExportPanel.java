@@ -13,7 +13,9 @@ import org.fractalizer.animation.Timeline;
 import org.fractalizer.render.FFmpegExporter;
 import org.fractalizer.ui.RenderController;
 
+import java.awt.Desktop;
 import java.io.File;
+import java.io.IOException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -381,9 +383,11 @@ public class ExportPanel extends ScrollPane {
             progressCallback.accept(0.0);
 
             controller.exportToPNG(file, progressCallback::accept)
-                .thenRun(() -> Platform.runLater(() ->
-                    statusCallback.accept("Exported to: " + file.getName())
-                ))
+                .thenRun(() -> Platform.runLater(() -> {
+                    statusCallback.accept("Exported to: " + file.getName());
+                    // Open the exported file
+                    openFile(file);
+                }))
                 .exceptionally(e -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.ERROR);
@@ -545,8 +549,12 @@ public class ExportPanel extends ScrollPane {
                     Platform.runLater(() -> {
                         if (result.success) {
                             animExportStatusLabel.setText("Export complete!\n" + finalTotalFrames + " frames + MP4:\n" + result.outputFile.getAbsolutePath());
+                            // Open the MP4 file
+                            openFile(result.outputFile);
                         } else {
                             animExportStatusLabel.setText("Frames exported. MP4 failed:\n" + result.message);
+                            // Open the directory with frames
+                            openFile(exportDir);
                         }
                         finishAnimationExport();
                     });
@@ -566,8 +574,12 @@ public class ExportPanel extends ScrollPane {
                     Platform.runLater(() -> {
                         if (result.success) {
                             animExportStatusLabel.setText("Export cancelled. MP4 created:\n" + result.outputFile.getAbsolutePath());
+                            // Open the MP4 file
+                            openFile(result.outputFile);
                         } else {
                             animExportStatusLabel.setText("Export cancelled. MP4 failed:\n" + result.message);
+                            // Open the directory with frames
+                            openFile(exportDir);
                         }
                         finishAnimationExport();
                     });
@@ -580,6 +592,8 @@ public class ExportPanel extends ScrollPane {
                         } else {
                             animExportStatusLabel.setText("Export complete! " + finalTotalFrames + " frames saved to:\n" + exportDir.getAbsolutePath());
                         }
+                        // Open the directory with frames
+                        openFile(exportDir);
                         finishAnimationExport();
                     });
                 }
@@ -668,5 +682,20 @@ public class ExportPanel extends ScrollPane {
 
     public boolean isExporting() {
         return exporting;
+    }
+
+    /**
+     * Open a file or directory using the system's default application.
+     */
+    private void openFile(File file) {
+        if (file == null || !file.exists()) return;
+
+        try {
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(file);
+            }
+        } catch (IOException e) {
+            System.err.println("Could not open file: " + e.getMessage());
+        }
     }
 }

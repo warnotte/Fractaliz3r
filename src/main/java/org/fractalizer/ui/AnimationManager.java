@@ -1,7 +1,9 @@
 package org.fractalizer.ui;
 
+import org.fractalizer.animation.AnimationTrack;
 import org.fractalizer.animation.Easing;
 import org.fractalizer.animation.Timeline;
+import org.fractalizer.config.FractalConfig;
 import org.fractalizer.engine.Camera;
 import org.fractalizer.fractals.AbstractFractalParams;
 import org.fractalizer.ui.timeline.TimelineWidget;
@@ -207,5 +209,155 @@ public class AnimationManager {
      */
     public void refresh() {
         timelineWidget.refresh();
+    }
+
+    // ========================================================================
+    // Animation Save/Load Support
+    // ========================================================================
+
+    /**
+     * Export timeline to AnimationConfig for saving.
+     * Returns null if no keyframes exist.
+     */
+    public FractalConfig.AnimationConfig exportAnimation() {
+        // Check if any track has keyframes
+        boolean hasKeyframes = false;
+        for (var track : timeline.getTracks()) {
+            if (track.hasKeyframes()) {
+                hasKeyframes = true;
+                break;
+            }
+        }
+        if (!hasKeyframes) {
+            return null;
+        }
+
+        FractalConfig.AnimationConfig config = new FractalConfig.AnimationConfig();
+        config.duration = timeline.getDuration();
+        config.frameRate = timeline.getFrameRate();
+        config.looping = timeline.isLooping();
+
+        for (var track : timeline.getTracks()) {
+            if (!track.hasKeyframes()) continue;
+
+            FractalConfig.TrackConfig trackConfig = new FractalConfig.TrackConfig();
+            trackConfig.name = track.getName();
+            trackConfig.valueType = track.getValueType().getSimpleName();
+            trackConfig.defaultValue = convertValueForJson(track.getDefaultValue());
+
+            for (var keyframe : track.getKeyframes()) {
+                FractalConfig.KeyframeConfig kfConfig = new FractalConfig.KeyframeConfig();
+                kfConfig.time = keyframe.getTime();
+                kfConfig.value = convertValueForJson(keyframe.getValue());
+                kfConfig.easing = keyframe.getEasing().name();
+                trackConfig.keyframes.add(kfConfig);
+            }
+
+            config.tracks.add(trackConfig);
+        }
+
+        return config;
+    }
+
+    /**
+     * Import animation from AnimationConfig.
+     */
+    public void importAnimation(FractalConfig.AnimationConfig config) {
+        if (config == null) return;
+
+        // Clear existing keyframes but keep track definitions
+        for (var track : timeline.getTracks()) {
+            track.clear();
+        }
+
+        // Apply timeline settings
+        timeline.setDuration(config.duration);
+        timeline.setFrameRate(config.frameRate);
+        timeline.setLooping(config.looping);
+
+        // Import tracks
+        for (FractalConfig.TrackConfig trackConfig : config.tracks) {
+            var track = timeline.getTrack(trackConfig.name);
+            if (track == null) {
+                // Create track if it doesn't exist
+                Class<?> valueType = getTypeFromName(trackConfig.valueType);
+                if (valueType == null) continue;
+                track = createTrackForType(trackConfig.name, valueType, trackConfig.defaultValue);
+            }
+
+            // Import keyframes
+            for (FractalConfig.KeyframeConfig kfConfig : trackConfig.keyframes) {
+                Easing easing = Easing.LINEAR;
+                try {
+                    easing = Easing.valueOf(kfConfig.easing);
+                } catch (IllegalArgumentException ignored) {}
+
+                Object value = convertValueFromJson(kfConfig.value, track.getValueType());
+                setKeyframeTyped(track, kfConfig.time, value, easing);
+            }
+        }
+
+        timeline.setCurrentTime(0);
+        timelineWidget.refresh();
+    }
+
+    /**
+     * Check if timeline has any keyframes.
+     */
+    public boolean hasKeyframes() {
+        for (var track : timeline.getTracks()) {
+            if (track.hasKeyframes()) return true;
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> AnimationTrack<T> createTrackForType(String name, Class<?> valueType, Object defaultValue) {
+        Object converted = convertValueFromJson(defaultValue, valueType);
+        return (AnimationTrack<T>) timeline.createTrack(name, (Class<T>) valueType, (T) converted);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> void setKeyframeTyped(AnimationTrack<?> track, double time, Object value, Easing easing) {
+        ((AnimationTrack<Object>) track).setKeyframe(time, value, easing);
+    }
+
+    private Object convertValueForJson(Object value) {
+        if (value instanceof float[] arr) {
+            // Convert float[] to List<Double> for JSON
+            java.util.List<Double> list = new java.util.ArrayList<>();
+            for (float v : arr) {
+                list.add((double) v);
+            }
+            return list;
+        }
+        return value;
+    }
+
+    private Object convertValueFromJson(Object value, Class<?> targetType) {
+        if (targetType == float[].class && value instanceof java.util.List<?> list) {
+            float[] arr = new float[list.size()];
+            for (int i = 0; i < list.size(); i++) {
+                arr[i] = ((Number) list.get(i)).floatValue();
+            }
+            return arr;
+        } else if (targetType == Float.class && value instanceof Number n) {
+            return n.floatValue();
+        } else if (targetType == Double.class && value instanceof Number n) {
+            return n.doubleValue();
+        } else if (targetType == Integer.class && value instanceof Number n) {
+            return n.intValue();
+        }
+        return value;
+    }
+
+    private Class<?> getTypeFromName(String typeName) {
+        return switch (typeName) {
+            case "Float" -> Float.class;
+            case "Double" -> Double.class;
+            case "Integer" -> Integer.class;
+            case "float[]" -> float[].class;
+            default -> null;
+        };
     }
 }

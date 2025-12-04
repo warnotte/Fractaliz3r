@@ -519,6 +519,9 @@ public class GLSLFractalizerApp extends Application {
                 if (currentConfigFile != null) {
                     fileChooser.setInitialDirectory(currentConfigFile.getParentFile());
                     fileChooser.setInitialFileName(currentConfigFile.getName());
+                } else {
+                    // Default to current working directory
+                    fileChooser.setInitialDirectory(new File(System.getProperty("user.dir")));
                 }
                 targetFile = fileChooser.showSaveDialog(primaryStage);
                 if (targetFile == null) return; // User cancelled
@@ -533,6 +536,11 @@ public class GLSLFractalizerApp extends Application {
             AbstractFractalParams params = fractalPanel.getParams();
             FractalConfig config = FractalConfig.fromParams(params);
             config.name = targetFile.getName().replace(FractalConfigManager.getFileExtension(), "");
+
+            // Include animation if there are keyframes
+            if (animationManager != null) {
+                config.animation = animationManager.exportAnimation();
+            }
 
             // Save to file
             FractalConfigManager.save(config, targetFile);
@@ -553,6 +561,9 @@ public class GLSLFractalizerApp extends Application {
         try {
             if (currentConfigFile != null) {
                 fileChooser.setInitialDirectory(currentConfigFile.getParentFile());
+            } else {
+                // Default to current working directory
+                fileChooser.setInitialDirectory(new File(System.getProperty("user.dir")));
             }
             File file = fileChooser.showOpenDialog(primaryStage);
             if (file == null) return; // User cancelled
@@ -577,6 +588,11 @@ public class GLSLFractalizerApp extends Application {
             fractalPanel.refreshFromParams();
             lightingPanel.refreshFromParams();
             qualityPanel.refreshFromParams();
+
+            // Import animation if present
+            if (animationManager != null && config.animation != null) {
+                animationManager.importAnimation(config.animation);
+            }
 
             currentConfigFile = file;
             statusLabel.setText("Loaded: " + file.getName());
