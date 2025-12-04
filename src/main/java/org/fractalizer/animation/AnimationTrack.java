@@ -46,7 +46,25 @@ public class AnimationTrack<T> {
     }
 
     public void setKeyframe(double time, T value, Easing easing) {
+        // Remove any existing keyframe within tolerance to avoid duplicates
+        removeKeyframeNear(time, 0.001);
         keyframes.put(time, new Keyframe<>(time, value, easing));
+    }
+
+    /**
+     * Remove keyframe at approximately the specified time (within tolerance).
+     */
+    public void removeKeyframeNear(double time, double tolerance) {
+        Double keyToRemove = null;
+        for (Double key : keyframes.keySet()) {
+            if (Math.abs(key - time) < tolerance) {
+                keyToRemove = key;
+                break;
+            }
+        }
+        if (keyToRemove != null) {
+            keyframes.remove(keyToRemove);
+        }
     }
 
     /**

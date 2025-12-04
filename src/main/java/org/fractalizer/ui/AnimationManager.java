@@ -48,6 +48,7 @@ public class AnimationManager {
             }
         });
         timelineWidget.setOnKeyframeAdded(this::addKeyframeAtCurrentTime);
+        timelineWidget.setOnKeyframeUpdated(this::updateSelectedKeyframe);
     }
 
     private void initializeTimelineTracks() {
@@ -70,44 +71,106 @@ public class AnimationManager {
     }
 
     /**
-     * Add a keyframe at the current time with all animatable parameters.
+     * Add a keyframe at the current time.
+     * If a track is selected, only add for that track.
+     * Otherwise, add for all tracks.
      */
     public void addKeyframeAtCurrentTime() {
+        String selectedTrack = timelineWidget.getSelectedTrackName();
+        if (selectedTrack != null) {
+            // Add only for selected track
+            addKeyframeForSelectedTrack();
+        } else {
+            // Add for all tracks
+            addKeyframeForAllTracks();
+        }
+    }
+
+    /**
+     * Add keyframes for all tracks at the current time.
+     */
+    public void addKeyframeForAllTracks() {
         AbstractFractalParams params = paramsSupplier.get();
         if (params == null) return;
 
         double time = timeline.getCurrentTime();
         Easing easing = timelineWidget.getSelectedEasing();
-        Camera camera = params.getCamera();
 
-        // Camera position
-        float[] pos = camera.getPosition();
-        timeline.setKeyframe("camPos", time, new float[]{pos[0], pos[1], pos[2]}, easing);
-
-        // Camera rotation
-        float[] quat = camera.getQuaternion();
-        timeline.setKeyframe("camQuat", time, new float[]{quat[0], quat[1], quat[2], quat[3]}, easing);
-
-        // FOV
-        timeline.setKeyframe("fov", time, (float) Math.toDegrees(params.getFov()), easing);
-
-        // Depth of Field
-        timeline.setKeyframe("focalDistance", time, params.getFocalDistance(), easing);
-        timeline.setKeyframe("aperture", time, params.getAperture(), easing);
-
-        // Light direction
-        timeline.setKeyframe("lightDir", time, new float[]{
-                params.getLightX(), params.getLightY(), params.getLightZ()
-        }, easing);
-
-        // Base hue
-        timeline.setKeyframe("baseHue", time, new float[]{
-                params.getHueR(), params.getHueG(), params.getHueB()
-        }, easing);
+        // Add keyframes for all tracks
+        addKeyframeForTrack("camPos", time, easing, params);
+        addKeyframeForTrack("camQuat", time, easing, params);
+        addKeyframeForTrack("fov", time, easing, params);
+        addKeyframeForTrack("focalDistance", time, easing, params);
+        addKeyframeForTrack("aperture", time, easing, params);
+        addKeyframeForTrack("lightDir", time, easing, params);
+        addKeyframeForTrack("baseHue", time, easing, params);
 
         timelineWidget.refresh();
         if (statusUpdater != null) {
-            statusUpdater.accept(String.format("Keyframe added at %.2fs", time));
+            statusUpdater.accept(String.format("Keyframes added at %.2fs", time));
+        }
+    }
+
+    /**
+     * Update only the selected track's keyframe at the current time.
+     * If no track is selected, adds for all tracks.
+     */
+    public void updateSelectedKeyframe() {
+        String selectedTrack = timelineWidget.getSelectedTrackName();
+        if (selectedTrack == null) {
+            // No keyframe selected, add all
+            addKeyframeForAllTracks();
+            return;
+        }
+        addKeyframeForSelectedTrack();
+    }
+
+    /**
+     * Add/update keyframe only for the selected track.
+     */
+    private void addKeyframeForSelectedTrack() {
+        String selectedTrack = timelineWidget.getSelectedTrackName();
+        if (selectedTrack == null) return;
+
+        AbstractFractalParams params = paramsSupplier.get();
+        if (params == null) return;
+
+        double time = timeline.getCurrentTime();
+        Easing easing = timelineWidget.getSelectedEasing();
+
+        // Update only the selected track
+        addKeyframeForTrack(selectedTrack, time, easing, params);
+
+        timelineWidget.refresh();
+        if (statusUpdater != null) {
+            statusUpdater.accept(String.format("Updated %s at %.2fs", selectedTrack, time));
+        }
+    }
+
+    /**
+     * Add a keyframe for a specific track.
+     */
+    private void addKeyframeForTrack(String trackName, double time, Easing easing, AbstractFractalParams params) {
+        Camera camera = params.getCamera();
+
+        switch (trackName) {
+            case "camPos" -> {
+                float[] pos = camera.getPosition();
+                timeline.setKeyframe("camPos", time, new float[]{pos[0], pos[1], pos[2]}, easing);
+            }
+            case "camQuat" -> {
+                float[] quat = camera.getQuaternion();
+                timeline.setKeyframe("camQuat", time, new float[]{quat[0], quat[1], quat[2], quat[3]}, easing);
+            }
+            case "fov" -> timeline.setKeyframe("fov", time, (float) Math.toDegrees(params.getFov()), easing);
+            case "focalDistance" -> timeline.setKeyframe("focalDistance", time, params.getFocalDistance(), easing);
+            case "aperture" -> timeline.setKeyframe("aperture", time, params.getAperture(), easing);
+            case "lightDir" -> timeline.setKeyframe("lightDir", time, new float[]{
+                    params.getLightX(), params.getLightY(), params.getLightZ()
+            }, easing);
+            case "baseHue" -> timeline.setKeyframe("baseHue", time, new float[]{
+                    params.getHueR(), params.getHueG(), params.getHueB()
+            }, easing);
         }
     }
 

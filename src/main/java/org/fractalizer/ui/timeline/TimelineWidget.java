@@ -80,6 +80,7 @@ public class TimelineWidget extends VBox {
     private Runnable onRenderRequest;
     private Consumer<Double> onTimeChange;
     private Runnable onKeyframeAdded;
+    private Runnable onKeyframeUpdated;
 
     public TimelineWidget(Timeline timeline) {
         this.timeline = timeline;
@@ -202,14 +203,16 @@ public class TimelineWidget extends VBox {
         topBar.setStyle("-fx-background-color: #252530;");
 
         Button addKeyBtn = new Button("+ Key");
+        addKeyBtn.setTooltip(new Tooltip("Add keyframe (selected track or all if none selected)"));
         addKeyBtn.setOnAction(e -> {
             if (onKeyframeAdded != null) onKeyframeAdded.run();
             redraw();
         });
 
         Button updateKeyBtn = new Button("Update");
+        updateKeyBtn.setTooltip(new Tooltip("Update selected track only"));
         updateKeyBtn.setOnAction(e -> {
-            if (onKeyframeAdded != null) onKeyframeAdded.run();
+            if (onKeyframeUpdated != null) onKeyframeUpdated.run();
             redraw();
         });
 
@@ -669,7 +672,8 @@ public class TimelineWidget extends VBox {
                     track.removeKeyframe(selectedKeyframe.time);
                     track.setKeyframe(newTime, value, easing);
                     selectedKeyframe = new KeyframeHandle(selectedKeyframe.trackName, newTime);
-                    redraw();
+                    // Apply changes and re-render the scene
+                    updateAndRender();
                 }
             }
         } else if (e.getY() < RULER_HEIGHT && e.getX() >= TRACK_LABEL_WIDTH) {
@@ -702,7 +706,8 @@ public class TimelineWidget extends VBox {
                     }
                 }
             }
-            redraw();
+            // Apply changes and re-render the scene
+            updateAndRender();
         }
     }
 
@@ -749,9 +754,21 @@ public class TimelineWidget extends VBox {
         if (selectedKeyframe != null) {
             AnimationTrack<?> track = timeline.getTrack(selectedKeyframe.trackName);
             if (track != null) {
-                track.removeKeyframe(selectedKeyframe.time);
+                // Find and remove keyframe with tolerance for floating point comparison
+                double targetTime = selectedKeyframe.time;
+                Double keyToRemove = null;
+                for (Keyframe<?> kf : track.getKeyframes()) {
+                    if (Math.abs(kf.getTime() - targetTime) < 0.001) {
+                        keyToRemove = kf.getTime();
+                        break;
+                    }
+                }
+                if (keyToRemove != null) {
+                    track.removeKeyframe(keyToRemove);
+                }
                 selectedKeyframe = null;
-                redraw();
+                // Apply changes and re-render the scene
+                updateAndRender();
             }
         }
     }
@@ -861,12 +878,30 @@ public class TimelineWidget extends VBox {
         this.onKeyframeAdded = callback;
     }
 
+    public void setOnKeyframeUpdated(Runnable callback) {
+        this.onKeyframeUpdated = callback;
+    }
+
     public Timeline getTimeline() {
         return timeline;
     }
 
     public Easing getSelectedEasing() {
         return easingCombo.getValue();
+    }
+
+    /**
+     * Get the currently selected track name, or null if no keyframe is selected.
+     */
+    public String getSelectedTrackName() {
+        return selectedKeyframe != null ? selectedKeyframe.trackName : null;
+    }
+
+    /**
+     * Get the time of the currently selected keyframe, or -1 if none selected.
+     */
+    public double getSelectedKeyframeTime() {
+        return selectedKeyframe != null ? selectedKeyframe.time : -1;
     }
 
     public void refresh() {
