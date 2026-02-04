@@ -122,15 +122,30 @@ float DE_simple(vec3 pos) {
 // ============================================================================
 
 vec3 getColor(OrbitTrap trap) {
-    float t1 = trap.minDist * 3.0;
-    float t2 = trap.avgDist * 0.4;
-    float t3 = trap.lastDist * 0.2;
-    float t4 = float(trap.iterations) * 0.15;
+    // Smooth iteration count approximation (if we had potential, but we use orbit stats)
+    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
+    
+    // Orbit behavior stats
+    float stability = trap.avgDist;
+    float divergence = trap.lastDist;
 
-    // Include Julia constant in coloring for variety
-    float cInfluence = length(juliaC.xyz) * 0.3;
+    // Ethereal Palette
+    vec3 voidColor = vec3(0.05, 0.05, 0.1);     // Dark background
+    vec3 mistColor = vec3(0.4, 0.5, 0.7);       // Misty blue
+    vec3 coreColor = vec3(0.9, 0.8, 0.7);       // Bone/Pale core
+    
+    // Base mix
+    vec3 color = mix(mistColor, coreColor, clamp(1.0 - divergence * 0.5, 0.0, 1.0));
+    
+    // Add depth with stability
+    color = mix(color, voidColor, smoothstep(0.0, 2.0, stability) * 0.5);
+    
+    // Iteration glow
+    color += vec3(0.1, 0.3, 0.5) * iterNorm;
+    
+    // C-constant influence for variation
+    float cVar = sin(length(juliaC.xyz) * 5.0);
+    color *= 0.9 + 0.1 * cVar;
 
-    float combined = t1 * 0.25 + t2 * 0.25 + t3 * 0.2 + t4 * 0.2 + cInfluence * 0.1;
-
-    return fractalPalette(combined * 0.6);
+    return color;
 }

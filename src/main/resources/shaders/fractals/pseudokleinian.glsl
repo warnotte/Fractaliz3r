@@ -59,7 +59,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
 
     for (int i = 0; i < maxIterations; i++) {
         // Check for convergence (optimization)
-        if (ap == p) break;
+        if (distance(ap, p) < 0.000001) break;
         ap = p;
 
         // Box fold: p = 2 * clamp(p, -cSize, cSize) - p
@@ -108,7 +108,7 @@ float DE_simple(vec3 pos) {
     vec3 ap = p + vec3(1.0);
 
     for (int i = 0; i < maxIterations; i++) {
-        if (ap == p) break;
+        if (distance(ap, p) < 0.000001) break;
         ap = p;
 
         // Box fold
@@ -134,17 +134,27 @@ float DE_simple(vec3 pos) {
 // ============================================================================
 
 vec3 getColor(OrbitTrap trap) {
-    // Create varied coloring from orbit trap data
-    float t1 = trap.minDist * 0.5;
-    float t2 = trap.avgDist * 0.2;
-    float t3 = trap.sphereHits * 0.15;
-    float t4 = float(trap.iterations) * 0.08;
+    // Structural data
+    float inversionDensity = trap.sphereHits / float(max(trap.iterations, 1));
+    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
+    
+    // Crystalline Palette
+    vec3 crystalBase = vec3(0.1, 0.4, 0.3);     // Dark Emerald
+    vec3 highlight = vec3(0.4, 0.9, 0.6);       // Bright Green/Mint
+    vec3 tubeColor = vec3(0.8, 0.2, 0.4);       // Alien Red/Pink tubes
 
-    // Combine factors for smooth color variation
-    float combined = t1 * 0.25 + t2 * 0.25 + t3 * 0.25 + t4 * 0.25;
+    // Base mix
+    vec3 color = crystalBase;
+    
+    // Highlight inversions (the spherical parts/tubes)
+    color = mix(color, tubeColor, smoothstep(0.1, 0.6, inversionDensity));
+    
+    // Add shine based on proximity (minDist)
+    float shine = exp(-trap.minDist * 5.0);
+    color += highlight * shine * 0.5;
+    
+    // Iteration depth
+    color = mix(color, vec3(0.0), iterNorm * 0.4);
 
-    // Add some variation from position in space
-    combined += size * 0.1;
-
-    return fractalPalette(combined);
+    return color;
 }

@@ -130,12 +130,29 @@ float DE_simple(vec3 pos) {
 // ============================================================================
 
 vec3 getColor(OrbitTrap trap) {
-    float t1 = trap.minDist * 2.0;
-    float t2 = trap.sumDist * 0.005;
-    float t3 = trap.avgFold * 0.5;
-    float t4 = float(trap.iterations) * 0.1;
+    // Normalize iteration count
+    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
+    
+    // Geometric factors
+    float geomFactor = trap.minDist * 2.0 + trap.avgFold;
+    
+    // Base palette
+    vec3 color = fractalPalette(geomFactor * 0.1 + iterNorm * 0.5);
 
-    float combined = t1 * 0.3 + t2 * 0.3 + t3 * 0.2 + t4 * 0.2;
+    // Neon Tints
+    vec3 neonPink = vec3(1.0, 0.1, 0.6);
+    vec3 electricBlue = vec3(0.1, 0.6, 1.0);
+    
+    // Use sumDist to create large-scale color variation
+    float variation = sin(trap.sumDist * 0.2);
+    
+    // Mix based on variation
+    color = mix(color, neonPink, smoothstep(0.2, 0.8, variation) * 0.4);
+    color = mix(color, electricBlue, smoothstep(-0.8, -0.2, variation) * 0.4);
+    
+    // Highlight edges (low min dist)
+    float edge = exp(-trap.minDist * 4.0);
+    color += vec3(0.5) * edge;
 
-    return fractalPalette(combined);
+    return color;
 }

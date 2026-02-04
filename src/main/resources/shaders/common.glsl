@@ -19,9 +19,9 @@
 const float PI = 3.14159265359;
 const float TAU = 6.28318530718;
 const float MAX_DISTANCE = 100.0;
-const float MIN_EPSILON = 0.00001;
+const float MIN_EPSILON = 0.000001;
 const float STEP_FACTOR = 0.9;
-const float NORMAL_EPSILON = 0.0001;
+const float NORMAL_EPSILON = 0.00001;
 
 // ============================================================================
 // Common Uniforms (available to all shaders)

@@ -60,14 +60,21 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
     float t = mint;
 
     int steps = int(float(shadowSteps) * qualityMultiplier);
+    float qualityEpsilon = baseEpsilon / qualityMultiplier;
 
     for (int i = 0; i < steps && t < maxt; i++) {
         float h = DE_simple(ro + rd * t);
 
-        if (h < 0.0001) return 0.0;
+        // Use adaptive epsilon for shadows too
+        float epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
+
+        if (h < epsilon) return 0.0;
 
         res = min(res, shadowSoftness * h / t);
-        t += clamp(h, 0.01, 0.5);
+        
+        // Don't clamp min step too aggressively, allows catching fine details
+        // but ensure we progress at least epsilon
+        t += max(h, epsilon * 2.0);
     }
 
     return clamp(res, 0.0, 1.0);
@@ -150,7 +157,8 @@ vec3 shade(RayHit hit, Ray ray) {
     float spec = pow(max(dot(normal, halfDir), 0.0), specularPower);
 
     // Shadow
-    float shadowBias = 0.001 + hit.dist * 0.001;
+    // Increased bias to prevent banding/acne on detailed fractals
+    float shadowBias = 0.005 + hit.dist * 0.01; 
     float shadow = calcShadow(hit.pos + normal * shadowBias, light, shadowBias, 15.0);
 
     // Ambient occlusion
@@ -197,7 +205,7 @@ vec3 shade(RayHit hit, Ray ray) {
 // Simple ray march for path tracing (no orbit traps needed)
 bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist) {
     float t = 0.0;
-    int effectiveMaxSteps = int(float(maxRaySteps) * qualityMultiplier * 0.5); // Fewer steps for bounces
+    int effectiveMaxSteps = int(float(maxRaySteps) * qualityMultiplier * 1.0); // Full steps for bounces
     float qualityEpsilon = baseEpsilon / qualityMultiplier;
 
     for (int i = 0; i < effectiveMaxSteps; i++) {
@@ -342,7 +350,8 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             if (NdotL > 0.0) {
                 // Shadow ray
                 Ray shadowRay;
-                shadowRay.origin = hitPos + faceNormal * 0.001;
+                float shadowBias = 0.005 + hitDist * 0.01; // Increased dynamic bias
+                shadowRay.origin = hitPos + faceNormal * shadowBias;
                 shadowRay.direction = lightDirNorm;
 
                 vec3 shadowHitPos;
@@ -393,7 +402,8 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             if (NdotL > 0.0) {
                 // Shadow ray
                 Ray shadowRay;
-                shadowRay.origin = hitPos + faceNormal * 0.001;
+                float shadowBias = 0.005 + hitDist * 0.01; // Increased dynamic bias
+                shadowRay.origin = hitPos + faceNormal * shadowBias;
                 shadowRay.direction = lightDirNorm;
 
                 vec3 shadowHitPos;

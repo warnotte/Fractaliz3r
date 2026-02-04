@@ -141,15 +141,15 @@ vec3 getColor(OrbitTrap trap) {
     vec3 baseColor = fractalPalette(iterNorm);
 
     // Three tint colors for each plane trap
-    vec3 tintX = vec3(0.9, 0.4, 0.2);  // Warm red-orange
-    vec3 tintY = vec3(0.2, 0.6, 0.9);  // Cool cyan-blue
-    vec3 tintZ = vec3(0.3, 0.9, 0.4);  // Fresh green
+    vec3 tintX = vec3(1.0, 0.7, 0.2);  // Gold/Amber
+    vec3 tintY = vec3(0.4, 0.2, 0.9);  // Deep Purple
+    vec3 tintZ = vec3(0.2, 0.9, 0.8);  // Teal/Cyan
 
     // Mix plane trap colors additively (IQ approach)
     vec3 color = baseColor;
-    color = mix(color, color * tintX + tintX * 0.25, trapX * 0.5);
-    color = mix(color, color * tintY + tintY * 0.25, trapY * 0.5);
-    color = mix(color, color * tintZ + tintZ * 0.25, trapZ * 0.5);
+    color = mix(color, color * tintX + tintX * 0.3, trapX * 0.6);
+    color = mix(color, color * tintY + tintY * 0.3, trapY * 0.6);
+    color = mix(color, color * tintZ + tintZ * 0.3, trapZ * 0.6);
 
     // Point trap as multiplicative factor (darkens crevices)
     color *= 0.6 + 0.4 * pointTrap;
