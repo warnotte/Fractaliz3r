@@ -54,6 +54,7 @@ public class GLSLFractalizerApp extends Application {
     // Panels
     private FractalPanel fractalPanel;
     private LightingPanel lightingPanel;
+    private MaterialPanel materialPanel;
     private QualityPanel qualityPanel;
     private ExportPanel exportPanel;
     private GLSLDevicePanel devicePanel;
@@ -302,6 +303,13 @@ public class GLSLFractalizerApp extends Application {
         );
         Tab lightingTab = new Tab("Lighting", lightingPanel);
 
+        // Material tab (New Unified System)
+        materialPanel = new MaterialPanel(
+            () -> fractalPanel.getParams(),
+            this::requestRender
+        );
+        Tab materialTab = new Tab("Material", materialPanel);
+
         // Quality tab - with samples control for GLSL
         qualityPanel = new QualityPanel(
             () -> fractalPanel.getParams(),
@@ -334,7 +342,7 @@ public class GLSLFractalizerApp extends Application {
         environmentPanel = new EnvironmentPanel(controller.getEngine(), this::requestRender);
         Tab environmentTab = new Tab("Env", environmentPanel);
 
-        tabPane.getTabs().addAll(fractalTab, lightingTab, qualityTab, postProcessTab, environmentTab, exportTab, deviceTab);
+        tabPane.getTabs().addAll(fractalTab, lightingTab, materialTab, qualityTab, postProcessTab, environmentTab, exportTab, deviceTab);
 
         return tabPane;
     }
@@ -587,6 +595,7 @@ public class GLSLFractalizerApp extends Application {
             // Refresh all UI panels
             fractalPanel.refreshFromParams();
             lightingPanel.refreshFromParams();
+            materialPanel.refreshFromParams();
             qualityPanel.refreshFromParams();
 
             // Import animation if present

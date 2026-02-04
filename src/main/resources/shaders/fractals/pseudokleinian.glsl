@@ -133,28 +133,15 @@ float DE_simple(vec3 pos) {
 // Material Color from Orbit Traps
 // ============================================================================
 
-vec3 getColor(OrbitTrap trap) {
-    // Structural data
-    float inversionDensity = trap.sphereHits / float(max(trap.iterations, 1));
-    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
-    
-    // Crystalline Palette
-    vec3 crystalBase = vec3(0.1, 0.4, 0.3);     // Dark Emerald
-    vec3 highlight = vec3(0.4, 0.9, 0.6);       // Bright Green/Mint
-    vec3 tubeColor = vec3(0.8, 0.2, 0.4);       // Alien Red/Pink tubes
+vec3 getFactors(OrbitTrap trap) {
+    // X: Structure (Inversion Density - Sphere hits)
+    float structural = smoothstep(0.1, 0.6, trap.sphereHits / float(max(trap.iterations, 1)));
 
-    // Base mix
-    vec3 color = crystalBase;
-    
-    // Highlight inversions (the spherical parts/tubes)
-    color = mix(color, tubeColor, smoothstep(0.1, 0.6, inversionDensity));
-    
-    // Add shine based on proximity (minDist)
-    float shine = exp(-trap.minDist * 5.0);
-    color += highlight * shine * 0.5;
-    
-    // Iteration depth
-    color = mix(color, vec3(0.0), iterNorm * 0.4);
+    // Y: Flow (Proximity / Shine)
+    float flow = 1.0 - exp(-trap.minDist * 5.0);
 
-    return color;
+    // Z: Detail (Iterations)
+    float detail = float(trap.iterations) / float(max(maxIterations, 1));
+
+    return vec3(structural, flow, detail);
 }

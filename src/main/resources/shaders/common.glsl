@@ -304,6 +304,34 @@ vec3 fractalPalette(float t) {
     );
 }
 
+// Unified Material System
+// Inputs:
+// - factors.x: Proximity/Edge (0.0 = far, 1.0 = close/edge)
+// - factors.y: Accumulation/Flow (0.0 to 1.0+, used for gradients)
+// - factors.z: Iteration/Detail (0.0 = start, 1.0 = max depth)
+vec3 applyMaterial(vec3 factors) {
+    float structural = factors.x;
+    float flow = factors.y;
+    float depth = factors.z;
+
+    // Base color from palette using flow/accumulation
+    // We mix the baseHue with a bit of variation based on depth
+    vec3 color = fractalPalette(flow * 0.5 + depth * 0.2);
+
+    // Add structural highlights (edges, geometric traps)
+    // "Gold" or "Energy" feel often comes from high values here
+    vec3 highlight = mix(vec3(1.0), baseHue * 1.5, 0.5);
+    color = mix(color, highlight, clamp(structural * 0.8, 0.0, 1.0));
+
+    // Darken deep iterations (Ambient Occlusion feel)
+    color *= 1.0 - depth * 0.5;
+
+    // Add some "glow" potential if structural is very high
+    color += max(0.0, structural - 0.8) * baseHue * 2.0;
+
+    return color;
+}
+
 // HSV to RGB
 vec3 hsv2rgb(vec3 c) {
     vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);

@@ -129,30 +129,15 @@ float DE_simple(vec3 pos) {
 // Material Color from Orbit Traps
 // ============================================================================
 
-vec3 getColor(OrbitTrap trap) {
-    // Normalize iteration count
-    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
-    
-    // Geometric factors
-    float geomFactor = trap.minDist * 2.0 + trap.avgFold;
-    
-    // Base palette
-    vec3 color = fractalPalette(geomFactor * 0.1 + iterNorm * 0.5);
+vec3 getFactors(OrbitTrap trap) {
+    // X: Structure (Proximity)
+    float structural = 1.0 - exp(-trap.minDist * 4.0);
 
-    // Neon Tints
-    vec3 neonPink = vec3(1.0, 0.1, 0.6);
-    vec3 electricBlue = vec3(0.1, 0.6, 1.0);
-    
-    // Use sumDist to create large-scale color variation
-    float variation = sin(trap.sumDist * 0.2);
-    
-    // Mix based on variation
-    color = mix(color, neonPink, smoothstep(0.2, 0.8, variation) * 0.4);
-    color = mix(color, electricBlue, smoothstep(-0.8, -0.2, variation) * 0.4);
-    
-    // Highlight edges (low min dist)
-    float edge = exp(-trap.minDist * 4.0);
-    color += vec3(0.5) * edge;
+    // Y: Flow (Sum dist variation)
+    float flow = sin(trap.sumDist * 0.2) * 0.5 + 0.5;
 
-    return color;
+    // Z: Detail (Iterations)
+    float detail = float(trap.iterations) / float(max(maxIterations, 1));
+
+    return vec3(structural, flow, detail);
 }

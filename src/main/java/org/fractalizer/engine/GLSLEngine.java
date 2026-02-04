@@ -351,6 +351,7 @@ public class GLSLEngine implements AutoCloseable {
 
             postProcessProgram.setUniform("sharpenEnabled", pp.sharpenEnabled ? 1 : 0);
             postProcessProgram.setUniform("sharpenIntensity", pp.sharpenIntensity);
+            postProcessProgram.setUniform("saturation", pp.saturation);
 
             glBindVertexArray(quadVAO);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -1136,6 +1137,8 @@ public class GLSLEngine implements AutoCloseable {
         public boolean sharpenEnabled = false;
         public float sharpenIntensity = 0.3f;
 
+        public float saturation = 1.0f;    // 0.0 - 2.0 (default 1.0)
+
         /**
          * Create default parameters (no effects).
          */
@@ -1161,6 +1164,7 @@ public class GLSLEngine implements AutoCloseable {
             copy.filmGrainIntensity = this.filmGrainIntensity;
             copy.sharpenEnabled = this.sharpenEnabled;
             copy.sharpenIntensity = this.sharpenIntensity;
+            copy.saturation = this.saturation;
             return copy;
         }
 
@@ -1182,6 +1186,7 @@ public class GLSLEngine implements AutoCloseable {
             filmGrainEnabled = true;
             filmGrainIntensity = 0.02f;
             sharpenEnabled = false;
+            saturation = 1.1f;
         }
 
         /**
@@ -1199,6 +1204,7 @@ public class GLSLEngine implements AutoCloseable {
             filmGrainEnabled = false;
             sharpenEnabled = true;
             sharpenIntensity = 0.2f;
+            saturation = 1.0f;
         }
 
         /**
@@ -1218,6 +1224,7 @@ public class GLSLEngine implements AutoCloseable {
             vignetteSoftness = 0.4f;
             filmGrainEnabled = false;
             sharpenEnabled = false;
+            saturation = 1.4f;
         }
 
         /**
@@ -1239,6 +1246,7 @@ public class GLSLEngine implements AutoCloseable {
             filmGrainIntensity = 0.03f;
             sharpenEnabled = false;
             sharpenIntensity = 0.3f;
+            saturation = 1.0f;
         }
     }
 }

@@ -126,33 +126,21 @@ float DE_simple(vec3 pos) {
 // so we can use simple exponential falloff without quality-dependent issues.
 // ============================================================================
 
-vec3 getColor(OrbitTrap trap) {
+vec3 getFactors(OrbitTrap trap) {
     // Exponential falloff for plane traps (IQ style)
-    // At fixed offset from surface, these values are consistent
     float trapX = exp(-trap.planeX * 2.0);
     float trapY = exp(-trap.planeY * 2.0);
     float trapZ = exp(-trap.planeZ * 2.0);
 
-    // Point trap for pseudo-AO effect
-    float pointTrap = 1.0 - exp(-trap.minDist * 0.5);
+    // X: Proximity / Structure (Point trap)
+    float structural = 1.0 - exp(-trap.minDist * 0.5);
 
-    // Base color from palette using iteration count
+    // Y: Flow / Accumulation (Plane traps combined)
+    float flow = (trapX + trapY + trapZ) / 3.0;
+
+    // Z: Detail / Depth (Iterations)
+    // Revert to stable integer iterations to fix white screen issue
     float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
-    vec3 baseColor = fractalPalette(iterNorm);
 
-    // Three tint colors for each plane trap
-    vec3 tintX = vec3(1.0, 0.7, 0.2);  // Gold/Amber
-    vec3 tintY = vec3(0.4, 0.2, 0.9);  // Deep Purple
-    vec3 tintZ = vec3(0.2, 0.9, 0.8);  // Teal/Cyan
-
-    // Mix plane trap colors additively (IQ approach)
-    vec3 color = baseColor;
-    color = mix(color, color * tintX + tintX * 0.3, trapX * 0.6);
-    color = mix(color, color * tintY + tintY * 0.3, trapY * 0.6);
-    color = mix(color, color * tintZ + tintZ * 0.3, trapZ * 0.6);
-
-    // Point trap as multiplicative factor (darkens crevices)
-    color *= 0.6 + 0.4 * pointTrap;
-
-    return color;
+    return vec3(structural, flow, iterNorm);
 }

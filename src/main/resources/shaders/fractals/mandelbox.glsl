@@ -125,35 +125,20 @@ float DE_simple(vec3 pos) {
 // Material Color from Orbit Traps
 // ============================================================================
 
-vec3 getColor(OrbitTrap trap) {
+vec3 getFactors(OrbitTrap trap) {
     // Normalize trap values for better control
     float foldIntensity = trap.avgFold * 0.5;
     float sphereIntensity = trap.sphereHits * 0.15;
     float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
 
-    // Base color from palette
-    vec3 baseColor = fractalPalette(iterNorm * 0.8 + foldIntensity * 0.2);
+    // X: Structure (Sphere hits - tends to identify bulbous areas)
+    float structural = clamp(sphereIntensity, 0.0, 1.0);
 
-    // Structural Tints
-    vec3 coreColor = vec3(1.0, 0.6, 0.2);   // Orange core (high folding)
-    vec3 shellColor = vec3(0.1, 0.7, 0.8);  // Cyan shell (sphere hits)
-    vec3 deepColor = vec3(0.2, 0.1, 0.5);   // Deep purple voids
+    // Y: Flow (Average folding - tends to identify complexity)
+    float flow = clamp(foldIntensity, 0.0, 1.0);
 
-    // Mix based on trap data
-    vec3 color = baseColor;
-    
-    // Highlight areas with many sphere folds (often the "bulbs")
-    color = mix(color, shellColor, clamp(sphereIntensity, 0.0, 0.8));
-    
-    // Highlight high-folding areas (complex details)
-    color = mix(color, coreColor, clamp(foldIntensity * 0.5, 0.0, 0.6));
-    
-    // Darken deep iterations
-    color = mix(color, deepColor, iterNorm * 0.3);
+    // Z: Detail (Iterations)
+    float detail = iterNorm;
 
-    // AO-like darkening from min distance
-    float proximity = 1.0 - exp(-trap.minDist * 0.2);
-    color *= 0.5 + 0.5 * proximity;
-
-    return color;
+    return vec3(structural, flow, detail);
 }

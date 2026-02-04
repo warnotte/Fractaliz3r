@@ -46,6 +46,17 @@ uniform float filmGrainTime;       // For animation
 uniform int sharpenEnabled;
 uniform float sharpenIntensity;    // 0.0 - 1.0
 
+uniform float saturation;          // 0.0 - 2.0 (default 1.0)
+
+// ============================================================================
+// Color Adjustments
+// ============================================================================
+
+vec3 adjustSaturation(vec3 color, float sat) {
+    float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    return mix(vec3(luminance), color, sat);
+}
+
 // ============================================================================
 // Tone Mapping Functions
 // ============================================================================
@@ -196,6 +207,12 @@ void main() {
 
     // Only apply effects for final render mode
     if (renderMode == 0) {
+        // Apply saturation before tone mapping for better vibrance
+        // Dynamic saturation boost: slightly increase saturation for very high sample counts
+        float dynamicSat = saturation;
+        if (sampleCount > 64) dynamicSat *= 1.0 + min(0.2, (float(sampleCount) - 64.0) / 1000.0);
+        color = adjustSaturation(color, dynamicSat);
+
         // Tone mapping
         color = applyToneMap(color, toneMapMode);
 

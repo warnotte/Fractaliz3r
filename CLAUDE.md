@@ -287,6 +287,10 @@ return length(z) * pow(scale, -n);
 
 ### Recent Improvements
 - [x] **GLSL migration** from OpenCL for better compatibility
+- [x] **Unified Material System**: Supports Lambertian, Metallic, and Glass materials with physical properties (roughness, metalness, IOR).
+- [x] **High-Quality Color Stability**: Fixed bug where colors faded or shifted at high Quality Multiplier settings.
+- [x] **Post-Processing Enhancements**: Added Saturation control and dynamic vibrance boost for high sample counts.
+- [x] **Unified Material Presets**: Intuitive presets for common materials (Gold, Silver, Crystal, etc.) that update all physical parameters.
 - [x] **Animation system** with timeline, keyframes, and easing
 - [x] **Motion blur** for animation export (shutter angle 0-360°)
 - [x] **Video export** via FFmpeg (MP4 with CRF quality control)

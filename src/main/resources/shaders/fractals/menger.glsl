@@ -104,34 +104,15 @@ float DE_simple(vec3 pos) {
 // Material Color from Orbit Traps
 // ============================================================================
 
-vec3 getColor(OrbitTrap trap) {
-    // Geometric trap gives us information about the "cross" cuts
-    float structural = trap.trap;
-    float proximity = trap.minDist;
-    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
+vec3 getFactors(OrbitTrap trap) {
+    // X: Structure (Geometric cross trap)
+    float structural = smoothstep(0.3, 0.8, trap.trap);
 
-    // Base industrial/dark metal color
-    vec3 metalColor = vec3(0.2, 0.22, 0.25);
-    
-    // Glowing gold/energy color for the inner complexity
-    vec3 energyColor = vec3(1.0, 0.7, 0.1); // Gold/Amber
-    
-    // Secondary cool light
-    vec3 accentColor = vec3(0.1, 0.4, 0.6); // Steel Blue
+    // Y: Flow (Use proximity as secondary flow)
+    float flow = 1.0 - exp(-trap.minDist * 2.0);
 
-    // Mix based on structural trap (inner parts tend to have higher trap values)
-    vec3 color = metalColor;
-    
-    // Highlight inner structures
-    float energyMix = smoothstep(0.3, 0.8, structural);
-    color = mix(color, energyColor, energyMix * 0.7);
-    
-    // Add accent on edges
-    float edgeMix = exp(-proximity * 5.0);
-    color = mix(color, accentColor, edgeMix * 0.3);
-    
-    // Subtle iteration banding
-    color *= 0.8 + 0.2 * sin(iterNorm * 20.0);
+    // Z: Detail (Iterations)
+    float detail = float(trap.iterations) / float(max(maxIterations, 1));
 
-    return color;
+    return vec3(structural, flow, detail);
 }

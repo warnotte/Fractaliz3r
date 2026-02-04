@@ -44,6 +44,9 @@ public class PostProcessingPanel extends ScrollPane {
     private CheckBox sharpenCheck;
     private Slider sharpenIntensitySlider;
 
+    // Saturation
+    private Slider saturationSlider;
+
     public PostProcessingPanel(PostProcessParams params, Runnable onUpdate) {
         this.params = params;
         this.onUpdate = onUpdate;
@@ -150,7 +153,12 @@ public class PostProcessingPanel extends ScrollPane {
         HBox exposureBox = createSliderRow("Exposure", exposureSlider,
             v -> { params.exposure = v.floatValue(); onUpdate.run(); });
 
-        section.getChildren().addAll(titleLabel, toneMapBox, exposureBox);
+        // Saturation
+        saturationSlider = new Slider(0.0, 2.0, params.saturation);
+        HBox saturationBox = createSliderRow("Saturation", saturationSlider,
+            v -> { params.saturation = v.floatValue(); onUpdate.run(); });
+
+        section.getChildren().addAll(titleLabel, toneMapBox, exposureBox, saturationBox);
         return section;
     }
 
@@ -327,6 +335,8 @@ public class PostProcessingPanel extends ScrollPane {
 
         sharpenCheck.setSelected(params.sharpenEnabled);
         sharpenIntensitySlider.setValue(params.sharpenIntensity);
+
+        saturationSlider.setValue(params.saturation);
     }
 
     /**

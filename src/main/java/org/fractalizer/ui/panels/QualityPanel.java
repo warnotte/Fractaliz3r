@@ -36,10 +36,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     // AO
     private Slider aoIntensitySlider;
 
-    // Specular
-    private Slider specularIntensitySlider;
-    private Slider specularPowerSlider;
-
     // Glow
     private Slider glowIntensitySlider;
 
@@ -55,12 +51,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private Slider bouncesSlider;
     private Slider skyIntensitySlider;
     private Slider indirectSlider;
-
-    // Material
-    private ComboBox<String> materialCombo;
-    private Slider metalnessSlider;
-    private Slider iorSlider;
-    private Slider roughnessSlider;
 
     public QualityPanel(Supplier<AbstractFractalParams> paramsSupplier,
                         RenderCallback renderCallback,
@@ -84,11 +74,9 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         // Collapsible sections
         panel.getChildren().add(createShadowsPane());
         panel.getChildren().add(createAOPane());
-        panel.getChildren().add(createSpecularPane());
         panel.getChildren().add(createGlowPane());
         panel.getChildren().add(createDoFPane());
         panel.getChildren().add(createPathTracingPane());
-        panel.getChildren().add(createMaterialPane());
         panel.getChildren().add(createPresetsPane());
 
         return panel;
@@ -222,36 +210,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         box.getChildren().addAll(aoIntLabel, aoIntensitySlider);
 
         TitledPane pane = new TitledPane("Ambient Occlusion", box);
-        pane.setExpanded(false);
-        return pane;
-    }
-
-    private TitledPane createSpecularPane() {
-        VBox box = new VBox(5);
-
-        Label specIntLabel = new Label("Specular Intensity: 0.5");
-        specularIntensitySlider = new Slider(0, 2, 0.5);
-        specularIntensitySlider.valueProperty().addListener((obs, old, val) -> {
-            specIntLabel.setText(String.format("Specular Intensity: %.2f", val.doubleValue()));
-            if (!suppressRender) {
-                getParams().specularIntensity(val.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        Label specPowLabel = new Label("Specular Power: 32");
-        specularPowerSlider = new Slider(4, 128, 32);
-        specularPowerSlider.valueProperty().addListener((obs, old, val) -> {
-            specPowLabel.setText(String.format("Specular Power: %.0f", val.doubleValue()));
-            if (!suppressRender) {
-                getParams().specularPower(val.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        box.getChildren().addAll(specIntLabel, specularIntensitySlider, specPowLabel, specularPowerSlider);
-
-        TitledPane pane = new TitledPane("Specular", box);
         pane.setExpanded(false);
         return pane;
     }
@@ -406,65 +364,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         return pane;
     }
 
-    private TitledPane createMaterialPane() {
-        VBox box = new VBox(5);
-
-        materialCombo = new ComboBox<>();
-        materialCombo.getItems().addAll("Lambertian (Diffuse)", "Metallic", "Glass");
-        materialCombo.getSelectionModel().select(0);
-        materialCombo.setMaxWidth(Double.MAX_VALUE);
-        materialCombo.setOnAction(e -> {
-            if (!suppressRender) {
-                getParams().setMaterialType(materialCombo.getSelectionModel().getSelectedIndex());
-                renderCallback.requestRender();
-            }
-        });
-
-        Label metalnessLabel = new Label("Metalness: 0.90");
-        metalnessSlider = new Slider(0.0, 1.0, 0.9);
-        metalnessSlider.valueProperty().addListener((obs, old, val) -> {
-            metalnessLabel.setText(String.format("Metalness: %.2f", val.doubleValue()));
-            if (!suppressRender) {
-                getParams().setMetalness(val.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        Label iorLabel = new Label("IOR (Glass): 1.50");
-        iorSlider = new Slider(1.0, 2.5, 1.5);
-        iorSlider.valueProperty().addListener((obs, old, val) -> {
-            iorLabel.setText(String.format("IOR (Glass): %.2f", val.doubleValue()));
-            if (!suppressRender) {
-                getParams().setIor(val.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        Label roughnessLabel = new Label("Roughness: 0.50");
-        roughnessSlider = new Slider(0.0, 1.0, 0.5);
-        roughnessSlider.valueProperty().addListener((obs, old, val) -> {
-            roughnessLabel.setText(String.format("Roughness: %.2f", val.doubleValue()));
-            if (!suppressRender) {
-                getParams().setRoughness(val.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        Label materialInfo = new Label(
-            "Lambertian: Classic diffuse\n" +
-            "Metallic: Reflective with roughness\n" +
-            "Glass: Transparent with refraction"
-        );
-        materialInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
-
-        box.getChildren().addAll(materialCombo, metalnessLabel, metalnessSlider,
-                iorLabel, iorSlider, roughnessLabel, roughnessSlider, materialInfo);
-
-        TitledPane pane = new TitledPane("Materials", box);
-        pane.setExpanded(false);
-        return pane;
-    }
-
     private TitledPane createPresetsPane() {
         VBox box = new VBox(5);
 
@@ -526,10 +425,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             // AO
             aoIntensitySlider.setValue(p.getAoIntensity());
 
-            // Specular
-            specularIntensitySlider.setValue(p.getSpecularIntensity());
-            specularPowerSlider.setValue(p.getSpecularPower());
-
             // Glow
             glowIntensitySlider.setValue(p.getGlowIntensity());
 
@@ -544,12 +439,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             bouncesSlider.setValue(p.getMaxBounces());
             skyIntensitySlider.setValue(p.getSkyIntensity());
             indirectSlider.setValue(p.getIndirectMultiplier());
-
-            // Material
-            materialCombo.getSelectionModel().select(p.getMaterialType());
-            metalnessSlider.setValue(p.getMetalness());
-            iorSlider.setValue(p.getIor());
-            roughnessSlider.setValue(p.getRoughness());
 
         } finally {
             suppressRender = false;

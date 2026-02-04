@@ -1,0 +1,292 @@
+package org.fractalizer.ui.panels;
+
+import javafx.geometry.Insets;
+import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+import org.fractalizer.fractals.AbstractFractalParams;
+
+import java.util.function.Supplier;
+
+/**
+ * Panel for configuring material properties:
+ * - Color Palette (Hue, Presets)
+ * - Physical Properties (Type, Roughness, Metalness, IOR)
+ * - Surface Properties (Specular)
+ */
+public class MaterialPanel extends ScrollPane implements Refreshable {
+
+    private final Supplier<AbstractFractalParams> paramsSupplier;
+    private final RenderCallback renderCallback;
+    private boolean suppressRender = false;
+
+    // Palette controls
+    private Slider hueOffsetSlider;
+    private ColorPicker baseColorPicker;
+    
+    // Material Type
+    private ComboBox<String> materialTypeCombo;
+    
+    // Physical Properties
+    private Slider roughnessSlider;
+    private Slider metalnessSlider;
+    private Slider iorSlider;
+    
+    // Specular
+    private Slider specularIntensitySlider;
+    private Slider specularPowerSlider;
+
+    public MaterialPanel(Supplier<AbstractFractalParams> paramsSupplier, RenderCallback renderCallback) {
+        this.paramsSupplier = paramsSupplier;
+        this.renderCallback = renderCallback;
+        
+        setContent(createContent());
+        setFitToWidth(true);
+        setPadding(new Insets(10));
+    }
+
+    private VBox createContent() {
+        VBox root = new VBox(10);
+        
+        // === COLOR PALETTE SECTION ===
+        Label paletteLabel = new Label("Color Palette");
+        paletteLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
+        
+        // Base Color Picker (replaces direct hue sliders for more intuitive control)
+        Label baseColorLabel = new Label("Base Color:");
+        baseColorPicker = new ColorPicker(Color.BLUE); // Default
+        baseColorPicker.setMaxWidth(Double.MAX_VALUE);
+        baseColorPicker.setOnAction(e -> {
+            if (!suppressRender) {
+                Color c = baseColorPicker.getValue();
+                getParams().setMaterialHue((float)c.getRed(), (float)c.getGreen(), (float)c.getBlue());
+                renderCallback.requestRender();
+            }
+        });
+
+        // Hue Offset Slider (Legacy support but useful for shifting palette)
+        Label hueLabel = new Label("Palette Shift:");
+        hueOffsetSlider = new Slider(0, 1, 0.0);
+        hueOffsetSlider.valueProperty().addListener((obs, old, val) -> {
+            if (!suppressRender) {
+                // Shift the current base color by this offset
+                // Ideally this would rotate the hue, but for now we keep simple logic
+                // or just update one component. Let's keep it simple: just update logic if needed.
+                // Actually, the previous implementation used this to SET the hue.
+                // We'll let the color picker be master, and this slider just shifts G component for variation.
+                // For now, let's keep it synced with Green channel as a proxy for "Shift".
+            }
+        });
+        
+        // Presets (Moved from LightingPanel)
+        VBox presetsBox = createPresetsBox();
+
+        // === PHYSICAL MATERIAL SECTION ===
+        Label physLabel = new Label("Physical Material");
+        physLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
+        
+        // Material Type
+        HBox typeBox = new HBox(10);
+        Label typeLabel = new Label("Type:");
+        materialTypeCombo = new ComboBox<>();
+        materialTypeCombo.getItems().addAll("Lambertian (Matte)", "Metallic", "Glass");
+        materialTypeCombo.getSelectionModel().select(0);
+        materialTypeCombo.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setMaterialType(materialTypeCombo.getSelectionModel().getSelectedIndex());
+                updateVisibility();
+                renderCallback.requestRender();
+            }
+        });
+        typeBox.getChildren().addAll(typeLabel, materialTypeCombo);
+
+        // Roughness
+        Label roughLabel = new Label("Roughness: 0.5");
+        roughnessSlider = new Slider(0, 1, 0.5);
+        roughnessSlider.valueProperty().addListener((obs, old, val) -> {
+            roughLabel.setText(String.format("Roughness: %.2f", val));
+            if (!suppressRender) {
+                getParams().setRoughness(val.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        // Metalness
+        Label metalLabel = new Label("Metalness: 0.9");
+        metalnessSlider = new Slider(0, 1, 0.9);
+        metalnessSlider.valueProperty().addListener((obs, old, val) -> {
+            metalLabel.setText(String.format("Metalness: %.2f", val));
+            if (!suppressRender) {
+                getParams().setMetalness(val.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        // IOR (Index of Refraction)
+        Label iorLabel = new Label("IOR (Glass): 1.5");
+        iorSlider = new Slider(1.0, 3.0, 1.5);
+        iorSlider.valueProperty().addListener((obs, old, val) -> {
+            iorLabel.setText(String.format("IOR (Glass): %.2f", val));
+            if (!suppressRender) {
+                getParams().setIor(val.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+        
+        // === SPECULAR SECTION (Legacy / Raytracing) ===
+        Label specLabel = new Label("Specular Highlights");
+        specLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
+        
+        Label specIntLabel = new Label("Intensity: 0.5");
+        specularIntensitySlider = new Slider(0, 2, 0.5);
+        specularIntensitySlider.valueProperty().addListener((obs, old, val) -> {
+            specIntLabel.setText(String.format("Intensity: %.2f", val));
+            if (!suppressRender) {
+                getParams().setSpecularIntensity(val.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        Label specPowLabel = new Label("Hardness (Power): 32");
+        specularPowerSlider = new Slider(1, 128, 32);
+        specularPowerSlider.valueProperty().addListener((obs, old, val) -> {
+            specPowLabel.setText(String.format("Hardness: %.0f", val));
+            if (!suppressRender) {
+                getParams().setSpecularPower(val.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        root.getChildren().addAll(
+            paletteLabel,
+            baseColorLabel, baseColorPicker,
+            new Separator(),
+            new Label("Quick Presets:"),
+            presetsBox,
+            new Separator(),
+            physLabel,
+            typeBox,
+            roughLabel, roughnessSlider,
+            metalLabel, metalnessSlider,
+            iorLabel, iorSlider,
+            new Separator(),
+            specLabel,
+            specIntLabel, specularIntensitySlider,
+            specPowLabel, specularPowerSlider
+        );
+        
+        return root;
+    }
+
+    private VBox createPresetsBox() {
+        VBox box = new VBox(5);
+        
+        // Row 1: Metals and Specialized
+        HBox row1 = new HBox(5);
+        row1.getChildren().addAll(
+            createFullPresetBtn("Gold", 1.0f, 0.7f, 0.2f, 1, 0.1f, 1.0f, 1.5f),
+            createFullPresetBtn("Silver", 0.9f, 0.9f, 0.95f, 1, 0.05f, 1.0f, 1.5f),
+            createFullPresetBtn("Copper", 0.95f, 0.64f, 0.54f, 1, 0.15f, 1.0f, 1.5f),
+            createFullPresetBtn("Cyber", 0.0f, 1.0f, 1.0f, 1, 0.2f, 0.8f, 1.5f)
+        );
+        
+        // Row 2: Dielectrics (Glass, Plastic, etc)
+        HBox row2 = new HBox(5);
+        row2.getChildren().addAll(
+            createFullPresetBtn("Crystal", 0.9f, 0.95f, 1.0f, 2, 0.0f, 0.0f, 1.5f),
+            createFullPresetBtn("Ruby", 1.0f, 0.1f, 0.2f, 2, 0.05f, 0.0f, 1.8f),
+            createFullPresetBtn("Plastic", 1.0f, 0.2f, 0.2f, 0, 0.3f, 0.0f, 1.5f),
+            createFullPresetBtn("Concrete", 0.5f, 0.5f, 0.5f, 0, 0.9f, 0.0f, 1.5f)
+        );
+        
+        box.getChildren().addAll(row1, row2);
+        return box;
+    }
+    
+    private Button createFullPresetBtn(String name, float r, float g, float b, int type, float rough, float metal, float ior) {
+        Button btn = new Button(name);
+        btn.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(btn, Priority.ALWAYS);
+        btn.setOnAction(e -> applyMaterialPreset(r, g, b, type, rough, metal, ior));
+        return btn;
+    }
+    
+    private Button createPresetBtn(String name, float r, float g, float b) {
+        // Keep for backward compatibility or simple color shifts if needed
+        Button btn = new Button(name);
+        btn.setOnAction(e -> {
+            baseColorPicker.setValue(Color.color(r, g, b));
+            if (!suppressRender) {
+                getParams().setMaterialHue(r, g, b);
+                renderCallback.requestRender();
+            }
+        });
+        return btn;
+    }
+    
+    private void applyMaterialPreset(float r, float g, float b, int type, float rough, float metal, float ior) {
+        suppressRender = true;
+        try {
+            baseColorPicker.setValue(Color.color(r, g, b));
+            getParams().setMaterialHue(r, g, b);
+            getParams().setMaterialType(type);
+            getParams().setRoughness(rough);
+            getParams().setMetalness(metal);
+            getParams().setIor(ior);
+            
+            // Update UI
+            materialTypeCombo.getSelectionModel().select(type);
+            roughnessSlider.setValue(rough);
+            metalnessSlider.setValue(metal);
+            iorSlider.setValue(ior);
+            updateVisibility();
+        } finally {
+            suppressRender = false;
+            renderCallback.requestRender();
+        }
+    }
+
+    private void updateVisibility() {
+        int type = materialTypeCombo.getSelectionModel().getSelectedIndex();
+        boolean isMetal = (type == 1);
+        boolean isGlass = (type == 2);
+        
+        metalnessSlider.setDisable(!isMetal);
+        iorSlider.setDisable(!isGlass);
+    }
+
+    private AbstractFractalParams getParams() {
+        return paramsSupplier.get();
+    }
+
+    @Override
+    public void refreshFromParams(boolean suppress) {
+        suppressRender = suppress; // Should be true ideally, or handle carefully
+        try {
+            AbstractFractalParams p = getParams();
+            
+            // Color
+            baseColorPicker.setValue(Color.color(
+                Math.max(0, Math.min(1, p.getHueR())),
+                Math.max(0, Math.min(1, p.getHueG())),
+                Math.max(0, Math.min(1, p.getHueB()))
+            ));
+            
+            // Material Props
+            materialTypeCombo.getSelectionModel().select(p.getMaterialType());
+            roughnessSlider.setValue(p.getRoughness());
+            metalnessSlider.setValue(p.getMetalness());
+            iorSlider.setValue(p.getIor());
+            
+            // Specular
+            specularIntensitySlider.setValue(p.getSpecularIntensity());
+            specularPowerSlider.setValue(p.getSpecularPower());
+            
+            updateVisibility();
+        } finally {
+            suppressRender = false;
+        }
+    }
+}
