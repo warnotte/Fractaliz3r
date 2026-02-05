@@ -18,6 +18,7 @@ uniform vec3 offset;
 
 struct OrbitTrap {
     float minDist;
+    vec3 plane;
     float trap;
     int iterations;
 };
@@ -59,6 +60,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
 
     trap.minDist = 1e10;
     trap.trap = 0.0;
+    trap.plane = vec3(0.0);
     trap.iterations = 0;
 
     float s = 1.0;
@@ -72,6 +74,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
         d = max(d, c);
 
         trap.minDist = min(trap.minDist, length(r));
+        trap.plane += abs(r) / s;
         trap.trap += length(a);
         trap.iterations = m + 1;
     }
@@ -108,8 +111,9 @@ vec3 getFactors(OrbitTrap trap) {
     // X: Structure (Geometric cross trap)
     float structural = smoothstep(0.3, 0.8, trap.trap);
 
-    // Y: Flow (Use proximity as secondary flow)
-    float flow = 1.0 - exp(-trap.minDist * 2.0);
+    // Y: Flow (Combined plane traps for internal color variation)
+    float p = (trap.plane.x + trap.plane.y + trap.plane.z) * 0.33;
+    float flow = sin(p * 5.0) * 0.5 + 0.5;
 
     // Z: Detail (Iterations)
     float detail = float(trap.iterations) / float(max(maxIterations, 1));

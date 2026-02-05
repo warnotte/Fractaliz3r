@@ -31,6 +31,7 @@ public class GLSLFractalizerController implements RenderController {
     private final GLSLEngine engine;
     private final ProgressiveRenderer progressiveRenderer;
 
+    private final java.util.Map<FractalType, FractalParams> paramsCache = new java.util.HashMap<>();
     private FractalParams currentParams;
     private FractalType currentFractalType = FractalType.MANDELBULB;
 
@@ -68,6 +69,7 @@ public class GLSLFractalizerController implements RenderController {
         engine.loadFractalShader("kaleidoscopic", "/shaders/fractals/kaleidoscopic.glsl");
         engine.loadFractalShader("julia3d", "/shaders/fractals/julia3d.glsl");
         engine.loadFractalShader("pseudokleinian", "/shaders/fractals/pseudokleinian.glsl");
+        engine.loadFractalShader("polyhedral", "/shaders/fractals/polyhedral.glsl");
     }
 
     /**
@@ -77,23 +79,30 @@ public class GLSLFractalizerController implements RenderController {
     public void setFractalType(FractalType type) {
         if (type == currentFractalType && currentParams != null) return;
 
+        AbstractFractalParams oldParams = (currentParams instanceof AbstractFractalParams afp) ? afp : null;
+        
         this.currentFractalType = type;
         engine.setActiveProgram(type.getKernelName());
 
-        Camera oldCamera = (currentParams instanceof AbstractFractalParams afp) ? afp.getCamera() : null;
+        // Try to get from cache
+        currentParams = paramsCache.get(type);
 
-        switch (type) {
-            case MANDELBULB -> this.currentParams = new MandelbulbParams();
-            case MANDELBOX -> this.currentParams = new MandelboxParams();
-            case MENGER_SPONGE -> this.currentParams = new MengerSpongeParams();
-            case KALEIDOSCOPIC_IFS -> this.currentParams = new KaleidoscopicIFSParams();
-            case JULIA_3D -> this.currentParams = new Julia3DParams();
-            case PSEUDO_KLEINIAN -> this.currentParams = new PseudoKleinianParams();
+        if (currentParams == null) {
+            switch (type) {
+                case MANDELBULB -> this.currentParams = new MandelbulbParams();
+                case MANDELBOX -> this.currentParams = new MandelboxParams();
+                case MENGER_SPONGE -> this.currentParams = new MengerSpongeParams();
+                case KALEIDOSCOPIC_IFS -> this.currentParams = new KaleidoscopicIFSParams();
+                case JULIA_3D -> this.currentParams = new Julia3DParams();
+                case PSEUDO_KLEINIAN -> this.currentParams = new PseudoKleinianParams();
+                case POLYHEDRAL_IFS -> this.currentParams = new PolyhedralIFSParams();
+            }
+            paramsCache.put(type, currentParams);
         }
 
-        // Preserve camera if switching fractals
-        if (oldCamera != null && currentParams instanceof AbstractFractalParams newParams) {
-            newParams.setCamera(oldCamera);
+        // Sync common settings (Path Tracing, Camera, Lighting, Palette) from old state
+        if (oldParams != null && currentParams instanceof AbstractFractalParams newParams) {
+            oldParams.copyCommonParams(newParams);
         }
     }
 
@@ -425,6 +434,9 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("baseHue", new float[]{
                 params.getHueR(), params.getHueG(), params.getHueB()
             });
+            uniforms.put("paletteIndex", params.getPaletteIndex());
+            uniforms.put("colorStrength", params.getColorStrength());
+            uniforms.put("paletteOffset", params.getPaletteOffset());
 
             // Effects
             uniforms.put("shadowSoftness", params.getShadowSoftness());
@@ -511,9 +523,40 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("deOffset", p.getDeOffset());
                 uniforms.put("zOffset", p.getZOffset());
             }
+            case POLYHEDRAL_IFS -> {
+                PolyhedralIFSParams p = (PolyhedralIFSParams) currentParams;
+                uniforms.put("polyType", p.getPolyType().ordinal());
+                uniforms.put("maxIterations", p.getMaxIterations());
+                uniforms.put("scale", p.getScale());
+                uniforms.put("offset", new float[]{p.getOffsetX(), p.getOffsetY(), p.getOffsetZ()});
+                uniforms.put("shift", new float[]{p.getShiftX(), p.getShiftY(), p.getShiftZ()});
+                
+                // Convert Euler angles to 3x3 matrices
+                uniforms.put("fractalRotation1", createRotationMatrix(p.getRot1X(), p.getRot1Y(), p.getRot1Z()));
+                uniforms.put("fractalRotation2", createRotationMatrix(p.getRot2X(), p.getRot2Y(), p.getRot2Z()));
+            }
         }
 
         return uniforms;
+    }
+
+    /**
+     * Helper to create a 3x3 rotation matrix from Euler angles (XYZ order).
+     */
+    private float[] createRotationMatrix(float x, float y, float z) {
+        float cx = (float) Math.cos(Math.toRadians(x));
+        float sx = (float) Math.sin(Math.toRadians(x));
+        float cy = (float) Math.cos(Math.toRadians(y));
+        float sy = (float) Math.sin(Math.toRadians(y));
+        float cz = (float) Math.cos(Math.toRadians(z));
+        float sz = (float) Math.sin(Math.toRadians(z));
+
+        // Combined rotation matrix R = Rz * Ry * Rx
+        return new float[] {
+            cy*cz, -cy*sz, sy,
+            sx*sy*cz + cx*sz, -sx*sy*sz + cx*cz, -sx*cy,
+            -cx*sy*cz + sx*sz, cx*sy*sz + sx*cz, cx*cy
+        };
     }
 
     // ========================================================================

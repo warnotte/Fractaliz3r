@@ -49,6 +49,9 @@ public abstract class AbstractFractalParams implements FractalParams {
 
     // Material hue offset for color palette
     protected float hueR, hueG, hueB;
+    protected int paletteIndex;
+    protected float colorStrength;
+    protected float paletteOffset;
 
     // Rendering quality
     protected float shadowSoftness;
@@ -124,6 +127,9 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.hueR = 0.0f;
         this.hueG = 0.33f;
         this.hueB = 0.67f;
+        this.paletteIndex = 0;
+        this.colorStrength = 1.0f;
+        this.paletteOffset = 0.0f;
 
         // Enhanced rendering defaults
         this.shadowSoftness = 16f;
@@ -161,7 +167,7 @@ public abstract class AbstractFractalParams implements FractalParams {
     /**
      * Copy common parameters to another instance.
      */
-    protected void copyCommonParams(AbstractFractalParams target) {
+    public void copyCommonParams(AbstractFractalParams target) {
         target.camera = this.camera; // Share camera reference
         target.fov = this.fov;
         target.maxRaySteps = this.maxRaySteps;
@@ -183,6 +189,9 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.hueR = this.hueR;
         target.hueG = this.hueG;
         target.hueB = this.hueB;
+        target.paletteIndex = this.paletteIndex;
+        target.colorStrength = this.colorStrength;
+        target.paletteOffset = this.paletteOffset;
 
         // Copy specular
         target.specularIntensity = this.specularIntensity;
@@ -307,6 +316,12 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.hueG = g;
         this.hueB = b;
     }
+    public int getPaletteIndex() { return paletteIndex; }
+    public void setPaletteIndex(int index) { this.paletteIndex = index; }
+    public float getColorStrength() { return colorStrength; }
+    public void setColorStrength(float strength) { this.colorStrength = strength; }
+    public float getPaletteOffset() { return paletteOffset; }
+    public void setPaletteOffset(float offset) { this.paletteOffset = offset; }
 
     // Shadows
     public float getShadowSoftness() { return shadowSoftness; }

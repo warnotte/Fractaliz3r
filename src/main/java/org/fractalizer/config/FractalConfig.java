@@ -307,13 +307,22 @@ public class FractalConfig {
             map.put("juliaX", pk.getJuliaX());
             map.put("juliaY", pk.getJuliaY());
             map.put("juliaZ", pk.getJuliaZ());
-            map.put("deOffset", pk.getDeOffset());
-            map.put("zOffset", pk.getZOffset());
-        }
-    }
-
-    private static void applyFractalParams(AbstractFractalParams params, Map<String, Object> map) {
-        if (params instanceof MandelbulbParams mb) {
+                            map.put("deOffset", pk.getDeOffset());
+                            map.put("zOffset", pk.getZOffset());
+                        } else if (params instanceof PolyhedralIFSParams p) {
+                            map.put("polyType", p.getPolyType().name());
+                            map.put("maxIterations", p.getMaxIterations());
+                            map.put("scale", p.getScale());
+                            map.put("offsetX", p.getOffsetX());
+                            map.put("offsetY", p.getOffsetY());
+                            map.put("offsetZ", p.getOffsetZ());
+                            map.put("rot1X", p.getRot1X());
+                            map.put("rot1Y", p.getRot1Y());
+                            map.put("rot1Z", p.getRot1Z());
+                        }
+                }
+            
+                private static void applyFractalParams(AbstractFractalParams params, Map<String, Object> map) {        if (params instanceof MandelbulbParams mb) {
             if (map.containsKey("power")) mb.power(getFloat(map, "power"));
             if (map.containsKey("maxIterations")) mb.iterations(getInt(map, "maxIterations"));
             if (map.containsKey("bailout")) mb.setBailout(getFloat(map, "bailout"));
@@ -355,6 +364,16 @@ public class FractalConfig {
             if (map.containsKey("juliaZ")) pk.setJuliaZ(getFloat(map, "juliaZ"));
             if (map.containsKey("deOffset")) pk.setDeOffset(getFloat(map, "deOffset"));
             if (map.containsKey("zOffset")) pk.setZOffset(getFloat(map, "zOffset"));
+        } else if (params instanceof PolyhedralIFSParams p) {
+            if (map.containsKey("polyType")) p.setPolyType(PolyhedralIFSParams.PolyType.valueOf((String)map.get("polyType")));
+            if (map.containsKey("maxIterations")) p.setMaxIterations(getInt(map, "maxIterations"));
+            if (map.containsKey("scale")) p.setScale(getFloat(map, "scale"));
+            if (map.containsKey("offsetX")) p.setOffsetX(getFloat(map, "offsetX"));
+            if (map.containsKey("offsetY")) p.setOffsetY(getFloat(map, "offsetY"));
+            if (map.containsKey("offsetZ")) p.setOffsetZ(getFloat(map, "offsetZ"));
+            if (map.containsKey("rot1X")) p.setRot1X(getFloat(map, "rot1X"));
+            if (map.containsKey("rot1Y")) p.setRot1Y(getFloat(map, "rot1Y"));
+            if (map.containsKey("rot1Z")) p.setRot1Z(getFloat(map, "rot1Z"));
         }
     }
 

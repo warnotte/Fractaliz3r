@@ -21,6 +21,7 @@ uniform int maxIterations;
 struct OrbitTrap {
     float minDist;
     float avgFold;
+    vec3 plane;
     float sphereHits;
     int iterations;
 };
@@ -65,6 +66,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
     trap.minDist = 1e10;
     trap.avgFold = 0.0;
     trap.sphereHits = 0.0;
+    trap.plane = vec3(0.0);
     trap.iterations = 0;
 
     for (int i = 0; i < maxIterations; i++) {
@@ -89,6 +91,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
         // Track orbit
         float dist = length(z);
         trap.minDist = min(trap.minDist, dist);
+        trap.plane += abs(z) / pow(abs(scale), float(i)*0.5);
 
         if (dist > 1000.0) break;
 
@@ -126,19 +129,15 @@ float DE_simple(vec3 pos) {
 // ============================================================================
 
 vec3 getFactors(OrbitTrap trap) {
-    // Normalize trap values for better control
-    float foldIntensity = trap.avgFold * 0.5;
-    float sphereIntensity = trap.sphereHits * 0.15;
-    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
-
     // X: Structure (Sphere hits - tends to identify bulbous areas)
-    float structural = clamp(sphereIntensity, 0.0, 1.0);
+    float structural = clamp(trap.sphereHits * 0.15, 0.0, 1.0);
 
-    // Y: Flow (Average folding - tends to identify complexity)
-    float flow = clamp(foldIntensity, 0.0, 1.0);
+    // Y: Flow (Combined plane traps for color variation)
+    float p = (trap.plane.x + trap.plane.y + trap.plane.z) * 0.33;
+    float flow = sin(p * 2.0) * 0.5 + 0.5;
 
     // Z: Detail (Iterations)
-    float detail = iterNorm;
+    float detail = float(trap.iterations) / float(max(maxIterations, 1));
 
     return vec3(structural, flow, detail);
 }

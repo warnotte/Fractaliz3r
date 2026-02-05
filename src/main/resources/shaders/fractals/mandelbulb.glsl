@@ -128,18 +128,17 @@ float DE_simple(vec3 pos) {
 
 vec3 getFactors(OrbitTrap trap) {
     // Exponential falloff for plane traps (IQ style)
-    float trapX = exp(-trap.planeX * 2.0);
-    float trapY = exp(-trap.planeY * 2.0);
-    float trapZ = exp(-trap.planeZ * 2.0);
+    float trapX = exp(-trap.planeX * 3.0);
+    float trapY = exp(-trap.planeY * 3.0);
+    float trapZ = exp(-trap.planeZ * 3.0);
 
     // X: Proximity / Structure (Point trap)
-    float structural = 1.0 - exp(-trap.minDist * 0.5);
+    float structural = 1.0 - exp(-trap.minDist * 0.8);
 
-    // Y: Flow / Accumulation (Plane traps combined)
-    float flow = (trapX + trapY + trapZ) / 3.0;
+    // Y: Flow / Accumulation - creating a more complex mix
+    float flow = (trapX * 0.5 + trapY * 1.0 + trapZ * 1.5) / 3.0;
 
     // Z: Detail / Depth (Iterations)
-    // Revert to stable integer iterations to fix white screen issue
     float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
 
     return vec3(structural, flow, iterNorm);

@@ -23,7 +23,9 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
     private boolean suppressRender = false;
 
     // Palette controls
-    private Slider hueOffsetSlider;
+    private ComboBox<String> paletteCombo;
+    private Slider colorStrengthSlider;
+    private Slider paletteOffsetSlider;
     private ColorPicker baseColorPicker;
     
     // Material Type
@@ -53,10 +55,48 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         // === COLOR PALETTE SECTION ===
         Label paletteLabel = new Label("Color Palette");
         paletteLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
+
+        // Palette Selector
+        Label presetLabel = new Label("Palette Preset:");
+        paletteCombo = new ComboBox<>();
+        paletteCombo.getItems().addAll(
+            "Custom (Original)", "Magma / Fire", "Ice / Ocean", 
+            "Forest / Nature", "Cyberpunk / Neon", "Spectral / Rainbow"
+        );
+        paletteCombo.getSelectionModel().select(0);
+        paletteCombo.setMaxWidth(Double.MAX_VALUE);
+        paletteCombo.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setPaletteIndex(paletteCombo.getSelectionModel().getSelectedIndex());
+                renderCallback.requestRender();
+            }
+        });
+
+        // Color Strength
+        Label strengthLabel = new Label("Color Strength: 1.0");
+        colorStrengthSlider = new Slider(0.1, 5.0, 1.0);
+        colorStrengthSlider.valueProperty().addListener((obs, old, val) -> {
+            strengthLabel.setText(String.format("Color Strength: %.1f", val));
+            if (!suppressRender) {
+                getParams().setColorStrength(val.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        // Palette Offset
+        Label offsetLabel = new Label("Palette Shift: 0.0");
+        paletteOffsetSlider = new Slider(0.0, 1.0, 0.0);
+        paletteOffsetSlider.valueProperty().addListener((obs, old, val) -> {
+            offsetLabel.setText(String.format("Palette Shift: %.2f", val));
+            if (!suppressRender) {
+                getParams().setPaletteOffset(val.floatValue());
+                renderCallback.requestRender();
+            }
+        });
         
-        // Base Color Picker (replaces direct hue sliders for more intuitive control)
-        Label baseColorLabel = new Label("Base Color:");
-        baseColorPicker = new ColorPicker(Color.BLUE); // Default
+        // Base Color Picker
+        Label baseColorLabel = new Label("Base Color (for Custom):");
+        baseColorPicker = new ColorPicker(Color.BLUE);
         baseColorPicker.setMaxWidth(Double.MAX_VALUE);
         baseColorPicker.setOnAction(e -> {
             if (!suppressRender) {
@@ -66,20 +106,6 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        // Hue Offset Slider (Legacy support but useful for shifting palette)
-        Label hueLabel = new Label("Palette Shift:");
-        hueOffsetSlider = new Slider(0, 1, 0.0);
-        hueOffsetSlider.valueProperty().addListener((obs, old, val) -> {
-            if (!suppressRender) {
-                // Shift the current base color by this offset
-                // Ideally this would rotate the hue, but for now we keep simple logic
-                // or just update one component. Let's keep it simple: just update logic if needed.
-                // Actually, the previous implementation used this to SET the hue.
-                // We'll let the color picker be master, and this slider just shifts G component for variation.
-                // For now, let's keep it synced with Green channel as a proxy for "Shift".
-            }
-        });
-        
         // Presets (Moved from LightingPanel)
         VBox presetsBox = createPresetsBox();
 
@@ -161,9 +187,12 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
 
         root.getChildren().addAll(
             paletteLabel,
+            presetLabel, paletteCombo,
+            strengthLabel, colorStrengthSlider,
+            offsetLabel, paletteOffsetSlider,
             baseColorLabel, baseColorPicker,
             new Separator(),
-            new Label("Quick Presets:"),
+            new Label("Material Presets:"),
             presetsBox,
             new Separator(),
             physLabel,
@@ -268,6 +297,9 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             AbstractFractalParams p = getParams();
             
             // Color
+            paletteCombo.getSelectionModel().select(p.getPaletteIndex());
+            colorStrengthSlider.setValue(p.getColorStrength());
+            paletteOffsetSlider.setValue(p.getPaletteOffset());
             baseColorPicker.setValue(Color.color(
                 Math.max(0, Math.min(1, p.getHueR())),
                 Math.max(0, Math.min(1, p.getHueG())),

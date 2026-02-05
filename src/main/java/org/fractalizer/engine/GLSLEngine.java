@@ -923,6 +923,8 @@ public class GLSLEngine implements AutoCloseable {
                 case 2 -> program.setUniform(name, arr[0], arr[1]);
                 case 3 -> program.setUniform(name, arr[0], arr[1], arr[2]);
                 case 4 -> program.setUniform(name, arr[0], arr[1], arr[2], arr[3]);
+                case 9 -> program.setUniformMatrix3(name, arr);
+                case 16 -> program.setUniformMatrix4(name, arr);
                 default -> throw new IllegalArgumentException("Unsupported float array length: " + arr.length);
             }
         } else if (value instanceof int[] arr) {
@@ -1094,6 +1096,14 @@ public class GLSLEngine implements AutoCloseable {
 
         public void setUniform(String name, float x, float y, float z, float w) {
             glUniform4f(getUniformLocation(name), x, y, z, w);
+        }
+
+        public void setUniformMatrix3(String name, float[] values) {
+            glUniformMatrix3fv(getUniformLocation(name), false, values);
+        }
+
+        public void setUniformMatrix4(String name, float[] values) {
+            glUniformMatrix4fv(getUniformLocation(name), false, values);
         }
 
         public void delete() {

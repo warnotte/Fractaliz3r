@@ -45,6 +45,9 @@ uniform float ambientIntensity;
 
 // Material
 uniform vec3 baseHue;
+uniform int paletteIndex;
+uniform float colorStrength;
+uniform float paletteOffset;
 
 // Quality
 uniform float qualityMultiplier;
@@ -294,14 +297,27 @@ vec3 palette(float t, vec3 a, vec3 b, vec3 c, vec3 d) {
     return a + b * cos(TAU * (c * t + d));
 }
 
-// Default fractal palette using baseHue
-vec3 fractalPalette(float t) {
-    return palette(t,
-        vec3(0.5, 0.5, 0.5),
-        vec3(0.5, 0.5, 0.5),
-        vec3(1.0, 1.0, 1.0),
-        baseHue
-    );
+// Advanced palettes presets (IQ Style: a + b*cos(2pi*(c*t+d)))
+vec3 getPresetPalette(float t) {
+    if (paletteIndex == 0) { // Custom (Uses Base Color)
+        return palette(t, vec3(0.5), vec3(0.5), vec3(1.0), baseHue);
+    } 
+    else if (paletteIndex == 1) { // Magma / Fire
+        return palette(t, vec3(0.5, 0.5, 0.5), vec3(0.5, 0.5, 0.5), vec3(1.0, 1.0, 1.0), vec3(0.00, 0.33, 0.67));
+    } 
+    else if (paletteIndex == 2) { // Ice / Ocean
+        return palette(t, vec3(0.5, 0.5, 0.5), vec3(0.5, 0.5, 0.5), vec3(1.0, 1.0, 0.5), vec3(0.80, 0.90, 0.30));
+    } 
+    else if (paletteIndex == 3) { // Forest / Nature
+        return palette(t, vec3(0.5, 0.5, 0.5), vec3(0.5, 0.5, 0.5), vec3(1.0, 1.0, 1.0), vec3(0.30, 0.20, 0.20));
+    } 
+    else if (paletteIndex == 4) { // Cyberpunk / Neon
+        return palette(t, vec3(0.5, 0.5, 0.5), vec3(0.5, 0.5, 0.5), vec3(1.0, 1.0, 1.0), vec3(0.50, 0.20, 0.25));
+    } 
+    else if (paletteIndex == 5) { // Spectral / Rainbow
+        return palette(t, vec3(0.5, 0.5, 0.5), vec3(0.5, 0.5, 0.5), vec3(1.0, 1.0, 1.0), vec3(0.00, 0.10, 0.20));
+    }
+    return vec3(t);
 }
 
 // Unified Material System
@@ -314,20 +330,15 @@ vec3 applyMaterial(vec3 factors) {
     float flow = factors.y;
     float depth = factors.z;
 
-    // Base color from palette using flow/accumulation
-    // We mix the baseHue with a bit of variation based on depth
-    vec3 color = fractalPalette(flow * 0.5 + depth * 0.2);
+    // Use our new preset palettes with offset and strength
+    vec3 color = getPresetPalette(flow * colorStrength + paletteOffset + depth * 0.1);
 
     // Add structural highlights (edges, geometric traps)
-    // "Gold" or "Energy" feel often comes from high values here
-    vec3 highlight = mix(vec3(1.0), baseHue * 1.5, 0.5);
-    color = mix(color, highlight, clamp(structural * 0.8, 0.0, 1.0));
+    vec3 highlight = mix(vec3(1.0), color * 1.5, 0.5);
+    color = mix(color, highlight, clamp(structural * 0.9, 0.0, 1.0));
 
     // Darken deep iterations (Ambient Occlusion feel)
-    color *= 1.0 - depth * 0.5;
-
-    // Add some "glow" potential if structural is very high
-    color += max(0.0, structural - 0.8) * baseHue * 2.0;
+    color *= 1.0 - depth * 0.4;
 
     return color;
 }
@@ -461,7 +472,7 @@ vec3 sampleEnvironmentWithGlow(vec3 dir, float minDist) {
 
     // Add glow effect based on how close we got to the fractal
     float glow = exp(-minDist * 10.0) * glowIntensity;
-    bg += fractalPalette(minDist * 2.0) * glow;
+    bg += getPresetPalette(minDist * 2.0) * glow;
 
     // Add stars (only for procedural sky or as overlay)
     if (useEnvMap == 0) {
