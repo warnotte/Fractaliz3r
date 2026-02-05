@@ -5,6 +5,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.fractalizer.fractals.AbstractFractalParams;
+import org.fractalizer.ui.components.EnhancedSlider;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -27,30 +28,29 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private ComboBox<String> passCombo;
 
     // Quality
-    private Slider qualitySlider;
+    private EnhancedSlider qualitySlider;
 
     // Shadows
-    private Slider shadowSoftnessSlider;
-    private Slider shadowStepsSlider;
+    private EnhancedSlider shadowSoftnessSlider;
+    private EnhancedSlider shadowStepsSlider;
 
     // AO
-    private Slider aoIntensitySlider;
+    private EnhancedSlider aoIntensitySlider;
 
     // Glow
-    private Slider glowIntensitySlider;
+    private EnhancedSlider glowIntensitySlider;
 
     // DoF controls
     private CheckBox dofEnabledCheck;
-    private Slider focalDistSlider;
-    private Label focalDistLabel;
-    private Slider apertureSlider;
-    private Slider dofSamplesSlider;
+    private EnhancedSlider focalDistSlider;
+    private EnhancedSlider apertureSlider;
+    private EnhancedSlider dofSamplesSlider;
 
     // Path tracing
     private CheckBox pathTracingCheck;
-    private Slider bouncesSlider;
-    private Slider skyIntensitySlider;
-    private Slider indirectSlider;
+    private EnhancedSlider bouncesSlider;
+    private EnhancedSlider skyIntensitySlider;
+    private EnhancedSlider indirectSlider;
 
     public QualityPanel(Supplier<AbstractFractalParams> paramsSupplier,
                         RenderCallback renderCallback,
@@ -129,21 +129,13 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private TitledPane createQualitySection() {
         VBox box = new VBox(5);
 
-        Label qualityValueLabel = new Label("Quality: 1.0x (Normal)");
-        qualitySlider = new Slider(0.5, 5.0, 1.0);
+        qualitySlider = new EnhancedSlider("Quality Multiplier", 0.5, 5.0, 1.0, false);
+        qualitySlider.showTickMarks(true);
         qualitySlider.setMajorTickUnit(1.0);
-        qualitySlider.setShowTickLabels(true);
-        qualitySlider.valueProperty().addListener((obs, old, val) -> {
-            float q = val.floatValue();
-            String desc;
-            if (q < 0.8f) desc = "Fast Preview";
-            else if (q < 1.2f) desc = "Normal";
-            else if (q < 2.0f) desc = "High";
-            else if (q < 3.0f) desc = "Ultra";
-            else desc = "Ultimate";
-            qualityValueLabel.setText(String.format("Quality: %.1fx (%s)", q, desc));
+        qualitySlider.setPrecision(1);
+        qualitySlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setQualityMultiplier(q);
+                getParams().setQualityMultiplier(v.floatValue());
                 renderCallback.requestRender();
             }
         });
@@ -151,9 +143,9 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         Label infoLabel = new Label("Higher = more detail when close to surface.\nWarning: >2x is slow!");
         infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        box.getChildren().addAll(qualityValueLabel, qualitySlider, infoLabel);
+        box.getChildren().addAll(qualitySlider, infoLabel);
 
-        TitledPane pane = new TitledPane("Quality Multiplier", box);
+        TitledPane pane = new TitledPane("Quality Settings", box);
         pane.setExpanded(false);
         return pane;
     }
@@ -165,29 +157,26 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private TitledPane createShadowsPane() {
         VBox box = new VBox(5);
 
-        Label shadowSoftLabel = new Label("Shadow Softness: 16");
-        shadowSoftnessSlider = new Slider(1, 64, 16);
-        shadowSoftnessSlider.valueProperty().addListener((obs, old, val) -> {
-            shadowSoftLabel.setText(String.format("Shadow Softness: %.0f", val.doubleValue()));
+        shadowSoftnessSlider = new EnhancedSlider("Shadow Softness", 1, 64, 16, false);
+        shadowSoftnessSlider.setPrecision(0);
+        shadowSoftnessSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().shadowSoftness(val.floatValue());
+                getParams().shadowSoftness(v.floatValue());
                 renderCallback.requestRender();
             }
         });
 
-        Label shadowStepsLabel = new Label("Shadow Steps: 128");
-        shadowStepsSlider = new Slider(32, 256, 128);
+        shadowStepsSlider = new EnhancedSlider("Shadow Steps", 32, 256, 128, true);
+        shadowStepsSlider.showTickMarks(true);
         shadowStepsSlider.setMajorTickUnit(64);
-        shadowStepsSlider.setShowTickLabels(true);
-        shadowStepsSlider.valueProperty().addListener((obs, old, val) -> {
-            shadowStepsLabel.setText(String.format("Shadow Steps: %d", val.intValue()));
+        shadowStepsSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setShadowSteps(val.intValue());
+                getParams().setShadowSteps(v.intValue());
                 renderCallback.requestRender();
             }
         });
 
-        box.getChildren().addAll(shadowSoftLabel, shadowSoftnessSlider, shadowStepsLabel, shadowStepsSlider);
+        box.getChildren().addAll(shadowSoftnessSlider, shadowStepsSlider);
 
         TitledPane pane = new TitledPane("Shadows", box);
         pane.setExpanded(false);
@@ -197,17 +186,15 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private TitledPane createAOPane() {
         VBox box = new VBox(5);
 
-        Label aoIntLabel = new Label("AO Intensity: 0.5");
-        aoIntensitySlider = new Slider(0, 1, 0.5);
-        aoIntensitySlider.valueProperty().addListener((obs, old, val) -> {
-            aoIntLabel.setText(String.format("AO Intensity: %.2f", val.doubleValue()));
+        aoIntensitySlider = new EnhancedSlider("AO Intensity", 0, 1, 0.5, false);
+        aoIntensitySlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().aoIntensity(val.floatValue());
+                getParams().aoIntensity(v.floatValue());
                 renderCallback.requestRender();
             }
         });
 
-        box.getChildren().addAll(aoIntLabel, aoIntensitySlider);
+        box.getChildren().addAll(aoIntensitySlider);
 
         TitledPane pane = new TitledPane("Ambient Occlusion", box);
         pane.setExpanded(false);
@@ -217,17 +204,15 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private TitledPane createGlowPane() {
         VBox box = new VBox(5);
 
-        Label glowIntLabel = new Label("Glow Intensity: 0.15");
-        glowIntensitySlider = new Slider(0, 1, 0.15);
-        glowIntensitySlider.valueProperty().addListener((obs, old, val) -> {
-            glowIntLabel.setText(String.format("Glow Intensity: %.2f", val.doubleValue()));
+        glowIntensitySlider = new EnhancedSlider("Glow Intensity", 0, 1, 0.15, false);
+        glowIntensitySlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().glowIntensity(val.floatValue());
+                getParams().glowIntensity(v.floatValue());
                 renderCallback.requestRender();
             }
         });
 
-        box.getChildren().addAll(glowIntLabel, glowIntensitySlider);
+        box.getChildren().addAll(glowIntensitySlider);
 
         TitledPane pane = new TitledPane("Glow", box);
         pane.setExpanded(false);
@@ -246,34 +231,29 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        focalDistLabel = new Label("Focal Distance: 2.5");
-        focalDistSlider = new Slider(0.1, 10, 2.5);
-        focalDistSlider.valueProperty().addListener((obs, old, val) -> {
-            focalDistLabel.setText(String.format("Focal Distance: %.2f", val.doubleValue()));
+        focalDistSlider = new EnhancedSlider("Focal Distance", 0.1, 10, 2.5, false);
+        focalDistSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setFocalDistance(val.floatValue());
+                getParams().setFocalDistance(v.floatValue());
                 renderCallback.requestRender();
             }
         });
 
-        Label apertureLabel = new Label("Aperture: 0.02");
-        apertureSlider = new Slider(0, 0.2, 0.02);
-        apertureSlider.valueProperty().addListener((obs, old, val) -> {
-            apertureLabel.setText(String.format("Aperture: %.3f", val.doubleValue()));
+        apertureSlider = new EnhancedSlider("Aperture", 0, 0.2, 0.02, false);
+        apertureSlider.setPrecision(3);
+        apertureSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setAperture(val.floatValue());
+                getParams().setAperture(v.floatValue());
                 renderCallback.requestRender();
             }
         });
 
-        Label dofSamplesLabel = new Label("DoF Samples: 16");
-        dofSamplesSlider = new Slider(4, 64, 16);
+        dofSamplesSlider = new EnhancedSlider("DoF Samples", 4, 64, 16, true);
+        dofSamplesSlider.showTickMarks(true);
         dofSamplesSlider.setMajorTickUnit(16);
-        dofSamplesSlider.setShowTickLabels(true);
-        dofSamplesSlider.valueProperty().addListener((obs, old, val) -> {
-            dofSamplesLabel.setText(String.format("DoF Samples: %d", val.intValue()));
+        dofSamplesSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setDofSamples(val.intValue());
+                getParams().setDofSamples(v.intValue());
                 renderCallback.requestRender();
             }
         });
@@ -281,8 +261,8 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         Label dofInfoLabel = new Label("Middle-click or Ctrl+click to pick\nfocal distance from the image.");
         dofInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        box.getChildren().addAll(dofEnabledCheck, focalDistLabel, focalDistSlider,
-                apertureLabel, apertureSlider, dofSamplesLabel, dofSamplesSlider, dofInfoLabel);
+        box.getChildren().addAll(dofEnabledCheck, focalDistSlider,
+                apertureSlider, dofSamplesSlider, dofInfoLabel);
 
         TitledPane pane = new TitledPane("Depth of Field", box);
         pane.setExpanded(false);
@@ -294,12 +274,11 @@ public class QualityPanel extends ScrollPane implements Refreshable {
      * @param distance The new focal distance value
      */
     public void updateFocalDistanceDisplay(float distance) {
-        if (focalDistSlider != null && focalDistLabel != null) {
+        if (focalDistSlider != null) {
             // Clamp to slider range
-            double clampedDistance = Math.max(focalDistSlider.getMin(),
-                    Math.min(focalDistSlider.getMax(), distance));
+            double clampedDistance = Math.max(focalDistSlider.getSlider().getMin(),
+                    Math.min(focalDistSlider.getSlider().getMax(), distance));
             focalDistSlider.setValue(clampedDistance);
-            focalDistLabel.setText(String.format("Focal Distance: %.2f", clampedDistance));
         }
     }
 
@@ -315,36 +294,29 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        Label bouncesLabel = new Label("Max Bounces: 4");
-        bouncesSlider = new Slider(1, 8, 4);
-        bouncesSlider.setMajorTickUnit(1);
-        bouncesSlider.setMinorTickCount(0);
-        bouncesSlider.setSnapToTicks(true);
-        bouncesSlider.setShowTickLabels(true);
-        bouncesSlider.valueProperty().addListener((obs, old, val) -> {
-            bouncesLabel.setText(String.format("Max Bounces: %d", val.intValue()));
+        bouncesSlider = new EnhancedSlider("Max Bounces", 1, 8, 4, true);
+        bouncesSlider.showTickMarks(true);
+        bouncesSlider.setMajorTickUnit(1.0);
+        bouncesSlider.getSlider().setSnapToTicks(true);
+        bouncesSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setMaxBounces(val.intValue());
+                getParams().setMaxBounces(v.intValue());
                 renderCallback.requestRender();
             }
         });
 
-        Label skyIntensityLabel = new Label("Sky Intensity: 1.0");
-        skyIntensitySlider = new Slider(0.0, 3.0, 1.0);
-        skyIntensitySlider.valueProperty().addListener((obs, old, val) -> {
-            skyIntensityLabel.setText(String.format("Sky Intensity: %.2f", val.doubleValue()));
+        skyIntensitySlider = new EnhancedSlider("Sky Intensity", 0.0, 3.0, 1.0, false);
+        skyIntensitySlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setSkyIntensity(val.floatValue());
+                getParams().setSkyIntensity(v.floatValue());
                 renderCallback.requestRender();
             }
         });
 
-        Label indirectLabel = new Label("Indirect Light: 50%");
-        indirectSlider = new Slider(0.0, 1.0, 0.5);
-        indirectSlider.valueProperty().addListener((obs, old, val) -> {
-            indirectLabel.setText(String.format("Indirect Light: %.0f%%", val.doubleValue() * 100));
+        indirectSlider = new EnhancedSlider("Indirect Light %", 0.0, 100.0, 50.0, true);
+        indirectSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setIndirectMultiplier(val.floatValue());
+                getParams().setIndirectMultiplier(v.floatValue() / 100.0f);
                 renderCallback.requestRender();
             }
         });
@@ -355,8 +327,8 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         Label pathTracingInfo = new Label("Path tracing adds global illumination.\nSlower but more realistic.");
         pathTracingInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        box.getChildren().addAll(pathTracingCheck, bouncesLabel, bouncesSlider,
-                skyIntensityLabel, skyIntensitySlider, indirectLabel, indirectSlider,
+        box.getChildren().addAll(pathTracingCheck, bouncesSlider,
+                skyIntensitySlider, indirectSlider,
                 indirectInfo, pathTracingInfo);
 
         TitledPane pane = new TitledPane("Path Tracing (GI)", box);
@@ -395,6 +367,10 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         params.shadowSoftness(shadowSoftness);
         params.aoIntensity(aoIntensity);
         params.specularIntensity(specIntensity);
+        
+        // Update UI state
+        refreshFromParams(true);
+        
         renderCallback.requestRender();
     }
 
@@ -438,7 +414,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             pathTracingCheck.setSelected(p.isPathTracingEnabled());
             bouncesSlider.setValue(p.getMaxBounces());
             skyIntensitySlider.setValue(p.getSkyIntensity());
-            indirectSlider.setValue(p.getIndirectMultiplier());
+            indirectSlider.setValue(p.getIndirectMultiplier() * 100.0);
 
         } finally {
             suppressRender = false;

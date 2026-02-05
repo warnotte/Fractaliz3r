@@ -6,6 +6,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import org.fractalizer.fractals.AbstractFractalParams;
+import org.fractalizer.ui.components.EnhancedSlider;
 
 import java.util.function.Supplier;
 
@@ -22,13 +23,13 @@ public class LightingPanel extends ScrollPane implements Refreshable {
     private boolean suppressRender = false;
 
     // Light direction sliders
-    private Slider lightXSlider;
-    private Slider lightYSlider;
-    private Slider lightZSlider;
+    private EnhancedSlider lightXSlider;
+    private EnhancedSlider lightYSlider;
+    private EnhancedSlider lightZSlider;
 
     // Intensity sliders
-    private Slider lightIntensitySlider;
-    private Slider ambientIntensitySlider;
+    private EnhancedSlider lightIntensitySlider;
+    private EnhancedSlider ambientIntensitySlider;
 
     // Color pickers
     private ColorPicker lightColorPicker;
@@ -50,38 +51,29 @@ public class LightingPanel extends ScrollPane implements Refreshable {
         Label dirLabel = new Label("Light Direction:");
         dirLabel.setStyle("-fx-font-weight: bold;");
 
-        Label lightXLabel = new Label("X: 2.0");
-        lightXSlider = new Slider(-5, 5, 2);
-        lightXSlider.valueProperty().addListener((obs, old, val) -> {
-            lightXLabel.setText(String.format("X: %.1f", val.doubleValue()));
+        lightXSlider = new EnhancedSlider("X", -5, 5, 2, false);
+        lightXSlider.setPrecision(1);
+        lightXSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().lightDirection(val.floatValue(),
-                    (float) lightYSlider.getValue(),
-                    (float) lightZSlider.getValue());
+                getParams().lightDirection(v.floatValue(), (float)lightYSlider.getValue(), (float)lightZSlider.getValue());
                 renderCallback.requestRender();
             }
         });
 
-        Label lightYLabel = new Label("Y: 3.0");
-        lightYSlider = new Slider(-5, 5, 3);
-        lightYSlider.valueProperty().addListener((obs, old, val) -> {
-            lightYLabel.setText(String.format("Y: %.1f", val.doubleValue()));
+        lightYSlider = new EnhancedSlider("Y", -5, 5, 3, false);
+        lightYSlider.setPrecision(1);
+        lightYSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().lightDirection((float) lightXSlider.getValue(),
-                    val.floatValue(),
-                    (float) lightZSlider.getValue());
+                getParams().lightDirection((float)lightXSlider.getValue(), v.floatValue(), (float)lightZSlider.getValue());
                 renderCallback.requestRender();
             }
         });
 
-        Label lightZLabel = new Label("Z: -2.0");
-        lightZSlider = new Slider(-5, 5, -2);
-        lightZSlider.valueProperty().addListener((obs, old, val) -> {
-            lightZLabel.setText(String.format("Z: %.1f", val.doubleValue()));
+        lightZSlider = new EnhancedSlider("Z", -5, 5, -2, false);
+        lightZSlider.setPrecision(1);
+        lightZSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().lightDirection((float) lightXSlider.getValue(),
-                    (float) lightYSlider.getValue(),
-                    val.floatValue());
+                getParams().lightDirection((float)lightXSlider.getValue(), (float)lightYSlider.getValue(), v.floatValue());
                 renderCallback.requestRender();
             }
         });
@@ -98,12 +90,11 @@ public class LightingPanel extends ScrollPane implements Refreshable {
             renderCallback.requestRender();
         });
 
-        Label lightIntLabel = new Label("Light Intensity: 1.2");
-        lightIntensitySlider = new Slider(0, 3, 1.2);
-        lightIntensitySlider.valueProperty().addListener((obs, old, val) -> {
-            lightIntLabel.setText(String.format("Light Intensity: %.1f", val.doubleValue()));
+        lightIntensitySlider = new EnhancedSlider("Light Intensity", 0, 3, 1.2, false);
+        lightIntensitySlider.setPrecision(1);
+        lightIntensitySlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().lightIntensity(val.floatValue());
+                getParams().lightIntensity(v.floatValue());
                 renderCallback.requestRender();
             }
         });
@@ -120,27 +111,26 @@ public class LightingPanel extends ScrollPane implements Refreshable {
             renderCallback.requestRender();
         });
 
-        Label ambientIntLabel = new Label("Ambient Intensity: 0.3");
-        ambientIntensitySlider = new Slider(0, 1, 0.3);
-        ambientIntensitySlider.valueProperty().addListener((obs, old, val) -> {
-            ambientIntLabel.setText(String.format("Ambient Intensity: %.2f", val.doubleValue()));
+        ambientIntensitySlider = new EnhancedSlider("Ambient Intensity", 0, 1, 0.3, false);
+        ambientIntensitySlider.setPrecision(2);
+        ambientIntensitySlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().ambientIntensity(val.floatValue());
+                getParams().ambientIntensity(v.floatValue());
                 renderCallback.requestRender();
             }
         });
 
         panel.getChildren().addAll(
             dirLabel,
-            lightXLabel, lightXSlider,
-            lightYLabel, lightYSlider,
-            lightZLabel, lightZSlider,
+            lightXSlider,
+            lightYSlider,
+            lightZSlider,
             new Separator(),
             lightColLabel, lightColorPicker,
-            lightIntLabel, lightIntensitySlider,
+            lightIntensitySlider,
             new Separator(),
             ambientLabel, ambientColorPicker,
-            ambientIntLabel, ambientIntensitySlider
+            ambientIntensitySlider
         );
 
         return panel;

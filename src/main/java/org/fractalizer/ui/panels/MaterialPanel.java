@@ -7,6 +7,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import org.fractalizer.fractals.AbstractFractalParams;
+import org.fractalizer.ui.components.EnhancedSlider;
 
 import java.util.function.Supplier;
 
@@ -24,21 +25,21 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
 
     // Palette controls
     private ComboBox<String> paletteCombo;
-    private Slider colorStrengthSlider;
-    private Slider paletteOffsetSlider;
+    private EnhancedSlider colorStrengthSlider;
+    private EnhancedSlider paletteOffsetSlider;
     private ColorPicker baseColorPicker;
     
     // Material Type
     private ComboBox<String> materialTypeCombo;
     
     // Physical Properties
-    private Slider roughnessSlider;
-    private Slider metalnessSlider;
-    private Slider iorSlider;
+    private EnhancedSlider roughnessSlider;
+    private EnhancedSlider metalnessSlider;
+    private EnhancedSlider iorSlider;
     
     // Specular
-    private Slider specularIntensitySlider;
-    private Slider specularPowerSlider;
+    private EnhancedSlider specularIntensitySlider;
+    private EnhancedSlider specularPowerSlider;
 
     public MaterialPanel(Supplier<AbstractFractalParams> paramsSupplier, RenderCallback renderCallback) {
         this.paramsSupplier = paramsSupplier;
@@ -73,23 +74,20 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         });
 
         // Color Strength
-        Label strengthLabel = new Label("Color Strength: 1.0");
-        colorStrengthSlider = new Slider(0.1, 5.0, 1.0);
-        colorStrengthSlider.valueProperty().addListener((obs, old, val) -> {
-            strengthLabel.setText(String.format("Color Strength: %.1f", val));
+        colorStrengthSlider = new EnhancedSlider("Color Strength", 0.1, 5.0, 1.0, false);
+        colorStrengthSlider.setPrecision(1);
+        colorStrengthSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setColorStrength(val.floatValue());
+                getParams().setColorStrength(v.floatValue());
                 renderCallback.requestRender();
             }
         });
 
         // Palette Offset
-        Label offsetLabel = new Label("Palette Shift: 0.0");
-        paletteOffsetSlider = new Slider(0.0, 1.0, 0.0);
-        paletteOffsetSlider.valueProperty().addListener((obs, old, val) -> {
-            offsetLabel.setText(String.format("Palette Shift: %.2f", val));
+        paletteOffsetSlider = new EnhancedSlider("Palette Shift", 0.0, 1.0, 0.0, false);
+        paletteOffsetSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setPaletteOffset(val.floatValue());
+                getParams().setPaletteOffset(v.floatValue());
                 renderCallback.requestRender();
             }
         });
@@ -129,34 +127,28 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         typeBox.getChildren().addAll(typeLabel, materialTypeCombo);
 
         // Roughness
-        Label roughLabel = new Label("Roughness: 0.5");
-        roughnessSlider = new Slider(0, 1, 0.5);
-        roughnessSlider.valueProperty().addListener((obs, old, val) -> {
-            roughLabel.setText(String.format("Roughness: %.2f", val));
+        roughnessSlider = new EnhancedSlider("Roughness", 0, 1, 0.5, false);
+        roughnessSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setRoughness(val.floatValue());
+                getParams().setRoughness(v.floatValue());
                 renderCallback.requestRender();
             }
         });
 
         // Metalness
-        Label metalLabel = new Label("Metalness: 0.9");
-        metalnessSlider = new Slider(0, 1, 0.9);
-        metalnessSlider.valueProperty().addListener((obs, old, val) -> {
-            metalLabel.setText(String.format("Metalness: %.2f", val));
+        metalnessSlider = new EnhancedSlider("Metalness", 0, 1, 0.9, false);
+        metalnessSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setMetalness(val.floatValue());
+                getParams().setMetalness(v.floatValue());
                 renderCallback.requestRender();
             }
         });
 
         // IOR (Index of Refraction)
-        Label iorLabel = new Label("IOR (Glass): 1.5");
-        iorSlider = new Slider(1.0, 3.0, 1.5);
-        iorSlider.valueProperty().addListener((obs, old, val) -> {
-            iorLabel.setText(String.format("IOR (Glass): %.2f", val));
+        iorSlider = new EnhancedSlider("IOR (Glass)", 1.0, 3.0, 1.5, false);
+        iorSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setIor(val.floatValue());
+                getParams().setIor(v.floatValue());
                 renderCallback.requestRender();
             }
         });
@@ -165,22 +157,18 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         Label specLabel = new Label("Specular Highlights");
         specLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
         
-        Label specIntLabel = new Label("Intensity: 0.5");
-        specularIntensitySlider = new Slider(0, 2, 0.5);
-        specularIntensitySlider.valueProperty().addListener((obs, old, val) -> {
-            specIntLabel.setText(String.format("Intensity: %.2f", val));
+        specularIntensitySlider = new EnhancedSlider("Intensity", 0, 2, 0.5, false);
+        specularIntensitySlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setSpecularIntensity(val.floatValue());
+                getParams().setSpecularIntensity(v.floatValue());
                 renderCallback.requestRender();
             }
         });
 
-        Label specPowLabel = new Label("Hardness (Power): 32");
-        specularPowerSlider = new Slider(1, 128, 32);
-        specularPowerSlider.valueProperty().addListener((obs, old, val) -> {
-            specPowLabel.setText(String.format("Hardness: %.0f", val));
+        specularPowerSlider = new EnhancedSlider("Hardness (Power)", 1, 128, 32, true);
+        specularPowerSlider.setOnAction(v -> {
             if (!suppressRender) {
-                getParams().setSpecularPower(val.floatValue());
+                getParams().setSpecularPower(v.floatValue());
                 renderCallback.requestRender();
             }
         });
@@ -188,8 +176,8 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         root.getChildren().addAll(
             paletteLabel,
             presetLabel, paletteCombo,
-            strengthLabel, colorStrengthSlider,
-            offsetLabel, paletteOffsetSlider,
+            colorStrengthSlider,
+            paletteOffsetSlider,
             baseColorLabel, baseColorPicker,
             new Separator(),
             new Label("Material Presets:"),
@@ -197,13 +185,13 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             new Separator(),
             physLabel,
             typeBox,
-            roughLabel, roughnessSlider,
-            metalLabel, metalnessSlider,
-            iorLabel, iorSlider,
+            roughnessSlider,
+            metalnessSlider,
+            iorSlider,
             new Separator(),
             specLabel,
-            specIntLabel, specularIntensitySlider,
-            specPowLabel, specularPowerSlider
+            specularIntensitySlider,
+            specularPowerSlider
         );
         
         return root;

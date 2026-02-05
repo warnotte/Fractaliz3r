@@ -33,7 +33,6 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private VBox mengerControls;
     private VBox kaleidoscopicControls;
     private VBox julia3dControls;
-    private VBox pseudoKleinianControls;
     private VBox polyhedralControls;
 
     // Common controls
@@ -70,19 +69,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider j3dCzSlider;
     private EnhancedSlider j3dCwSlider;
 
-    // PseudoKleinian sliders
-    private EnhancedSlider pkIterSlider;
-    private EnhancedSlider pkSizeSlider;
-    private EnhancedSlider pkCsizeXSlider;
-    private EnhancedSlider pkCsizeYSlider;
-    private EnhancedSlider pkCsizeZSlider;
-    private EnhancedSlider pkJuliaXSlider;
-    private EnhancedSlider pkJuliaYSlider;
-    private EnhancedSlider pkJuliaZSlider;
-    private EnhancedSlider pkDeOffsetSlider;
-    private EnhancedSlider pkZOffsetSlider;
-
-    // Polyhedral sliders (Birthday upgrade!)
+    // Polyhedral sliders
     private ComboBox<PolyhedralIFSParams.PolyType> polyTypeCombo;
     private EnhancedSlider polyIterSlider;
     private EnhancedSlider polyScaleSlider;
@@ -116,7 +103,6 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         createMengerControls();
         createKaleidoscopicControls();
         createJulia3dControls();
-        createPseudoKleinianControls();
         createPolyhedralControls();
 
         // Movement speed
@@ -158,7 +144,6 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             mengerControls,
             kaleidoscopicControls,
             julia3dControls,
-            pseudoKleinianControls,
             polyhedralControls,
             new Separator(),
             speedSlider,
@@ -240,253 +225,6 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         );
         polyhedralControls.setVisible(false);
         polyhedralControls.setManaged(false);
-    }
-
-    private ComboBox<FractalType> createTypeComboBox() {
-        ComboBox<FractalType> combo = new ComboBox<>();
-        combo.getItems().addAll(FractalType.values());
-        combo.setValue(FractalType.MANDELBULB);
-        combo.setMaxWidth(Double.MAX_VALUE);
-
-        // Display friendly names
-        combo.setButtonCell(new ListCell<>() {
-            @Override
-            protected void updateItem(FractalType item, boolean empty) {
-                super.updateItem(item, empty);
-                setText(empty || item == null ? "" : item.getDisplayName());
-            }
-        });
-        combo.setCellFactory(lv -> new ListCell<>() {
-            @Override
-            protected void updateItem(FractalType item, boolean empty) {
-                super.updateItem(item, empty);
-                setText(empty || item == null ? "" : item.getDisplayName());
-            }
-        });
-
-        // Fractal type change handler
-        combo.setOnAction(e -> {
-            if (suppressRender) return;
-            FractalType selectedType = combo.getValue();
-            controller.setFractalType(selectedType);
-            params = (AbstractFractalParams) controller.getParams();
-            camera = params.getCamera();
-
-            // Hide all fractal-specific controls
-            mandelbulbControls.setVisible(false);
-            mandelbulbControls.setManaged(false);
-            mandelboxControls.setVisible(false);
-            mandelboxControls.setManaged(false);
-            mengerControls.setVisible(false);
-            mengerControls.setManaged(false);
-            kaleidoscopicControls.setVisible(false);
-            kaleidoscopicControls.setManaged(false);
-            julia3dControls.setVisible(false);
-            julia3dControls.setManaged(false);
-            pseudoKleinianControls.setVisible(false);
-            pseudoKleinianControls.setManaged(false);
-            polyhedralControls.setVisible(false);
-            polyhedralControls.setManaged(false);
-
-            // Show only the relevant controls
-            switch (selectedType) {
-                case MANDELBULB -> {
-                    mandelbulbControls.setVisible(true);
-                    mandelbulbControls.setManaged(true);
-                }
-                case MANDELBOX -> {
-                    mandelboxControls.setVisible(true);
-                    mandelboxControls.setManaged(true);
-                }
-                case MENGER_SPONGE -> {
-                    mengerControls.setVisible(true);
-                    mengerControls.setManaged(true);
-                }
-                case KALEIDOSCOPIC_IFS -> {
-                    kaleidoscopicControls.setVisible(true);
-                    kaleidoscopicControls.setManaged(true);
-                }
-                case JULIA_3D -> {
-                    julia3dControls.setVisible(true);
-                    julia3dControls.setManaged(true);
-                }
-                case PSEUDO_KLEINIAN -> {
-                    pseudoKleinianControls.setVisible(true);
-                    pseudoKleinianControls.setManaged(true);
-                }
-                case POLYHEDRAL_IFS -> {
-                    polyhedralControls.setVisible(true);
-                    polyhedralControls.setManaged(true);
-                }
-            }
-
-            // Sync all UI controls to the new (or cached) parameters
-            refreshFromParams(true);
-
-            renderCallback.requestRender();
-        });
-
-        return combo;
-    }
-
-    private void createMandelbulbControls() {
-        mandelbulbControls = new VBox(8);
-
-        mbPowerSlider = new EnhancedSlider("Power", 2, 16, 8, false);
-        mbPowerSlider.showTickMarks(true);
-        mbPowerSlider.setMajorTickUnit(2.0);
-        mbPowerSlider.setPrecision(1);
-        mbPowerSlider.setOnAction(v -> {
-            if (!suppressRender && params instanceof MandelbulbParams mbParams) {
-                mbParams.power(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        mbIterSlider = new EnhancedSlider("Iterations", 5, 30, 15, true);
-        mbIterSlider.showTickMarks(true);
-        mbIterSlider.setMajorTickUnit(5.0);
-        mbIterSlider.setOnAction(v -> {
-            if (!suppressRender && params instanceof MandelbulbParams mbParams) {
-                mbParams.iterations(v.intValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        mbBailoutSlider = new EnhancedSlider("Bailout", 1, 16, 2.0, false);
-        mbBailoutSlider.setPrecision(1);
-        mbBailoutSlider.setOnAction(v -> {
-            if (!suppressRender && params instanceof MandelbulbParams mbParams) {
-                mbParams.setBailout(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        mandelbulbControls.getChildren().addAll(
-            mbPowerSlider, mbIterSlider, mbBailoutSlider
-        );
-    }
-
-    private void createMandelboxControls() {
-        mandelboxControls = new VBox(8);
-
-        mbxScaleSlider = new EnhancedSlider("Scale", -3, 3, 2, false);
-        mbxScaleSlider.showTickMarks(true);
-        mbxScaleSlider.setMajorTickUnit(1.0);
-        mbxScaleSlider.setOnAction(v -> { if(!suppressRender && params instanceof MandelboxParams p) { p.setScale(v.floatValue()); renderCallback.requestRender(); } });
-
-        mbxMinRadiusSlider = new EnhancedSlider("Min Radius", 0.01, 1.0, 0.25, false);
-        mbxMinRadiusSlider.setOnAction(v -> { if(!suppressRender && params instanceof MandelboxParams p) { p.setMinRadius(v.floatValue()); renderCallback.requestRender(); } });
-
-        mbxFixedRadiusSlider = new EnhancedSlider("Fixed Radius", 0.5, 2.0, 1.0, false);
-        mbxFixedRadiusSlider.setOnAction(v -> { if(!suppressRender && params instanceof MandelboxParams p) { p.setFixedRadius(v.floatValue()); renderCallback.requestRender(); } });
-
-        mbxFoldingLimitSlider = new EnhancedSlider("Folding Limit", 0.5, 2.0, 1.0, false);
-        mbxFoldingLimitSlider.setOnAction(v -> { if(!suppressRender && params instanceof MandelboxParams p) { p.setFoldingLimit(v.floatValue()); renderCallback.requestRender(); } });
-
-        mbxIterSlider = new EnhancedSlider("Iterations", 5, 30, 15, true);
-        mbxIterSlider.showTickMarks(true);
-        mbxIterSlider.setMajorTickUnit(5.0);
-        mbxIterSlider.setOnAction(v -> { if(!suppressRender && params instanceof MandelboxParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
-
-        mandelboxControls.getChildren().addAll(
-            mbxScaleSlider, mbxMinRadiusSlider, mbxFixedRadiusSlider,
-            mbxFoldingLimitSlider, mbxIterSlider
-        );
-        mandelboxControls.setVisible(false);
-        mandelboxControls.setManaged(false);
-    }
-
-    private void createMengerControls() {
-        mengerControls = new VBox(8);
-
-        mengerIterSlider = new EnhancedSlider("Iterations", 2, 10, 6, true);
-        mengerIterSlider.showTickMarks(true);
-        mengerIterSlider.setMajorTickUnit(2.0);
-        mengerIterSlider.setOnAction(v -> { if(!suppressRender && params instanceof MengerSpongeParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
-
-        mengerScaleSlider = new EnhancedSlider("Scale", 2.0, 4.0, 3.0, false);
-        mengerScaleSlider.setOnAction(v -> { if(!suppressRender && params instanceof MengerSpongeParams p) { p.setScale(v.floatValue()); renderCallback.requestRender(); } });
-
-        mengerControls.getChildren().addAll(
-            mengerIterSlider, mengerScaleSlider
-        );
-        mengerControls.setVisible(false);
-        mengerControls.setManaged(false);
-    }
-
-    private void createKaleidoscopicControls() {
-        kaleidoscopicControls = new VBox(8);
-
-        // Info label about parameter relationships
-        Label infoLabel = new Label("Classic Sierpinski: Scale=2, Offset=3");
-        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
-
-        kIterSlider = new EnhancedSlider("Iterations", 4, 25, 15, true);
-        kIterSlider.showTickMarks(true);
-        kIterSlider.setMajorTickUnit(5.0);
-        kIterSlider.setOnAction(v -> { if(!suppressRender && params instanceof KaleidoscopicIFSParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
-
-        kScaleSlider = new EnhancedSlider("Scale", 1.5, 3.0, 2.0, false);
-        kScaleSlider.showTickMarks(true);
-        kScaleSlider.setMajorTickUnit(0.5);
-        kScaleSlider.setOnAction(v -> { if(!suppressRender && params instanceof KaleidoscopicIFSParams p) { p.setScale(v.floatValue()); renderCallback.requestRender(); } });
-
-        kOffsetSlider = new EnhancedSlider("Offset", 1.0, 5.0, 3.0, false);
-        kOffsetSlider.showTickMarks(true);
-        kOffsetSlider.setMajorTickUnit(1.0);
-        kOffsetSlider.setOnAction(v -> { if(!suppressRender && params instanceof KaleidoscopicIFSParams p) { p.setOffset(v.floatValue(), 0, 0); renderCallback.requestRender(); } });
-
-        kFoldXSlider = new EnhancedSlider("Rotation X", -30, 30, 0, false);
-        kFoldXSlider.showTickMarks(true);
-        kFoldXSlider.setMajorTickUnit(15.0);
-        kFoldXSlider.setOnAction(v -> { if(!suppressRender && params instanceof KaleidoscopicIFSParams p) { p.setFoldAngleX(v.floatValue()); renderCallback.requestRender(); } });
-
-        kFoldYSlider = new EnhancedSlider("Rotation Y", -30, 30, 0, false);
-        kFoldYSlider.showTickMarks(true);
-        kFoldYSlider.setMajorTickUnit(15.0);
-        kFoldYSlider.setOnAction(v -> { if(!suppressRender && params instanceof KaleidoscopicIFSParams p) { p.setFoldAngleY(v.floatValue()); renderCallback.requestRender(); } });
-
-        // Preset buttons for common configurations
-        Label presetLabel = new Label("Presets:");
-        presetLabel.setStyle("-fx-font-weight: bold;");
-
-        Button sierpinskiBtn = new Button("Sierpinski");
-        sierpinskiBtn.setOnAction(e -> {
-            kScaleSlider.setValue(2.0);
-            kOffsetSlider.setValue(3.0);
-            kFoldXSlider.setValue(0);
-            kFoldYSlider.setValue(0);
-        });
-
-        Button variation1Btn = new Button("Variation 1");
-        variation1Btn.setOnAction(e -> {
-            kScaleSlider.setValue(2.0);
-            kOffsetSlider.setValue(2.5);
-            kFoldXSlider.setValue(10);
-            kFoldYSlider.setValue(5);
-        });
-
-        Button variation2Btn = new Button("Variation 2");
-        variation2Btn.setOnAction(e -> {
-            kScaleSlider.setValue(2.2);
-            kOffsetSlider.setValue(3.5);
-            kFoldXSlider.setValue(-15);
-            kFoldYSlider.setValue(8);
-        });
-
-        javafx.scene.layout.HBox presetBox = new javafx.scene.layout.HBox(5);
-        presetBox.getChildren().addAll(sierpinskiBtn, variation1Btn, variation2Btn);
-
-        kaleidoscopicControls.getChildren().addAll(
-            infoLabel,
-            kIterSlider, kScaleSlider, kOffsetSlider,
-            kFoldXSlider, kFoldYSlider,
-            new Separator(),
-            presetLabel, presetBox
-        );
-        kaleidoscopicControls.setVisible(false);
-        kaleidoscopicControls.setManaged(false);
     }
 
     private void createJulia3dControls() {
@@ -572,154 +310,245 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         julia3dControls.setManaged(false);
     }
 
-    private void createPseudoKleinianControls() {
-        pseudoKleinianControls = new VBox(8);
+    private void createKaleidoscopicControls() {
+        kaleidoscopicControls = new VBox(8);
 
-        Label titleLabel = new Label("Pseudo Kleinian");
-        titleLabel.setStyle("-fx-font-weight: bold;");
-
-        Label infoLabel = new Label("Box fold + Sphere fold + Julia");
+        // Info label about parameter relationships
+        Label infoLabel = new Label("Classic Sierpinski: Scale=2, Offset=3");
         infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        // Iterations
-        pkIterSlider = new EnhancedSlider("Iterations", 4, 15, 8, true);
-        pkIterSlider.showTickMarks(true);
-        pkIterSlider.setMajorTickUnit(4.0);
-        pkIterSlider.setOnAction(v -> { if(!suppressRender && params instanceof PseudoKleinianParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
+        kIterSlider = new EnhancedSlider("Iterations", 4, 25, 15, true);
+        kIterSlider.showTickMarks(true);
+        kIterSlider.setMajorTickUnit(5.0);
+        kIterSlider.setOnAction(v -> { if(!suppressRender && params instanceof KaleidoscopicIFSParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
 
-        // Size (sphere fold)
-        pkSizeSlider = new EnhancedSlider("Size", 0.5, 2.0, 1.0, false);
-        pkSizeSlider.setOnAction(v -> { if(!suppressRender && params instanceof PseudoKleinianParams p) { p.setSize(v.floatValue()); renderCallback.requestRender(); } });
+        kScaleSlider = new EnhancedSlider("Scale", 1.5, 3.0, 2.0, false);
+        kScaleSlider.showTickMarks(true);
+        kScaleSlider.setMajorTickUnit(0.5);
+        kScaleSlider.setOnAction(v -> { if(!suppressRender && params instanceof KaleidoscopicIFSParams p) { p.setScale(v.floatValue()); renderCallback.requestRender(); } });
 
-        // CSize (box fold bounds)
-        Label csizeLabel = new Label("Box Fold Size:");
-        csizeLabel.setStyle("-fx-font-weight: bold;");
+        kOffsetSlider = new EnhancedSlider("Offset", 1.0, 5.0, 3.0, false);
+        kOffsetSlider.showTickMarks(true);
+        kOffsetSlider.setMajorTickUnit(1.0);
+        kOffsetSlider.setOnAction(v -> { if(!suppressRender && params instanceof KaleidoscopicIFSParams p) { p.setOffset(v.floatValue(), 0, 0); renderCallback.requestRender(); } });
 
-        pkCsizeXSlider = new EnhancedSlider("CSize X", 0.5, 1.5, 0.90453, false);
-        pkCsizeXSlider.setOnAction(v -> { if(!suppressRender && params instanceof PseudoKleinianParams p) { p.setCSizeX(v.floatValue()); renderCallback.requestRender(); } });
+        kFoldXSlider = new EnhancedSlider("Rotation X", -30, 30, 0, false);
+        kFoldXSlider.showTickMarks(true);
+        kFoldXSlider.setMajorTickUnit(15.0);
+        kFoldXSlider.setOnAction(v -> { if(!suppressRender && params instanceof KaleidoscopicIFSParams p) { p.setFoldAngleX(v.floatValue()); renderCallback.requestRender(); } });
 
-        pkCsizeYSlider = new EnhancedSlider("CSize Y", 0.5, 1.5, 0.92, false);
-        pkCsizeYSlider.setOnAction(v -> { if(!suppressRender && params instanceof PseudoKleinianParams p) { p.setCSizeY(v.floatValue()); renderCallback.requestRender(); } });
+        kFoldYSlider = new EnhancedSlider("Rotation Y", -30, 30, 0, false);
+        kFoldYSlider.showTickMarks(true);
+        kFoldYSlider.setMajorTickUnit(15.0);
+        kFoldYSlider.setOnAction(v -> { if(!suppressRender && params instanceof KaleidoscopicIFSParams p) { p.setFoldAngleY(v.floatValue()); renderCallback.requestRender(); } });
 
-        pkCsizeZSlider = new EnhancedSlider("CSize Z", 0.5, 1.5, 0.90453, false);
-        pkCsizeZSlider.setOnAction(v -> { if(!suppressRender && params instanceof PseudoKleinianParams p) { p.setCSizeZ(v.floatValue()); renderCallback.requestRender(); } });
-
-        // Julia constant
-        Label juliaLabel = new Label("Julia Constant:");
-        juliaLabel.setStyle("-fx-font-weight: bold;");
-
-        pkJuliaXSlider = new EnhancedSlider("Julia X", -2.0, 2.0, 0.0, false);
-        pkJuliaXSlider.setOnAction(v -> { if(!suppressRender && params instanceof PseudoKleinianParams p) { p.setJuliaX(v.floatValue()); renderCallback.requestRender(); } });
-
-        pkJuliaYSlider = new EnhancedSlider("Julia Y", -2.0, 2.0, 0.0, false);
-        pkJuliaYSlider.setOnAction(v -> { if(!suppressRender && params instanceof PseudoKleinianParams p) { p.setJuliaY(v.floatValue()); renderCallback.requestRender(); } });
-
-        pkJuliaZSlider = new EnhancedSlider("Julia Z", -2.0, 2.0, 0.0, false);
-        pkJuliaZSlider.setOnAction(v -> { if(!suppressRender && params instanceof PseudoKleinianParams p) { p.setJuliaZ(v.floatValue()); renderCallback.requestRender(); } });
-
-        // DE parameters
-        Label deLabel = new Label("Distance Estimator:");
-        deLabel.setStyle("-fx-font-weight: bold;");
-
-        pkDeOffsetSlider = new EnhancedSlider("DE Offset", -0.1, 0.1, 0.0, false);
-        pkDeOffsetSlider.setPrecision(3);
-        pkDeOffsetSlider.setOnAction(v -> { if(!suppressRender && params instanceof PseudoKleinianParams p) { p.setDeOffset(v.floatValue()); renderCallback.requestRender(); } });
-
-        pkZOffsetSlider = new EnhancedSlider("Z Offset", 0.0, 3.0, 1.0, false);
-        pkZOffsetSlider.setOnAction(v -> { if(!suppressRender && params instanceof PseudoKleinianParams p) { p.setZOffset(v.floatValue()); renderCallback.requestRender(); } });
-
-        // Preset buttons
+        // Preset buttons for common configurations
         Label presetLabel = new Label("Presets:");
         presetLabel.setStyle("-fx-font-weight: bold;");
 
-        Button defaultBtn = new Button("Default");
-        defaultBtn.setOnAction(e -> {
-            pkIterSlider.setValue(8);
-            pkSizeSlider.setValue(1.0);
-            pkCsizeXSlider.setValue(0.90453);
-            pkCsizeYSlider.setValue(0.92);
-            pkCsizeZSlider.setValue(0.90453);
-            pkJuliaXSlider.setValue(0.0);
-            pkJuliaYSlider.setValue(0.0);
-            pkJuliaZSlider.setValue(0.0);
-            pkDeOffsetSlider.setValue(0.0);
-            pkZOffsetSlider.setValue(1.0);
+        Button sierpinskiBtn = new Button("Sierpinski");
+        sierpinskiBtn.setOnAction(e -> {
+            kScaleSlider.setValue(2.0);
+            kOffsetSlider.setValue(3.0);
+            kFoldXSlider.setValue(0);
+            kFoldYSlider.setValue(0);
         });
 
-        Button coralBtn = new Button("Coral");
-        coralBtn.setOnAction(e -> {
-            pkIterSlider.setValue(10);
-            pkSizeSlider.setValue(1.0);
-            pkCsizeXSlider.setValue(0.8);
-            pkCsizeYSlider.setValue(0.8);
-            pkCsizeZSlider.setValue(0.8);
-            pkJuliaXSlider.setValue(0.5);
-            pkJuliaYSlider.setValue(0.5);
-            pkJuliaZSlider.setValue(0.0);
-            pkDeOffsetSlider.setValue(0.0);
-            pkZOffsetSlider.setValue(1.2);
+        Button variation1Btn = new Button("Variation 1");
+        variation1Btn.setOnAction(e -> {
+            kScaleSlider.setValue(2.0);
+            kOffsetSlider.setValue(2.5);
+            kFoldXSlider.setValue(10);
+            kFoldYSlider.setValue(5);
         });
 
-        Button crystalBtn = new Button("Crystal");
-        crystalBtn.setOnAction(e -> {
-            pkIterSlider.setValue(12);
-            pkSizeSlider.setValue(1.2);
-            pkCsizeXSlider.setValue(1.0);
-            pkCsizeYSlider.setValue(1.0);
-            pkCsizeZSlider.setValue(1.0);
-            pkJuliaXSlider.setValue(-0.5);
-            pkJuliaYSlider.setValue(0.3);
-            pkJuliaZSlider.setValue(0.2);
-            pkDeOffsetSlider.setValue(0.01);
-            pkZOffsetSlider.setValue(0.8);
+        Button variation2Btn = new Button("Variation 2");
+        variation2Btn.setOnAction(e -> {
+            kScaleSlider.setValue(2.2);
+            kOffsetSlider.setValue(3.5);
+            kFoldXSlider.setValue(-15);
+            kFoldYSlider.setValue(8);
         });
 
         javafx.scene.layout.HBox presetBox = new javafx.scene.layout.HBox(5);
-        presetBox.getChildren().addAll(defaultBtn, coralBtn, crystalBtn);
+        presetBox.getChildren().addAll(sierpinskiBtn, variation1Btn, variation2Btn);
 
-        pseudoKleinianControls.getChildren().addAll(
-            titleLabel, infoLabel,
-            pkIterSlider, pkSizeSlider,
-            new Separator(),
-            csizeLabel,
-            pkCsizeXSlider, pkCsizeYSlider, pkCsizeZSlider,
-            new Separator(),
-            juliaLabel,
-            pkJuliaXSlider, pkJuliaYSlider, pkJuliaZSlider,
-            new Separator(),
-            deLabel,
-            pkDeOffsetSlider, pkZOffsetSlider,
+        kaleidoscopicControls.getChildren().addAll(
+            infoLabel,
+            kIterSlider, kScaleSlider, kOffsetSlider,
+            kFoldXSlider, kFoldYSlider,
             new Separator(),
             presetLabel, presetBox
         );
-        pseudoKleinianControls.setVisible(false);
-        pseudoKleinianControls.setManaged(false);
+        kaleidoscopicControls.setVisible(false);
+        kaleidoscopicControls.setManaged(false);
     }
 
-    // Public methods for external access
-    public void updatePositionLabel() {
-        float[] pos = camera.getPosition();
-        positionLabel.setText(String.format("Pos: (%.2f, %.2f, %.2f)", pos[0], pos[1], pos[2]));
+    private void createMengerControls() {
+        mengerControls = new VBox(8);
+
+        mengerIterSlider = new EnhancedSlider("Iterations", 2, 10, 6, true);
+        mengerIterSlider.showTickMarks(true);
+        mengerIterSlider.setMajorTickUnit(2.0);
+        mengerIterSlider.setOnAction(v -> { if(!suppressRender && params instanceof MengerSpongeParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
+
+        mengerScaleSlider = new EnhancedSlider("Scale", 2.0, 4.0, 3.0, false);
+        mengerScaleSlider.setOnAction(v -> { if(!suppressRender && params instanceof MengerSpongeParams p) { p.setScale(v.floatValue()); renderCallback.requestRender(); } });
+
+        mengerControls.getChildren().addAll(
+            mengerIterSlider, mengerScaleSlider
+        );
+        mengerControls.setVisible(false);
+        mengerControls.setManaged(false);
     }
 
-    public Camera getCamera() {
-        return camera;
+    private void createMandelboxControls() {
+        mandelboxControls = new VBox(8);
+
+        mbxScaleSlider = new EnhancedSlider("Scale", -3, 3, 2, false);
+        mbxScaleSlider.showTickMarks(true);
+        mbxScaleSlider.setMajorTickUnit(1.0);
+        mbxScaleSlider.setOnAction(v -> { if(!suppressRender && params instanceof MandelboxParams p) { p.setScale(v.floatValue()); renderCallback.requestRender(); } });
+
+        mbxMinRadiusSlider = new EnhancedSlider("Min Radius", 0.01, 1.0, 0.25, false);
+        mbxMinRadiusSlider.setOnAction(v -> { if(!suppressRender && params instanceof MandelboxParams p) { p.setMinRadius(v.floatValue()); renderCallback.requestRender(); } });
+
+        mbxFixedRadiusSlider = new EnhancedSlider("Fixed Radius", 0.5, 2.0, 1.0, false);
+        mbxFixedRadiusSlider.setOnAction(v -> { if(!suppressRender && params instanceof MandelboxParams p) { p.setFixedRadius(v.floatValue()); renderCallback.requestRender(); } });
+
+        mbxFoldingLimitSlider = new EnhancedSlider("Folding Limit", 0.5, 2.0, 1.0, false);
+        mbxFoldingLimitSlider.setOnAction(v -> { if(!suppressRender && params instanceof MandelboxParams p) { p.setFoldingLimit(v.floatValue()); renderCallback.requestRender(); } });
+
+        mbxIterSlider = new EnhancedSlider("Iterations", 5, 30, 15, true);
+        mbxIterSlider.showTickMarks(true);
+        mbxIterSlider.setMajorTickUnit(5.0);
+        mbxIterSlider.setOnAction(v -> { if(!suppressRender && params instanceof MandelboxParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
+
+        mandelboxControls.getChildren().addAll(
+            mbxScaleSlider, mbxMinRadiusSlider, mbxFixedRadiusSlider,
+            mbxFoldingLimitSlider, mbxIterSlider
+        );
+        mandelboxControls.setVisible(false);
+        mandelboxControls.setManaged(false);
     }
 
-    public AbstractFractalParams getParams() {
-        return params;
+    private void createMandelbulbControls() {
+        mandelbulbControls = new VBox(8);
+
+        mbPowerSlider = new EnhancedSlider("Power", 2, 16, 8, false);
+        mbPowerSlider.showTickMarks(true);
+        mbPowerSlider.setMajorTickUnit(2.0);
+        mbPowerSlider.setPrecision(1);
+        mbPowerSlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof MandelbulbParams mbParams) {
+                mbParams.power(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        mbIterSlider = new EnhancedSlider("Iterations", 5, 30, 15, true);
+        mbIterSlider.showTickMarks(true);
+        mbIterSlider.setMajorTickUnit(5.0);
+        mbIterSlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof MandelbulbParams mbParams) {
+                mbParams.iterations(v.intValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        mbBailoutSlider = new EnhancedSlider("Bailout", 1, 16, 2.0, false);
+        mbBailoutSlider.setPrecision(1);
+        mbBailoutSlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof MandelbulbParams mbParams) {
+                mbParams.setBailout(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        mandelbulbControls.getChildren().addAll(
+            mbPowerSlider, mbIterSlider, mbBailoutSlider
+        );
     }
 
-    public void setSpeedSliderValue(double value) {
-        speedSlider.setValue(value);
-    }
+    private ComboBox<FractalType> createTypeComboBox() {
+        ComboBox<FractalType> combo = new ComboBox<>();
+        combo.getItems().addAll(FractalType.values());
+        combo.setValue(FractalType.MANDELBULB);
+        combo.setMaxWidth(Double.MAX_VALUE);
 
-    /**
-     * Update params reference (for load configuration).
-     */
-    public void setParams(AbstractFractalParams newParams) {
-        this.params = newParams;
-        this.camera = newParams.getCamera();
+        // Display friendly names
+        combo.setButtonCell(new ListCell<>() {
+            @Override
+            protected void updateItem(FractalType item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? "" : item.getDisplayName());
+            }
+        });
+        combo.setCellFactory(lv -> new ListCell<>() {
+            @Override
+            protected void updateItem(FractalType item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? "" : item.getDisplayName());
+            }
+        });
+
+        // Fractal type change handler
+        combo.setOnAction(e -> {
+            if (suppressRender) return;
+            FractalType selectedType = combo.getValue();
+            controller.setFractalType(selectedType);
+            params = (AbstractFractalParams) controller.getParams();
+            camera = params.getCamera();
+
+            // Hide all fractal-specific controls
+            mandelbulbControls.setVisible(false);
+            mandelbulbControls.setManaged(false);
+            mandelboxControls.setVisible(false);
+            mandelboxControls.setManaged(false);
+            mengerControls.setVisible(false);
+            mengerControls.setManaged(false);
+            kaleidoscopicControls.setVisible(false);
+            kaleidoscopicControls.setManaged(false);
+            julia3dControls.setVisible(false);
+            julia3dControls.setManaged(false);
+            polyhedralControls.setVisible(false);
+            polyhedralControls.setManaged(false);
+
+            // Show only the relevant controls
+            switch (selectedType) {
+                case MANDELBULB -> {
+                    mandelbulbControls.setVisible(true);
+                    mandelbulbControls.setManaged(true);
+                }
+                case MANDELBOX -> {
+                    mandelboxControls.setVisible(true);
+                    mandelboxControls.setManaged(true);
+                }
+                case MENGER_SPONGE -> {
+                    mengerControls.setVisible(true);
+                    mengerControls.setManaged(true);
+                }
+                case KALEIDOSCOPIC_IFS -> {
+                    kaleidoscopicControls.setVisible(true);
+                    kaleidoscopicControls.setManaged(true);
+                }
+                case JULIA_3D -> {
+                    julia3dControls.setVisible(true);
+                    julia3dControls.setManaged(true);
+                }
+                case POLYHEDRAL_IFS -> {
+                    polyhedralControls.setVisible(true);
+                    polyhedralControls.setManaged(true);
+                }
+            }
+
+            // Sync all UI controls to the new (or cached) parameters
+            refreshFromParams(true);
+
+            renderCallback.requestRender();
+        });
+
+        return combo;
     }
 
     /**
@@ -745,8 +574,6 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             kaleidoscopicControls.setManaged(false);
             julia3dControls.setVisible(false);
             julia3dControls.setManaged(false);
-            pseudoKleinianControls.setVisible(false);
-            pseudoKleinianControls.setManaged(false);
             polyhedralControls.setVisible(false);
             polyhedralControls.setManaged(false);
 
@@ -786,19 +613,6 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 j3dCySlider.setValue(j.getJuliaCy());
                 j3dCzSlider.setValue(j.getJuliaCz());
                 j3dCwSlider.setValue(j.getJuliaCw());
-            } else if (params instanceof PseudoKleinianParams pk) {
-                pseudoKleinianControls.setVisible(true);
-                pseudoKleinianControls.setManaged(true);
-                pkIterSlider.setValue(pk.getMaxIterations());
-                pkSizeSlider.setValue(pk.getSize());
-                pkCsizeXSlider.setValue(pk.getCSizeX());
-                pkCsizeYSlider.setValue(pk.getCSizeY());
-                pkCsizeZSlider.setValue(pk.getCSizeZ());
-                pkJuliaXSlider.setValue(pk.getJuliaX());
-                pkJuliaYSlider.setValue(pk.getJuliaY());
-                pkJuliaZSlider.setValue(pk.getJuliaZ());
-                pkDeOffsetSlider.setValue(pk.getDeOffset());
-                pkZOffsetSlider.setValue(pk.getZOffset());
             } else if (params instanceof PolyhedralIFSParams p) {
                 polyhedralControls.setVisible(true);
                 polyhedralControls.setManaged(true);
@@ -826,5 +640,36 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         } finally {
             suppressRender = false;
         }
+    }
+
+    // Public methods for external access
+    public void updatePositionLabel() {
+        if (positionLabel != null && camera != null) {
+            float[] pos = camera.getPosition();
+            positionLabel.setText(String.format("Pos: (%.2f, %.2f, %.2f)", pos[0], pos[1], pos[2]));
+        }
+    }
+
+    public Camera getCamera() {
+        return camera;
+    }
+
+    public AbstractFractalParams getParams() {
+        return params;
+    }
+
+    public void setSpeedSliderValue(double value) {
+        if (speedSlider != null) {
+            speedSlider.setValue(value);
+        }
+    }
+
+    /**
+     * Update params reference (for load configuration).
+     */
+    public void setParams(AbstractFractalParams newParams) {
+        this.params = newParams;
+        this.camera = newParams.getCamera();
+        refreshFromParams(true);
     }
 }

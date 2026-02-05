@@ -31,7 +31,7 @@ public class GLSLFractalizerController implements RenderController {
     private final GLSLEngine engine;
     private final ProgressiveRenderer progressiveRenderer;
 
-    private final java.util.Map<FractalType, FractalParams> paramsCache = new java.util.HashMap<>();
+    private final Map<FractalType, FractalParams> paramsCache = new HashMap<>();
     private FractalParams currentParams;
     private FractalType currentFractalType = FractalType.MANDELBULB;
 
@@ -68,7 +68,6 @@ public class GLSLFractalizerController implements RenderController {
         engine.loadFractalShader("menger", "/shaders/fractals/menger.glsl");
         engine.loadFractalShader("kaleidoscopic", "/shaders/fractals/kaleidoscopic.glsl");
         engine.loadFractalShader("julia3d", "/shaders/fractals/julia3d.glsl");
-        engine.loadFractalShader("pseudokleinian", "/shaders/fractals/pseudokleinian.glsl");
         engine.loadFractalShader("polyhedral", "/shaders/fractals/polyhedral.glsl");
     }
 
@@ -94,7 +93,6 @@ public class GLSLFractalizerController implements RenderController {
                 case MENGER_SPONGE -> this.currentParams = new MengerSpongeParams();
                 case KALEIDOSCOPIC_IFS -> this.currentParams = new KaleidoscopicIFSParams();
                 case JULIA_3D -> this.currentParams = new Julia3DParams();
-                case PSEUDO_KLEINIAN -> this.currentParams = new PseudoKleinianParams();
                 case POLYHEDRAL_IFS -> this.currentParams = new PolyhedralIFSParams();
             }
             paramsCache.put(type, currentParams);
@@ -509,19 +507,6 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("juliaC", new float[]{
                     p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz(), p.getJuliaCw()
                 });
-            }
-            case PSEUDO_KLEINIAN -> {
-                PseudoKleinianParams p = (PseudoKleinianParams) currentParams;
-                uniforms.put("maxIterations", p.getMaxIterations());
-                uniforms.put("size", p.getSize());
-                uniforms.put("cSize", new float[]{
-                    p.getCSizeX(), p.getCSizeY(), p.getCSizeZ()
-                });
-                uniforms.put("juliaC", new float[]{
-                    p.getJuliaX(), p.getJuliaY(), p.getJuliaZ()
-                });
-                uniforms.put("deOffset", p.getDeOffset());
-                uniforms.put("zOffset", p.getZOffset());
             }
             case POLYHEDRAL_IFS -> {
                 PolyhedralIFSParams p = (PolyhedralIFSParams) currentParams;

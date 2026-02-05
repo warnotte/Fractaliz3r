@@ -40,7 +40,6 @@ org.fractalizer
 │   ├── MengerSpongeParams.java      # Menger Sponge: iterations, scale, offset
 │   ├── KaleidoscopicIFSParams.java  # KIFS: scale, offset, fold angles
 │   ├── Julia3DParams.java           # 3D Julia: quaternion c parameter
-│   ├── PseudoKleinianParams.java    # Pseudo-Kleinian: size, cSize, julia
 │   └── PolyhedralIFSParams.java     # Polyhedral IFS: symmetry type, scale, rotations, offsets
 ├── render/
 │   ├── ProgressiveRenderer.java     # Progressive sample accumulation
@@ -56,8 +55,10 @@ org.fractalizer
     │   └── EnhancedSlider.java         # Professional UI slider with mouse wheel & precision control
     ├── panels/
     │   ├── FractalPanel.java           # Fractal type and parameters (uses EnhancedSlider)
-    │   ├── MaterialPanel.java          # Material type, physical props, and artistic palettes
-    │   ├── QualityPanel.java           # Ray steps, DoF, path tracing
+    │   ├── MaterialPanel.java          # Material type, physical props, and artistic palettes (uses EnhancedSlider)
+    │   ├── LightingPanel.java          # Light direction and colors (uses EnhancedSlider)
+    │   ├── QualityPanel.java           # Ray steps, DoF, path tracing (uses EnhancedSlider)
+    │   ├── PostProcessingPanel.java    # Bloom, tone mapping, color correction (uses EnhancedSlider)
     │   └── ExportPanel.java            # Image/animation export with motion blur
 ```
 
@@ -73,16 +74,18 @@ shaders/
 └── fractals/              # Individual fractal Distance Estimators
     ├── mandelbulb.glsl
     ├── mandelbox.glsl
-    ├── polyhedral.glsl    # Polyhedral IFS with Octa/Dodeca/Icosa/Tetra symmetries
-    └── ...
+    ├── menger.glsl
+    ├── kaleidoscopic.glsl
+    ├── julia3d.glsl
+    └── polyhedral.glsl    # Polyhedral IFS with Octa/Dodeca/Icosa/Tetra symmetries
 ```
 
 ## Advanced UI Features
 
 ### EnhancedSlider Component
-A standard component for all numeric fractal parameters:
+A standard component used for **all** numeric parameters across the application:
 - **Mouse Wheel Support**: Scroll over any slider to adjust value.
-- **Modifier Keys**: 
+- **Modifier Keys** (Required for value adjustment to avoid ScrollPane conflicts):
   - `ALT + Scroll`: Normal speed adjustment.
   - `SHIFT + Scroll`: Fine/Precision control (10x slower).
   - `CTRL + Scroll`: Fast movement (10x faster).
@@ -118,7 +121,7 @@ Major fractals use cumulative "Plane Traps" (weighted sum of absolute coordinate
 - **Page Up/Down**: Move up/down
 - **R**: Reset camera
 - **Space**: Render full quality
-- **Scroll wheel**: Adjust movement speed
+- **Scroll wheel**: Adjust movement speed (when not hovering a slider)
 
 ## Dependencies
 

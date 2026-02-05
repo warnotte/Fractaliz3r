@@ -5,12 +5,14 @@ import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.fractalizer.engine.GLSLEngine.PostProcessParams;
+import org.fractalizer.ui.components.EnhancedSlider;
 
 import java.util.function.Consumer;
 
 /**
  * Panel for post-processing settings.
  * Controls bloom, chromatic aberration, vignette, film grain, etc.
+ * Uses EnhancedSlider for professional control.
  */
 public class PostProcessingPanel extends ScrollPane {
 
@@ -19,33 +21,31 @@ public class PostProcessingPanel extends ScrollPane {
 
     // Tone mapping
     private ComboBox<String> toneMapCombo;
-    private Slider exposureSlider;
+    private EnhancedSlider exposureSlider;
+    private EnhancedSlider saturationSlider;
 
     // Bloom
     private CheckBox bloomCheck;
-    private Slider bloomIntensitySlider;
-    private Slider bloomThresholdSlider;
-    private Slider bloomRadiusSlider;
+    private EnhancedSlider bloomIntensitySlider;
+    private EnhancedSlider bloomThresholdSlider;
+    private EnhancedSlider bloomRadiusSlider;
 
     // Chromatic Aberration
     private CheckBox chromaticCheck;
-    private Slider chromaticIntensitySlider;
+    private EnhancedSlider chromaticIntensitySlider;
 
     // Vignette
     private CheckBox vignetteCheck;
-    private Slider vignetteIntensitySlider;
-    private Slider vignetteSoftnessSlider;
+    private EnhancedSlider vignetteIntensitySlider;
+    private EnhancedSlider vignetteSoftnessSlider;
 
     // Film Grain
     private CheckBox filmGrainCheck;
-    private Slider filmGrainIntensitySlider;
+    private EnhancedSlider filmGrainIntensitySlider;
 
     // Sharpening
     private CheckBox sharpenCheck;
-    private Slider sharpenIntensitySlider;
-
-    // Saturation
-    private Slider saturationSlider;
+    private EnhancedSlider sharpenIntensitySlider;
 
     public PostProcessingPanel(PostProcessParams params, Runnable onUpdate) {
         this.params = params;
@@ -133,12 +133,12 @@ public class PostProcessingPanel extends ScrollPane {
     private VBox createToneMappingSection() {
         VBox section = new VBox(5);
 
-        Label titleLabel = new Label("Tone Mapping");
+        Label titleLabel = new Label("Tone Mapping & Color");
         titleLabel.setStyle("-fx-font-weight: bold;");
 
         // Tone map mode
         HBox toneMapBox = new HBox(10);
-        toneMapBox.getChildren().add(new Label("Mode:"));
+        Label modeLabel = new Label("Mode:");
         toneMapCombo = new ComboBox<>();
         toneMapCombo.getItems().addAll("ACES", "Reinhard", "Filmic", "None");
         toneMapCombo.setValue(getToneMapName(params.toneMapMode));
@@ -146,19 +146,19 @@ public class PostProcessingPanel extends ScrollPane {
             params.toneMapMode = toneMapCombo.getSelectionModel().getSelectedIndex();
             onUpdate.run();
         });
-        toneMapBox.getChildren().add(toneMapCombo);
+        toneMapBox.getChildren().addAll(modeLabel, toneMapCombo);
 
         // Exposure
-        exposureSlider = new Slider(0.1, 3.0, params.exposure);
-        HBox exposureBox = createSliderRow("Exposure", exposureSlider,
-            v -> { params.exposure = v.floatValue(); onUpdate.run(); });
+        exposureSlider = new EnhancedSlider("Exposure", 0.1, 3.0, params.exposure, false);
+        exposureSlider.setPrecision(2);
+        exposureSlider.setOnAction(v -> { params.exposure = v.floatValue(); onUpdate.run(); });
 
         // Saturation
-        saturationSlider = new Slider(0.0, 2.0, params.saturation);
-        HBox saturationBox = createSliderRow("Saturation", saturationSlider,
-            v -> { params.saturation = v.floatValue(); onUpdate.run(); });
+        saturationSlider = new EnhancedSlider("Saturation", 0.0, 2.0, params.saturation, false);
+        saturationSlider.setPrecision(2);
+        saturationSlider.setOnAction(v -> { params.saturation = v.floatValue(); onUpdate.run(); });
 
-        section.getChildren().addAll(titleLabel, toneMapBox, exposureBox, saturationBox);
+        section.getChildren().addAll(titleLabel, toneMapBox, exposureSlider, saturationSlider);
         return section;
     }
 
@@ -173,19 +173,20 @@ public class PostProcessingPanel extends ScrollPane {
             onUpdate.run();
         });
 
-        bloomIntensitySlider = new Slider(0.0, 2.0, params.bloomIntensity);
-        HBox intensityBox = createSliderRow("Intensity", bloomIntensitySlider,
-            v -> { params.bloomIntensity = v.floatValue(); onUpdate.run(); });
+        bloomIntensitySlider = new EnhancedSlider("Intensity", 0.0, 2.0, params.bloomIntensity, false);
+        bloomIntensitySlider.setPrecision(2);
+        bloomIntensitySlider.setOnAction(v -> { params.bloomIntensity = v.floatValue(); onUpdate.run(); });
 
-        bloomThresholdSlider = new Slider(0.0, 3.0, params.bloomThreshold);
-        HBox thresholdBox = createSliderRow("Threshold", bloomThresholdSlider,
-            v -> { params.bloomThreshold = v.floatValue(); onUpdate.run(); });
+        bloomThresholdSlider = new EnhancedSlider("Threshold", 0.0, 3.0, params.bloomThreshold, false);
+        bloomThresholdSlider.setPrecision(2);
+        bloomThresholdSlider.setOnAction(v -> { params.bloomThreshold = v.floatValue(); onUpdate.run(); });
 
-        bloomRadiusSlider = new Slider(1, 8, params.bloomRadius);
-        HBox radiusBox = createSliderRow("Radius", bloomRadiusSlider,
-            v -> { params.bloomRadius = v.intValue(); onUpdate.run(); });
+        bloomRadiusSlider = new EnhancedSlider("Radius (Blur Passes)", 1, 8, params.bloomRadius, true);
+        bloomRadiusSlider.showTickMarks(true);
+        bloomRadiusSlider.setMajorTickUnit(1);
+        bloomRadiusSlider.setOnAction(v -> { params.bloomRadius = v.intValue(); onUpdate.run(); });
 
-        section.getChildren().addAll(bloomCheck, intensityBox, thresholdBox, radiusBox);
+        section.getChildren().addAll(bloomCheck, bloomIntensitySlider, bloomThresholdSlider, bloomRadiusSlider);
         return section;
     }
 
@@ -200,11 +201,11 @@ public class PostProcessingPanel extends ScrollPane {
             onUpdate.run();
         });
 
-        chromaticIntensitySlider = new Slider(0.0, 0.02, params.chromaticAberrationIntensity);
-        HBox intensityBox = createSliderRow("Intensity", chromaticIntensitySlider,
-            v -> { params.chromaticAberrationIntensity = v.floatValue(); onUpdate.run(); });
+        chromaticIntensitySlider = new EnhancedSlider("Intensity", 0.0, 0.02, params.chromaticAberrationIntensity, false);
+        chromaticIntensitySlider.setPrecision(4);
+        chromaticIntensitySlider.setOnAction(v -> { params.chromaticAberrationIntensity = v.floatValue(); onUpdate.run(); });
 
-        section.getChildren().addAll(chromaticCheck, intensityBox);
+        section.getChildren().addAll(chromaticCheck, chromaticIntensitySlider);
         return section;
     }
 
@@ -219,15 +220,15 @@ public class PostProcessingPanel extends ScrollPane {
             onUpdate.run();
         });
 
-        vignetteIntensitySlider = new Slider(0.0, 1.0, params.vignetteIntensity);
-        HBox intensityBox = createSliderRow("Intensity", vignetteIntensitySlider,
-            v -> { params.vignetteIntensity = v.floatValue(); onUpdate.run(); });
+        vignetteIntensitySlider = new EnhancedSlider("Intensity", 0.0, 1.0, params.vignetteIntensity, false);
+        vignetteIntensitySlider.setPrecision(2);
+        vignetteIntensitySlider.setOnAction(v -> { params.vignetteIntensity = v.floatValue(); onUpdate.run(); });
 
-        vignetteSoftnessSlider = new Slider(0.0, 1.0, params.vignetteSoftness);
-        HBox softnessBox = createSliderRow("Softness", vignetteSoftnessSlider,
-            v -> { params.vignetteSoftness = v.floatValue(); onUpdate.run(); });
+        vignetteSoftnessSlider = new EnhancedSlider("Softness", 0.0, 1.0, params.vignetteSoftness, false);
+        vignetteSoftnessSlider.setPrecision(2);
+        vignetteSoftnessSlider.setOnAction(v -> { params.vignetteSoftness = v.floatValue(); onUpdate.run(); });
 
-        section.getChildren().addAll(vignetteCheck, intensityBox, softnessBox);
+        section.getChildren().addAll(vignetteCheck, vignetteIntensitySlider, vignetteSoftnessSlider);
         return section;
     }
 
@@ -242,11 +243,11 @@ public class PostProcessingPanel extends ScrollPane {
             onUpdate.run();
         });
 
-        filmGrainIntensitySlider = new Slider(0.0, 0.1, params.filmGrainIntensity);
-        HBox intensityBox = createSliderRow("Intensity", filmGrainIntensitySlider,
-            v -> { params.filmGrainIntensity = v.floatValue(); onUpdate.run(); });
+        filmGrainIntensitySlider = new EnhancedSlider("Intensity", 0.0, 0.1, params.filmGrainIntensity, false);
+        filmGrainIntensitySlider.setPrecision(3);
+        filmGrainIntensitySlider.setOnAction(v -> { params.filmGrainIntensity = v.floatValue(); onUpdate.run(); });
 
-        section.getChildren().addAll(filmGrainCheck, intensityBox);
+        section.getChildren().addAll(filmGrainCheck, filmGrainIntensitySlider);
         return section;
     }
 
@@ -261,45 +262,12 @@ public class PostProcessingPanel extends ScrollPane {
             onUpdate.run();
         });
 
-        sharpenIntensitySlider = new Slider(0.0, 1.0, params.sharpenIntensity);
-        HBox intensityBox = createSliderRow("Intensity", sharpenIntensitySlider,
-            v -> { params.sharpenIntensity = v.floatValue(); onUpdate.run(); });
+        sharpenIntensitySlider = new EnhancedSlider("Intensity", 0.0, 1.0, params.sharpenIntensity, false);
+        sharpenIntensitySlider.setPrecision(2);
+        sharpenIntensitySlider.setOnAction(v -> { params.sharpenIntensity = v.floatValue(); onUpdate.run(); });
 
-        section.getChildren().addAll(sharpenCheck, intensityBox);
+        section.getChildren().addAll(sharpenCheck, sharpenIntensitySlider);
         return section;
-    }
-
-    private HBox createSliderRow(String name, Slider slider, Consumer<Double> onChange) {
-        HBox box = new HBox(10);
-        box.setPadding(new Insets(0, 0, 0, 15));
-
-        Label nameLabel = new Label(name + ":");
-        nameLabel.setMinWidth(70);
-
-        slider.setPrefWidth(120);
-        slider.setShowTickMarks(true);
-
-        Label valueLabel = new Label(formatValue(slider.getValue()));
-        valueLabel.setMinWidth(40);
-        valueLabel.setStyle("-fx-font-family: monospace;");
-
-        slider.valueProperty().addListener((obs, oldVal, newVal) -> {
-            valueLabel.setText(formatValue(newVal.doubleValue()));
-            onChange.accept(newVal.doubleValue());
-        });
-
-        box.getChildren().addAll(nameLabel, slider, valueLabel);
-        return box;
-    }
-
-    private String formatValue(double value) {
-        if (value < 0.1) {
-            return String.format("%.3f", value);
-        } else if (value < 10) {
-            return String.format("%.2f", value);
-        } else {
-            return String.format("%.0f", value);
-        }
     }
 
     private String getToneMapName(int mode) {
@@ -317,6 +285,7 @@ public class PostProcessingPanel extends ScrollPane {
     public void refreshUI() {
         toneMapCombo.setValue(getToneMapName(params.toneMapMode));
         exposureSlider.setValue(params.exposure);
+        saturationSlider.setValue(params.saturation);
 
         bloomCheck.setSelected(params.bloomEnabled);
         bloomIntensitySlider.setValue(params.bloomIntensity);
@@ -335,8 +304,6 @@ public class PostProcessingPanel extends ScrollPane {
 
         sharpenCheck.setSelected(params.sharpenEnabled);
         sharpenIntensitySlider.setValue(params.sharpenIntensity);
-
-        saturationSlider.setValue(params.saturation);
     }
 
     /**

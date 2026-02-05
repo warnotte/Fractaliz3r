@@ -89,6 +89,9 @@ public class FractalConfig {
 
     public static class MaterialConfig {
         public float[] hue = {0, 0.33f, 0.67f};
+        public int paletteIndex = 0;
+        public float colorStrength = 1.0f;
+        public float paletteOffset = 0.0f;
         public int type = 0;  // 0=Lambertian, 1=Metallic, 2=Glass
         public float metalness = 0.9f;
         public float ior = 1.5f;
@@ -175,6 +178,9 @@ public class FractalConfig {
 
         // Material
         config.material.hue = new float[]{params.getHueR(), params.getHueG(), params.getHueB()};
+        config.material.paletteIndex = params.getPaletteIndex();
+        config.material.colorStrength = params.getColorStrength();
+        config.material.paletteOffset = params.getPaletteOffset();
         config.material.type = params.getMaterialType();
         config.material.metalness = params.getMetalness();
         config.material.ior = params.getIor();
@@ -231,6 +237,9 @@ public class FractalConfig {
 
         // Material
         params.setMaterialHue(material.hue[0], material.hue[1], material.hue[2]);
+        params.setPaletteIndex(material.paletteIndex);
+        params.setColorStrength(material.colorStrength);
+        params.setPaletteOffset(material.paletteOffset);
         params.setMaterialType(material.type);
         params.setMetalness(material.metalness);
         params.setIor(material.ior);
@@ -298,31 +307,27 @@ public class FractalConfig {
             map.put("juliaCy", j.getJuliaCy());
             map.put("juliaCz", j.getJuliaCz());
             map.put("juliaCw", j.getJuliaCw());
-        } else if (params instanceof PseudoKleinianParams pk) {
-            map.put("maxIterations", pk.getMaxIterations());
-            map.put("size", pk.getSize());
-            map.put("cSizeX", pk.getCSizeX());
-            map.put("cSizeY", pk.getCSizeY());
-            map.put("cSizeZ", pk.getCSizeZ());
-            map.put("juliaX", pk.getJuliaX());
-            map.put("juliaY", pk.getJuliaY());
-            map.put("juliaZ", pk.getJuliaZ());
-                            map.put("deOffset", pk.getDeOffset());
-                            map.put("zOffset", pk.getZOffset());
-                        } else if (params instanceof PolyhedralIFSParams p) {
-                            map.put("polyType", p.getPolyType().name());
-                            map.put("maxIterations", p.getMaxIterations());
-                            map.put("scale", p.getScale());
-                            map.put("offsetX", p.getOffsetX());
-                            map.put("offsetY", p.getOffsetY());
-                            map.put("offsetZ", p.getOffsetZ());
-                            map.put("rot1X", p.getRot1X());
-                            map.put("rot1Y", p.getRot1Y());
-                            map.put("rot1Z", p.getRot1Z());
-                        }
-                }
-            
-                private static void applyFractalParams(AbstractFractalParams params, Map<String, Object> map) {        if (params instanceof MandelbulbParams mb) {
+        } else if (params instanceof PolyhedralIFSParams p) {
+            map.put("polyType", p.getPolyType().name());
+            map.put("maxIterations", p.getMaxIterations());
+            map.put("scale", p.getScale());
+            map.put("offsetX", p.getOffsetX());
+            map.put("offsetY", p.getOffsetY());
+            map.put("offsetZ", p.getOffsetZ());
+            map.put("shiftX", p.getShiftX());
+            map.put("shiftY", p.getShiftY());
+            map.put("shiftZ", p.getShiftZ());
+            map.put("rot1X", p.getRot1X());
+            map.put("rot1Y", p.getRot1Y());
+            map.put("rot1Z", p.getRot1Z());
+            map.put("rot2X", p.getRot2X());
+            map.put("rot2Y", p.getRot2Y());
+            map.put("rot2Z", p.getRot2Z());
+        }
+    }
+
+    private static void applyFractalParams(AbstractFractalParams params, Map<String, Object> map) {
+        if (params instanceof MandelbulbParams mb) {
             if (map.containsKey("power")) mb.power(getFloat(map, "power"));
             if (map.containsKey("maxIterations")) mb.iterations(getInt(map, "maxIterations"));
             if (map.containsKey("bailout")) mb.setBailout(getFloat(map, "bailout"));
@@ -353,17 +358,6 @@ public class FractalConfig {
             if (map.containsKey("juliaCy")) j.setJuliaCy(getFloat(map, "juliaCy"));
             if (map.containsKey("juliaCz")) j.setJuliaCz(getFloat(map, "juliaCz"));
             if (map.containsKey("juliaCw")) j.setJuliaCw(getFloat(map, "juliaCw"));
-        } else if (params instanceof PseudoKleinianParams pk) {
-            if (map.containsKey("maxIterations")) pk.setMaxIterations(getInt(map, "maxIterations"));
-            if (map.containsKey("size")) pk.setSize(getFloat(map, "size"));
-            if (map.containsKey("cSizeX")) pk.setCSizeX(getFloat(map, "cSizeX"));
-            if (map.containsKey("cSizeY")) pk.setCSizeY(getFloat(map, "cSizeY"));
-            if (map.containsKey("cSizeZ")) pk.setCSizeZ(getFloat(map, "cSizeZ"));
-            if (map.containsKey("juliaX")) pk.setJuliaX(getFloat(map, "juliaX"));
-            if (map.containsKey("juliaY")) pk.setJuliaY(getFloat(map, "juliaY"));
-            if (map.containsKey("juliaZ")) pk.setJuliaZ(getFloat(map, "juliaZ"));
-            if (map.containsKey("deOffset")) pk.setDeOffset(getFloat(map, "deOffset"));
-            if (map.containsKey("zOffset")) pk.setZOffset(getFloat(map, "zOffset"));
         } else if (params instanceof PolyhedralIFSParams p) {
             if (map.containsKey("polyType")) p.setPolyType(PolyhedralIFSParams.PolyType.valueOf((String)map.get("polyType")));
             if (map.containsKey("maxIterations")) p.setMaxIterations(getInt(map, "maxIterations"));
@@ -371,9 +365,15 @@ public class FractalConfig {
             if (map.containsKey("offsetX")) p.setOffsetX(getFloat(map, "offsetX"));
             if (map.containsKey("offsetY")) p.setOffsetY(getFloat(map, "offsetY"));
             if (map.containsKey("offsetZ")) p.setOffsetZ(getFloat(map, "offsetZ"));
+            if (map.containsKey("shiftX")) p.setShiftX(getFloat(map, "shiftX"));
+            if (map.containsKey("shiftY")) p.setShiftY(getFloat(map, "shiftY"));
+            if (map.containsKey("shiftZ")) p.setShiftZ(getFloat(map, "shiftZ"));
             if (map.containsKey("rot1X")) p.setRot1X(getFloat(map, "rot1X"));
             if (map.containsKey("rot1Y")) p.setRot1Y(getFloat(map, "rot1Y"));
             if (map.containsKey("rot1Z")) p.setRot1Z(getFloat(map, "rot1Z"));
+            if (map.containsKey("rot2X")) p.setRot2X(getFloat(map, "rot2X"));
+            if (map.containsKey("rot2Y")) p.setRot2Y(getFloat(map, "rot2Y"));
+            if (map.containsKey("rot2Z")) p.setRot2Z(getFloat(map, "rot2Z"));
         }
     }
 
