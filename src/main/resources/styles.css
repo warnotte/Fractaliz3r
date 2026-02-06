@@ -1,0 +1,170 @@
+/* Modern Dark Theme for Fractaliz3r */
+.root {
+    -fx-base: #1e1e24;
+    -fx-background-color: #1e1e24;
+    -fx-font-family: "Segoe UI", "Roboto", Helvetica, Arial, sans-serif;
+    -fx-font-size: 12px;
+    -fx-text-fill: #e0e0e0;
+    -fx-accent: #0078d7;
+    -fx-focus-color: #0078d7;
+    -fx-faint-focus-color: #0078d722;
+}
+
+/* ScrollPane & Backgrounds */
+.scroll-pane {
+    -fx-background-color: transparent;
+    -fx-background: #1e1e24;
+    -fx-padding: 0;
+}
+
+.scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.separator *.line {
+    -fx-border-style: solid;
+    -fx-border-width: 1px;
+    -fx-border-color: #3a3a45;
+}
+
+/* Tabs */
+.tab-pane .tab-header-area .tab-header-background {
+    -fx-background-color: #25252e;
+}
+
+.tab-pane .tab {
+    -fx-background-color: #2d2d36;
+    -fx-text-fill: #a0a0a0;
+    -fx-background-radius: 5 5 0 0;
+    -fx-padding: 6 12 6 12;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: #3e3e4a;
+    -fx-text-fill: white;
+    -fx-border-color: #0078d7;
+    -fx-border-width: 0 0 2 0;
+}
+
+/* Buttons */
+.button {
+    -fx-background-color: #3a3a45;
+    -fx-text-fill: white;
+    -fx-background-radius: 4;
+    -fx-cursor: hand;
+    -fx-padding: 5 10 5 10;
+    -fx-border-color: #4a4a55;
+    -fx-border-radius: 4;
+}
+
+.button:hover {
+    -fx-background-color: #4a4a55;
+    -fx-border-color: #5a5a65;
+}
+
+.button:pressed {
+    -fx-background-color: #0078d7;
+    -fx-border-color: #005a9e;
+}
+
+/* Sliders */
+.slider .track {
+    -fx-background-color: #303038;
+    -fx-background-radius: 2;
+}
+
+.slider .thumb {
+    -fx-background-color: #0078d7;
+    -fx-background-radius: 10;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 3, 0, 0, 1);
+}
+
+.slider .thumb:hover {
+    -fx-background-color: #1e8feb;
+    -fx-scale-x: 1.1;
+    -fx-scale-y: 1.1;
+}
+
+/* ComboBox & ColorPicker */
+.combo-box-base {
+    -fx-background-color: #303038;
+    -fx-background-radius: 4;
+    -fx-border-color: #404048;
+    -fx-border-radius: 4;
+}
+
+.combo-box-base:hover {
+    -fx-background-color: #383840;
+}
+
+.combo-box .list-cell {
+    -fx-text-fill: white; 
+}
+
+.combo-box-popup .list-view {
+    -fx-background-color: #25252e;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.4), 8, 0, 0, 2);
+}
+
+.combo-box-popup .list-cell:filled:hover {
+    -fx-background-color: #0078d7;
+    -fx-text-fill: white;
+}
+
+/* CheckBox */
+.check-box .box {
+    -fx-background-color: #303038;
+    -fx-border-color: #505058;
+    -fx-border-radius: 2;
+}
+
+.check-box:selected .mark {
+    -fx-background-color: white;
+}
+
+.check-box:selected .box {
+    -fx-background-color: #0078d7;
+    -fx-border-color: #0078d7;
+}
+
+/* Labels */
+.label {
+    -fx-text-fill: #cccccc;
+}
+
+.title-label {
+    -fx-text-fill: white;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, black, 2, 0, 0, 1);
+}
+
+/* Progress Bar */
+.progress-bar .track {
+    -fx-background-color: #303038;
+}
+
+.progress-bar .bar {
+    -fx-background-color: linear-gradient(to right, #0078d7, #00c6ff);
+    -fx-background-radius: 2;
+}
+
+/* Menu Bar */
+.menu-bar {
+    -fx-background-color: #25252e;
+    -fx-border-color: #15151a;
+    -fx-border-width: 0 0 1 0;
+}
+
+.menu-item .label {
+    -fx-text-fill: white;
+}
+
+.context-menu {
+    -fx-background-color: #25252e;
+    -fx-border-color: #404048;
+}
+
+.menu-item:focused {
+    -fx-background-color: #0078d7;
+}

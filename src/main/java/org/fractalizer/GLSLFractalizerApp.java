@@ -77,6 +77,10 @@ public class GLSLFractalizerApp extends Application {
     private static final long RENDER_DELAY_MS = 100;
     private boolean autoFullQuality = true;
     private volatile boolean exportingAnimation = false;
+    
+    // Eye Candy state
+    private boolean turntableMode = false;
+    private float turntableSpeed = 0.5f;
 
     @Override
     public void start(Stage primaryStage) {
@@ -183,6 +187,9 @@ public class GLSLFractalizerApp extends Application {
         root.setBottom(statusBar);
 
         Scene scene = new Scene(root, 1400, 850);
+        
+        // Apply Modern Dark Theme
+        scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
 
         // Setup navigation controller
         navigation = new NavigationController(
@@ -421,7 +428,20 @@ public class GLSLFractalizerApp extends Application {
         exitItem.setOnAction(e -> Platform.exit());
 
         fileMenu.getItems().addAll(loadItem, saveItem, new SeparatorMenuItem(), exitItem);
-        menuBar.getMenus().add(fileMenu);
+        
+        Menu viewMenu = new Menu("View");
+        CheckMenuItem darkThemeItem = new CheckMenuItem("Modern Dark Theme");
+        darkThemeItem.setSelected(true);
+        darkThemeItem.setOnAction(e -> {
+            if (darkThemeItem.isSelected()) {
+                primaryStage.getScene().getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
+            } else {
+                primaryStage.getScene().getStylesheets().clear();
+            }
+        });
+        viewMenu.getItems().add(darkThemeItem);
+
+        menuBar.getMenus().addAll(fileMenu, viewMenu);
 
         return menuBar;
     }
@@ -439,6 +459,12 @@ public class GLSLFractalizerApp extends Application {
                 if (navigation != null && navigation.processKeyboardInput()) {
                     requestRender();
                     fractalPanel.updatePositionLabel();
+                }
+                
+                // Turntable Auto-Rotation
+                if (turntableMode) {
+                    fractalPanel.getCamera().rotate(turntableSpeed, 0); // Rotate Yaw
+                    requestRender();
                 }
 
                 if (needsRender && (System.currentTimeMillis() - lastRenderTime > RENDER_DELAY_MS)) {
