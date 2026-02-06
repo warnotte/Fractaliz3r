@@ -14,15 +14,20 @@ import java.util.function.Consumer;
  * Controls bloom, chromatic aberration, vignette, film grain, etc.
  * Uses EnhancedSlider for professional control.
  */
-public class PostProcessingPanel extends ScrollPane {
+public class PostProcessingPanel extends ScrollPane implements Refreshable {
 
     private final PostProcessParams params;
     private final Runnable onUpdate;
+    private boolean suppressRender = false;
 
     // Tone mapping
     private ComboBox<String> toneMapCombo;
     private EnhancedSlider exposureSlider;
     private EnhancedSlider saturationSlider;
+    
+    // Color Grading
+    private ComboBox<String> gradingCombo;
+    private EnhancedSlider gradingIntensitySlider;
 
     // Bloom
     private CheckBox bloomCheck;
@@ -65,6 +70,10 @@ public class PostProcessingPanel extends ScrollPane {
 
         // Tone Mapping
         panel.getChildren().add(createToneMappingSection());
+        panel.getChildren().add(new Separator());
+        
+        // Color Grading
+        panel.getChildren().add(createColorGradingSection());
         panel.getChildren().add(new Separator());
 
         // Bloom
@@ -159,6 +168,33 @@ public class PostProcessingPanel extends ScrollPane {
         saturationSlider.setOnAction(v -> { params.saturation = v.floatValue(); onUpdate.run(); });
 
         section.getChildren().addAll(titleLabel, toneMapBox, exposureSlider, saturationSlider);
+        return section;
+    }
+
+    private VBox createColorGradingSection() {
+        VBox section = new VBox(5);
+
+        Label titleLabel = new Label("Color Grading (LUT Styles)");
+        titleLabel.setStyle("-fx-font-weight: bold;");
+
+        // Grading Style
+        HBox styleBox = new HBox(10);
+        Label styleLabel = new Label("Style:");
+        gradingCombo = new ComboBox<>();
+        gradingCombo.getItems().addAll("None", "Cinema (Teal/Orange)", "Vintage", "Matrix", "Neon", "Noir (B&W)");
+        gradingCombo.getSelectionModel().select(params.colorGradingMode);
+        gradingCombo.setOnAction(e -> {
+            params.colorGradingMode = gradingCombo.getSelectionModel().getSelectedIndex();
+            onUpdate.run();
+        });
+        styleBox.getChildren().addAll(styleLabel, gradingCombo);
+
+        // Intensity
+        gradingIntensitySlider = new EnhancedSlider("Intensity", 0.0, 1.0, params.colorGradingIntensity, false);
+        gradingIntensitySlider.setPrecision(2);
+        gradingIntensitySlider.setOnAction(v -> { params.colorGradingIntensity = v.floatValue(); onUpdate.run(); });
+
+        section.getChildren().addAll(titleLabel, styleBox, gradingIntensitySlider);
         return section;
     }
 
@@ -280,12 +316,28 @@ public class PostProcessingPanel extends ScrollPane {
     }
 
     /**
+     * Refresh all UI controls from current params.
+     */
+    @Override
+    public void refreshFromParams(boolean suppress) {
+        this.suppressRender = suppress;
+        try {
+            refreshUI();
+        } finally {
+            this.suppressRender = false;
+        }
+    }
+
+    /**
      * Refresh UI to match current params (after preset change).
      */
     public void refreshUI() {
         toneMapCombo.setValue(getToneMapName(params.toneMapMode));
         exposureSlider.setValue(params.exposure);
         saturationSlider.setValue(params.saturation);
+        
+        gradingCombo.getSelectionModel().select(params.colorGradingMode);
+        gradingIntensitySlider.setValue(params.colorGradingIntensity);
 
         bloomCheck.setSelected(params.bloomEnabled);
         bloomIntensitySlider.setValue(params.bloomIntensity);

@@ -352,6 +352,9 @@ public class GLSLEngine implements AutoCloseable {
             postProcessProgram.setUniform("sharpenEnabled", pp.sharpenEnabled ? 1 : 0);
             postProcessProgram.setUniform("sharpenIntensity", pp.sharpenIntensity);
             postProcessProgram.setUniform("saturation", pp.saturation);
+            
+            postProcessProgram.setUniform("colorGradingMode", pp.colorGradingMode);
+            postProcessProgram.setUniform("colorGradingIntensity", pp.colorGradingIntensity);
 
             glBindVertexArray(quadVAO);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -1148,6 +1151,10 @@ public class GLSLEngine implements AutoCloseable {
         public float sharpenIntensity = 0.3f;
 
         public float saturation = 1.0f;    // 0.0 - 2.0 (default 1.0)
+        
+        // Color Grading
+        public int colorGradingMode = 0; // 0=None, 1=Cinema, 2=Vintage, 3=Matrix, 4=Neon, 5=B&W
+        public float colorGradingIntensity = 1.0f;
 
         /**
          * Create default parameters (no effects).
@@ -1175,6 +1182,8 @@ public class GLSLEngine implements AutoCloseable {
             copy.sharpenEnabled = this.sharpenEnabled;
             copy.sharpenIntensity = this.sharpenIntensity;
             copy.saturation = this.saturation;
+            copy.colorGradingMode = this.colorGradingMode;
+            copy.colorGradingIntensity = this.colorGradingIntensity;
             return copy;
         }
 
@@ -1197,6 +1206,8 @@ public class GLSLEngine implements AutoCloseable {
             filmGrainIntensity = 0.02f;
             sharpenEnabled = false;
             saturation = 1.1f;
+            colorGradingMode = 1; // Cinema
+            colorGradingIntensity = 0.8f;
         }
 
         /**
@@ -1215,6 +1226,7 @@ public class GLSLEngine implements AutoCloseable {
             sharpenEnabled = true;
             sharpenIntensity = 0.2f;
             saturation = 1.0f;
+            colorGradingMode = 0; // None
         }
 
         /**
@@ -1235,6 +1247,8 @@ public class GLSLEngine implements AutoCloseable {
             filmGrainEnabled = false;
             sharpenEnabled = false;
             saturation = 1.4f;
+            colorGradingMode = 4; // Neon
+            colorGradingIntensity = 0.6f;
         }
 
         /**
@@ -1257,6 +1271,8 @@ public class GLSLEngine implements AutoCloseable {
             sharpenEnabled = false;
             sharpenIntensity = 0.3f;
             saturation = 1.0f;
+            colorGradingMode = 0;
+            colorGradingIntensity = 1.0f;
         }
     }
 }

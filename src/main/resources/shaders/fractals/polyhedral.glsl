@@ -28,14 +28,14 @@ struct OrbitTrap {
 // ============================================================================
 
 // Dodecahedron constants
-const float _IKVNORM_ = 0.35682208977; // 1.0 / sqrt( (phi*(1+phi))^2 + (phi*phi-1)^2 + (1+phi)^2 )
+const float _IKVNORM_ = 0.19098593171; // 1.0 / sqrt( (phi*(1+phi))^2 + (phi*phi-1)^2 + (1+phi)^2 )
 const vec3 phi3 = vec3(0.5, 0.5 / phi, 0.5 * phi);
 const vec3 c_3  = vec3(phi * (1.0 + phi) * _IKVNORM_, (phi * phi - 1.0) * _IKVNORM_, (1.0 + phi) * _IKVNORM_);
 
-// Icosahedron constants
-const vec3 n1_iso = vec3(-phi, phi-1.0, 1.0); // Will be normalized in function
-const vec3 n2_iso = vec3(1.0, -phi, phi+1.0);
-const vec3 n3_iso = vec3(0.0, 0.0, -1.0);
+// Icosahedron constants (pre-normalized: |n1|=2, |n2|=2*phi, |n3|=1)
+const vec3 n1_ico = vec3(-0.80901699437, 0.30901699437, 0.5);
+const vec3 n2_ico = vec3( 0.30901699437, -0.5, 0.80901699437);
+const vec3 n3_ico = vec3(0.0, 0.0, -1.0);
 
 float polyDE(vec3 p, out OrbitTrap trap) {
     trap.minDist = 1e10;
@@ -48,45 +48,45 @@ float polyDE(vec3 p, out OrbitTrap trap) {
     int i;
     for (i = 0; i < maxIterations; i++) {
         w *= fractalRotation1;
-        w = abs(w + shift) - shift;
-        
+
         if (polyType == 0) { // Octahedral
+            // Box fold (abs) required before sorting for octahedral symmetry
+            w = abs(w + shift) - shift;
             if (w.x < w.y) w.xy = w.yx;
             if (w.x < w.z) w.xz = w.zx;
             if (w.y < w.z) w.yz = w.zy;
-        } 
+        }
         else if (polyType == 1) { // Dodecahedron
+            // 5 reflection fold planes handle symmetry directly (no abs needed)
             float t;
             t = w.x * phi3.z + w.y * phi3.y - w.z * phi3.x;
             if (t < 0.0) w += vec3(-2.0, -2.0, 2.0) * t * phi3.zyx;
-            
+
             t = -w.x * phi3.x + w.y * phi3.z + w.z * phi3.y;
             if (t < 0.0) w += vec3(2.0, -2.0, -2.0) * t * phi3.xzy;
-            
+
             t = w.x * phi3.y - w.y * phi3.x + w.z * phi3.z;
             if (t < 0.0) w += vec3(-2.0, 2.0, -2.0) * t * phi3.yxz;
-            
+
             t = -w.x * c_3.x + w.y * c_3.y + w.z * c_3.z;
             if (t < 0.0) w += vec3(2.0, -2.0, -2.0) * t * c_3.xyz;
-            
+
             t = w.x * c_3.z - w.y * c_3.x + w.z * c_3.y;
             if (t < 0.0) w += vec3(-2.0, 2.0, -2.0) * t * c_3.zxy;
         }
         else if (polyType == 2) { // Icosahedron
-            float t;
-            vec3 n1 = normalize(n1_iso);
-            vec3 n2 = normalize(n2_iso);
-            vec3 n3 = normalize(n3_iso);
-            
+            // Icosahedron uses its own abs for symmetry
             w = abs(w);
-            t = dot(w, n1); if (t > 0.0) w -= 2.0 * t * n1;
-            t = dot(w, n2); if (t > 0.0) w -= 2.0 * t * n2;
-            t = dot(w, n3); if (t > 0.0) w -= 2.0 * t * n3;
-            t = dot(w, n2); if (t > 0.0) w -= 2.0 * t * n2;
+            float t;
+            t = dot(w, n1_ico); if (t > 0.0) w -= 2.0 * t * n1_ico;
+            t = dot(w, n2_ico); if (t > 0.0) w -= 2.0 * t * n2_ico;
+            t = dot(w, n3_ico); if (t > 0.0) w -= 2.0 * t * n3_ico;
+            t = dot(w, n2_ico); if (t > 0.0) w -= 2.0 * t * n2_ico;
         }
         else if (polyType == 3) { // Tetrahedron
+            // Conditional negate-swap folds (NO abs - it would make conditions always false)
             if (w.x + w.y < 0.0) w.xy = -w.yx;
-            if (w.x + w.z < 0.0) w.xz = -w.zx; 
+            if (w.x + w.z < 0.0) w.xz = -w.zx;
             if (w.y + w.z < 0.0) w.yz = -w.zy;
         }
 

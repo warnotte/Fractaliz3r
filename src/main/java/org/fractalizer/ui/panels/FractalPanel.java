@@ -211,6 +211,47 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         polyRot2ZSlider = new EnhancedSlider("Rot2 Z", -180, 180, 0, false);
         polyRot2ZSlider.setOnAction(v -> { if(!suppressRender && params instanceof PolyhedralIFSParams p) p.setRot2Z(v.floatValue()); renderCallback.requestRender(); });
 
+        // Presets
+        Label presetLabel = new Label("Presets:");
+        presetLabel.setStyle("-fx-font-weight: bold;");
+
+        Button octaClassicBtn = new Button("Octa Classic");
+        octaClassicBtn.setOnAction(e -> applyPolyPreset(
+            PolyhedralIFSParams.PolyType.OCTAHEDRAL, 15, 2.0, 1,1,1, 0,0,0, 0,0,0, 0,0,0));
+
+        Button twistedOctaBtn = new Button("Twisted Octa");
+        twistedOctaBtn.setOnAction(e -> applyPolyPreset(
+            PolyhedralIFSParams.PolyType.OCTAHEDRAL, 15, 2.0, 1,1,1, 0,0,0, 15,10,0, 0,0,0));
+
+        Button sierpTetraBtn = new Button("Sierpinski Tetra");
+        sierpTetraBtn.setOnAction(e -> applyPolyPreset(
+            PolyhedralIFSParams.PolyType.TETRAHEDRON, 15, 2.0, 1,1,1, 0,0,0, 0,0,0, 0,0,0));
+
+        Button icosaCrystalBtn = new Button("Icosa Crystal");
+        icosaCrystalBtn.setOnAction(e -> applyPolyPreset(
+            PolyhedralIFSParams.PolyType.ICOSAHEDRON, 15, 2.0, 1,1,1, 0,0,0, 5,5,0, 0,0,0));
+
+        Button dodecaFlowerBtn = new Button("Dodeca Flower");
+        dodecaFlowerBtn.setOnAction(e -> applyPolyPreset(
+            PolyhedralIFSParams.PolyType.DODECAHEDRON, 12, 2.0, 1,1,1, 0,0,0, 6,0,4, 0,3,0));
+
+        Button alienBtn = new Button("Alien Artifact");
+        alienBtn.setOnAction(e -> applyPolyPreset(
+            PolyhedralIFSParams.PolyType.OCTAHEDRAL, 18, 2.3, 1.2,0.8,1.0, 0.1,-0.05,0.1, 12,8,5, -5,3,0));
+
+        Button coralBtn = new Button("Deep Coral");
+        coralBtn.setOnAction(e -> applyPolyPreset(
+            PolyhedralIFSParams.PolyType.ICOSAHEDRON, 16, 1.9, 1.0,1.0,1.0, 0,0,0, 8,12,0, 3,-3,0));
+
+        Button cathedralBtn = new Button("Cathedral");
+        cathedralBtn.setOnAction(e -> applyPolyPreset(
+            PolyhedralIFSParams.PolyType.DODECAHEDRON, 15, 2.0, 1,1.15,1, 0,0,0, 0,5,0, 3,0,0));
+
+        javafx.scene.layout.HBox presetRow1 = new javafx.scene.layout.HBox(5);
+        presetRow1.getChildren().addAll(octaClassicBtn, twistedOctaBtn, sierpTetraBtn, icosaCrystalBtn);
+        javafx.scene.layout.HBox presetRow2 = new javafx.scene.layout.HBox(5);
+        presetRow2.getChildren().addAll(dodecaFlowerBtn, alienBtn, coralBtn, cathedralBtn);
+
         polyhedralControls.getChildren().addAll(
             typeLabel, polyTypeCombo,
             polyIterSlider, polyScaleSlider,
@@ -221,10 +262,34 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             new Separator(),
             polyRot1XSlider, polyRot1YSlider, polyRot1ZSlider,
             new Separator(),
-            polyRot2XSlider, polyRot2YSlider, polyRot2ZSlider
+            polyRot2XSlider, polyRot2YSlider, polyRot2ZSlider,
+            new Separator(),
+            presetLabel, presetRow1, presetRow2
         );
         polyhedralControls.setVisible(false);
         polyhedralControls.setManaged(false);
+    }
+
+    private void applyPolyPreset(PolyhedralIFSParams.PolyType type, int iter, double scale,
+                                  double ox, double oy, double oz,
+                                  double sx, double sy, double sz,
+                                  double r1x, double r1y, double r1z,
+                                  double r2x, double r2y, double r2z) {
+        polyTypeCombo.setValue(type);
+        polyIterSlider.setValue(iter);
+        polyScaleSlider.setValue(scale);
+        polyOffXSlider.setValue(ox);
+        polyOffYSlider.setValue(oy);
+        polyOffZSlider.setValue(oz);
+        polyShiftXSlider.setValue(sx);
+        polyShiftYSlider.setValue(sy);
+        polyShiftZSlider.setValue(sz);
+        polyRot1XSlider.setValue(r1x);
+        polyRot1YSlider.setValue(r1y);
+        polyRot1ZSlider.setValue(r1z);
+        polyRot2XSlider.setValue(r2x);
+        polyRot2YSlider.setValue(r2y);
+        polyRot2ZSlider.setValue(r2z);
     }
 
     private void createJulia3dControls() {

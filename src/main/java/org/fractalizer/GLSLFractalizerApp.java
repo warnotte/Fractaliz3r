@@ -28,6 +28,8 @@ import org.fractalizer.ui.timeline.TimelineWidget;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * GLSL-based JavaFX application for Fractaliz3r.
@@ -60,6 +62,9 @@ public class GLSLFractalizerApp extends Application {
     private GLSLDevicePanel devicePanel;
     private PostProcessingPanel postProcessPanel;
     private EnvironmentPanel environmentPanel;
+
+    // List of panels that need refreshing when config changes
+    private final List<Refreshable> refreshablePanels = new ArrayList<>();
 
     // Animation manager (handles timeline and keyframes)
     private AnimationManager animationManager;
@@ -294,6 +299,7 @@ public class GLSLFractalizerApp extends Application {
 
         // Fractal tab
         fractalPanel = new FractalPanel(controller, initialParams, this::requestRender);
+        refreshablePanels.add(fractalPanel);
         Tab fractalTab = new Tab("Fractal", fractalPanel);
 
         // Lighting tab
@@ -301,6 +307,7 @@ public class GLSLFractalizerApp extends Application {
             () -> fractalPanel.getParams(),
             this::requestRender
         );
+        refreshablePanels.add(lightingPanel);
         Tab lightingTab = new Tab("Lighting", lightingPanel);
 
         // Material tab (New Unified System)
@@ -308,6 +315,7 @@ public class GLSLFractalizerApp extends Application {
             () -> fractalPanel.getParams(),
             this::requestRender
         );
+        refreshablePanels.add(materialPanel);
         Tab materialTab = new Tab("Material", materialPanel);
 
         // Quality tab - with samples control for GLSL
@@ -316,6 +324,7 @@ public class GLSLFractalizerApp extends Application {
             this::requestRender,
             auto -> this.autoFullQuality = auto
         );
+        refreshablePanels.add(qualityPanel);
         Tab qualityTab = new Tab("Quality", qualityPanel);
 
         // Export tab
@@ -336,10 +345,12 @@ public class GLSLFractalizerApp extends Application {
         // Post-processing tab
         PostProcessParams postProcessParams = controller.getEngine().getPostProcessParams();
         postProcessPanel = new PostProcessingPanel(postProcessParams, this::requestRender);
+        refreshablePanels.add(postProcessPanel);
         Tab postProcessTab = new Tab("FX", postProcessPanel);
 
         // Environment tab
-        environmentPanel = new EnvironmentPanel(controller.getEngine(), this::requestRender);
+        environmentPanel = new EnvironmentPanel(controller.getEngine(), () -> (AbstractFractalParams) controller.getParams(), this::requestRender);
+        refreshablePanels.add(environmentPanel);
         Tab environmentTab = new Tab("Env", environmentPanel);
 
         tabPane.getTabs().addAll(fractalTab, lightingTab, materialTab, qualityTab, postProcessTab, environmentTab, exportTab, deviceTab);
@@ -593,10 +604,9 @@ public class GLSLFractalizerApp extends Application {
             fractalPanel.setParams(params);
 
             // Refresh all UI panels
-            fractalPanel.refreshFromParams();
-            lightingPanel.refreshFromParams();
-            materialPanel.refreshFromParams();
-            qualityPanel.refreshFromParams();
+            for (Refreshable pnl : refreshablePanels) {
+                pnl.refreshFromParams();
+            }
 
             // Import animation if present
             if (animationManager != null && config.animation != null) {

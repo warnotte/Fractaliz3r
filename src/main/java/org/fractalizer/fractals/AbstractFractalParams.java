@@ -79,6 +79,12 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float roughness;
     protected float skyIntensity;
     protected float indirectMultiplier;  // Controls indirect light contribution (0 = no GI, 1 = full GI)
+    
+    // Sky
+    protected int skyType; // 0=Clouds, 1=Space, 2=Ocean, 3=Studio
+    protected float cloudDensity;
+    protected float skySpeed; // Renamed to "Variation" in UI
+    protected float skyTime;  // Manual time control
 
     // Material System
     // Type: 0 = Lambertian (diffuse), 1 = Metallic, 2 = Glass (dielectric)
@@ -153,7 +159,11 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.maxBounces = 4;
         this.roughness = 0.5f;
         this.skyIntensity = 1.0f;
-        this.indirectMultiplier = 0.5f;  // 50% indirect light by default (darker shadows)
+        this.indirectMultiplier = 0.5f;
+        this.skyType = 0; // Default to Clouds
+        this.cloudDensity = 0.5f;
+        this.skySpeed = 1.0f; // Variation scale
+        this.skyTime = 0.0f;
 
         // Material defaults (Lambertian diffuse)
         this.materialType = MATERIAL_LAMBERTIAN;
@@ -219,6 +229,10 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.roughness = this.roughness;
         target.skyIntensity = this.skyIntensity;
         target.indirectMultiplier = this.indirectMultiplier;
+        target.skyType = this.skyType;
+        target.cloudDensity = this.cloudDensity;
+        target.skySpeed = this.skySpeed;
+        target.skyTime = this.skyTime;
 
         // Copy material
         target.materialType = this.materialType;
@@ -370,6 +384,16 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setSkyIntensity(float intensity) { this.skyIntensity = intensity; }
     public float getIndirectMultiplier() { return indirectMultiplier; }
     public void setIndirectMultiplier(float multiplier) { this.indirectMultiplier = Math.max(0, Math.min(1, multiplier)); }
+
+    // Sky
+    public int getSkyType() { return skyType; }
+    public void setSkyType(int type) { this.skyType = type; }
+    public float getCloudDensity() { return cloudDensity; }
+    public void setCloudDensity(float density) { this.cloudDensity = density; }
+    public float getSkySpeed() { return skySpeed; }
+    public void setSkySpeed(float speed) { this.skySpeed = speed; }
+    public float getSkyTime() { return skyTime; }
+    public void setSkyTime(float time) { this.skyTime = time; }
 
     // Material
     public int getMaterialType() { return materialType; }

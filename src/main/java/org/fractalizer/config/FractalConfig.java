@@ -110,6 +110,12 @@ public class FractalConfig {
         public float roughness = 0.5f;
         public float skyIntensity = 1.0f;
         public float indirectMultiplier = 0.5f;
+        
+        // Procedural Sky
+        public int skyType = 0;
+        public float cloudDensity = 0.5f;
+        public float skySpeed = 1.0f;
+        public float skyTime = 0.0f;
 
         // Motion Blur
         public float shutterAngle = 180f;
@@ -195,6 +201,10 @@ public class FractalConfig {
         config.effects.roughness = params.getRoughness();
         config.effects.skyIntensity = params.getSkyIntensity();
         config.effects.indirectMultiplier = params.getIndirectMultiplier();
+        config.effects.skyType = params.getSkyType();
+        config.effects.cloudDensity = params.getCloudDensity();
+        config.effects.skySpeed = params.getSkySpeed();
+        config.effects.skyTime = params.getSkyTime();
         config.effects.shutterAngle = params.getShutterAngle();
 
         // Fractal-specific parameters
@@ -254,6 +264,10 @@ public class FractalConfig {
         params.setRoughness(effects.roughness);
         params.setSkyIntensity(effects.skyIntensity);
         params.setIndirectMultiplier(effects.indirectMultiplier);
+        params.setSkyType(effects.skyType);
+        params.setCloudDensity(effects.cloudDensity);
+        params.setSkySpeed(effects.skySpeed);
+        params.setSkyTime(effects.skyTime);
         params.setShutterAngle(effects.shutterAngle);
 
         // Fractal-specific parameters

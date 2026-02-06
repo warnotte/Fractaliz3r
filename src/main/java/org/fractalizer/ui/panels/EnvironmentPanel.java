@@ -6,24 +6,36 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import org.fractalizer.engine.GLSLEngine;
+import org.fractalizer.fractals.AbstractFractalParams;
+import org.fractalizer.ui.components.EnhancedSlider;
 
 import java.io.File;
+import java.util.function.Supplier;
 
 /**
  * Panel for environment map settings.
- * Allows loading HDRI images for environment lighting.
+ * Allows loading HDRI images or configuring a dynamic procedural sky.
  */
-public class EnvironmentPanel extends ScrollPane {
+public class EnvironmentPanel extends ScrollPane implements Refreshable {
 
     private final GLSLEngine engine;
+    private final Supplier<AbstractFractalParams> paramsSupplier;
     private final Runnable onUpdate;
+    private boolean suppressRender = false;
 
     private Label statusLabel;
-    private Slider rotationSlider;
-    private Slider lightingMixSlider;
+    private EnhancedSlider rotationSlider;
+    private EnhancedSlider lightingMixSlider;
+    
+    // Procedural Sky controls
+    private ComboBox<String> skyTypeCombo;
+    private EnhancedSlider cloudDensitySlider;
+    private EnhancedSlider skySpeedSlider; // Variation
+    private EnhancedSlider skyTimeSlider;
 
-    public EnvironmentPanel(GLSLEngine engine, Runnable onUpdate) {
+    public EnvironmentPanel(GLSLEngine engine, Supplier<AbstractFractalParams> paramsSupplier, Runnable onUpdate) {
         this.engine = engine;
+        this.paramsSupplier = paramsSupplier;
         this.onUpdate = onUpdate;
 
         setContent(createContent());
@@ -35,19 +47,21 @@ public class EnvironmentPanel extends ScrollPane {
         panel.setPadding(new Insets(10));
 
         // Title
-        Label titleLabel = new Label("Environment Map");
+        Label titleLabel = new Label("Environment & Sky");
         titleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
 
         // Status
         statusLabel = new Label("Using procedural sky");
         statusLabel.setStyle("-fx-font-style: italic;");
 
-        // Load button
+        // HDRI Section
+        Label hdriLabel = new Label("HDRI Environment Map");
+        hdriLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
+
         Button loadButton = new Button("Load HDRI...");
         loadButton.setMaxWidth(Double.MAX_VALUE);
         loadButton.setOnAction(e -> loadEnvironmentMap());
 
-        // Clear button
         Button clearButton = new Button("Use Procedural Sky");
         clearButton.setMaxWidth(Double.MAX_VALUE);
         clearButton.setOnAction(e -> {
@@ -58,76 +72,83 @@ public class EnvironmentPanel extends ScrollPane {
 
         HBox buttonBox = new HBox(5, loadButton, clearButton);
 
-        // Rotation slider
-        Label rotationLabel = new Label("Rotation:");
-        rotationLabel.setStyle("-fx-font-weight: bold;");
-
-        Label rotationValueLabel = new Label("0°");
-        rotationSlider = new Slider(0, 360, 0);
-        rotationSlider.setShowTickLabels(true);
+        rotationSlider = new EnhancedSlider("HDRI Rotation", 0, 360, 0, true);
+        rotationSlider.showTickMarks(true);
         rotationSlider.setMajorTickUnit(90);
-        rotationSlider.valueProperty().addListener((obs, old, val) -> {
-            rotationValueLabel.setText(String.format("%.0f°", val.doubleValue()));
-            engine.setEnvRotation((float) Math.toRadians(val.doubleValue()));
+        rotationSlider.setOnAction(v -> {
+            engine.setEnvRotation((float) Math.toRadians(v));
             onUpdate.run();
         });
 
-        HBox rotationBox = new HBox(10, rotationSlider, rotationValueLabel);
-
-        // Lighting Mix slider - controls blend between directional and HDRI lighting
-        Label lightingMixLabel = new Label("Lighting Mix:");
-        lightingMixLabel.setStyle("-fx-font-weight: bold;");
-
-        Label lightingMixValueLabel = new Label("50%");
-        lightingMixSlider = new Slider(0, 100, 50);
-        lightingMixSlider.setShowTickLabels(true);
+        lightingMixSlider = new EnhancedSlider("Lighting Mix %", 0, 100, 50, true);
+        lightingMixSlider.showTickMarks(true);
         lightingMixSlider.setMajorTickUnit(25);
-        lightingMixSlider.valueProperty().addListener((obs, old, val) -> {
-            lightingMixValueLabel.setText(String.format("%.0f%%", val.doubleValue()));
-            engine.setEnvLightingMix((float) (val.doubleValue() / 100.0));
+        lightingMixSlider.setOnAction(v -> {
+            engine.setEnvLightingMix((float) (v / 100.0));
             onUpdate.run();
         });
 
-        HBox lightingMixBox = new HBox(10, lightingMixSlider, lightingMixValueLabel);
+        // Procedural Sky Section
+        Label skyLabel = new Label("Dynamic Procedural Sky");
+        skyLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
 
-        Label lightingMixInfoLabel = new Label(
-            "0% = Directional light only\n" +
-            "100% = Full HDRI lighting"
-        );
-        lightingMixInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        // Sky Type
+        HBox typeBox = new HBox(10);
+        Label typeLabel = new Label("Type:");
+        skyTypeCombo = new ComboBox<>();
+        skyTypeCombo.getItems().addAll("Clouds", "Deep Space", "Ocean", "Studio");
+        skyTypeCombo.setValue("Clouds");
+        skyTypeCombo.setMaxWidth(Double.MAX_VALUE);
+        skyTypeCombo.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setSkyType(skyTypeCombo.getSelectionModel().getSelectedIndex());
+                onUpdate.run();
+            }
+        });
+        typeBox.getChildren().addAll(typeLabel, skyTypeCombo);
+
+        cloudDensitySlider = new EnhancedSlider("Density", 0, 1, 0.5, false);
+        cloudDensitySlider.setPrecision(2);
+        cloudDensitySlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setCloudDensity(v.floatValue());
+                onUpdate.run();
+            }
+        });
+
+        skySpeedSlider = new EnhancedSlider("Variation Scale", 0.1, 5.0, 1.0, false);
+        skySpeedSlider.setPrecision(2);
+        skySpeedSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setSkySpeed(v.floatValue());
+                onUpdate.run();
+            }
+        });
+        
+        skyTimeSlider = new EnhancedSlider("Time (Animation)", 0, 100, 0.0, false);
+        skyTimeSlider.setPrecision(2);
+        skyTimeSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setSkyTime(v.floatValue());
+                onUpdate.run();
+            }
+        });
 
         // Info
         Label infoLabel = new Label(
-            "Load an equirectangular HDRI image for\n" +
-            "realistic environment lighting.\n\n" +
-            "Supported formats: PNG, JPG, HDR\n\n" +
-            "Free HDRIs available at:\n" +
-            "• polyhaven.com/hdris\n" +
-            "• hdrihaven.com"
+            "Procedural sky uses FBM noise clouds.\n" +
+            "HDRI provides realistic 360° lighting."
         );
         infoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
 
-        // Separator
-        Separator sep = new Separator();
-
-        // Sky intensity is already in Quality panel via path tracing settings
-        Label noteLabel = new Label("Tip: Adjust 'Sky Intensity' in the\nQuality tab for brightness control.");
-        noteLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
-
         panel.getChildren().addAll(
-            titleLabel,
-            statusLabel,
-            buttonBox,
-            sep,
-            rotationLabel,
-            rotationBox,
+            titleLabel, statusLabel,
             new Separator(),
-            lightingMixLabel,
-            lightingMixBox,
-            lightingMixInfoLabel,
+            hdriLabel, buttonBox, rotationSlider, lightingMixSlider,
             new Separator(),
-            infoLabel,
-            noteLabel
+            skyLabel, typeBox, cloudDensitySlider, skySpeedSlider, skyTimeSlider,
+            new Separator(),
+            infoLabel
         );
 
         return panel;
@@ -146,6 +167,34 @@ public class EnvironmentPanel extends ScrollPane {
             engine.loadEnvironmentMap(file.getAbsolutePath());
             statusLabel.setText("Loaded: " + file.getName());
             onUpdate.run();
+        }
+    }
+
+    private AbstractFractalParams getParams() {
+        return paramsSupplier.get();
+    }
+
+    @Override
+    public void refreshFromParams(boolean suppress) {
+        this.suppressRender = suppress;
+        try {
+            AbstractFractalParams p = getParams();
+            skyTypeCombo.getSelectionModel().select(p.getSkyType());
+            cloudDensitySlider.setValue(p.getCloudDensity());
+            skySpeedSlider.setValue(p.getSkySpeed());
+            skyTimeSlider.setValue(p.getSkyTime());
+            
+            // Re-sync engine state if needed
+            rotationSlider.setValue(Math.toDegrees(engine.getEnvRotation()));
+            lightingMixSlider.setValue(engine.getEnvLightingMix() * 100.0);
+            
+            if (engine.isEnvMapLoaded()) {
+                statusLabel.setText("HDRI Map Loaded");
+            } else {
+                statusLabel.setText("Using procedural sky");
+            }
+        } finally {
+            this.suppressRender = false;
         }
     }
 }

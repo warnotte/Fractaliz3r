@@ -4,12 +4,13 @@
  * Post-processing shader for Fractaliz3r
  *
  * Effects:
- * - ACES/Reinhard/Filmic tone mapping
+ * - Tone mapping (ACES/Reinhard/Filmic)
+ * - Color Grading (Procedural LUTs: Cinema, Vintage, Matrix, Neon, B&W)
  * - Bloom (bright areas glow)
  * - Chromatic aberration (color fringing)
  * - Vignette (darkened edges)
- * - Film grain (optional)
- * - Sharpening (optional)
+ * - Film grain
+ * - Sharpening
  */
 
 in vec2 uv;
@@ -27,6 +28,10 @@ uniform vec2 resolution;
 // Post-processing parameters
 uniform int toneMapMode;           // 0=ACES, 1=Reinhard, 2=Filmic, 3=None
 uniform float exposure;            // Exposure adjustment (default 1.0)
+
+// Color Grading
+uniform int colorGradingMode;      // 0=None, 1=Cinema, 2=Vintage, 3=Matrix, 4=Neon, 5=B&W
+uniform float colorGradingIntensity;
 
 uniform int bloomEnabled;          // 0=off, 1=on
 uniform float bloomIntensity;      // Bloom strength (default 0.5)
@@ -47,6 +52,54 @@ uniform int sharpenEnabled;
 uniform float sharpenIntensity;    // 0.0 - 1.0
 
 uniform float saturation;          // 0.0 - 2.0 (default 1.0)
+
+// ============================================================================
+// Color Grading Algorithms (Procedural LUTs)
+// ============================================================================
+
+vec3 liftGammaGain(vec3 color, vec3 lift, vec3 gamma, vec3 gain) {
+    color = color * (1.5 - 0.5 * lift) + 0.5 * lift - 0.5;
+    color = clamp(color, 0.0, 1.0);
+    color = pow(color, 1.0 / gamma);
+    return color * gain;
+}
+
+vec3 applyColorGrading(vec3 color) {
+    vec3 graded = color;
+    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+
+    if (colorGradingMode == 1) { // Cinema (Teal & Orange)
+        // Push shadows to Teal, Highlights to Orange
+        vec3 shadows = vec3(0.0, 0.1, 0.15); // Teal
+        vec3 midtones = vec3(1.0, 0.9, 0.8); // Warm
+        vec3 highlights = vec3(1.2, 1.1, 1.0); // Bright warm
+        
+        graded = mix(shadows, highlights, luma);
+        graded = mix(graded, color, 0.5); // Blend with original
+        graded *= vec3(1.0, 0.95, 0.9); // Global warm tint
+        graded = pow(graded, vec3(1.1)); // Contrast
+    } 
+    else if (colorGradingMode == 2) { // Vintage (Sepia/Faded)
+        vec3 sepia = vec3(1.2, 1.0, 0.8) * luma;
+        graded = mix(color, sepia, 0.6);
+        graded = pow(graded, vec3(0.9, 1.0, 1.1)); // Lift blacks (blueish shadows)
+    }
+    else if (colorGradingMode == 3) { // Matrix (Green Tint)
+        vec3 green = vec3(0.5, 1.2, 0.5) * luma;
+        graded = mix(color, green, 0.7);
+        graded *= vec3(0.8, 1.2, 0.8);
+    }
+    else if (colorGradingMode == 4) { // Neon (High Contrast, Purple/Blue)
+        graded = pow(color, vec3(1.2)); // Increase contrast
+        graded *= vec3(1.1, 0.8, 1.2); // Purple tint
+    }
+    else if (colorGradingMode == 5) { // B&W (Noir)
+        graded = vec3(luma);
+        graded = (graded - 0.5) * 1.3 + 0.5; // High contrast
+    }
+
+    return mix(color, graded, colorGradingIntensity);
+}
 
 // ============================================================================
 // Color Adjustments
@@ -197,21 +250,23 @@ void main() {
 
     // Sharpening (before tone mapping)
     if (sharpenEnabled != 0 && sharpenIntensity > 0.0001) {
-        // Create a normalized version for sharpening
         vec3 sharpened = sharpen(accumTexture, uv, texelSize, sharpenIntensity);
         sharpened /= float(max(sampleCount, 1));
         sharpened *= exposure;
-        // Blend with chromatic aberration result
         color = mix(color, sharpened, 0.5);
     }
 
     // Only apply effects for final render mode
     if (renderMode == 0) {
-        // Apply saturation before tone mapping for better vibrance
-        // Dynamic saturation boost: slightly increase saturation for very high sample counts
+        // Dynamic saturation boost
         float dynamicSat = saturation;
         if (sampleCount > 64) dynamicSat *= 1.0 + min(0.2, (float(sampleCount) - 64.0) / 1000.0);
         color = adjustSaturation(color, dynamicSat);
+        
+        // --- NEW: Color Grading (Procedural LUTs) ---
+        if (colorGradingMode > 0) {
+            color = applyColorGrading(color);
+        }
 
         // Tone mapping
         color = applyToneMap(color, toneMapMode);
@@ -219,17 +274,16 @@ void main() {
         // Gamma correction
         color = pow(color, vec3(1.0 / 2.2));
 
-        // Film grain (after gamma for natural look)
+        // Film grain
         if (filmGrainEnabled != 0 && filmGrainIntensity > 0.0001) {
             color = filmGrain(color, uv, filmGrainIntensity, filmGrainTime);
         }
 
-        // Vignette (last - affects final brightness)
+        // Vignette
         if (vignetteEnabled != 0 && vignetteIntensity > 0.0001) {
             color *= vignette(uv, vignetteIntensity, vignetteSoftness);
         }
     }
-    // Debug modes: output values without post-processing
 
     FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }

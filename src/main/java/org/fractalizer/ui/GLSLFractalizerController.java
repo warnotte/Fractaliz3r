@@ -458,6 +458,12 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("skyIntensity", params.getSkyIntensity());
             uniforms.put("indirectMultiplier", params.getIndirectMultiplier());
 
+            // Sky
+            uniforms.put("skyType", params.getSkyType());
+            uniforms.put("cloudDensity", params.getCloudDensity());
+            uniforms.put("skySpeed", params.getSkySpeed());
+            uniforms.put("skyTime", params.getSkyTime());
+
             // Material System
             uniforms.put("materialType", params.getMaterialType());
             uniforms.put("metalness", params.getMetalness());
