@@ -87,11 +87,14 @@ uniform int useEnvMap;
 uniform float envRotation;
 uniform float envLightingMix;
 
-uniform int skyType; 
+uniform int skyType;
 uniform float cloudDensity;
-uniform float skySpeed; 
+uniform float skySpeed;
 uniform float skyTime;
 uniform float skyParallax;
+
+// Gradient Palette (1D texture)
+uniform sampler2D paletteTexture;
 
 // Volumetric Fog
 uniform int volumetricFogEnabled;
@@ -174,18 +177,14 @@ uint initRandom(vec2 fragCoord, int sampleIdx) {
 // Palette & Material
 // ============================================================================
 
-vec3 palette(float t, vec3 a, vec3 b, vec3 c, vec3 d) {
-    return a + b * cos(TAU * (c * t + d));
+// Environment palette — clamp to avoid wrap discontinuity at edges
+vec3 getSmoothPalette(float t) {
+    return texture(paletteTexture, vec2(clamp(t, 0.0, 1.0), 0.5)).rgb;
 }
 
+// Fractal palette — fract for cyclic wrapping on orbit traps
 vec3 getPresetPalette(float t) {
-    if (paletteIndex == 0) return palette(t, vec3(0.5), vec3(0.5), vec3(1.0), baseHue);
-    if (paletteIndex == 1) return palette(t, vec3(0.5, 0.5, 0.5), vec3(0.5, 0.5, 0.5), vec3(1.0, 1.0, 1.0), vec3(0.00, 0.33, 0.67));
-    if (paletteIndex == 2) return palette(t, vec3(0.5, 0.5, 0.5), vec3(0.5, 0.5, 0.5), vec3(1.0, 1.0, 0.5), vec3(0.80, 0.90, 0.30));
-    if (paletteIndex == 3) return palette(t, vec3(0.5, 0.5, 0.5), vec3(0.5, 0.5, 0.5), vec3(1.0, 1.0, 1.0), vec3(0.30, 0.20, 0.20));
-    if (paletteIndex == 4) return palette(t, vec3(0.5, 0.5, 0.5), vec3(0.5, 0.5, 0.5), vec3(1.0, 1.0, 1.0), vec3(0.50, 0.20, 0.25));
-    if (paletteIndex == 5) return palette(t, vec3(0.5, 0.5, 0.5), vec3(0.5, 0.5, 0.5), vec3(1.0, 1.0, 1.0), vec3(0.00, 0.10, 0.20));
-    return vec3(t);
+    return texture(paletteTexture, vec2(fract(t), 0.5)).rgb;
 }
 
 vec3 applyMaterial(vec3 factors) {
@@ -238,7 +237,7 @@ vec3 renderSpace(vec3 dir) {
     vec3 p1 = (dir + camPos * 0.02 * skyParallax) * 1.0 * skySpeed;
     p1.z += skyTime * 0.01;
     float n1 = warpedFbm(p1);
-    vec3 nebula = getPresetPalette(n1 * 1.2 + paletteOffset) * smoothstep(0.2, 0.8, n1) * cloudDensity * 0.4;
+    vec3 nebula = getSmoothPalette(n1 * 1.2 + paletteOffset) * smoothstep(0.2, 0.8, n1) * cloudDensity * 0.4;
     
     // 2. Dust Layer
     vec3 p2 = (dir + camPos * 0.05 * skyParallax) * 2.0 * skySpeed;
@@ -322,7 +321,7 @@ vec3 sampleEnvironment(vec3 dir) {
 vec3 sampleEnvironmentWithGlow(vec3 dir, float minDist) {
     vec3 bg = sampleEnvironment(dir);
     float glow = exp(-minDist * 10.0) * glowIntensity;
-    bg += getPresetPalette(minDist * 2.0) * glow;
+    bg += getSmoothPalette(minDist * 2.0) * glow;
     return bg;
 }
 

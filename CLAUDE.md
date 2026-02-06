@@ -34,7 +34,8 @@ org.fractalizer
 ├── fractals/
 │   ├── FractalParams.java           # Interface for fractal parameters
 │   ├── FractalType.java             # Enum of available fractal types
-│   ├── AbstractFractalParams.java   # Base class with common params (camera, lighting, palettes, etc.)
+│   ├── AbstractFractalParams.java   # Base class with common params (camera, lighting, gradient, etc.)
+│   ├── GradientPalette.java         # Custom gradient model with ColorStops and GPU texture generation
 │   ├── MandelbulbParams.java        # Mandelbulb: power, iterations, bailout
 │   ├── MandelboxParams.java         # Mandelbox: scale, minRadius, fixedRadius, foldingLimit
 │   ├── MengerSpongeParams.java      # Menger Sponge: iterations, scale, offset
@@ -52,7 +53,8 @@ org.fractalizer
     ├── GLSLFractalizerController.java  # Bridges UI with GLSL engine (includes parameter caching)
     ├── AnimationManager.java           # Manages timeline and keyframe editing
     ├── components/
-    │   └── EnhancedSlider.java         # Professional UI slider with mouse wheel & precision control
+    │   ├── EnhancedSlider.java         # Professional UI slider with mouse wheel & precision control
+    │   └── GradientEditor.java         # Visual gradient editor with draggable color stops
     ├── panels/
     │   ├── FractalPanel.java           # Fractal type and parameters (uses EnhancedSlider)
     │   ├── MaterialPanel.java          # Material type, physical props, and artistic palettes (uses EnhancedSlider)
@@ -97,16 +99,14 @@ The `GLSLFractalizerController` maintains a cache of fractal parameters. Switchi
 
 ## Rendering & Coloring
 
-### Artistic Palette System
-Located in `common.glsl`, the system provides 5 professional presets:
-1. **Magma / Fire**: Intense warm oranges and reds.
-2. **Ice / Ocean**: Deep cold blues and cyans.
-3. **Forest / Nature**: Earthy greens and browns.
-4. **Cyberpunk / Neon**: Vibrant pinks and purples.
-5. **Spectral / Rainbow**: Soft pastel spectrum.
+### Visual Gradient Editor
+The coloring system uses a GPU-based 1D texture (256x1, RGB32F) driven by a visual gradient editor with draggable color stops.
+
+**Architecture**: `GradientPalette` (model) → `toTextureData()` → `GLSLEngine.updatePaletteTexture()` (GL_TEXTURE1) → shader sampling via `getPresetPalette(t)` (fract, cyclic) and `getSmoothPalette(t)` (clamp, for environments).
+
+**10 Built-in Presets**: Magma, Ice, Forest, Neon, Spectral, Sunset, Ocean, Aurora, Pastel, Monochrome.
 
 **Parameters**:
-- `Palette Index`: Selection of the preset.
 - `Color Strength`: Multiplier for color intensity and contrast.
 - `Palette Shift`: Global offset to slide colors across the fractal structure.
 

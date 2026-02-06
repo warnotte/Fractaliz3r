@@ -5,15 +5,17 @@ import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
 import org.fractalizer.fractals.AbstractFractalParams;
+import org.fractalizer.fractals.GradientPalette;
 import org.fractalizer.ui.components.EnhancedSlider;
+import org.fractalizer.ui.components.GradientEditor;
 
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
  * Panel for configuring material properties:
- * - Color Palette (Hue, Presets)
+ * - Gradient Palette (visual editor with presets)
  * - Physical Properties (Type, Roughness, Metalness, IOR)
  * - Surface Properties (Specular)
  */
@@ -23,20 +25,20 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
     private final RenderCallback renderCallback;
     private boolean suppressRender = false;
 
-    // Palette controls
-    private ComboBox<String> paletteCombo;
+    // Gradient
+    private GradientEditor gradientEditor;
+    private Consumer<GradientPalette> onGradientChanged;
     private EnhancedSlider colorStrengthSlider;
     private EnhancedSlider paletteOffsetSlider;
-    private ColorPicker baseColorPicker;
-    
+
     // Material Type
     private ComboBox<String> materialTypeCombo;
-    
+
     // Physical Properties
     private EnhancedSlider roughnessSlider;
     private EnhancedSlider metalnessSlider;
     private EnhancedSlider iorSlider;
-    
+
     // Specular
     private EnhancedSlider specularIntensitySlider;
     private EnhancedSlider specularPowerSlider;
@@ -44,31 +46,32 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
     public MaterialPanel(Supplier<AbstractFractalParams> paramsSupplier, RenderCallback renderCallback) {
         this.paramsSupplier = paramsSupplier;
         this.renderCallback = renderCallback;
-        
+
         setContent(createContent());
         setFitToWidth(true);
         setPadding(new Insets(10));
     }
 
+    /**
+     * Set callback for gradient changes (used by App to upload texture to GPU).
+     */
+    public void setOnGradientChanged(Consumer<GradientPalette> callback) {
+        this.onGradientChanged = callback;
+    }
+
     private VBox createContent() {
         VBox root = new VBox(10);
-        
-        // === COLOR PALETTE SECTION ===
+
+        // === GRADIENT PALETTE SECTION ===
         Label paletteLabel = new Label("Color Palette");
         paletteLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
 
-        // Palette Selector
-        Label presetLabel = new Label("Palette Preset:");
-        paletteCombo = new ComboBox<>();
-        paletteCombo.getItems().addAll(
-            "Custom (Original)", "Magma / Fire", "Ice / Ocean", 
-            "Forest / Nature", "Cyberpunk / Neon", "Spectral / Rainbow"
-        );
-        paletteCombo.getSelectionModel().select(0);
-        paletteCombo.setMaxWidth(Double.MAX_VALUE);
-        paletteCombo.setOnAction(e -> {
+        // Gradient Editor (always visible)
+        gradientEditor = new GradientEditor(getParams().getCustomGradient());
+        gradientEditor.setOnGradientChanged(gradient -> {
             if (!suppressRender) {
-                getParams().setPaletteIndex(paletteCombo.getSelectionModel().getSelectedIndex());
+                getParams().setCustomGradient(gradient);
+                fireGradientChanged(gradient);
                 renderCallback.requestRender();
             }
         });
@@ -91,26 +94,14 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
                 renderCallback.requestRender();
             }
         });
-        
-        // Base Color Picker
-        Label baseColorLabel = new Label("Base Color (for Custom):");
-        baseColorPicker = new ColorPicker(Color.BLUE);
-        baseColorPicker.setMaxWidth(Double.MAX_VALUE);
-        baseColorPicker.setOnAction(e -> {
-            if (!suppressRender) {
-                Color c = baseColorPicker.getValue();
-                getParams().setMaterialHue((float)c.getRed(), (float)c.getGreen(), (float)c.getBlue());
-                renderCallback.requestRender();
-            }
-        });
 
-        // Presets (Moved from LightingPanel)
+        // Material Presets
         VBox presetsBox = createPresetsBox();
 
         // === PHYSICAL MATERIAL SECTION ===
         Label physLabel = new Label("Physical Material");
         physLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
-        
+
         // Material Type
         HBox typeBox = new HBox(10);
         Label typeLabel = new Label("Type:");
@@ -152,11 +143,11 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
                 renderCallback.requestRender();
             }
         });
-        
-        // === SPECULAR SECTION (Legacy / Raytracing) ===
+
+        // === SPECULAR SECTION ===
         Label specLabel = new Label("Specular Highlights");
         specLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
-        
+
         specularIntensitySlider = new EnhancedSlider("Intensity", 0, 2, 0.5, false);
         specularIntensitySlider.setOnAction(v -> {
             if (!suppressRender) {
@@ -175,10 +166,9 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
 
         root.getChildren().addAll(
             paletteLabel,
-            presetLabel, paletteCombo,
+            gradientEditor,
             colorStrengthSlider,
             paletteOffsetSlider,
-            baseColorLabel, baseColorPicker,
             new Separator(),
             new Label("Material Presets:"),
             presetsBox,
@@ -193,66 +183,51 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             specularIntensitySlider,
             specularPowerSlider
         );
-        
+
         return root;
     }
 
     private VBox createPresetsBox() {
         VBox box = new VBox(5);
-        
+
         // Row 1: Metals and Specialized
         HBox row1 = new HBox(5);
         row1.getChildren().addAll(
-            createFullPresetBtn("Gold", 1.0f, 0.7f, 0.2f, 1, 0.1f, 1.0f, 1.5f),
-            createFullPresetBtn("Silver", 0.9f, 0.9f, 0.95f, 1, 0.05f, 1.0f, 1.5f),
-            createFullPresetBtn("Copper", 0.95f, 0.64f, 0.54f, 1, 0.15f, 1.0f, 1.5f),
-            createFullPresetBtn("Cyber", 0.0f, 1.0f, 1.0f, 1, 0.2f, 0.8f, 1.5f)
+            createFullPresetBtn("Gold", 1, 0.1f, 1.0f, 1.5f),
+            createFullPresetBtn("Silver", 1, 0.05f, 1.0f, 1.5f),
+            createFullPresetBtn("Copper", 1, 0.15f, 1.0f, 1.5f),
+            createFullPresetBtn("Cyber", 1, 0.2f, 0.8f, 1.5f)
         );
-        
+
         // Row 2: Dielectrics (Glass, Plastic, etc)
         HBox row2 = new HBox(5);
         row2.getChildren().addAll(
-            createFullPresetBtn("Crystal", 0.9f, 0.95f, 1.0f, 2, 0.0f, 0.0f, 1.5f),
-            createFullPresetBtn("Ruby", 1.0f, 0.1f, 0.2f, 2, 0.05f, 0.0f, 1.8f),
-            createFullPresetBtn("Plastic", 1.0f, 0.2f, 0.2f, 0, 0.3f, 0.0f, 1.5f),
-            createFullPresetBtn("Concrete", 0.5f, 0.5f, 0.5f, 0, 0.9f, 0.0f, 1.5f)
+            createFullPresetBtn("Crystal", 2, 0.0f, 0.0f, 1.5f),
+            createFullPresetBtn("Ruby", 2, 0.05f, 0.0f, 1.8f),
+            createFullPresetBtn("Plastic", 0, 0.3f, 0.0f, 1.5f),
+            createFullPresetBtn("Concrete", 0, 0.9f, 0.0f, 1.5f)
         );
-        
+
         box.getChildren().addAll(row1, row2);
         return box;
     }
-    
-    private Button createFullPresetBtn(String name, float r, float g, float b, int type, float rough, float metal, float ior) {
+
+    private Button createFullPresetBtn(String name, int type, float rough, float metal, float ior) {
         Button btn = new Button(name);
         btn.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(btn, Priority.ALWAYS);
-        btn.setOnAction(e -> applyMaterialPreset(r, g, b, type, rough, metal, ior));
+        btn.setOnAction(e -> applyMaterialPreset(type, rough, metal, ior));
         return btn;
     }
-    
-    private Button createPresetBtn(String name, float r, float g, float b) {
-        // Keep for backward compatibility or simple color shifts if needed
-        Button btn = new Button(name);
-        btn.setOnAction(e -> {
-            baseColorPicker.setValue(Color.color(r, g, b));
-            if (!suppressRender) {
-                getParams().setMaterialHue(r, g, b);
-                renderCallback.requestRender();
-            }
-        });
-        return btn;
-    }
-    
-    private void applyMaterialPreset(float r, float g, float b, int type, float rough, float metal, float ior) {
+
+    private void applyMaterialPreset(int type, float rough, float metal, float ior) {
         suppressRender = true;
         try {
-            baseColorPicker.setValue(Color.color(r, g, b));
-            getParams().setMaterialHue(r, g, b);
             getParams().setMaterialType(type);
             getParams().setRoughness(rough);
             getParams().setMetalness(metal);
             getParams().setIor(ior);
-            
+
             // Update UI
             materialTypeCombo.getSelectionModel().select(type);
             roughnessSlider.setValue(rough);
@@ -267,11 +242,14 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
 
     private void updateVisibility() {
         int type = materialTypeCombo.getSelectionModel().getSelectedIndex();
-        boolean isMetal = (type == 1);
-        boolean isGlass = (type == 2);
-        
-        metalnessSlider.setDisable(!isMetal);
-        iorSlider.setDisable(!isGlass);
+        metalnessSlider.setDisable(type != 1);
+        iorSlider.setDisable(type != 2);
+    }
+
+    private void fireGradientChanged(GradientPalette gradient) {
+        if (onGradientChanged != null) {
+            onGradientChanged.accept(gradient);
+        }
     }
 
     private AbstractFractalParams getParams() {
@@ -280,30 +258,25 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
 
     @Override
     public void refreshFromParams(boolean suppress) {
-        suppressRender = suppress; // Should be true ideally, or handle carefully
+        suppressRender = suppress;
         try {
             AbstractFractalParams p = getParams();
-            
-            // Color
-            paletteCombo.getSelectionModel().select(p.getPaletteIndex());
+
+            // Gradient
+            gradientEditor.setPalette(p.getCustomGradient());
             colorStrengthSlider.setValue(p.getColorStrength());
             paletteOffsetSlider.setValue(p.getPaletteOffset());
-            baseColorPicker.setValue(Color.color(
-                Math.max(0, Math.min(1, p.getHueR())),
-                Math.max(0, Math.min(1, p.getHueG())),
-                Math.max(0, Math.min(1, p.getHueB()))
-            ));
-            
+
             // Material Props
             materialTypeCombo.getSelectionModel().select(p.getMaterialType());
             roughnessSlider.setValue(p.getRoughness());
             metalnessSlider.setValue(p.getMetalness());
             iorSlider.setValue(p.getIor());
-            
+
             // Specular
             specularIntensitySlider.setValue(p.getSpecularIntensity());
             specularPowerSlider.setValue(p.getSpecularPower());
-            
+
             updateVisibility();
         } finally {
             suppressRender = false;

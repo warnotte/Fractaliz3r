@@ -46,6 +46,9 @@ public class GLSLEngine implements AutoCloseable {
     // Lens Dirt texture
     private int lensDirtTexture;
 
+    // Custom palette texture (256x1, RGB32F)
+    private int paletteTexture;
+
     // Environment map
     private int envMapTexture;
     private boolean envMapLoaded = false;
@@ -146,6 +149,7 @@ public class GLSLEngine implements AutoCloseable {
         createBloomFramebuffers(currentWidth, currentHeight);
         createLensDirtTexture();
         createDefaultEnvMap();
+        createDefaultPaletteTexture();
         loadDisplayShader();
         loadPostProcessShaders();
 
@@ -261,6 +265,11 @@ public class GLSLEngine implements AutoCloseable {
             program.setUniform("useEnvMap", envMapLoaded ? 1 : 0);
             program.setUniform("envRotation", envRotation);
             program.setUniform("envLightingMix", envLightingMix);
+
+            // Custom palette texture
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, paletteTexture);
+            program.setUniform("paletteTexture", 1);
 
             // Set user uniforms
             for (Map.Entry<String, Object> entry : uniforms.entrySet()) {
@@ -758,6 +767,55 @@ public class GLSLEngine implements AutoCloseable {
         envMapLoaded = false;
     }
 
+    // ========================================================================
+    // Custom Palette Texture
+    // ========================================================================
+
+    /**
+     * Create a default 256x1 white palette texture.
+     */
+    private void createDefaultPaletteTexture() {
+        paletteTexture = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, paletteTexture);
+
+        // Default: white gradient (256 pixels, RGB float)
+        FloatBuffer data = MemoryUtil.memAllocFloat(256 * 3);
+        for (int i = 0; i < 256; i++) {
+            float t = (float) i / 255.0f;
+            data.put(t).put(t).put(t); // Greyscale ramp
+        }
+        data.flip();
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, 256, 1, 0, GL_RGB, GL_FLOAT, data);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        MemoryUtil.memFree(data);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    /**
+     * Update the palette texture with new gradient data.
+     *
+     * @param rgbData  float[resolution * 3] with RGB values in [0, 1]
+     * @param resolution Number of pixels (width of the 1D texture)
+     */
+    public void updatePaletteTexture(float[] rgbData, int resolution) {
+        runOnGLThread(() -> {
+            glBindTexture(GL_TEXTURE_2D, paletteTexture);
+
+            FloatBuffer data = MemoryUtil.memAllocFloat(rgbData.length);
+            data.put(rgbData).flip();
+
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, resolution, 1, 0, GL_RGB, GL_FLOAT, data);
+
+            MemoryUtil.memFree(data);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        });
+    }
+
     /**
      * Load an environment map from file (supports PNG, JPG, HDR).
      * Uses STB image loading via LWJGL.
@@ -1059,6 +1117,7 @@ public class GLSLEngine implements AutoCloseable {
             glDeleteTextures(bloomTexture1);
             glDeleteTextures(bloomTexture2);
             glDeleteTextures(envMapTexture);
+            glDeleteTextures(paletteTexture);
             glDeleteVertexArrays(quadVAO);
             glDeleteBuffers(quadVBO);
             glDeleteBuffers(quadEBO);

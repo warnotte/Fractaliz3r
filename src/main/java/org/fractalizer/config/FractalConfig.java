@@ -1,5 +1,6 @@
 package org.fractalizer.config;
 
+import javafx.scene.paint.Color;
 import org.fractalizer.engine.Camera;
 import org.fractalizer.fractals.*;
 
@@ -95,6 +96,21 @@ public class FractalConfig {
         public int type = 0;  // 0=Lambertian, 1=Metallic, 2=Glass
         public float metalness = 0.9f;
         public float ior = 1.5f;
+        public List<GradientStopConfig> gradientStops;
+    }
+
+    public static class GradientStopConfig {
+        public double position;
+        public double r, g, b;
+
+        public GradientStopConfig() {}
+
+        public GradientStopConfig(double position, double r, double g, double b) {
+            this.position = position;
+            this.r = r;
+            this.g = g;
+            this.b = b;
+        }
     }
 
     public static class EffectsConfig {
@@ -205,6 +221,17 @@ public class FractalConfig {
         config.material.metalness = params.getMetalness();
         config.material.ior = params.getIor();
 
+        // Serialize custom gradient stops
+        GradientPalette gradient = params.getCustomGradient();
+        if (gradient != null) {
+            config.material.gradientStops = new ArrayList<>();
+            for (GradientPalette.ColorStop stop : gradient.getStops()) {
+                config.material.gradientStops.add(new GradientStopConfig(
+                    stop.position(), stop.color().getRed(), stop.color().getGreen(), stop.color().getBlue()
+                ));
+            }
+        }
+
         // Effects
         config.effects.dofEnabled = params.isDofEnabled();
         config.effects.focalDistance = params.getFocalDistance();
@@ -277,6 +304,19 @@ public class FractalConfig {
         params.setMaterialType(material.type);
         params.setMetalness(material.metalness);
         params.setIor(material.ior);
+
+        // Deserialize custom gradient stops
+        if (material.gradientStops != null && material.gradientStops.size() >= 2) {
+            List<GradientPalette.ColorStop> stops = new ArrayList<>();
+            for (GradientStopConfig sc : material.gradientStops) {
+                stops.add(new GradientPalette.ColorStop(sc.position, Color.color(
+                    Math.max(0, Math.min(1, sc.r)),
+                    Math.max(0, Math.min(1, sc.g)),
+                    Math.max(0, Math.min(1, sc.b))
+                )));
+            }
+            params.setCustomGradient(new GradientPalette(stops));
+        }
 
         // Effects
         params.setDofEnabled(effects.dofEnabled);

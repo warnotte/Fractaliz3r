@@ -132,6 +132,9 @@ public abstract class AbstractFractalParams implements FractalParams {
     // shutterAngle: 0 = no blur, 180 = half frame, 360 = full frame blur (cinematic default)
     protected float shutterAngle;
 
+    // Custom gradient palette (used when paletteIndex == 6)
+    protected GradientPalette customGradient;
+
     /**
      * Initialize common parameters with sensible defaults.
      */
@@ -193,7 +196,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.roughness = 0.5f;
         this.skyIntensity = 1.0f;
         this.indirectMultiplier = 0.5f;
-        this.skyType = 0; // Default to Clouds
+        this.skyType = 1; // Default to Deep Space
         this.cloudDensity = 0.5f;
         this.skySpeed = 1.0f; // Variation scale
         this.skyTime = 0.0f;
@@ -206,6 +209,9 @@ public abstract class AbstractFractalParams implements FractalParams {
 
         // Motion blur defaults (180° = cinematic film standard)
         this.shutterAngle = 180.0f;
+
+        // Custom gradient (default: Spectral rainbow)
+        this.customGradient = GradientPalette.createSpectral();
 
         // Lens defaults
         this.lensEffectsEnabled = false;
@@ -298,6 +304,9 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.materialType = this.materialType;
         target.metalness = this.metalness;
         target.ior = this.ior;
+
+        // Copy custom gradient
+        target.customGradient = this.customGradient.copy();
     }
 
     /**
@@ -570,6 +579,10 @@ public abstract class AbstractFractalParams implements FractalParams {
     // Motion Blur
     public float getShutterAngle() { return shutterAngle; }
     public void setShutterAngle(float angle) { this.shutterAngle = Math.max(0, Math.min(360, angle)); }
+
+    // Custom Gradient
+    public GradientPalette getCustomGradient() { return customGradient; }
+    public void setCustomGradient(GradientPalette gradient) { this.customGradient = gradient; }
 
     // ========================================================================
     // Builder-style setters (return this for chaining)

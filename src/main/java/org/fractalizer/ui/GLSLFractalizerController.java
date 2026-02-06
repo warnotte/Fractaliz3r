@@ -10,6 +10,8 @@ import org.fractalizer.fractals.*;
 import org.fractalizer.render.ProgressiveRenderer;
 import org.fractalizer.util.ImageWriterHelper;
 
+import org.fractalizer.fractals.GradientPalette;
+
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -678,6 +680,15 @@ public class GLSLFractalizerController implements RenderController {
         }
 
         return -1;
+    }
+
+    /**
+     * Upload a custom gradient palette to the GPU texture.
+     */
+    public void updatePaletteTexture(GradientPalette gradient) {
+        int resolution = 256;
+        float[] rgbData = gradient.toTextureData(resolution);
+        engine.updatePaletteTexture(rgbData, resolution);
     }
 
     /**

@@ -74,7 +74,12 @@ public class GLSLFractalizerApp extends Application {
     // Rendering state
     private boolean needsRender = true;
     private long lastRenderTime = 0;
-    private static final long RENDER_DELAY_MS = 100;
+    private long lastInteractionTime = 0; // For auto-quality debounce
+    private boolean isHighQualityActive = false; // To avoid restarting HQ render repeatedly
+    
+    private static final long RENDER_DELAY_MS = 33; // ~30 FPS for preview
+    private static final long HQ_DELAY_MS = 400;    // Wait 400ms before refining
+    
     private boolean autoFullQuality = true;
     private volatile boolean exportingAnimation = false;
     
@@ -263,6 +268,9 @@ public class GLSLFractalizerApp extends Application {
         // Start render loop
         startRenderLoop();
 
+        // Upload initial gradient texture to GPU
+        controller.updatePaletteTexture(initialParams.getCustomGradient());
+
         // Initial viewport size update (after layout is done)
         Platform.runLater(() -> {
             updateViewportSize();
@@ -354,6 +362,10 @@ public class GLSLFractalizerApp extends Application {
             () -> fractalPanel.getParams(),
             this::requestRender
         );
+        materialPanel.setOnGradientChanged(gradient -> {
+            controller.updatePaletteTexture(gradient);
+            requestRender();
+        });
         refreshablePanels.add(materialPanel);
         Tab materialTab = new Tab("Material", materialPanel);
 
@@ -466,6 +478,8 @@ public class GLSLFractalizerApp extends Application {
 
     private void requestRender() {
         needsRender = true;
+        isHighQualityActive = false; // Stop HQ accumulation
+        lastInteractionTime = System.currentTimeMillis();
         controller.cancelRender();
     }
 
@@ -473,16 +487,12 @@ public class GLSLFractalizerApp extends Application {
         AnimationTimer timer = new AnimationTimer() {
             @Override
             public void handle(long now) {
+                long currentTime = System.currentTimeMillis();
+
                 // Process keyboard input
                 if (navigation != null && navigation.processKeyboardInput()) {
                     requestRender();
                     fractalPanel.updatePositionLabel();
-                }
-                
-                // Turntable Auto-Rotation
-                if (turntableMode) {
-                    fractalPanel.getCamera().rotate(turntableSpeed, 0); // Rotate Yaw
-                    requestRender();
                 }
 
                 // Animation playback
@@ -490,10 +500,26 @@ public class GLSLFractalizerApp extends Application {
                     requestRender();
                 }
 
-                if (needsRender && (System.currentTimeMillis() - lastRenderTime > RENDER_DELAY_MS)) {
+                // 1. Preview Render (Interactive)
+                if (needsRender && (currentTime - lastRenderTime > RENDER_DELAY_MS)) {
                     renderPreview();
                     needsRender = false;
-                    lastRenderTime = System.currentTimeMillis();
+                    lastRenderTime = currentTime;
+                    // Reset HQ trigger
+                    lastInteractionTime = currentTime;
+                    isHighQualityActive = false;
+                }
+                
+                // 2. Auto Full Quality (Refinement after idle)
+                if (!needsRender && !isHighQualityActive && autoFullQuality && !exportingAnimation) {
+                    // Don't start HQ render if animation is playing
+                    boolean isPlaying = (animationManager != null && animationManager.isPlaying());
+                    
+                    if (!isPlaying && (currentTime - lastInteractionTime > HQ_DELAY_MS)) {
+                        // User stopped moving -> Start refining
+                        renderFull();
+                        isHighQualityActive = true;
+                    }
                 }
             }
         };
@@ -586,6 +612,9 @@ public class GLSLFractalizerApp extends Application {
             for (Refreshable pnl : refreshablePanels) {
                 pnl.refreshFromParams();
             }
+
+            // Upload gradient texture to GPU
+            controller.updatePaletteTexture(params.getCustomGradient());
 
             // Sync animation manager with loaded fractal type
             if (animationManager != null) {
