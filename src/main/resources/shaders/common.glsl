@@ -220,23 +220,26 @@ vec3 renderStarLayer(vec3 dir, float scale, float threshold, float brightness, f
 // Multi-layered Space with Spatial Parallax
 vec3 renderSpace(vec3 dir) {
     // 1. Deep Nebula Layer (Distant)
-    vec3 p1 = (dir + camPos * 0.0005) * 1.0 * skySpeed;
+    // Increased parallax from 0.0005 to 0.02 for visibility
+    vec3 p1 = (dir + camPos * 0.02) * 1.0 * skySpeed;
     p1.z += skyTime * 0.01;
     float n1 = warpedFbm(p1);
     vec3 nebula = getPresetPalette(n1 * 1.2 + paletteOffset) * smoothstep(0.2, 0.8, n1) * cloudDensity * 0.4;
     
     // 2. Dust Layer (Closer, more parallax)
-    vec3 p2 = (dir + camPos * 0.002) * 2.0 * skySpeed;
+    // Increased parallax from 0.002 to 0.05
+    vec3 p2 = (dir + camPos * 0.05) * 2.0 * skySpeed;
     p2.x += skyTime * 0.02;
     float n2 = fbm(p2);
     float dust = smoothstep(0.4, 0.7, n2);
     nebula *= (1.0 - dust * 0.8);
     
     // 3. Stars (Multi-Layer with different parallax scales)
+    // Huge parallax boost for "floating in starfield" effect
     vec3 stars = vec3(0.0);
-    stars += renderStarLayer(dir, 40.0, 0.98, 2.0, 0.0001); // Giant stars (far)
-    stars += renderStarLayer(dir, 100.0, 0.95, 0.8, 0.001);  // Medium stars
-    stars += renderStarLayer(dir, 300.0, 0.90, 0.3, 0.005) * (1.0 - dust); // Background dust (closer)
+    stars += renderStarLayer(dir, 40.0, 0.98, 2.0, 0.01);  // Giants (Far)
+    stars += renderStarLayer(dir, 100.0, 0.95, 0.8, 0.05); // Medium (Mid)
+    stars += renderStarLayer(dir, 300.0, 0.90, 0.3, 0.15) * (1.0 - dust); // Dust stars (Close)
 
     return (nebula + stars) * skyIntensity;
 }
@@ -247,13 +250,14 @@ vec3 renderClouds(vec3 dir) {
     vec3 sky = mix(vec3(0.1, 0.2, 0.4), vec3(0.4, 0.6, 0.9), t);
     float sun = pow(max(0.0, dot(dir, normalize(lightDir))), 256.0) * 8.0 * lightIntensity;
     
-    // Layer 1: Heavy Low Clouds (More parallax)
-    vec3 p1 = (dir + camPos * 0.01) * 3.0 * skySpeed;
+    // Layer 1: Heavy Low Clouds (High Parallax)
+    // Factor 0.1 makes them feel "huge but reachable"
+    vec3 p1 = (dir + camPos * 0.1) * 3.0 * skySpeed;
     p1.x += skyTime * 0.05;
     float c1 = smoothstep(1.0 - cloudDensity, 1.4 - cloudDensity, fbm(p1));
     
-    // Layer 2: Fast High Cirrus (Less parallax)
-    vec3 p2 = (dir + camPos * 0.002) * 8.0 * skySpeed;
+    // Layer 2: Fast High Cirrus (Lower Parallax)
+    vec3 p2 = (dir + camPos * 0.03) * 8.0 * skySpeed;
     p2.z += skyTime * 0.15;
     float c2 = smoothstep(0.6, 1.0, fbm(p2)) * 0.4;
     
@@ -267,7 +271,8 @@ vec3 renderOcean(vec3 dir) {
     vec3 sky = mix(vec3(0.0, 0.1, 0.3), vec3(0.5, 0.7, 1.0), smoothstep(-0.1, 0.5, dir.y));
     if (dir.y < 0.0) {
         // Water parallax based on projection
-        vec3 p = (dir + camPos * 0.01) * 15.0 / abs(dir.y);
+        // Increased parallax for wave motion sensation
+        vec3 p = (dir + camPos * 0.1) * 15.0 / abs(dir.y);
         p.xz += skyTime * 0.5;
         float wave = fbm(p * 0.2) * 0.5 + 0.5;
         sky = mix(vec3(0.0, 0.05, 0.1), vec3(0.0, 0.2, 0.4), wave);
