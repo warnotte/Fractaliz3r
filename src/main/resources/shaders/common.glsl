@@ -40,6 +40,7 @@ uniform float time;
 uniform vec3 camPos;
 uniform vec4 camQuat;
 uniform float fov;
+uniform int projectionMode;
 
 uniform vec3 lightDir;
 uniform vec3 lightColor;
@@ -408,11 +409,28 @@ vec4 quaternionFromAxisAngle(vec3 axis, float angle) {
 Ray getCameraRay(vec2 screenUV) {
     Ray ray;
     ray.origin = camPos;
-    float aspect = resolution.x / resolution.y;
-    float halfHeight = tan(radians(fov) * 0.5);
-    float halfWidth = halfHeight * aspect;
-    vec3 localDir = normalize(vec3(screenUV.x * halfWidth, screenUV.y * halfHeight, 1.0));
-    ray.direction = rotateByQuaternion(localDir, camQuat);
+    
+    if (projectionMode == 1) { // 360 EQUIRECTANGULAR
+        // screenUV is in range [-1, 1]
+        // Longitude: -PI to PI
+        float lon = screenUV.x * PI;
+        // Latitude: -PI/2 to PI/2
+        float lat = screenUV.y * PI * 0.5;
+        
+        // Spherical to Cartesian (Right-handed, Z is forward)
+        // We use Z as the primary axis to align with the camera rotation logic
+        float x = sin(lon) * cos(lat);
+        float y = sin(lat);
+        float z = cos(lon) * cos(lat);
+        
+        ray.direction = rotateByQuaternion(vec3(x, y, z), camQuat);
+    } else { // PERSPECTIVE (Standard)
+        float aspect = resolution.x / resolution.y;
+        float halfHeight = tan(radians(fov) * 0.5);
+        float halfWidth = halfHeight * aspect;
+        vec3 localDir = normalize(vec3(screenUV.x * halfWidth, screenUV.y * halfHeight, 1.0));
+        ray.direction = rotateByQuaternion(localDir, camQuat);
+    }
     return ray;
 }
 

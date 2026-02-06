@@ -121,6 +121,19 @@ Fractaliz3r features a full cinematic rendering pipeline:
 3. **Optics (Lens Effects)**: Realistic camera imperfections including Lens Dirt (dust/spots) and JJ Abrams style anamorphic horizontal flares.
 4. **Color Grading**: Procedural LUT styles (Cinema, Vintage, Matrix, Neon, Noir) for instant professional looks.
 
+## VR & Export Features
+
+- **360\u00B0 Equirectangular Projection**: Render full spherical panoramas compatible with VR headsets.
+- **Automatic Metadata Injection**: 
+    - **Photos**: Injects Google Photo Sphere (XMP) tags into JPEG and PNG files via `ImageWriterHelper`.
+    - **Videos**: 
+        - Uses **ExifTool** (if available in PATH) to automatically inject spherical metadata into MP4 files.
+        - Provides a fallback guidance system with links to official Google tools if ExifTool is missing.
+        - Includes a silent audio track to ensure YouTube/Facebook VR processing.
+- **Multi-format Export**: Support for high-quality PNG and JPEG (95% quality).
+- **Standard VR Presets**: 2048x1024 (2K) and 4096x2048 (4K) 2:1 aspect ratio presets.
+- **Video Encoding**: Automatic MP4 creation via FFmpeg (H.265 HEVC) with `+faststart` for web optimization.
+
 ## Navigation Controls
 
 - **Arrow keys**: Move forward/backward/strafe

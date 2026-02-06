@@ -87,6 +87,53 @@ public class FFmpegExporter {
     }
 
     /**
+     * Check if ExifTool is available on the system.
+     */
+    public static boolean isExifToolAvailable() {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("exiftool", "-ver");
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            int exitCode = process.waitFor();
+            return exitCode == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Injects 360 metadata into a video file using ExifTool.
+     */
+    public static boolean injectExifToolMetadata(File videoFile) {
+        if (!isExifToolAvailable()) return false;
+        
+        log("Injecting 360 metadata via ExifTool...");
+        try {
+            List<String> command = new ArrayList<>();
+            command.add("exiftool");
+            command.add("-overwrite_original");
+            command.add("-XMP-GSpherical:Spherical=true");
+            command.add("-XMP-GSpherical:Stitched=true");
+            command.add("-XMP-GSpherical:ProjectionType=equirectangular");
+            command.add(videoFile.getAbsolutePath());
+            
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            // Read output to ensure process completes
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                while (reader.readLine() != null) { /* consume */ }
+            }
+            
+            return process.waitFor() == 0;
+        } catch (Exception e) {
+            logError("ExifTool injection failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Create an MP4 video from a PNG sequence using H.265 (HEVC) codec.
      *
      * @param inputDir Directory containing PNG frames (frame_00000.png, frame_00001.png, etc.)
@@ -97,11 +144,11 @@ public class FFmpegExporter {
      * @return ExportResult with success status and message
      */
     public static ExportResult createMP4(File inputDir, File outputFile, int frameRate, int crf,
-                                          Consumer<Double> progressCallback) {
+                                          boolean is360, Consumer<Double> progressCallback) {
         log("Starting MP4 export...");
         log("Input directory: " + inputDir.getAbsolutePath());
         log("Output file: " + outputFile.getAbsolutePath());
-        log("Frame rate: " + frameRate + ", CRF: " + crf);
+        log("Frame rate: " + frameRate + ", CRF: " + crf + (is360 ? " (360 VR Enabled)" : ""));
 
         if (!isFFmpegAvailable()) {
             logError("FFmpeg is not installed or not in PATH");
@@ -138,16 +185,35 @@ public class FFmpegExporter {
         command.add("-y"); // Overwrite output file
         command.add("-framerate");
         command.add(String.valueOf(frameRate));
+        
+        // Input 1: The PNG sequence
         command.add("-i");
         command.add(new File(inputDir, "frame_%05d.png").getAbsolutePath());
+        
+        // Input 2: A dummy silent audio track
+        command.add("-f");
+        command.add("lavfi");
+        command.add("-i");
+        command.add("anullsrc=channel_layout=stereo:sample_rate=44100");
+        
         command.add("-c:v");
-        command.add("libx265"); // H.265/HEVC codec
+        command.add("libx265"); // Back to HEVC for best quality/size ratio
         command.add("-crf");
         command.add(String.valueOf(crf));
         command.add("-pix_fmt");
-        command.add("yuv420p"); // Compatibility
+        command.add("yuv420p");
         command.add("-tag:v");
-        command.add("hvc1"); // Better compatibility with Apple devices
+        command.add("hvc1"); // Apple compatibility
+        
+        // Audio codec
+        command.add("-c:a");
+        command.add("aac");
+        command.add("-shortest");
+        
+        // Basic container flags (faststart is always good)
+        command.add("-movflags");
+        command.add("+faststart");
+        
         command.add(outputFile.getAbsolutePath());
 
         log("FFmpeg command: " + String.join(" ", command));
@@ -200,10 +266,21 @@ public class FFmpegExporter {
                 if (progressCallback != null) {
                     progressCallback.accept(1.0);
                 }
+                
+                // Automatic ExifTool Injection for 360 mode
+                String statusMsg = String.format("Video created successfully: %s", outputFile.getName());
+                if (is360) {
+                    if (injectExifToolMetadata(outputFile)) {
+                        statusMsg += " (360 Metadata Injected)";
+                    } else {
+                        statusMsg += " (Manual 360 injection required)";
+                    }
+                }
+
                 long fileSizeMB = fileSize / (1024 * 1024);
-                log("Video created successfully: " + outputFile.getName() + " (" + fileSizeMB + " MB)");
+                log(statusMsg + " (" + fileSizeMB + " MB)");
                 return new ExportResult(true,
-                        String.format("Video created successfully: %s (%d MB)", outputFile.getName(), fileSizeMB),
+                        statusMsg + String.format(" (%d MB)", fileSizeMB),
                         outputFile);
             } else {
                 logError("FFmpeg failed. Exit code: " + exitCode);
@@ -230,7 +307,7 @@ public class FFmpegExporter {
      * @return ExportResult
      */
     public static ExportResult createMP4(File inputDir, File outputFile, int frameRate) {
-        return createMP4(inputDir, outputFile, frameRate, 23, null);
+        return createMP4(inputDir, outputFile, frameRate, 23, false, null);
     }
 
     /**
@@ -239,13 +316,14 @@ public class FFmpegExporter {
      * @param inputDir Directory containing PNG frames
      * @param frameRate Frame rate
      * @param crf Quality setting
+     * @param is360 Whether to inject spherical metadata
      * @param progressCallback Progress callback
      * @return ExportResult
      */
     public static ExportResult createMP4InPlace(File inputDir, int frameRate, int crf,
-                                                 Consumer<Double> progressCallback) {
+                                                 boolean is360, Consumer<Double> progressCallback) {
         String outputName = inputDir.getName() + ".mp4";
         File outputFile = new File(inputDir.getParentFile(), outputName);
-        return createMP4(inputDir, outputFile, frameRate, crf, progressCallback);
+        return createMP4(inputDir, outputFile, frameRate, crf, is360, progressCallback);
     }
 }

@@ -26,6 +26,9 @@ public class QualityPanel extends ScrollPane implements Refreshable {
 
     // Render pass
     private ComboBox<String> passCombo;
+    
+    // Projection mode
+    private ComboBox<String> projectionCombo;
 
     // Quality
     private EnhancedSlider qualitySlider;
@@ -69,6 +72,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
 
         // Top-level controls (always visible)
         panel.getChildren().add(createRenderPassSection());
+        panel.getChildren().add(createProjectionSection());
         panel.getChildren().add(createQualitySection());
 
         // Collapsible sections
@@ -123,6 +127,34 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         });
 
         box.getChildren().addAll(passLabel, passCombo, autoFullQualityCheck);
+        return box;
+    }
+
+    private VBox createProjectionSection() {
+        VBox box = new VBox(5);
+
+        Label projLabel = new Label("Camera Projection:");
+        projLabel.setStyle("-fx-font-weight: bold;");
+
+        projectionCombo = new ComboBox<>();
+        projectionCombo.getItems().addAll(
+            "Perspective (Standard)",
+            "360° Equirectangular (VR)"
+        );
+        projectionCombo.getSelectionModel().select(0);
+        projectionCombo.setMaxWidth(Double.MAX_VALUE);
+        projectionCombo.setOnAction(e -> {
+            if (!suppressRender) {
+                int mode = projectionCombo.getSelectionModel().getSelectedIndex();
+                getParams().setProjectionMode(mode);
+                renderCallback.requestRender();
+            }
+        });
+
+        Label infoLabel = new Label("360° mode creates a spherical map.\nUse 2:1 aspect ratio for best results.");
+        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        box.getChildren().addAll(projLabel, projectionCombo, infoLabel);
         return box;
     }
 
@@ -390,6 +422,9 @@ public class QualityPanel extends ScrollPane implements Refreshable {
 
             // Render mode
             passCombo.getSelectionModel().select(p.getRenderMode());
+            
+            // Projection mode
+            projectionCombo.getSelectionModel().select(p.getProjectionMode());
 
             // Quality
             qualitySlider.setValue(p.getQualityMultiplier());

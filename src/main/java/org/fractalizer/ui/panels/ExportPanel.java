@@ -157,9 +157,15 @@ public class ExportPanel extends ScrollPane {
         viewportInfoLabel = new Label("Viewport: --");
         viewportInfoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
 
-        // Preset sizes
         ComboBox<String> presetCombo = new ComboBox<>();
-        presetCombo.getItems().addAll("1920x1080 (Full HD)", "3840x2160 (4K)", "7680x4320 (8K)", "Custom");
+        presetCombo.getItems().addAll(
+            "1920x1080 (Full HD)", 
+            "3840x2160 (4K)", 
+            "7680x4320 (8K)", 
+            "2048x1024 (360\u00B0 2K)",
+            "4096x2048 (360\u00B0 4K)",
+            "Custom"
+        );
         presetCombo.setValue("1920x1080 (Full HD)");
         presetCombo.setMaxWidth(Double.MAX_VALUE);
         presetCombo.setOnAction(e -> {
@@ -173,6 +179,12 @@ public class ExportPanel extends ScrollPane {
             } else if (preset.startsWith("7680")) {
                 widthField.setText("7680");
                 heightField.setText("4320");
+            } else if (preset.startsWith("2048")) {
+                widthField.setText("2048");
+                heightField.setText("1024");
+            } else if (preset.startsWith("4096")) {
+                widthField.setText("4096");
+                heightField.setText("2048");
             }
             updateExportSize();
         });
@@ -213,7 +225,7 @@ public class ExportPanel extends ScrollPane {
         renderBtn.setMaxWidth(Double.MAX_VALUE);
         renderBtn.setStyle("-fx-font-weight: bold;");
 
-        Button exportBtn = new Button("Export PNG...");
+        Button exportBtn = new Button("Export Image...");
         exportBtn.setOnAction(e -> exportImage());
         exportBtn.setMaxWidth(Double.MAX_VALUE);
 
@@ -383,8 +395,10 @@ public class ExportPanel extends ScrollPane {
 
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Export Image");
-        fileChooser.getExtensionFilters().add(
-            new FileChooser.ExtensionFilter("PNG Image", "*.png"));
+        fileChooser.getExtensionFilters().addAll(
+            new FileChooser.ExtensionFilter("PNG Image", "*.png"),
+            new FileChooser.ExtensionFilter("JPEG Image", "*.jpg", "*.jpeg")
+        );
         fileChooser.setInitialFileName("fractal.png");
 
         File file = fileChooser.showSaveDialog(getScene().getWindow());
@@ -468,6 +482,13 @@ public class ExportPanel extends ScrollPane {
         int fps = (int) timeline.getFrameRate();
         boolean useMotionBlur = shutterAngle > 0 && motionBlurExportCallback != null;
 
+        // Detect 360 mode from current params
+        boolean is360 = false;
+        if (controller.getParams() instanceof org.fractalizer.fractals.AbstractFractalParams afp) {
+            is360 = (afp.getProjectionMode() == org.fractalizer.fractals.AbstractFractalParams.PROJECTION_360_EQUIRECTANGULAR);
+        }
+        final boolean finalIs360 = is360;
+
         // Start export
         exporting = true;
         exportCancelled = false;
@@ -545,14 +566,33 @@ public class ExportPanel extends ScrollPane {
                     });
 
                     FFmpegExporter.ExportResult result = FFmpegExporter.createMP4InPlace(
-                            exportDir, fps, crf,
+                            exportDir, fps, crf, finalIs360,
                             progress -> Platform.runLater(() -> frameProgress.setProgress(progress))
                     );
 
                     final int finalTotalFrames = totalFrames;
                     Platform.runLater(() -> {
                         if (result.success) {
-                            animExportStatusLabel.setText("Export complete!\n" + finalTotalFrames + " frames + MP4:\n" + result.outputFile.getAbsolutePath());
+                            String msg = "Export complete!\n" + finalTotalFrames + " frames + MP4:\n" + result.outputFile.getAbsolutePath();
+                            animExportStatusLabel.setText(msg);
+                            
+                            // 360 Metadata Warning (only if not already injected by ExifTool)
+                            if (finalIs360 && !result.message.contains("360 Metadata Injected")) {
+                                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                                alert.setTitle("360\u00B0 Video Export");
+                                alert.setHeaderText("Manual Metadata Injection Required");
+                                alert.setContentText("ExifTool was not found. To be recognized by YouTube/Facebook, you must inject metadata into the MP4 using the 'Spatial Media Metadata Injector' or install ExifTool.");
+                                
+                                ButtonType downloadBtn = new ButtonType("Get Injector Tool");
+                                alert.getButtonTypes().add(downloadBtn);
+                                
+                                alert.showAndWait().ifPresent(type -> {
+                                    if (type == downloadBtn) {
+                                        openUrl("https://github.com/google/spatial-media/releases");
+                                    }
+                                });
+                            }
+                            
                             // Open the MP4 file
                             openFile(result.outputFile);
                         } else {
@@ -571,7 +611,7 @@ public class ExportPanel extends ScrollPane {
                     });
 
                     FFmpegExporter.ExportResult result = FFmpegExporter.createMP4InPlace(
-                            exportDir, fps, crf,
+                            exportDir, fps, crf, finalIs360,
                             progress -> Platform.runLater(() -> frameProgress.setProgress(progress))
                     );
 
@@ -714,6 +754,16 @@ public class ExportPanel extends ScrollPane {
             }
         } catch (IOException e) {
             System.err.println("Could not open file: " + e.getMessage());
+        }
+    }
+
+    private void openUrl(String url) {
+        try {
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(new java.net.URI(url));
+            }
+        } catch (Exception e) {
+            System.err.println("Could not open URL: " + e.getMessage());
         }
     }
 }

@@ -8,6 +8,7 @@ import org.fractalizer.engine.Camera;
 import org.fractalizer.engine.GLSLEngine;
 import org.fractalizer.fractals.*;
 import org.fractalizer.render.ProgressiveRenderer;
+import org.fractalizer.util.ImageWriterHelper;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -175,7 +176,8 @@ public class GLSLFractalizerController implements RenderController {
     }
 
     /**
-     * Export the current render to a PNG file (uses export size).
+     * Export the current render to a file (PNG or JPG).
+     * Automatically injects 360 metadata if projection mode is Equirectangular.
      */
     @Override
     public CompletableFuture<Void> exportToPNG(File file, Consumer<Double> onProgress) {
@@ -198,7 +200,7 @@ public class GLSLFractalizerController implements RenderController {
                     }
                 }
 
-                // Read and save image
+                // Read pixels
                 float[] pixels = engine.readImage();
                 BufferedImage image = new BufferedImage(exportWidth, exportHeight, BufferedImage.TYPE_INT_RGB);
 
@@ -212,7 +214,14 @@ public class GLSLFractalizerController implements RenderController {
                     }
                 }
 
-                ImageIO.write(image, "PNG", file);
+                // Check for 360 mode
+                boolean is360 = false;
+                if (currentParams instanceof AbstractFractalParams afp) {
+                    is360 = (afp.getProjectionMode() == AbstractFractalParams.PROJECTION_360_EQUIRECTANGULAR);
+                }
+
+                // Use helper to write with optional metadata
+                ImageWriterHelper.writeImage(image, file, is360);
 
             } catch (Exception e) {
                 throw new RuntimeException("Failed to export image", e);
@@ -422,6 +431,7 @@ public class GLSLFractalizerController implements RenderController {
             // GLSL expects vec4(x, y, z, w), so reorder from Java's [w, x, y, z]
             uniforms.put("camQuat", new float[]{quat[1], quat[2], quat[3], quat[0]});
             uniforms.put("fov", (float) Math.toDegrees(params.getFov()));
+            uniforms.put("projectionMode", params.getProjectionMode());
 
             // Quality
             uniforms.put("qualityMultiplier", params.getQualityMultiplier());

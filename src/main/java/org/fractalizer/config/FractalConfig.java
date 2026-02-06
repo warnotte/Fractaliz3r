@@ -117,6 +117,7 @@ public class FractalConfig {
         public float skySpeed = 1.0f;
         public float skyTime = 0.0f;
         public float skyParallax = 0.25f;
+        public int projectionMode = 0;
 
         // Lens Effects
         public boolean lensEffectsEnabled = false;
@@ -219,6 +220,7 @@ public class FractalConfig {
         config.effects.skySpeed = params.getSkySpeed();
         config.effects.skyTime = params.getSkyTime();
         config.effects.skyParallax = params.getSkyParallax();
+        config.effects.projectionMode = params.getProjectionMode();
         config.effects.lensEffectsEnabled = params.isLensEffectsEnabled();
         config.effects.lensDirtIntensity = params.getLensDirtIntensity();
         config.effects.starburstIntensity = params.getStarburstIntensity();
@@ -291,6 +293,7 @@ public class FractalConfig {
         params.setSkySpeed(effects.skySpeed);
         params.setSkyTime(effects.skyTime);
         params.setSkyParallax(effects.skyParallax);
+        params.setProjectionMode(effects.projectionMode);
         params.setLensEffectsEnabled(effects.lensEffectsEnabled);
         params.setLensDirtIntensity(effects.lensDirtIntensity);
         params.setStarburstIntensity(effects.starburstIntensity);

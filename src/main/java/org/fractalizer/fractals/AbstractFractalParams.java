@@ -31,12 +31,19 @@ public abstract class AbstractFractalParams implements FractalParams {
     public static final int RENDER_ORBIT_TRAP = 7;
     public static final int RENDER_ITERATIONS = 8;
 
+    // Projection modes
+    public static final int PROJECTION_PERSPECTIVE = 0;
+    public static final int PROJECTION_360_EQUIRECTANGULAR = 1;
+
     // ========================================================================
     // Common parameters for all fractals
     // ========================================================================
 
     // Camera reference
     protected Camera camera;
+
+    // Projection mode
+    protected int projectionMode;
 
     // Field of view in radians
     protected float fov;
@@ -130,6 +137,7 @@ public abstract class AbstractFractalParams implements FractalParams {
      */
     protected AbstractFractalParams() {
         this.camera = new Camera();
+        this.projectionMode = PROJECTION_PERSPECTIVE;
         this.fov = (float) Math.toRadians(60);
 
         // Ray marching defaults
@@ -217,6 +225,7 @@ public abstract class AbstractFractalParams implements FractalParams {
      */
     public void copyCommonParams(AbstractFractalParams target) {
         target.camera = this.camera; // Share camera reference
+        target.projectionMode = this.projectionMode;
         target.fov = this.fov;
         target.maxRaySteps = this.maxRaySteps;
         target.epsilon = this.epsilon;
@@ -399,6 +408,9 @@ public abstract class AbstractFractalParams implements FractalParams {
     // Camera
     public Camera getCamera() { return camera; }
     public void setCamera(Camera camera) { this.camera = camera; }
+    
+    public int getProjectionMode() { return projectionMode; }
+    public void setProjectionMode(int mode) { this.projectionMode = mode; }
 
     // FOV
     public float getFov() { return fov; }
