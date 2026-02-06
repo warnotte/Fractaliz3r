@@ -51,6 +51,9 @@ public class ExportPanel extends ScrollPane {
     // Motion blur callback
     private MotionBlurExportCallback motionBlurExportCallback;
 
+    // Prepare frame callback (applies timeline params on FX thread before render)
+    private Runnable prepareFrameCallback;
+
     // UI Components
     private TextField widthField;
     private TextField heightField;
@@ -122,6 +125,13 @@ public class ExportPanel extends ScrollPane {
      */
     public void setMotionBlurExportCallback(MotionBlurExportCallback callback) {
         this.motionBlurExportCallback = callback;
+    }
+
+    /**
+     * Set the callback to prepare/apply params on the FX thread before each frame render.
+     */
+    public void setPrepareFrameCallback(Runnable callback) {
+        this.prepareFrameCallback = callback;
     }
 
     private VBox createContent() {
@@ -477,58 +487,52 @@ public class ExportPanel extends ScrollPane {
 
         System.out.println("[AnimExport] Starting animation export: " + totalFrames + " frames at " + exportWidth + "x" + exportHeight);
 
+        long exportStartTime = System.currentTimeMillis();
+
         Thread exportThread = new Thread(() -> {
             try {
                 for (int frame = 0; frame < totalFrames && !exportCancelled; frame++) {
                     final int currentFrame = frame;
                     double time = frame / timeline.getFrameRate();
 
-                    // Apply timeline values on JavaFX thread and wait
-                    java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+                    // Step 1: Apply params on FX thread (quick, <1ms)
+                    java.util.concurrent.CountDownLatch prepareLatch = new java.util.concurrent.CountDownLatch(1);
                     Platform.runLater(() -> {
                         try {
                             timeline.setCurrentTime(time);
-                            // Params are applied via AnimationPanel's listener
+                            if (prepareFrameCallback != null) prepareFrameCallback.run();
                             frameProgressLabel.setText(String.format("Frame %d / %d", currentFrame + 1, totalFrames));
-                            animExportStatusLabel.setText("Rendering frames...");
-                            frameProgress.setProgress(0);
+                            animExportStatusLabel.setText("Rendering...");
                         } finally {
-                            latch.countDown();
+                            prepareLatch.countDown();
                         }
                     });
-                    latch.await();
+                    prepareLatch.await();
 
-                    // Small delay to ensure params are applied
-                    Thread.sleep(50);
-
-                    // Create frame file
+                    // Step 2: Render on background thread (GL work delegates to GL thread internally)
                     File frameFile = new File(exportDir, String.format("frame_%05d.png", currentFrame));
-
-                    // Render and save frame (synchronous call on JavaFX thread)
-                    java.util.concurrent.CountDownLatch renderLatch = new java.util.concurrent.CountDownLatch(1);
                     final double frameTime = time;
-                    Platform.runLater(() -> {
-                        try {
-                            if (useMotionBlur) {
-                                // Use motion blur callback with temporal jittering
-                                motionBlurExportCallback.exportFrameWithMotionBlur(
-                                    frameFile, exportWidth, exportHeight, exportSamples,
-                                    frameTime, fps, shutterAngle);
-                            } else {
-                                // Normal export without motion blur
-                                animationExportCallback.exportFrame(frameFile, exportWidth, exportHeight, exportSamples);
-                            }
-                        } finally {
-                            renderLatch.countDown();
-                        }
-                    });
-                    renderLatch.await();
+                    if (useMotionBlur) {
+                        motionBlurExportCallback.exportFrameWithMotionBlur(
+                            frameFile, exportWidth, exportHeight, exportSamples,
+                            frameTime, fps, shutterAngle);
+                    } else {
+                        animationExportCallback.exportFrame(frameFile, exportWidth, exportHeight, exportSamples);
+                    }
 
-                    // Update total progress
-                    final double progress = (double) (frame + 1) / totalFrames;
+                    // Step 3: Update progress on FX thread (quick)
+                    final double progress = (double) (currentFrame + 1) / totalFrames;
+                    long elapsed = System.currentTimeMillis() - exportStartTime;
+                    long estimatedTotal = (long) (elapsed / progress);
+                    long remaining = estimatedTotal - elapsed;
+                    final String etaText = String.format(
+                        "Frame %d / %d — %s elapsed — ~%s remaining",
+                        currentFrame + 1, totalFrames,
+                        formatDuration(elapsed), formatDuration(remaining));
                     Platform.runLater(() -> {
                         totalProgress.setProgress(progress);
                         frameProgress.setProgress(1.0);
+                        animExportStatusLabel.setText(etaText);
                     });
                 }
 
@@ -682,6 +686,20 @@ public class ExportPanel extends ScrollPane {
 
     public boolean isExporting() {
         return exporting;
+    }
+
+    /**
+     * Format a duration in milliseconds as a human-readable string.
+     */
+    private static String formatDuration(long ms) {
+        long totalSeconds = ms / 1000;
+        if (totalSeconds < 60) return totalSeconds + "s";
+        long minutes = totalSeconds / 60;
+        long seconds = totalSeconds % 60;
+        if (minutes < 60) return minutes + "m" + String.format("%02d", seconds) + "s";
+        long hours = minutes / 60;
+        minutes = minutes % 60;
+        return hours + "h" + String.format("%02d", minutes) + "m";
     }
 
     /**

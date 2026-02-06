@@ -11,16 +11,22 @@ public class MandelboxParams extends AbstractFractalParams {
     // ========================================================================
 
     // Scale factor (-3 to 3, classic is -1.5 or 2.0)
+    @Animatable(display = "Scale")
     private float scale;
 
     // Sphere radii for spherical folding
+    @Animatable(display = "Min Radius")
     private float minRadius;      // Inner sphere (typically 0.25-0.5)
+
+    @Animatable(display = "Fixed Radius")
     private float fixedRadius;    // Outer sphere (typically 1.0)
 
     // Folding limit for box fold
+    @Animatable(display = "Folding Limit")
     private float foldingLimit;   // Typically 1.0
 
     // Fractal iteration count
+    @Animatable(display = "Iterations")
     private int maxIterations;
 
     public MandelboxParams() {

@@ -19,22 +19,51 @@ public class PolyhedralIFSParams extends AbstractFractalParams {
     }
 
     private PolyType polyType = PolyType.OCTAHEDRAL;
+
+    @Animatable(display = "Iterations")
     private int maxIterations = 15;
+
+    @Animatable(display = "Scale")
     private float scale = 2.0f;
-    
+
     // Translation offsets
+    @Animatable(display = "Offset X")
     private float offsetX = 1.0f;
+
+    @Animatable(display = "Offset Y")
     private float offsetY = 1.0f;
+
+    @Animatable(display = "Offset Z")
     private float offsetZ = 1.0f;
-    
+
     // Fold shifts
+    @Animatable(display = "Shift X")
     private float shiftX = 0.0f;
+
+    @Animatable(display = "Shift Y")
     private float shiftY = 0.0f;
+
+    @Animatable(display = "Shift Z")
     private float shiftZ = 0.0f;
 
     // Rotation angles (Euler) for fractal rotations 1 and 2
-    private float rot1X = 0, rot1Y = 0, rot1Z = 0;
-    private float rot2X = 0, rot2Y = 0, rot2Z = 0;
+    @Animatable(display = "Rot1 X")
+    private float rot1X = 0;
+
+    @Animatable(display = "Rot1 Y")
+    private float rot1Y = 0;
+
+    @Animatable(display = "Rot1 Z")
+    private float rot1Z = 0;
+
+    @Animatable(display = "Rot2 X")
+    private float rot2X = 0;
+
+    @Animatable(display = "Rot2 Y")
+    private float rot2Y = 0;
+
+    @Animatable(display = "Rot2 Z")
+    private float rot2Z = 0;
 
     public PolyhedralIFSParams() {
         super();

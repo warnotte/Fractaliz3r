@@ -11,14 +11,21 @@ public class MengerSpongeParams extends AbstractFractalParams {
     // ========================================================================
 
     // Number of folding iterations (3-10 typical)
+    @Animatable(display = "Iterations")
     private int maxIterations;
 
     // Scale factor per iteration (classic is 3.0)
+    @Animatable(display = "Scale")
     private float scale;
 
     // Offset for variation
+    @Animatable(display = "Offset X")
     private float offsetX;
+
+    @Animatable(display = "Offset Y")
     private float offsetY;
+
+    @Animatable(display = "Offset Z")
     private float offsetZ;
 
     public MengerSpongeParams() {

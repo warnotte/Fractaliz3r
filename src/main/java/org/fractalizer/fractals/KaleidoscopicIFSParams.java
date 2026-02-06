@@ -12,17 +12,23 @@ public class KaleidoscopicIFSParams extends AbstractFractalParams {
     // ========================================================================
 
     // Number of IFS iterations
+    @Animatable(display = "Iterations")
     private int maxIterations;
 
     // Scale factor per iteration (2.0 for classic Sierpinski)
+    @Animatable(display = "Scale")
     private float scale;
 
     // Optional rotation angles for variety (in degrees)
+    @Animatable(display = "Fold Angle X")
     private float foldAngleX;
+
+    @Animatable(display = "Fold Angle Y")
     private float foldAngleY;
 
     // Scalar offset for translation (3.0 for classic Sierpinski)
     // Note: stored in offsetX, offsetY/Z are unused but kept for UI compatibility
+    @Animatable(display = "Offset X")
     private float offsetX;
     private float offsetY;
     private float offsetZ;

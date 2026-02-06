@@ -35,6 +35,30 @@ public class TimelineWidget extends VBox {
     private final Timeline timeline;
     private final List<TrackInfo> visibleTracks = new ArrayList<>();
 
+    // Group header color
+    private static final Color GROUP_HEADER_COLOR = Color.rgb(55, 55, 70);
+    private static final Color GROUP_HEADER_TEXT = Color.rgb(180, 180, 200);
+    private static final double GROUP_HEADER_HEIGHT = 18;
+
+    /** The global tracks organized into groups. */
+    private static final List<TrackInfo> GLOBAL_TRACKS = List.of(
+        // Camera group
+        TrackInfo.groupHeader("Camera", Color.rgb(100, 200, 255)),
+        new TrackInfo("camPos", "Position", Color.rgb(100, 200, 255)),
+        new TrackInfo("camQuat", "Rotation", Color.rgb(150, 200, 255)),
+        new TrackInfo("fov", "FOV", Color.rgb(200, 150, 255)),
+        // DoF group
+        TrackInfo.groupHeader("Depth of Field", Color.rgb(255, 200, 100)),
+        new TrackInfo("focalDistance", "Focal Dist", Color.rgb(255, 200, 100)),
+        new TrackInfo("aperture", "Aperture", Color.rgb(255, 180, 100)),
+        // Lighting group
+        TrackInfo.groupHeader("Lighting", Color.rgb(255, 255, 150)),
+        new TrackInfo("lightDir", "Direction", Color.rgb(255, 255, 150)),
+        // Color group
+        TrackInfo.groupHeader("Color", Color.rgb(255, 150, 200)),
+        new TrackInfo("baseHue", "Base Hue", Color.rgb(255, 150, 200))
+    );
+
     // UI Components
     private final Canvas canvas;
     private HBox transportBar;
@@ -273,8 +297,8 @@ public class TimelineWidget extends VBox {
         if (scrollOffsetX > maxScrollX) scrollOffsetX = maxScrollX;
         hScrollBar.setValue(scrollOffsetX);
 
-        // Vertical scrollbar: total tracks height
-        double totalTracksHeight = RULER_HEIGHT + visibleTracks.size() * TRACK_HEIGHT;
+        // Vertical scrollbar: total tracks height (headers are shorter)
+        double totalTracksHeight = RULER_HEIGHT + computeTotalTracksHeight();
         double visibleHeight = canvasHeight;
         double maxScrollY = Math.max(0, totalTracksHeight - canvasHeight);
 
@@ -288,15 +312,8 @@ public class TimelineWidget extends VBox {
     }
 
     private void initializeTrackInfo() {
-        // Define which tracks to show and their display names
         visibleTracks.clear();
-        visibleTracks.add(new TrackInfo("camPos", "Camera Pos", Color.rgb(100, 200, 255)));
-        visibleTracks.add(new TrackInfo("camQuat", "Camera Rot", Color.rgb(150, 200, 255)));
-        visibleTracks.add(new TrackInfo("fov", "FOV", Color.rgb(200, 150, 255)));
-        visibleTracks.add(new TrackInfo("focalDistance", "Focal Dist", Color.rgb(255, 200, 100)));
-        visibleTracks.add(new TrackInfo("aperture", "Aperture", Color.rgb(255, 180, 100)));
-        visibleTracks.add(new TrackInfo("lightDir", "Light Dir", Color.rgb(255, 255, 150)));
-        visibleTracks.add(new TrackInfo("baseHue", "Base Hue", Color.rgb(255, 150, 200)));
+        visibleTracks.addAll(GLOBAL_TRACKS);
     }
 
     private HBox createTransportBar() {
@@ -497,48 +514,71 @@ public class TimelineWidget extends VBox {
 
     private void drawTracks(GraphicsContext gc, double width, double height) {
         double y = RULER_HEIGHT - scrollOffsetY;
+        int trackIndex = 0; // counter for alternating background (excludes headers)
 
         for (int i = 0; i < visibleTracks.size(); i++) {
             TrackInfo info = visibleTracks.get(i);
-            AnimationTrack<?> track = timeline.getTrack(info.trackName);
+            double rh = rowHeight(info);
 
-            // Skip tracks that are completely off-screen
-            if (y + TRACK_HEIGHT < RULER_HEIGHT || y > height) {
-                y += TRACK_HEIGHT;
+            // Skip rows that are completely off-screen
+            if (y + rh < RULER_HEIGHT || y > height) {
+                y += rh;
+                if (!info.isGroupHeader) trackIndex++;
                 continue;
             }
 
-            // Track background
-            gc.setFill(i % 2 == 0 ? TRACK_COLOR_1 : TRACK_COLOR_2);
-            gc.fillRect(0, y, width, TRACK_HEIGHT);
+            if (info.isGroupHeader) {
+                // Draw group header bar
+                gc.setFill(GROUP_HEADER_COLOR);
+                gc.fillRect(0, y, width, rh);
 
-            // Track label background
-            gc.setFill(Color.rgb(50, 50, 60));
-            gc.fillRect(0, y, TRACK_LABEL_WIDTH, TRACK_HEIGHT);
+                // Group name with accent color
+                gc.setFill(info.color);
+                gc.setTextAlign(TextAlignment.LEFT);
+                gc.setFont(Font.font("System", 10));
+                gc.fillText(info.displayName.toUpperCase(), 5, y + rh - 5);
 
-            // Track label
-            gc.setFill(info.color);
-            gc.setTextAlign(TextAlignment.LEFT);
-            gc.setFont(Font.font("System", 11));
-            gc.fillText(info.displayName, 5, y + TRACK_HEIGHT - 7);
+                // Subtle line under header
+                gc.setStroke(info.color.deriveColor(0, 1, 1, 0.3));
+                gc.setLineWidth(1);
+                gc.strokeLine(TRACK_LABEL_WIDTH, y + rh - 0.5, width, y + rh - 0.5);
+            } else {
+                AnimationTrack<?> track = timeline.getTrack(info.trackName);
 
-            // Draw keyframes
-            if (track != null) {
-                drawKeyframes(gc, track, info, y, width);
-            }
+                // Track background (alternating)
+                gc.setFill(trackIndex % 2 == 0 ? TRACK_COLOR_1 : TRACK_COLOR_2);
+                gc.fillRect(0, y, width, rh);
 
-            // Grid lines
-            gc.setStroke(GRID_COLOR.deriveColor(0, 1, 1, 0.3));
-            double tickInterval = calculateTickInterval();
-            double startTime = Math.floor(scrollOffsetX / pixelsPerSecond / tickInterval) * tickInterval;
-            for (double time = startTime; time <= timeline.getDuration(); time += tickInterval) {
-                double x = TRACK_LABEL_WIDTH + (time * pixelsPerSecond) - scrollOffsetX;
-                if (x >= TRACK_LABEL_WIDTH && x <= width) {
-                    gc.strokeLine(x, y, x, y + TRACK_HEIGHT);
+                // Track label background
+                gc.setFill(Color.rgb(50, 50, 60));
+                gc.fillRect(0, y, TRACK_LABEL_WIDTH, rh);
+
+                // Track label (indented for grouped feel)
+                gc.setFill(info.color);
+                gc.setTextAlign(TextAlignment.LEFT);
+                gc.setFont(Font.font("System", 11));
+                gc.fillText(info.displayName, 10, y + rh - 7);
+
+                // Draw keyframes
+                if (track != null) {
+                    drawKeyframes(gc, track, info, y, width);
                 }
+
+                // Grid lines
+                gc.setStroke(GRID_COLOR.deriveColor(0, 1, 1, 0.3));
+                double tickInterval = calculateTickInterval();
+                double startTime = Math.floor(scrollOffsetX / pixelsPerSecond / tickInterval) * tickInterval;
+                for (double time = startTime; time <= timeline.getDuration(); time += tickInterval) {
+                    double x = TRACK_LABEL_WIDTH + (time * pixelsPerSecond) - scrollOffsetX;
+                    if (x >= TRACK_LABEL_WIDTH && x <= width) {
+                        gc.strokeLine(x, y, x, y + rh);
+                    }
+                }
+
+                trackIndex++;
             }
 
-            y += TRACK_HEIGHT;
+            y += rh;
         }
     }
 
@@ -730,22 +770,27 @@ public class TimelineWidget extends VBox {
         double y = RULER_HEIGHT - scrollOffsetY;
 
         for (TrackInfo info : visibleTracks) {
-            AnimationTrack<?> track = timeline.getTrack(info.trackName);
-            if (track != null && mouseY >= y && mouseY < y + TRACK_HEIGHT && mouseY >= RULER_HEIGHT) {
-                double centerY = y + TRACK_HEIGHT / 2;
+            double rh = rowHeight(info);
 
-                for (Keyframe<?> kf : track.getKeyframes()) {
-                    double kfX = TRACK_LABEL_WIDTH + (kf.getTime() * pixelsPerSecond) - scrollOffsetX;
+            if (!info.isGroupHeader) {
+                AnimationTrack<?> track = timeline.getTrack(info.trackName);
+                if (track != null && mouseY >= y && mouseY < y + rh && mouseY >= RULER_HEIGHT) {
+                    double centerY = y + rh / 2;
 
-                    // Check if mouse is within diamond bounds
-                    double dx = Math.abs(mouseX - kfX);
-                    double dy = Math.abs(mouseY - centerY);
-                    if (dx + dy <= KEYFRAME_SIZE) {
-                        return new KeyframeHandle(info.trackName, kf.getTime());
+                    for (Keyframe<?> kf : track.getKeyframes()) {
+                        double kfX = TRACK_LABEL_WIDTH + (kf.getTime() * pixelsPerSecond) - scrollOffsetX;
+
+                        // Check if mouse is within diamond bounds
+                        double dx = Math.abs(mouseX - kfX);
+                        double dy = Math.abs(mouseY - centerY);
+                        if (dx + dy <= KEYFRAME_SIZE) {
+                            return new KeyframeHandle(info.trackName, kf.getTime());
+                        }
                     }
                 }
             }
-            y += TRACK_HEIGHT;
+
+            y += rh;
         }
         return null;
     }
@@ -819,6 +864,20 @@ public class TimelineWidget extends VBox {
     // ========================================================================
     // Helpers
     // ========================================================================
+
+    /** Compute the height of a given row (group header vs normal track). */
+    private double rowHeight(TrackInfo info) {
+        return info.isGroupHeader ? GROUP_HEADER_HEIGHT : TRACK_HEIGHT;
+    }
+
+    /** Compute total height of all visible track rows. */
+    private double computeTotalTracksHeight() {
+        double total = 0;
+        for (TrackInfo info : visibleTracks) {
+            total += rowHeight(info);
+        }
+        return total;
+    }
 
     private double calculateTickInterval() {
         // Aim for ticks every ~50-100 pixels
@@ -908,19 +967,53 @@ public class TimelineWidget extends VBox {
         redraw();
     }
 
+    /**
+     * Update the fractal-specific tracks displayed in the timeline.
+     * Replaces any previous fractal tracks while keeping the global tracks.
+     * @param fractalDisplayName Display name for the group header (e.g. "Mandelbulb")
+     * @param fractalTracks      List of fractal-specific track infos
+     */
+    public void updateFractalTracks(String fractalDisplayName, List<TrackInfo> fractalTracks) {
+        visibleTracks.clear();
+        visibleTracks.addAll(GLOBAL_TRACKS);
+        if (fractalTracks != null && !fractalTracks.isEmpty()) {
+            // Derive header color from the first fractal track
+            Color headerColor = fractalTracks.get(0).color;
+            visibleTracks.add(TrackInfo.groupHeader(fractalDisplayName, headerColor));
+            visibleTracks.addAll(fractalTracks);
+        }
+        updateScrollBars();
+        redraw();
+    }
+
     // ========================================================================
     // Inner classes
     // ========================================================================
 
-    private static class TrackInfo {
-        final String trackName;
+    /** Describes a track's display properties in the timeline widget. */
+    public static class TrackInfo {
+        final String trackName;   // null for group headers
         final String displayName;
         final Color color;
+        final boolean isGroupHeader;
 
-        TrackInfo(String trackName, String displayName, Color color) {
+        public TrackInfo(String trackName, String displayName, Color color) {
             this.trackName = trackName;
             this.displayName = displayName;
             this.color = color;
+            this.isGroupHeader = false;
+        }
+
+        /** Create a group header entry (no track, just a visual separator). */
+        public static TrackInfo groupHeader(String groupName, Color color) {
+            return new TrackInfo(groupName, color);
+        }
+
+        private TrackInfo(String displayName, Color color) {
+            this.trackName = null;
+            this.displayName = displayName;
+            this.color = color;
+            this.isGroupHeader = true;
         }
     }
 

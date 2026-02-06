@@ -160,6 +160,23 @@ public class GLSLFractalizerApp extends Application {
         // Bottom: Timeline
         TimelineWidget timelineWidget = createTimelinePanel();
 
+        // Wire fractal type changes to animation manager
+        fractalPanel.setOnFractalTypeChanged((type, params) ->
+            animationManager.onFractalTypeChanged(type, params)
+        );
+        // Initial sync: register the current fractal type with animation manager
+        animationManager.onFractalTypeChanged(initialParams.getType(), initialParams);
+
+        // Refresh all UI panel sliders when timeline applies values (scrub/playback)
+        // Skip during animation export to avoid unnecessary UI updates
+        animationManager.setOnParamsApplied(() -> {
+            if (!exportingAnimation) {
+                for (Refreshable pnl : refreshablePanels) {
+                    pnl.refreshFromParams(true);
+                }
+            }
+        });
+
         // Layout with SplitPanes
         SplitPane horizontalSplit = new SplitPane();
         horizontalSplit.getItems().addAll(imageContainer, controlTabs);
@@ -215,21 +232,22 @@ public class GLSLFractalizerApp extends Application {
 
         // Connect export panel to timeline (after animationManager is created)
         exportPanel.setTimelineSupplier(() -> animationManager.getTimeline());
+        exportPanel.setPrepareFrameCallback(() -> animationManager.applyTimelineToParams());
         exportPanel.setAnimationExportCallback((file, width, height, samples) -> {
-            animationManager.applyTimelineToParams();
+            // Called on background thread - render only (GL delegates internally)
             javafx.scene.image.Image image = controller.exportAnimationFrame(file, width, height, samples);
-            updateImage(image);
+            Platform.runLater(() -> updateImage(image));
         });
         exportPanel.setMotionBlurExportCallback((file, width, height, samples, frameTime, fps, shutterAngle) -> {
-            // Motion blur: render samples at jittered times
+            // Called on background thread - render only (GL delegates internally)
             javafx.scene.image.Image image = controller.exportAnimationFrameWithMotionBlur(
                 file, width, height, samples, frameTime, fps, shutterAngle,
                 time -> {
-                    // Apply animation params at the jittered time
+                    // Sub-frame time jittering
                     animationManager.getTimeline().setCurrentTime(time);
                     animationManager.applyTimelineToParams();
                 });
-            updateImage(image);
+            Platform.runLater(() -> updateImage(image));
         });
         exportPanel.setExportStateCallback(exporting -> {
             this.exportingAnimation = exporting;
@@ -467,6 +485,11 @@ public class GLSLFractalizerApp extends Application {
                     requestRender();
                 }
 
+                // Animation playback
+                if (animationManager != null && animationManager.updatePlayback(now)) {
+                    requestRender();
+                }
+
                 if (needsRender && (System.currentTimeMillis() - lastRenderTime > RENDER_DELAY_MS)) {
                     renderPreview();
                     needsRender = false;
@@ -564,9 +587,14 @@ public class GLSLFractalizerApp extends Application {
                 pnl.refreshFromParams();
             }
 
-            // Import animation if present
-            if (animationManager != null && config.animation != null) {
-                animationManager.importAnimation(config.animation);
+            // Sync animation manager with loaded fractal type
+            if (animationManager != null) {
+                animationManager.onFractalTypeChanged(params.getType(), params);
+
+                // Import animation if present
+                if (config.animation != null) {
+                    animationManager.importAnimation(config.animation);
+                }
             }
 
             currentConfigFile = file;

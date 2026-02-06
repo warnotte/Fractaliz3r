@@ -17,13 +17,23 @@ public class Julia3DParams extends AbstractFractalParams {
     // Julia 3D-specific parameters
     // ========================================================================
 
+    @Animatable(display = "Iterations")
     private int maxIterations;
+
+    @Animatable(display = "Bailout")
     private float bailout;
 
     // Julia constant quaternion (cx, cy, cz, cw)
+    @Animatable(display = "Julia Cx")
     private float juliaCx;
+
+    @Animatable(display = "Julia Cy")
     private float juliaCy;
+
+    @Animatable(display = "Julia Cz")
     private float juliaCz;
+
+    @Animatable(display = "Julia Cw")
     private float juliaCw;
 
     public Julia3DParams() {

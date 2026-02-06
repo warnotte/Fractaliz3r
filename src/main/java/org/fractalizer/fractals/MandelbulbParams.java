@@ -11,10 +11,14 @@ public class MandelbulbParams extends AbstractFractalParams {
     // ========================================================================
 
     // Mandelbulb power (classic is 8)
+    @Animatable(display = "Power")
     private float power;
 
     // Fractal iteration parameters
+    @Animatable(display = "Iterations")
     private int maxIterations;
+
+    @Animatable(display = "Bailout")
     private float bailout;
 
     public MandelbulbParams() {

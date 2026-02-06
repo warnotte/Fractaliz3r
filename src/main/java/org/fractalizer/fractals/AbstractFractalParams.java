@@ -2,11 +2,23 @@ package org.fractalizer.fractals;
 
 import org.fractalizer.engine.Camera;
 
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Abstract base class for fractal parameters.
  * Contains all common rendering parameters shared across fractal types.
  */
 public abstract class AbstractFractalParams implements FractalParams {
+
+    // Cache of animatable field metadata per concrete class (fields don't change at runtime)
+    private static final Map<Class<?>, List<AnimatableFieldInfo>> FIELD_INFO_CACHE = new ConcurrentHashMap<>();
+
+    /** Internal record to cache field reflection info without binding to a specific instance. */
+    private record AnimatableFieldInfo(Field field, String name, String displayName, Class<?> valueType) {}
 
     // Render mode constants (must match shaders/common.glsl RENDER_MODE_* defines)
     public static final int RENDER_FINAL = 0;
@@ -289,6 +301,81 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.shadowSteps = Math.max(32, this.shadowSteps / reductionFactor);
         target.aoSteps = 2;
         target.dofSamples = Math.max(4, this.dofSamples / reductionFactor);
+    }
+
+    // ========================================================================
+    // Animatable parameter discovery via reflection
+    // ========================================================================
+
+    /**
+     * Get the kernel name for this fractal type (e.g. "mandelbulb").
+     * Used to prefix animation track names.
+     */
+    public String getKernelName() {
+        return getType().getKernelName();
+    }
+
+    /**
+     * Discover all @Animatable fields in this concrete class via reflection.
+     * Field metadata is cached per class; getter/setter lambdas are bound to this instance.
+     */
+    public List<AnimatableParameter> getAnimatableParameters() {
+        List<AnimatableFieldInfo> fieldInfos = FIELD_INFO_CACHE.computeIfAbsent(this.getClass(), clazz -> {
+            List<AnimatableFieldInfo> infos = new ArrayList<>();
+            for (Field field : clazz.getDeclaredFields()) {
+                Animatable ann = field.getAnnotation(Animatable.class);
+                if (ann == null) continue;
+
+                field.setAccessible(true);
+
+                // Map primitive types to boxed types
+                Class<?> valueType;
+                if (field.getType() == float.class) {
+                    valueType = Float.class;
+                } else if (field.getType() == int.class) {
+                    valueType = Integer.class;
+                } else if (field.getType() == double.class) {
+                    valueType = Double.class;
+                } else {
+                    valueType = field.getType();
+                }
+
+                infos.add(new AnimatableFieldInfo(field, field.getName(), ann.display(), valueType));
+            }
+            return infos;
+        });
+
+        // Build AnimatableParameter list with getter/setter bound to THIS instance
+        List<AnimatableParameter> params = new ArrayList<>(fieldInfos.size());
+        for (AnimatableFieldInfo info : fieldInfos) {
+            final Field f = info.field();
+            params.add(new AnimatableParameter(
+                info.name(), info.displayName(), info.valueType(),
+                () -> {
+                    try {
+                        return f.get(this);
+                    } catch (IllegalAccessException e) {
+                        throw new RuntimeException("Cannot read animatable field: " + f.getName(), e);
+                    }
+                },
+                value -> {
+                    try {
+                        if (f.getType() == int.class && value instanceof Number n) {
+                            f.setInt(this, n.intValue());
+                        } else if (f.getType() == float.class && value instanceof Number n) {
+                            f.setFloat(this, n.floatValue());
+                        } else if (f.getType() == double.class && value instanceof Number n) {
+                            f.setDouble(this, n.doubleValue());
+                        } else {
+                            f.set(this, value);
+                        }
+                    } catch (IllegalAccessException e) {
+                        throw new RuntimeException("Cannot write animatable field: " + f.getName(), e);
+                    }
+                }
+            ));
+        }
+        return params;
     }
 
     // ========================================================================

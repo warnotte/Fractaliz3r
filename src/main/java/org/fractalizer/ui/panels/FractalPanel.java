@@ -24,6 +24,9 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     // Suppress render during refresh
     private boolean suppressRender = false;
 
+    // Callback notified when fractal type changes (for animation manager)
+    private java.util.function.BiConsumer<FractalType, AbstractFractalParams> onFractalTypeChanged;
+
     // Fractal type combo
     private ComboBox<FractalType> typeCombo;
 
@@ -610,6 +613,11 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             // Sync all UI controls to the new (or cached) parameters
             refreshFromParams(true);
 
+            // Notify animation manager of fractal type change
+            if (onFractalTypeChanged != null) {
+                onFractalTypeChanged.accept(selectedType, params);
+            }
+
             renderCallback.requestRender();
         });
 
@@ -736,5 +744,12 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         this.params = newParams;
         this.camera = newParams.getCamera();
         refreshFromParams(true);
+    }
+
+    /**
+     * Set callback for fractal type changes (used by AnimationManager).
+     */
+    public void setOnFractalTypeChanged(java.util.function.BiConsumer<FractalType, AbstractFractalParams> callback) {
+        this.onFractalTypeChanged = callback;
     }
 }

@@ -6,14 +6,21 @@ import org.fractalizer.animation.Timeline;
 import org.fractalizer.config.FractalConfig;
 import org.fractalizer.engine.Camera;
 import org.fractalizer.fractals.AbstractFractalParams;
+import org.fractalizer.fractals.AnimatableParameter;
+import org.fractalizer.fractals.FractalType;
 import org.fractalizer.ui.timeline.TimelineWidget;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import javafx.scene.paint.Color;
+
 /**
  * Manages animation timeline and keyframe operations.
- * Extracted from GLSLFractalizerApp to simplify the main application class.
+ * Supports both global tracks (camera, FOV, lighting) and
+ * fractal-specific tracks discovered via @Animatable annotations.
  */
 public class AnimationManager {
 
@@ -22,6 +29,13 @@ public class AnimationManager {
     private final Supplier<AbstractFractalParams> paramsSupplier;
     private final Runnable onRenderRequest;
     private final Consumer<String> statusUpdater;
+
+    // Callback fired after timeline values are applied to params (for UI refresh)
+    private Runnable onParamsApplied;
+
+    // Current fractal type and its animatable descriptors
+    private FractalType currentFractalType;
+    private List<AnimatableParameter> currentFractalDescriptors = List.of();
 
     // Playback state
     private long lastPlaybackTime = 0;
@@ -70,6 +84,54 @@ public class AnimationManager {
         timeline.createTrack("baseHue", float[].class, new float[]{0.6f, 0.3f, 0.1f});
     }
 
+    // ========================================================================
+    // Fractal-specific track management
+    // ========================================================================
+
+    /**
+     * Called when the fractal type changes. Discovers animatable parameters
+     * via reflection and creates/updates timeline tracks and widget display.
+     */
+    public void onFractalTypeChanged(FractalType type, AbstractFractalParams params) {
+        this.currentFractalType = type;
+        this.currentFractalDescriptors = params.getAnimatableParameters();
+
+        String kernelName = params.getKernelName();
+
+        // Ensure timeline tracks exist for each animatable parameter
+        for (AnimatableParameter desc : currentFractalDescriptors) {
+            String trackName = desc.trackName(kernelName);
+            if (timeline.getTrack(trackName) == null) {
+                // Create track with default value from current params
+                Object currentValue = desc.getter().get();
+                if (desc.valueType() == Float.class) {
+                    timeline.createTrack(trackName, Float.class, ((Number) currentValue).floatValue());
+                } else if (desc.valueType() == Integer.class) {
+                    timeline.createTrack(trackName, Integer.class, ((Number) currentValue).intValue());
+                } else if (desc.valueType() == Double.class) {
+                    timeline.createTrack(trackName, Double.class, ((Number) currentValue).doubleValue());
+                }
+            }
+        }
+
+        // Build TrackInfo list for the widget with auto-generated colors
+        List<TimelineWidget.TrackInfo> fractalTrackInfos = new ArrayList<>();
+        for (int i = 0; i < currentFractalDescriptors.size(); i++) {
+            AnimatableParameter desc = currentFractalDescriptors.get(i);
+            String trackName = desc.trackName(kernelName);
+            // Generate color by hue rotation
+            double hue = (i * 37.0) % 360; // golden angle-ish spread
+            Color color = Color.hsb(hue, 0.6, 0.9);
+            fractalTrackInfos.add(new TimelineWidget.TrackInfo(trackName, desc.displayName(), color));
+        }
+
+        timelineWidget.updateFractalTracks(type.getDisplayName(), fractalTrackInfos);
+    }
+
+    // ========================================================================
+    // Keyframe operations
+    // ========================================================================
+
     /**
      * Add a keyframe at the current time.
      * If a track is selected, only add for that track.
@@ -96,7 +158,7 @@ public class AnimationManager {
         double time = timeline.getCurrentTime();
         Easing easing = timelineWidget.getSelectedEasing();
 
-        // Add keyframes for all tracks
+        // Add keyframes for global tracks
         addKeyframeForTrack("camPos", time, easing, params);
         addKeyframeForTrack("camQuat", time, easing, params);
         addKeyframeForTrack("fov", time, easing, params);
@@ -104,6 +166,9 @@ public class AnimationManager {
         addKeyframeForTrack("aperture", time, easing, params);
         addKeyframeForTrack("lightDir", time, easing, params);
         addKeyframeForTrack("baseHue", time, easing, params);
+
+        // Add keyframes for fractal-specific tracks
+        addFractalKeyframes(time, easing, params);
 
         timelineWidget.refresh();
         if (statusUpdater != null) {
@@ -148,7 +213,7 @@ public class AnimationManager {
     }
 
     /**
-     * Add a keyframe for a specific track.
+     * Add a keyframe for a specific track (global or fractal-specific).
      */
     private void addKeyframeForTrack(String trackName, double time, Easing easing, AbstractFractalParams params) {
         Camera camera = params.getCamera();
@@ -171,6 +236,56 @@ public class AnimationManager {
             case "baseHue" -> timeline.setKeyframe("baseHue", time, new float[]{
                     params.getHueR(), params.getHueG(), params.getHueB()
             }, easing);
+            default -> {
+                // Check if it's a fractal-specific track
+                addFractalKeyframeForTrack(trackName, time, easing, params);
+            }
+        }
+    }
+
+    /**
+     * Add keyframes for all fractal-specific animatable parameters.
+     */
+    private void addFractalKeyframes(double time, Easing easing, AbstractFractalParams params) {
+        if (currentFractalType == null) return;
+
+        String kernelName = params.getKernelName();
+        List<AnimatableParameter> descriptors = params.getAnimatableParameters();
+
+        for (AnimatableParameter desc : descriptors) {
+            String trackName = desc.trackName(kernelName);
+            Object value = desc.getter().get();
+            setFractalKeyframeValue(trackName, time, value, desc.valueType(), easing);
+        }
+    }
+
+    /**
+     * Add a keyframe for a single fractal-specific track by name.
+     */
+    private void addFractalKeyframeForTrack(String trackName, double time, Easing easing, AbstractFractalParams params) {
+        String kernelName = params.getKernelName();
+        List<AnimatableParameter> descriptors = params.getAnimatableParameters();
+
+        for (AnimatableParameter desc : descriptors) {
+            if (desc.trackName(kernelName).equals(trackName)) {
+                Object value = desc.getter().get();
+                setFractalKeyframeValue(trackName, time, value, desc.valueType(), easing);
+                return;
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void setFractalKeyframeValue(String trackName, double time, Object value, Class<?> valueType, Easing easing) {
+        AnimationTrack<?> track = timeline.getTrack(trackName);
+        if (track == null) return;
+
+        if (valueType == Float.class) {
+            ((AnimationTrack<Float>) track).setKeyframe(time, ((Number) value).floatValue(), easing);
+        } else if (valueType == Integer.class) {
+            ((AnimationTrack<Integer>) track).setKeyframe(time, ((Number) value).intValue(), easing);
+        } else if (valueType == Double.class) {
+            ((AnimationTrack<Double>) track).setKeyframe(time, ((Number) value).doubleValue(), easing);
         }
     }
 
@@ -220,6 +335,31 @@ public class AnimationManager {
             float[] hue = timeline.getValue("baseHue");
             params.materialHue(hue[0], hue[1], hue[2]);
         }
+
+        // Apply fractal-specific parameters
+        applyFractalTimelineToParams(params);
+
+        // Notify UI to refresh sliders
+        if (onParamsApplied != null) {
+            onParamsApplied.run();
+        }
+    }
+
+    /**
+     * Apply fractal-specific timeline values to params via descriptors.
+     */
+    private void applyFractalTimelineToParams(AbstractFractalParams params) {
+        String kernelName = params.getKernelName();
+        List<AnimatableParameter> descriptors = params.getAnimatableParameters();
+
+        for (AnimatableParameter desc : descriptors) {
+            String trackName = desc.trackName(kernelName);
+            AnimationTrack<?> track = timeline.getTrack(trackName);
+            if (track != null && track.hasKeyframes()) {
+                Object value = timeline.getValue(trackName);
+                desc.setter().accept(value);
+            }
+        }
     }
 
     /**
@@ -251,6 +391,14 @@ public class AnimationManager {
      */
     public boolean isPlaying() {
         return timeline.isPlaying();
+    }
+
+    /**
+     * Set callback fired after timeline values are applied to params.
+     * Used to refresh UI panel sliders during scrubbing/playback.
+     */
+    public void setOnParamsApplied(Runnable callback) {
+        this.onParamsApplied = callback;
     }
 
     /**
@@ -342,7 +490,7 @@ public class AnimationManager {
         for (FractalConfig.TrackConfig trackConfig : config.tracks) {
             var track = timeline.getTrack(trackConfig.name);
             if (track == null) {
-                // Create track if it doesn't exist
+                // Create track if it doesn't exist (handles fractal tracks from saved files)
                 Class<?> valueType = getTypeFromName(trackConfig.valueType);
                 if (valueType == null) continue;
                 track = createTrackForType(trackConfig.name, valueType, trackConfig.defaultValue);
@@ -358,6 +506,12 @@ public class AnimationManager {
                 Object value = convertValueFromJson(kfConfig.value, track.getValueType());
                 setKeyframeTyped(track, kfConfig.time, value, easing);
             }
+        }
+
+        // Re-sync the fractal tracks display after import
+        AbstractFractalParams params = paramsSupplier.get();
+        if (params != null) {
+            onFractalTypeChanged(params.getType(), params);
         }
 
         timeline.setCurrentTime(0);
