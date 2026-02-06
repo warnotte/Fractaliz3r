@@ -116,6 +116,19 @@ public class FractalConfig {
         public float cloudDensity = 0.5f;
         public float skySpeed = 1.0f;
         public float skyTime = 0.0f;
+        public float skyParallax = 0.25f;
+
+        // Lens Effects
+        public boolean lensEffectsEnabled = false;
+        public float lensDirtIntensity = 0.0f;
+        public float starburstIntensity = 0.0f;
+
+        // Volumetric Fog
+        public boolean volumetricFogEnabled = false;
+        public float fogDensity = 0.15f;
+        public float[] fogColor = {0.5f, 0.6f, 0.7f};
+        public float fogScattering = 0.5f;
+        public int fogSteps = 32;
 
         // Motion Blur
         public float shutterAngle = 180f;
@@ -205,6 +218,15 @@ public class FractalConfig {
         config.effects.cloudDensity = params.getCloudDensity();
         config.effects.skySpeed = params.getSkySpeed();
         config.effects.skyTime = params.getSkyTime();
+        config.effects.skyParallax = params.getSkyParallax();
+        config.effects.lensEffectsEnabled = params.isLensEffectsEnabled();
+        config.effects.lensDirtIntensity = params.getLensDirtIntensity();
+        config.effects.starburstIntensity = params.getStarburstIntensity();
+        config.effects.volumetricFogEnabled = params.isVolumetricFogEnabled();
+        config.effects.fogDensity = params.getFogDensity();
+        config.effects.fogColor = params.getFogColor().clone();
+        config.effects.fogScattering = params.getFogScattering();
+        config.effects.fogSteps = params.getFogSteps();
         config.effects.shutterAngle = params.getShutterAngle();
 
         // Fractal-specific parameters
@@ -268,6 +290,17 @@ public class FractalConfig {
         params.setCloudDensity(effects.cloudDensity);
         params.setSkySpeed(effects.skySpeed);
         params.setSkyTime(effects.skyTime);
+        params.setSkyParallax(effects.skyParallax);
+        params.setLensEffectsEnabled(effects.lensEffectsEnabled);
+        params.setLensDirtIntensity(effects.lensDirtIntensity);
+        params.setStarburstIntensity(effects.starburstIntensity);
+        params.setVolumetricFogEnabled(effects.volumetricFogEnabled);
+        params.setFogDensity(effects.fogDensity);
+        if (effects.fogColor != null && effects.fogColor.length == 3) {
+            params.setFogColor(effects.fogColor[0], effects.fogColor[1], effects.fogColor[2]);
+        }
+        params.setFogScattering(effects.fogScattering);
+        params.setFogSteps(effects.fogSteps);
         params.setShutterAngle(effects.shutterAngle);
 
         // Fractal-specific parameters

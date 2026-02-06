@@ -85,6 +85,19 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float cloudDensity;
     protected float skySpeed; // Renamed to "Variation" in UI
     protected float skyTime;  // Manual time control
+    protected float skyParallax;
+
+    // Lens Effects
+    protected boolean lensEffectsEnabled;
+    protected float lensDirtIntensity;
+    protected float starburstIntensity;
+
+    // Volumetric Fog
+    protected boolean volumetricFogEnabled;
+    protected float fogDensity;
+    protected float[] fogColorVec;
+    protected float fogScattering; // Anisotropy (-1 to 1)
+    protected int fogSteps;
 
     // Material System
     // Type: 0 = Lambertian (diffuse), 1 = Metallic, 2 = Glass (dielectric)
@@ -164,6 +177,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.cloudDensity = 0.5f;
         this.skySpeed = 1.0f; // Variation scale
         this.skyTime = 0.0f;
+        this.skyParallax = 0.25f;
 
         // Material defaults (Lambertian diffuse)
         this.materialType = MATERIAL_LAMBERTIAN;
@@ -172,6 +186,18 @@ public abstract class AbstractFractalParams implements FractalParams {
 
         // Motion blur defaults (180° = cinematic film standard)
         this.shutterAngle = 180.0f;
+
+        // Lens defaults
+        this.lensEffectsEnabled = false;
+        this.lensDirtIntensity = 0.0f;
+        this.starburstIntensity = 0.0f;
+
+        // Volumetric Fog defaults
+        this.volumetricFogEnabled = false;
+        this.fogDensity = 0.15f;
+        this.fogColorVec = new float[]{0.5f, 0.6f, 0.7f};
+        this.fogScattering = 0.5f; // Forward scattering
+        this.fogSteps = 32;
     }
 
     /**
@@ -233,6 +259,19 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.cloudDensity = this.cloudDensity;
         target.skySpeed = this.skySpeed;
         target.skyTime = this.skyTime;
+        target.skyParallax = this.skyParallax;
+
+        // Copy Lens Effects
+        target.lensEffectsEnabled = this.lensEffectsEnabled;
+        target.lensDirtIntensity = this.lensDirtIntensity;
+        target.starburstIntensity = this.starburstIntensity;
+
+        // Copy Volumetric Fog
+        target.volumetricFogEnabled = this.volumetricFogEnabled;
+        target.fogDensity = this.fogDensity;
+        target.fogColorVec = this.fogColorVec.clone();
+        target.fogScattering = this.fogScattering;
+        target.fogSteps = this.fogSteps;
 
         // Copy material
         target.materialType = this.materialType;
@@ -394,6 +433,32 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setSkySpeed(float speed) { this.skySpeed = speed; }
     public float getSkyTime() { return skyTime; }
     public void setSkyTime(float time) { this.skyTime = time; }
+    public float getSkyParallax() { return skyParallax; }
+    public void setSkyParallax(float parallax) { this.skyParallax = parallax; }
+
+    // Lens Effects
+    public boolean isLensEffectsEnabled() { return lensEffectsEnabled; }
+    public void setLensEffectsEnabled(boolean enabled) { this.lensEffectsEnabled = enabled; }
+    public float getLensDirtIntensity() { return lensDirtIntensity; }
+    public void setLensDirtIntensity(float intensity) { this.lensDirtIntensity = intensity; }
+    public float getStarburstIntensity() { return starburstIntensity; }
+    public void setStarburstIntensity(float intensity) { this.starburstIntensity = intensity; }
+
+    // Volumetric Fog
+    public boolean isVolumetricFogEnabled() { return volumetricFogEnabled; }
+    public void setVolumetricFogEnabled(boolean enabled) { this.volumetricFogEnabled = enabled; }
+    public float getFogDensity() { return fogDensity; }
+    public void setFogDensity(float density) { this.fogDensity = density; }
+    public float[] getFogColor() { return fogColorVec; }
+    public void setFogColor(float r, float g, float b) {
+        this.fogColorVec[0] = r;
+        this.fogColorVec[1] = g;
+        this.fogColorVec[2] = b;
+    }
+    public float getFogScattering() { return fogScattering; }
+    public void setFogScattering(float scattering) { this.fogScattering = scattering; }
+    public int getFogSteps() { return fogSteps; }
+    public void setFogSteps(int steps) { this.fogSteps = steps; }
 
     // Material
     public int getMaterialType() { return materialType; }

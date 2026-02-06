@@ -54,21 +54,34 @@ public class GLSLFractalizerController implements RenderController {
     public GLSLFractalizerController() throws IOException {
         this.engine = new GLSLEngine(viewportWidth, viewportHeight);
         this.progressiveRenderer = new ProgressiveRenderer(engine);
-
-        loadAllShaders();
-        setFractalType(FractalType.MANDELBULB);
     }
 
     /**
-     * Load all fractal shaders.
+     * Load all fractal shaders with progress reporting.
      */
+    public void loadAllShaders(java.util.function.BiConsumer<String, Double> progressCallback) {
+        FractalType[] types = FractalType.values();
+        for (int i = 0; i < types.length; i++) {
+            FractalType type = types[i];
+            String name = type.getKernelName();
+            String path = "/shaders/fractals/" + name + ".glsl";
+            
+            if (progressCallback != null) {
+                progressCallback.accept("Compiling " + type.getDisplayName() + "...", (double) i / types.length);
+            }
+            
+            engine.loadFractalShader(name, path);
+        }
+        
+        if (progressCallback != null) {
+            progressCallback.accept("Ready", 1.0);
+        }
+        
+        setFractalType(FractalType.MANDELBULB);
+    }
+
     private void loadAllShaders() {
-        engine.loadFractalShader("mandelbulb", "/shaders/fractals/mandelbulb.glsl");
-        engine.loadFractalShader("mandelbox", "/shaders/fractals/mandelbox.glsl");
-        engine.loadFractalShader("menger", "/shaders/fractals/menger.glsl");
-        engine.loadFractalShader("kaleidoscopic", "/shaders/fractals/kaleidoscopic.glsl");
-        engine.loadFractalShader("julia3d", "/shaders/fractals/julia3d.glsl");
-        engine.loadFractalShader("polyhedral", "/shaders/fractals/polyhedral.glsl");
+        loadAllShaders(null);
     }
 
     /**
@@ -463,6 +476,14 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("cloudDensity", params.getCloudDensity());
             uniforms.put("skySpeed", params.getSkySpeed());
             uniforms.put("skyTime", params.getSkyTime());
+            uniforms.put("skyParallax", params.getSkyParallax());
+
+            // Volumetric Fog
+            uniforms.put("volumetricFogEnabled", params.isVolumetricFogEnabled() ? 1 : 0);
+            uniforms.put("fogDensity", params.getFogDensity());
+            uniforms.put("fogColor", params.getFogColor());
+            uniforms.put("fogScattering", params.getFogScattering());
+            uniforms.put("fogSteps", params.getFogSteps());
 
             // Material System
             uniforms.put("materialType", params.getMaterialType());

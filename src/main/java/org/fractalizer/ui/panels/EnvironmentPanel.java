@@ -32,6 +32,14 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider cloudDensitySlider;
     private EnhancedSlider skySpeedSlider; // Variation
     private EnhancedSlider skyTimeSlider;
+    private EnhancedSlider skyParallaxSlider;
+    
+    // Volumetric Fog controls
+    private CheckBox fogEnabledCheck;
+    private EnhancedSlider fogDensitySlider;
+    private ColorPicker fogColorPicker;
+    private EnhancedSlider fogScatteringSlider;
+    private EnhancedSlider fogStepsSlider;
 
     public EnvironmentPanel(GLSLEngine engine, Supplier<AbstractFractalParams> paramsSupplier, Runnable onUpdate) {
         this.engine = engine;
@@ -134,10 +142,73 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
             }
         });
 
+        skyParallaxSlider = new EnhancedSlider("Parallax Strength", 0, 1, 0.25, false);
+        skyParallaxSlider.setPrecision(2);
+        skyParallaxSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setSkyParallax(v.floatValue());
+                onUpdate.run();
+            }
+        });
+
+        // Volumetric Fog Section
+        Label fogLabel = new Label("Volumetric Fog & God Rays");
+        fogLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
+        
+        fogEnabledCheck = new CheckBox("Enable Volumetric Fog");
+        fogEnabledCheck.setStyle("-fx-font-weight: bold;");
+        fogEnabledCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setVolumetricFogEnabled(fogEnabledCheck.isSelected());
+                onUpdate.run();
+            }
+        });
+        
+        fogDensitySlider = new EnhancedSlider("Fog Density", 0, 1, 0.15, false);
+        fogDensitySlider.setPrecision(2);
+        fogDensitySlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setFogDensity(v.floatValue());
+                onUpdate.run();
+            }
+        });
+        
+        HBox fogColorBox = new HBox(10);
+        Label colorLabel = new Label("Fog Color:");
+        fogColorPicker = new ColorPicker(javafx.scene.paint.Color.rgb(128, 153, 178));
+        fogColorPicker.setMaxWidth(Double.MAX_VALUE);
+        fogColorPicker.setOnAction(e -> {
+            if (!suppressRender) {
+                javafx.scene.paint.Color c = fogColorPicker.getValue();
+                getParams().setFogColor((float) c.getRed(), (float) c.getGreen(), (float) c.getBlue());
+                onUpdate.run();
+            }
+        });
+        fogColorBox.getChildren().addAll(colorLabel, fogColorPicker);
+        
+        fogScatteringSlider = new EnhancedSlider("Scattering (Anisotropy)", -0.9, 0.9, 0.5, false);
+        fogScatteringSlider.setPrecision(2);
+        fogScatteringSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setFogScattering(v.floatValue());
+                onUpdate.run();
+            }
+        });
+        
+        fogStepsSlider = new EnhancedSlider("Quality (Samples)", 8, 64, 32, true);
+        fogStepsSlider.showTickMarks(true);
+        fogStepsSlider.setMajorTickUnit(8);
+        fogStepsSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setFogSteps(v.intValue());
+                onUpdate.run();
+            }
+        });
+
         // Info
         Label infoLabel = new Label(
             "Procedural sky uses FBM noise clouds.\n" +
-            "HDRI provides realistic 360° lighting."
+            "Volumetric fog creates rays of light (God Rays)."
         );
         infoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
 
@@ -146,7 +217,9 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
             new Separator(),
             hdriLabel, buttonBox, rotationSlider, lightingMixSlider,
             new Separator(),
-            skyLabel, typeBox, cloudDensitySlider, skySpeedSlider, skyTimeSlider,
+            skyLabel, typeBox, cloudDensitySlider, skySpeedSlider, skyTimeSlider, skyParallaxSlider,
+            new Separator(),
+            fogLabel, fogEnabledCheck, fogDensitySlider, fogColorBox, fogScatteringSlider, fogStepsSlider,
             new Separator(),
             infoLabel
         );
@@ -183,6 +256,14 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
             cloudDensitySlider.setValue(p.getCloudDensity());
             skySpeedSlider.setValue(p.getSkySpeed());
             skyTimeSlider.setValue(p.getSkyTime());
+            skyParallaxSlider.setValue(p.getSkyParallax());
+            
+            fogEnabledCheck.setSelected(p.isVolumetricFogEnabled());
+            fogDensitySlider.setValue(p.getFogDensity());
+            float[] fc = p.getFogColor();
+            fogColorPicker.setValue(javafx.scene.paint.Color.color(fc[0], fc[1], fc[2]));
+            fogScatteringSlider.setValue(p.getFogScattering());
+            fogStepsSlider.setValue(p.getFogSteps());
             
             // Re-sync engine state if needed
             rotationSlider.setValue(Math.toDegrees(engine.getEnvRotation()));

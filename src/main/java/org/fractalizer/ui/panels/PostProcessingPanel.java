@@ -5,9 +5,11 @@ import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.fractalizer.engine.GLSLEngine.PostProcessParams;
+import org.fractalizer.fractals.AbstractFractalParams;
 import org.fractalizer.ui.components.EnhancedSlider;
 
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Panel for post-processing settings.
@@ -17,6 +19,7 @@ import java.util.function.Consumer;
 public class PostProcessingPanel extends ScrollPane implements Refreshable {
 
     private final PostProcessParams params;
+    private final Supplier<AbstractFractalParams> fractalParamsSupplier;
     private final Runnable onUpdate;
     private boolean suppressRender = false;
 
@@ -35,6 +38,11 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider bloomThresholdSlider;
     private EnhancedSlider bloomRadiusSlider;
 
+    // Lens Effects
+    private CheckBox lensEffectsCheck;
+    private EnhancedSlider lensDirtSlider;
+    private EnhancedSlider starburstSlider;
+
     // Chromatic Aberration
     private CheckBox chromaticCheck;
     private EnhancedSlider chromaticIntensitySlider;
@@ -52,8 +60,9 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
     private CheckBox sharpenCheck;
     private EnhancedSlider sharpenIntensitySlider;
 
-    public PostProcessingPanel(PostProcessParams params, Runnable onUpdate) {
+    public PostProcessingPanel(PostProcessParams params, Supplier<AbstractFractalParams> fractalParamsSupplier, Runnable onUpdate) {
         this.params = params;
+        this.fractalParamsSupplier = fractalParamsSupplier;
         this.onUpdate = onUpdate;
 
         setContent(createContent());
@@ -78,6 +87,10 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
 
         // Bloom
         panel.getChildren().add(createBloomSection());
+        panel.getChildren().add(new Separator());
+
+        // Lens Effects
+        panel.getChildren().add(createLensEffectsSection());
         panel.getChildren().add(new Separator());
 
         // Chromatic Aberration
@@ -108,6 +121,15 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
         Button cinematicBtn = new Button("Cinematic");
         cinematicBtn.setOnAction(e -> {
             params.applyCinematicPreset();
+            AbstractFractalParams afp = fractalParamsSupplier.get();
+            if (afp != null) {
+                afp.setVolumetricFogEnabled(true);
+                afp.setFogDensity(0.12f);
+                afp.setFogColor(0.5f, 0.6f, 0.7f);
+                afp.setFogScattering(0.6f);
+                afp.setLensDirtIntensity(params.lensDirtIntensity);
+                afp.setStarburstIntensity(params.starburstIntensity);
+            }
             refreshUI();
             onUpdate.run();
         });
@@ -115,6 +137,12 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
         Button cleanBtn = new Button("Clean");
         cleanBtn.setOnAction(e -> {
             params.applyCleanPreset();
+            AbstractFractalParams afp = fractalParamsSupplier.get();
+            if (afp != null) {
+                afp.setVolumetricFogEnabled(false);
+                afp.setLensDirtIntensity(0.0f);
+                afp.setStarburstIntensity(0.0f);
+            }
             refreshUI();
             onUpdate.run();
         });
@@ -122,6 +150,15 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
         Button vibrantBtn = new Button("Vibrant");
         vibrantBtn.setOnAction(e -> {
             params.applyVibrantPreset();
+            AbstractFractalParams afp = fractalParamsSupplier.get();
+            if (afp != null) {
+                afp.setVolumetricFogEnabled(true);
+                afp.setFogDensity(0.25f);
+                afp.setFogColor(0.8f, 0.6f, 0.4f);
+                afp.setFogScattering(0.8f);
+                afp.setLensDirtIntensity(params.lensDirtIntensity);
+                afp.setStarburstIntensity(params.starburstIntensity);
+            }
             refreshUI();
             onUpdate.run();
         });
@@ -129,6 +166,12 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
         Button resetBtn = new Button("Reset");
         resetBtn.setOnAction(e -> {
             params.reset();
+            AbstractFractalParams afp = fractalParamsSupplier.get();
+            if (afp != null) {
+                afp.setVolumetricFogEnabled(false);
+                afp.setLensDirtIntensity(0.0f);
+                afp.setStarburstIntensity(0.0f);
+            }
             refreshUI();
             onUpdate.run();
         });
@@ -223,6 +266,41 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
         bloomRadiusSlider.setOnAction(v -> { params.bloomRadius = v.intValue(); onUpdate.run(); });
 
         section.getChildren().addAll(bloomCheck, bloomIntensitySlider, bloomThresholdSlider, bloomRadiusSlider);
+        return section;
+    }
+
+    private VBox createLensEffectsSection() {
+        VBox section = new VBox(5);
+
+        lensEffectsCheck = new CheckBox("Lens Effects (JJ Abrams Style)");
+        lensEffectsCheck.setSelected(params.lensEffectsEnabled);
+        lensEffectsCheck.setStyle("-fx-font-weight: bold;");
+        lensEffectsCheck.setOnAction(e -> {
+            params.lensEffectsEnabled = lensEffectsCheck.isSelected();
+            AbstractFractalParams afp = fractalParamsSupplier.get();
+            if (afp != null) afp.setLensEffectsEnabled(lensEffectsCheck.isSelected());
+            onUpdate.run();
+        });
+
+        lensDirtSlider = new EnhancedSlider("Lens Dirt Intensity", 0.0, 2.0, params.lensDirtIntensity, false);
+        lensDirtSlider.setPrecision(2);
+        lensDirtSlider.setOnAction(v -> {
+            params.lensDirtIntensity = v.floatValue();
+            AbstractFractalParams afp = fractalParamsSupplier.get();
+            if (afp != null) afp.setLensDirtIntensity(v.floatValue());
+            onUpdate.run();
+        });
+
+        starburstSlider = new EnhancedSlider("Starburst Intensity", 0.0, 1.0, params.starburstIntensity, false);
+        starburstSlider.setPrecision(2);
+        starburstSlider.setOnAction(v -> {
+            params.starburstIntensity = v.floatValue();
+            AbstractFractalParams afp = fractalParamsSupplier.get();
+            if (afp != null) afp.setStarburstIntensity(v.floatValue());
+            onUpdate.run();
+        });
+
+        section.getChildren().addAll(lensEffectsCheck, lensDirtSlider, starburstSlider);
         return section;
     }
 
@@ -322,6 +400,13 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
     public void refreshFromParams(boolean suppress) {
         this.suppressRender = suppress;
         try {
+            // Sync from AbstractFractalParams to PostProcessParams for lens effects
+            AbstractFractalParams afp = fractalParamsSupplier.get();
+            if (afp != null) {
+                params.lensEffectsEnabled = afp.isLensEffectsEnabled();
+                params.lensDirtIntensity = afp.getLensDirtIntensity();
+                params.starburstIntensity = afp.getStarburstIntensity();
+            }
             refreshUI();
         } finally {
             this.suppressRender = false;
@@ -343,6 +428,10 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
         bloomIntensitySlider.setValue(params.bloomIntensity);
         bloomThresholdSlider.setValue(params.bloomThreshold);
         bloomRadiusSlider.setValue(params.bloomRadius);
+
+        lensEffectsCheck.setSelected(params.lensEffectsEnabled);
+        lensDirtSlider.setValue(params.lensDirtIntensity);
+        starburstSlider.setValue(params.starburstIntensity);
 
         chromaticCheck.setSelected(params.chromaticAberrationEnabled);
         chromaticIntensitySlider.setValue(params.chromaticAberrationIntensity);

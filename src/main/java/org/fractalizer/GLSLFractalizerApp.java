@@ -16,6 +16,7 @@ import javafx.scene.layout.*;
 import javafx.geometry.Orientation;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.concurrent.Task;
 import org.fractalizer.config.FractalConfig;
 import org.fractalizer.config.FractalConfigManager;
 import org.fractalizer.engine.GLSLEngine.PostProcessParams;
@@ -23,6 +24,7 @@ import org.fractalizer.fractals.*;
 import org.fractalizer.ui.AnimationManager;
 import org.fractalizer.ui.GLSLFractalizerController;
 import org.fractalizer.ui.NavigationController;
+import org.fractalizer.ui.SplashScreen;
 import org.fractalizer.ui.panels.*;
 import org.fractalizer.ui.timeline.TimelineWidget;
 
@@ -78,21 +80,56 @@ public class GLSLFractalizerApp extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        try {
-            controller = new GLSLFractalizerController();
-        } catch (Exception e) {
-            e.printStackTrace();
-            showError("Failed to initialize GLSL Engine", e.getMessage());
-            Platform.exit();
-            return;
-        }
+        this.primaryStage = primaryStage;
+        
+        // Show Splash Screen first
+        SplashScreen splash = new SplashScreen();
+        splash.show();
 
+        // Perform initialization in background thread
+        Task<Void> initTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                updateMessage("Initializing OpenGL...");
+                updateProgress(0, 100);
+                
+                controller = new GLSLFractalizerController();
+                
+                // Load shaders one by one and report progress
+                controller.loadAllShaders((status, progress) -> {
+                    updateMessage(status);
+                    updateProgress(progress * 100, 100);
+                });
+                
+                return null;
+            }
+        };
+
+        // Sync splash screen with task progress
+        initTask.messageProperty().addListener((obs, old, msg) -> splash.update(msg, initTask.getProgress()));
+        initTask.progressProperty().addListener((obs, old, prog) -> splash.update(initTask.getMessage(), prog.doubleValue()));
+
+        initTask.setOnSucceeded(e -> {
+            splash.hide();
+            setupMainApp();
+        });
+
+        initTask.setOnFailed(e -> {
+            splash.hide();
+            Throwable ex = initTask.getException();
+            ex.printStackTrace();
+            showError("Initialization Failed", ex.getMessage());
+            Platform.exit();
+        });
+
+        new Thread(initTask).start();
+    }
+
+    private void setupMainApp() {
         // Initialize params
         AbstractFractalParams initialParams = new MandelbulbParams();
         controller.setParams(initialParams);
 
-        // Store stage reference
-        this.primaryStage = primaryStage;
         primaryStage.setTitle("Fractaliz3r GLSL - 3D Fractal Renderer");
 
         // Initialize file chooser
@@ -106,53 +143,30 @@ public class GLSLFractalizerApp extends Application {
         imageView = new ImageView();
         imageView.setPreserveRatio(true);
         imageView.setSmooth(true);
-        imageView.setManaged(false);
+        imageView.setCache(true);
 
-        imageContainer = new StackPane();
-        imageContainer.setStyle("-fx-background-color: #1a1a2e;");
-        imageContainer.setFocusTraversable(true);
-        imageContainer.getChildren().add(imageView);
-
-        // Position and size ImageView manually when container resizes
-        imageContainer.layoutBoundsProperty().addListener((obs, old, bounds) -> {
-            double w = bounds.getWidth();
-            double h = bounds.getHeight();
-            imageView.setFitWidth(w);
-            imageView.setFitHeight(h);
-            imageView.setLayoutX(0);
-            imageView.setLayoutY(0);
-        });
-
-        // Right: Controls panel with tabs
+        imageContainer = new StackPane(imageView);
+        imageContainer.setStyle("-fx-background-color: black;");
+        
+        // Left: Controls
         TabPane controlTabs = createControlTabs(initialParams);
-        controlTabs.setMinWidth(250);
-        controlTabs.setPrefWidth(320);
+        controlTabs.setMinWidth(350);
+        controlTabs.setPrefWidth(380);
 
-        // Horizontal SplitPane: 3D View | Parameters
+        // Bottom: Timeline
+        TimelineWidget timelineWidget = createTimelinePanel();
+
+        // Layout with SplitPanes
         SplitPane horizontalSplit = new SplitPane();
-        horizontalSplit.setOrientation(Orientation.HORIZONTAL);
         horizontalSplit.getItems().addAll(imageContainer, controlTabs);
         horizontalSplit.setDividerPositions(0.75);
-        SplitPane.setResizableWithParent(controlTabs, false);
 
-        // Set minimum sizes to prevent crashes during resize
-        imageContainer.setMinWidth(100);
-        imageContainer.setMinHeight(100);
-        controlTabs.setMinWidth(200);
-
-        // Timeline panel (separate from status bar)
-        TimelineWidget timelinePanel = createTimelinePanel();
-        timelinePanel.setMinHeight(100);
-        timelinePanel.setPrefHeight(180);
-
-        // Vertical SplitPane: Top (3D + params) | Bottom (Timeline only)
         SplitPane verticalSplit = new SplitPane();
         verticalSplit.setOrientation(Orientation.VERTICAL);
-        verticalSplit.getItems().addAll(horizontalSplit, timelinePanel);
-        verticalSplit.setDividerPositions(0.72);
-        SplitPane.setResizableWithParent(timelinePanel, false);
-
-        // Minimum size for top area
+        verticalSplit.getItems().addAll(horizontalSplit, timelineWidget);
+        verticalSplit.setDividerPositions(0.85);
+        
+        // Prevent timeline from disappearing
         horizontalSplit.setMinHeight(150);
 
         // Status bar - always at bottom, outside SplitPane
@@ -344,7 +358,7 @@ public class GLSLFractalizerApp extends Application {
 
         // Post-processing tab
         PostProcessParams postProcessParams = controller.getEngine().getPostProcessParams();
-        postProcessPanel = new PostProcessingPanel(postProcessParams, this::requestRender);
+        postProcessPanel = new PostProcessingPanel(postProcessParams, () -> (AbstractFractalParams) controller.getParams(), this::requestRender);
         refreshablePanels.add(postProcessPanel);
         Tab postProcessTab = new Tab("FX", postProcessPanel);
 
@@ -379,214 +393,130 @@ public class GLSLFractalizerApp extends Application {
         statusLabel = new Label("Ready");
         statusLabel.setStyle("-fx-text-fill: #ccc;");
         sampleLabel = new Label("Samples: 0");
-        sampleLabel.setStyle("-fx-font-family: monospace; -fx-text-fill: #aaa;");
+        sampleLabel.setStyle("-fx-text-fill: #aaa;");
+
         progressBar = new ProgressBar(0);
-        progressBar.setPrefWidth(150);
+        progressBar.setPrefWidth(200);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        statusBar.getChildren().addAll(statusLabel, spacer, sampleLabel, progressBar);
+        statusBar.getChildren().addAll(statusLabel, sampleLabel, spacer, progressBar);
         return statusBar;
+    }
+
+    private MenuBar createMenuBar() {
+        MenuBar menuBar = new MenuBar();
+
+        Menu fileMenu = new Menu("File");
+        MenuItem loadItem = new MenuItem("Load Config...");
+        loadItem.setAccelerator(new KeyCodeCombination(KeyCode.O, KeyCombination.CONTROL_DOWN));
+        loadItem.setOnAction(e -> loadConfig());
+
+        MenuItem saveItem = new MenuItem("Save Config...");
+        saveItem.setAccelerator(new KeyCodeCombination(KeyCode.S, KeyCombination.CONTROL_DOWN));
+        saveItem.setOnAction(e -> saveConfig());
+
+        MenuItem exitItem = new MenuItem("Exit");
+        exitItem.setOnAction(e -> Platform.exit());
+
+        fileMenu.getItems().addAll(loadItem, saveItem, new SeparatorMenuItem(), exitItem);
+        menuBar.getMenus().add(fileMenu);
+
+        return menuBar;
+    }
+
+    private void requestRender() {
+        needsRender = true;
+        controller.cancelRender();
     }
 
     private void startRenderLoop() {
         AnimationTimer timer = new AnimationTimer() {
             @Override
             public void handle(long now) {
-                // Skip render loop during animation export
-                if (exportingAnimation) return;
-
-                // Handle timeline playback via AnimationManager
-                if (animationManager != null && animationManager.updatePlayback(now)) {
-                    fractalPanel.updatePositionLabel();
-                    needsRender = true;
-                }
-
-                // Process keyboard input (only when not playing animation)
-                if ((animationManager == null || !animationManager.isPlaying()) && navigation.processKeyboardInput()) {
-                    needsRender = true;
+                // Process keyboard input
+                if (navigation != null && navigation.processKeyboardInput()) {
+                    requestRender();
                     fractalPanel.updatePositionLabel();
                 }
 
-                // Update sample count display
-                if (controller.isRendering()) {
-                    int samples = controller.getProgressiveRenderer().getCurrentSamples();
-                    sampleLabel.setText("Samples: " + samples);
-                }
-
-                // Render if needed (with throttling)
-                // Cancel current render if parameters changed (needsRender is true)
-                if (needsRender) {
-                    long currentTime = System.currentTimeMillis();
-                    if (currentTime - lastRenderTime > RENDER_DELAY_MS) {
-                        needsRender = false;
-                        lastRenderTime = currentTime;
-                        renderPreview();  // This will cancel any current render
-                    }
+                if (needsRender && (System.currentTimeMillis() - lastRenderTime > RENDER_DELAY_MS)) {
+                    renderPreview();
+                    needsRender = false;
+                    lastRenderTime = System.currentTimeMillis();
                 }
             }
         };
         timer.start();
     }
 
-    private void requestRender() {
-        needsRender = true;
+    private void renderPreview() {
+        controller.renderPreview(this::updateImage, progress -> {
+            progressBar.setProgress(progress);
+            statusLabel.setText("Rendering Preview...");
+        });
+    }
+
+    private void renderFull() {
+        controller.renderFull(this::updateImage, progress -> {
+            progressBar.setProgress(progress);
+            statusLabel.setText("Rendering High Quality...");
+        }, null);
     }
 
     private void resetCamera() {
         fractalPanel.getCamera().reset();
-        needsRender = true;
+        requestRender();
         fractalPanel.updatePositionLabel();
     }
 
-    private void renderPreview() {
-        progressBar.setProgress(0);
-        sampleLabel.setText("Samples: 0");
-
-        if (autoFullQuality) {
-            controller.renderFull(
-                this::updateImage,
-                progress -> progressBar.setProgress(progress),
-                null
-            );
-        } else {
-            controller.renderPreview(
-                this::updateImage,
-                progress -> progressBar.setProgress(progress)
-            );
-        }
-    }
-
-    private void renderFull() {
-        statusLabel.setText("Rendering full quality...");
-        progressBar.setProgress(0);
-        sampleLabel.setText("Samples: 0");
-
-        controller.renderFull(
-            image -> {
-                updateImage(image);
-                statusLabel.setText("Render complete");
-            },
-            progress -> progressBar.setProgress(progress),
-            null
-        );
-    }
-
-    private void updateImage(Image image) {
+    private void updateImage(javafx.scene.image.Image image) {
         imageView.setImage(image);
-        int samples = controller.getProgressiveRenderer().getCurrentSamples();
-        sampleLabel.setText("Samples: " + samples);
+        sampleLabel.setText("Samples: " + controller.getEngine().getSampleCount());
+        if (controller.getEngine().getSampleCount() >= 1) {
+            statusLabel.setText("Render convergence: " + controller.getEngine().getSampleCount() + " samples");
+        }
     }
 
     private void showError(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle(title);
+        alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
     }
 
-    @Override
-    public void stop() {
-        if (controller != null) {
-            controller.close();
-        }
-    }
-
-    // ========================================================================
-    // Menu Bar and File Operations
-    // ========================================================================
-
-    private MenuBar createMenuBar() {
-        MenuBar menuBar = new MenuBar();
-
-        // File menu
-        Menu fileMenu = new Menu("_File");
-
-        MenuItem saveItem = new MenuItem("_Save Configuration");
-        saveItem.setAccelerator(new KeyCodeCombination(KeyCode.S, KeyCombination.CONTROL_DOWN));
-        saveItem.setOnAction(e -> saveConfiguration(false));
-
-        MenuItem saveAsItem = new MenuItem("Save Configuration _As...");
-        saveAsItem.setAccelerator(new KeyCodeCombination(KeyCode.S, KeyCombination.CONTROL_DOWN, KeyCombination.SHIFT_DOWN));
-        saveAsItem.setOnAction(e -> saveConfiguration(true));
-
-        MenuItem loadItem = new MenuItem("_Load Configuration...");
-        loadItem.setAccelerator(new KeyCodeCombination(KeyCode.O, KeyCombination.CONTROL_DOWN));
-        loadItem.setOnAction(e -> loadConfiguration());
-
-        SeparatorMenuItem sep1 = new SeparatorMenuItem();
-
-        MenuItem exitItem = new MenuItem("E_xit");
-        exitItem.setOnAction(e -> Platform.exit());
-
-        fileMenu.getItems().addAll(saveItem, saveAsItem, loadItem, sep1, exitItem);
-
-        menuBar.getMenus().add(fileMenu);
-        return menuBar;
-    }
-
-    /**
-     * Save current configuration to file.
-     * @param forceDialog If true, always show file dialog; if false, use current file if set
-     */
-    private void saveConfiguration(boolean forceDialog) {
-        try {
-            File targetFile = currentConfigFile;
-
-            if (forceDialog || targetFile == null) {
-                if (currentConfigFile != null) {
-                    fileChooser.setInitialDirectory(currentConfigFile.getParentFile());
-                    fileChooser.setInitialFileName(currentConfigFile.getName());
-                } else {
-                    // Default to current working directory
-                    fileChooser.setInitialDirectory(new File(System.getProperty("user.dir")));
+    private void saveConfig() {
+        File file = fileChooser.showSaveDialog(primaryStage);
+        if (file != null) {
+            try {
+                AbstractFractalParams params = (AbstractFractalParams) controller.getParams();
+                FractalConfig config = FractalConfig.fromParams(params);
+                
+                // Add animation data if manager exists
+                if (animationManager != null) {
+                    config.animation = animationManager.exportAnimation();
                 }
-                targetFile = fileChooser.showSaveDialog(primaryStage);
-                if (targetFile == null) return; // User cancelled
+                
+                FractalConfigManager.save(config, file);
+                currentConfigFile = file;
+                statusLabel.setText("Saved: " + file.getName());
+            } catch (IOException ex) {
+                showError("Save Error", "Failed to save configuration: " + ex.getMessage());
             }
-
-            // Ensure .frac extension
-            if (!targetFile.getName().endsWith(FractalConfigManager.getFileExtension())) {
-                targetFile = new File(targetFile.getAbsolutePath() + FractalConfigManager.getFileExtension());
-            }
-
-            // Create config from current params
-            AbstractFractalParams params = fractalPanel.getParams();
-            FractalConfig config = FractalConfig.fromParams(params);
-            config.name = targetFile.getName().replace(FractalConfigManager.getFileExtension(), "");
-
-            // Include animation if there are keyframes
-            if (animationManager != null) {
-                config.animation = animationManager.exportAnimation();
-            }
-
-            // Save to file
-            FractalConfigManager.save(config, targetFile);
-            currentConfigFile = targetFile;
-
-            statusLabel.setText("Saved: " + targetFile.getName());
-            primaryStage.setTitle("Fractaliz3r GLSL - " + targetFile.getName());
-
-        } catch (IOException ex) {
-            showError("Save Error", "Failed to save configuration: " + ex.getMessage());
         }
     }
 
-    /**
-     * Load configuration from file.
-     */
-    private void loadConfiguration() {
-        try {
-            if (currentConfigFile != null) {
-                fileChooser.setInitialDirectory(currentConfigFile.getParentFile());
-            } else {
-                // Default to current working directory
-                fileChooser.setInitialDirectory(new File(System.getProperty("user.dir")));
-            }
-            File file = fileChooser.showOpenDialog(primaryStage);
-            if (file == null) return; // User cancelled
+    private void loadConfig() {
+        File file = fileChooser.showOpenDialog(primaryStage);
+        if (file != null) {
+            loadConfigFile(file);
+        }
+    }
 
+    private void loadConfigFile(File file) {
+        try {
             // Load config from file
             FractalConfig config = FractalConfigManager.load(file);
 

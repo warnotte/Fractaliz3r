@@ -142,8 +142,46 @@ RayHit rayMarch(Ray ray) {
 }
 
 // ============================================================================
+// Volumetric Fog Helper
+// ============================================================================
+
+vec3 computeVolumetricFog(Ray ray, float hitDist, vec3 surfaceColor, out float extinction) {
+    extinction = 1.0;
+    if (volumetricFogEnabled == 0 || fogDensity <= 0.0) return surfaceColor;
+
+    float volAccum = 0.0;
+    float stepSize = hitDist / float(fogSteps);
+    vec3 light = normalize(lightDir);
+    float phase = phaseHG(dot(ray.direction, light), fogScattering);
+    
+    uint seed = initRandom(gl_FragCoord.xy, sampleIndex);
+    float offset = random(seed) * stepSize;
+    
+    for (int i = 0; i < fogSteps; i++) {
+        float d = (float(i) + 0.5) * stepSize + offset;
+        if (d > hitDist) break;
+        
+        vec3 p = ray.origin + ray.direction * d;
+        float shadowBias = 0.01 + d * 0.005;
+        float sh = calcShadow(p, light, shadowBias, 10.0);
+        volAccum += sh * exp(-d * fogDensity) * stepSize;
+    }
+    
+    extinction = exp(-hitDist * fogDensity);
+    vec3 volumetricLight = lightColor * lightIntensity * fogColor * phase * volAccum * fogDensity;
+    
+    return surfaceColor * extinction + volumetricLight;
+}
+
+// ============================================================================
 // Shading
 // ============================================================================
+
+vec3 shadeBackground(Ray ray, float minDist) {
+    vec3 bg = sampleEnvironmentWithGlow(ray.direction, minDist);
+    float extinction;
+    return computeVolumetricFog(ray, 20.0, bg, extinction);
+}
 
 vec3 shade(RayHit hit, Ray ray) {
     vec3 normal = calcNormal(hit.pos);
@@ -213,12 +251,18 @@ vec3 shade(RayHit hit, Ray ray) {
     float rim = fresnel(viewDir, normal, 3.0);
     vec3 rimLight = lightColor * rim * 0.15;
 
-    // Distance fog - use environment color for fog if available
-    float fogFactor = 1.0 - exp(-hit.dist * 0.05);
-    vec3 fogColor = (useEnvMap != 0) ? sampleEnvironment(ray.direction) * 0.3 : ambientColor * 0.5;
-
     vec3 color = ambient + diffuse + specular + rimLight;
-    color = mix(color, fogColor, fogFactor * 0.3);
+    
+    // ====== VOLUMETRIC FOG (God Rays) ======
+    float extinction;
+    color = computeVolumetricFog(ray, hit.dist, color, extinction);
+    
+    // Fallback distance fog (if volumetric is disabled)
+    if (volumetricFogEnabled == 0) {
+        float fogFactor = 1.0 - exp(-hit.dist * 0.05);
+        vec3 fogColorBase = (useEnvMap != 0) ? sampleEnvironment(ray.direction) * 0.3 : ambientColor * 0.5;
+        color = mix(color, fogColorBase, fogFactor * 0.3);
+    }
 
     return color;
 }
@@ -452,6 +496,10 @@ void main() {
         Ray centerRay = getCameraRay(fragCoord); // No DoF jitter
         RayHit depthHit = rayMarch(centerRay);
         depth = depthHit.hit ? depthHit.dist : 100.0;
+        
+        // Apply volumetric fog to the path tracing result
+        float extinction;
+        color = computeVolumetricFog(ray, depth, color, extinction);
     } else {
         // ====== CLASSIC RAYTRACING ======
         RayHit hit = rayMarch(ray);
@@ -470,9 +518,9 @@ void main() {
 
             color = renderByMode(hit, ray, normal, shadow, ao);
         } else {
-            // For debug modes, use simple background; for final mode use fancy background with glow
+            // For debug modes, use simple background; for final mode use fancy background with volumetric fog
             if (renderMode == RENDER_MODE_FINAL) {
-                color = sampleEnvironmentWithGlow(ray.direction, hit.minDist);
+                color = shadeBackground(ray, hit.minDist);
             } else {
                 // True black background for debug modes
                 color = vec3(0.0);

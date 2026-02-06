@@ -113,6 +113,14 @@ Located in `common.glsl`, the system provides 5 professional presets:
 ### Improved Orbit Traps
 Major fractals use cumulative "Plane Traps" (weighted sum of absolute coordinates) to ensure rich, non-uniform coloring that reacts dynamically to fractal parameters.
 
+## Cinematic Rendering Pipeline
+
+Fractaliz3r features a full cinematic rendering pipeline:
+1. **Volumetric Fog & God Rays**: Physically-based scattering with Henyey-Greenstein phase function and shadow-aware light accumulation.
+2. **Procedural Environments**: Dynamic sky types (Clouds, Space, Ocean, Studio) with spatial parallax based on camera movement.
+3. **Optics (Lens Effects)**: Realistic camera imperfections including Lens Dirt (dust/spots) and JJ Abrams style anamorphic horizontal flares.
+4. **Color Grading**: Procedural LUT styles (Cinema, Vintage, Matrix, Neon, Noir) for instant professional looks.
+
 ## Navigation Controls
 
 - **Arrow keys**: Move forward/backward/strafe

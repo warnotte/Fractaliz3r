@@ -43,6 +43,9 @@ public class GLSLEngine implements AutoCloseable {
     private int bloomTexture1, bloomTexture2;
     private int bloomWidth, bloomHeight;  // Half resolution for performance
 
+    // Lens Dirt texture
+    private int lensDirtTexture;
+
     // Environment map
     private int envMapTexture;
     private boolean envMapLoaded = false;
@@ -141,6 +144,7 @@ public class GLSLEngine implements AutoCloseable {
         createFullscreenQuad();
         createFramebuffer(currentWidth, currentHeight);
         createBloomFramebuffers(currentWidth, currentHeight);
+        createLensDirtTexture();
         createDefaultEnvMap();
         loadDisplayShader();
         loadPostProcessShaders();
@@ -324,6 +328,10 @@ public class GLSLEngine implements AutoCloseable {
             glBindTexture(GL_TEXTURE_2D, bloomTexture1);
             postProcessProgram.setUniform("bloomTexture", 1);
 
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, lensDirtTexture);
+            postProcessProgram.setUniform("lensDirtTexture", 2);
+
             // Set uniforms
             postProcessProgram.setUniform("sampleCount", Math.max(1, sampleCount));
             postProcessProgram.setUniform("renderMode", currentRenderMode);
@@ -352,6 +360,10 @@ public class GLSLEngine implements AutoCloseable {
             postProcessProgram.setUniform("sharpenEnabled", pp.sharpenEnabled ? 1 : 0);
             postProcessProgram.setUniform("sharpenIntensity", pp.sharpenIntensity);
             postProcessProgram.setUniform("saturation", pp.saturation);
+            
+            postProcessProgram.setUniform("lensEffectsEnabled", pp.lensEffectsEnabled ? 1 : 0);
+            postProcessProgram.setUniform("lensDirtIntensity", pp.lensDirtIntensity);
+            postProcessProgram.setUniform("starburstIntensity", pp.starburstIntensity);
             
             postProcessProgram.setUniform("colorGradingMode", pp.colorGradingMode);
             postProcessProgram.setUniform("colorGradingIntensity", pp.colorGradingIntensity);
@@ -615,6 +627,35 @@ public class GLSLEngine implements AutoCloseable {
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloomTexture2, 0);
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    private void createLensDirtTexture() {
+        int size = 512;
+        ByteBuffer buffer = MemoryUtil.memAlloc(size * size * 4); // RGBA = 4 bytes per pixel
+        Random rand = new Random(12345);
+
+        for (int i = 0; i < size * size; i++) {
+            float n = rand.nextFloat();
+            // Mélange de poussière fine, taches moyennes et grosses imperfections
+            float val = (float) Math.pow(n, 10.0) * 0.5f; 
+            val += (float) Math.pow(n, 30.0) * 0.5f;
+            val += (float) Math.pow(n, 2.0) * 0.1f;
+            
+            byte b = (byte) (Math.min(1.0f, val) * 255);
+            buffer.put(b).put(b).put(b).put((byte)255); // R, G, B, A
+        }
+        buffer.flip();
+
+        lensDirtTexture = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, lensDirtTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+        MemoryUtil.memFree(buffer);
+        glBindTexture(GL_TEXTURE_2D, 0);
     }
 
     /**
@@ -1152,6 +1193,11 @@ public class GLSLEngine implements AutoCloseable {
 
         public float saturation = 1.0f;    // 0.0 - 2.0 (default 1.0)
         
+        // Lens Effects
+        public boolean lensEffectsEnabled = false;
+        public float lensDirtIntensity = 0.5f;
+        public float starburstIntensity = 0.3f;
+        
         // Color Grading
         public int colorGradingMode = 0; // 0=None, 1=Cinema, 2=Vintage, 3=Matrix, 4=Neon, 5=B&W
         public float colorGradingIntensity = 1.0f;
@@ -1182,6 +1228,9 @@ public class GLSLEngine implements AutoCloseable {
             copy.sharpenEnabled = this.sharpenEnabled;
             copy.sharpenIntensity = this.sharpenIntensity;
             copy.saturation = this.saturation;
+            copy.lensEffectsEnabled = this.lensEffectsEnabled;
+            copy.lensDirtIntensity = this.lensDirtIntensity;
+            copy.starburstIntensity = this.starburstIntensity;
             copy.colorGradingMode = this.colorGradingMode;
             copy.colorGradingIntensity = this.colorGradingIntensity;
             return copy;
@@ -1206,6 +1255,9 @@ public class GLSLEngine implements AutoCloseable {
             filmGrainIntensity = 0.02f;
             sharpenEnabled = false;
             saturation = 1.1f;
+            lensEffectsEnabled = true;
+            lensDirtIntensity = 0.15f;
+            starburstIntensity = 0.2f;
             colorGradingMode = 1; // Cinema
             colorGradingIntensity = 0.8f;
         }
@@ -1226,6 +1278,9 @@ public class GLSLEngine implements AutoCloseable {
             sharpenEnabled = true;
             sharpenIntensity = 0.2f;
             saturation = 1.0f;
+            lensEffectsEnabled = false;
+            lensDirtIntensity = 0.0f;
+            starburstIntensity = 0.0f;
             colorGradingMode = 0; // None
         }
 
@@ -1247,6 +1302,9 @@ public class GLSLEngine implements AutoCloseable {
             filmGrainEnabled = false;
             sharpenEnabled = false;
             saturation = 1.4f;
+            lensEffectsEnabled = true;
+            lensDirtIntensity = 0.1f;
+            starburstIntensity = 0.4f;
             colorGradingMode = 4; // Neon
             colorGradingIntensity = 0.6f;
         }
@@ -1271,6 +1329,9 @@ public class GLSLEngine implements AutoCloseable {
             sharpenEnabled = false;
             sharpenIntensity = 0.3f;
             saturation = 1.0f;
+            lensEffectsEnabled = false;
+            lensDirtIntensity = 0.0f;
+            starburstIntensity = 0.0f;
             colorGradingMode = 0;
             colorGradingIntensity = 1.0f;
         }

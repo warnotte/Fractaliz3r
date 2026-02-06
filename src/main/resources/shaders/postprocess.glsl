@@ -53,6 +53,43 @@ uniform float sharpenIntensity;    // 0.0 - 1.0
 
 uniform float saturation;          // 0.0 - 2.0 (default 1.0)
 
+// Lens Effects
+uniform sampler2D lensDirtTexture;
+uniform int lensEffectsEnabled;
+uniform float lensDirtIntensity;
+uniform float starburstIntensity;
+
+// ============================================================================
+// Lens Effects (Starburst & Lens Dirt)
+// ============================================================================
+
+vec3 applyLensEffects(vec3 color, vec3 bloom, vec2 texCoord) {
+    // Masque équilibré : le bloom est prioritaire, mais la couleur brute aide si le bloom est faible
+    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    vec3 highlightMask = max(bloom, vec3(smoothstep(0.7, 1.0, luma) * 0.3));
+
+    // 1. Lens Dirt
+    float dirt = texture(lensDirtTexture, texCoord).r;
+    vec3 dirtColor = highlightMask * dirt * lensDirtIntensity;
+    
+    // 2. JJ Abrams Anamorphic Flare / Starburst
+    vec2 flareUV = texCoord;
+    flareUV.y = (flareUV.y - 0.5) * 50.0 + 0.5;
+    float horizontalFlare = texture(lensDirtTexture, vec2(texCoord.x, 0.5)).r;
+    horizontalFlare *= smoothstep(0.1, 0.0, abs(texCoord.y - 0.5));
+    
+    vec2 p = (texCoord - 0.5) * 2.0;
+    float angle = atan(p.y, p.x);
+    float dist = length(p);
+    float star = sin(angle * 6.0) * 0.5 + 0.5;
+    star *= sin(angle * 12.0 + 0.5) * 0.5 + 0.5;
+    star *= pow(max(0.0, 1.0 - dist), 6.0);
+    
+    vec3 flareColor = vec3(0.5, 0.7, 1.0) * starburstIntensity * highlightMask;
+    
+    return color + dirtColor + (flareColor * (star + horizontalFlare * 2.0));
+}
+
 // ============================================================================
 // Color Grading Algorithms (Procedural LUTs)
 // ============================================================================
@@ -243,9 +280,15 @@ void main() {
     color *= exposure;
 
     // Add bloom
+    vec3 bloom = vec3(0.0);
     if (bloomEnabled != 0 && bloomIntensity > 0.0001) {
-        vec3 bloom = texture(bloomTexture, uv).rgb;
+        bloom = texture(bloomTexture, uv).rgb;
         color += bloom * bloomIntensity;
+    }
+
+    // Apply Lens Effects (Dirt & Starburst)
+    if (lensEffectsEnabled != 0 && (lensDirtIntensity > 0.0001 || starburstIntensity > 0.0001)) {
+        color = applyLensEffects(color, bloom, uv);
     }
 
     // Sharpening (before tone mapping)
