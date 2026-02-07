@@ -38,6 +38,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private VBox julia3dControls;
     private VBox polyhedralControls;
     private VBox testSceneControls;
+    private VBox cornellBoxControls;
 
     // Common controls
     private EnhancedSlider speedSlider;
@@ -85,6 +86,9 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     // Test Scene sliders
     private EnhancedSlider tsScaleSlider;
 
+    // Cornell Box sliders
+    private EnhancedSlider cbScaleSlider;
+
     public FractalPanel(RenderController controller, AbstractFractalParams initialParams,
                         RenderCallback renderCallback) {
         this.controller = controller;
@@ -112,6 +116,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         createJulia3dControls();
         createPolyhedralControls();
         createTestSceneControls();
+        createCornellBoxControls();
 
         // Movement speed
         speedSlider = new EnhancedSlider("Move Speed", 0.001, 0.5, 0.1, false);
@@ -154,6 +159,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             julia3dControls,
             polyhedralControls,
             testSceneControls,
+            cornellBoxControls,
             new Separator(),
             speedSlider,
             new Separator(),
@@ -566,6 +572,28 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         testSceneControls.setManaged(false);
     }
 
+    private void createCornellBoxControls() {
+        cornellBoxControls = new VBox(8);
+
+        Label titleLabel = new Label("Cornell Box");
+        titleLabel.setStyle("-fx-font-weight: bold;");
+
+        Label infoLabel = new Label("Enable Path Tracing for caustics");
+        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        cbScaleSlider = new EnhancedSlider("Scene Scale", 0.5, 3.0, 1.0, false);
+        cbScaleSlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof CornellBoxParams cb) {
+                cb.setSceneScale(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        cornellBoxControls.getChildren().addAll(titleLabel, infoLabel, cbScaleSlider);
+        cornellBoxControls.setVisible(false);
+        cornellBoxControls.setManaged(false);
+    }
+
     private ComboBox<FractalType> createTypeComboBox() {
         ComboBox<FractalType> combo = new ComboBox<>();
         combo.getItems().addAll(FractalType.values());
@@ -611,6 +639,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             polyhedralControls.setManaged(false);
             testSceneControls.setVisible(false);
             testSceneControls.setManaged(false);
+            cornellBoxControls.setVisible(false);
+            cornellBoxControls.setManaged(false);
 
             // Show only the relevant controls
             switch (selectedType) {
@@ -641,6 +671,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 case TEST_SCENE -> {
                     testSceneControls.setVisible(true);
                     testSceneControls.setManaged(true);
+                }
+                case CORNELL_BOX -> {
+                    cornellBoxControls.setVisible(true);
+                    cornellBoxControls.setManaged(true);
                 }
             }
 
@@ -685,6 +719,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             polyhedralControls.setManaged(false);
             testSceneControls.setVisible(false);
             testSceneControls.setManaged(false);
+            cornellBoxControls.setVisible(false);
+            cornellBoxControls.setManaged(false);
 
             // Update fractal-specific controls based on type
             if (params instanceof MandelbulbParams mb) {
@@ -744,6 +780,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 testSceneControls.setVisible(true);
                 testSceneControls.setManaged(true);
                 tsScaleSlider.setValue(ts.getSceneScale());
+            } else if (params instanceof CornellBoxParams cb) {
+                cornellBoxControls.setVisible(true);
+                cornellBoxControls.setManaged(true);
+                cbScaleSlider.setValue(cb.getSceneScale());
             }
 
             // Update common controls

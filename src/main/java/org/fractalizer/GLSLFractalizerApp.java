@@ -375,6 +375,10 @@ public class GLSLFractalizerApp extends Application {
             this::requestRender,
             auto -> this.autoFullQuality = auto
         );
+        qualityPanel.setFullSamplesCallbacks(
+            controller::setFullSamples,
+            controller::getFullSamples
+        );
         refreshablePanels.add(qualityPanel);
         Tab qualityTab = new Tab("Quality", qualityPanel);
 

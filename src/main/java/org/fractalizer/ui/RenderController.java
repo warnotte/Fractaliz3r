@@ -39,6 +39,7 @@ public interface RenderController {
     void renderFull(Consumer<Image> onComplete, Consumer<Double> onProgress, Consumer<Object> onTileComplete);
 
     CompletableFuture<Void> exportToPNG(File file, Consumer<Double> onProgress);
+    CompletableFuture<Void> exportToPNG(File file, int samples, Consumer<Double> onProgress);
 
     void cancelRender();
     boolean isRendering();

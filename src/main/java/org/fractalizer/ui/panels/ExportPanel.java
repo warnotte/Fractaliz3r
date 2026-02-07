@@ -58,6 +58,7 @@ public class ExportPanel extends ScrollPane {
     private TextField widthField;
     private TextField heightField;
     private Label viewportInfoLabel;
+    private Spinner<Integer> imageExportSamplesSpinner;
 
     // Animation export UI
     private ProgressBar frameProgress;
@@ -219,6 +220,16 @@ public class ExportPanel extends ScrollPane {
     private TitledPane createImageExportSection() {
         VBox box = new VBox(8);
 
+        // Export samples
+        HBox imageSamplesBox = new HBox(5);
+        imageSamplesBox.setAlignment(Pos.CENTER_LEFT);
+        imageSamplesBox.getChildren().add(new Label("Samples:"));
+        imageExportSamplesSpinner = new Spinner<>(16, 1024, 128, 16);
+        imageExportSamplesSpinner.setPrefWidth(80);
+        imageExportSamplesSpinner.setEditable(true);
+        imageExportSamplesSpinner.setTooltip(new Tooltip("Number of render iterations for image export"));
+        imageSamplesBox.getChildren().add(imageExportSamplesSpinner);
+
         // Buttons
         Button renderBtn = new Button("Render Full Quality (Space)");
         renderBtn.setOnAction(e -> renderFullCallback.run());
@@ -239,7 +250,7 @@ public class ExportPanel extends ScrollPane {
         infoLabel.setStyle("-fx-font-size: 11px;");
         infoLabel.setWrapText(true);
 
-        box.getChildren().addAll(renderBtn, exportBtn, infoLabel);
+        box.getChildren().addAll(imageSamplesBox, renderBtn, exportBtn, infoLabel);
 
         TitledPane pane = new TitledPane("Image", box);
         pane.setExpanded(true);
@@ -405,8 +416,9 @@ public class ExportPanel extends ScrollPane {
         if (file != null) {
             statusCallback.accept("Exporting...");
             progressCallback.accept(0.0);
+            int samples = imageExportSamplesSpinner.getValue();
 
-            controller.exportToPNG(file, progressCallback::accept)
+            controller.exportToPNG(file, samples, progressCallback::accept)
                 .thenRun(() -> Platform.runLater(() -> {
                     statusCallback.accept("Exported to: " + file.getName());
                     // Open the exported file

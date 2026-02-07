@@ -206,7 +206,18 @@ vec3 shadeSimple(vec3 hitPos, Ray ray) {
     OrbitTrap trap;
     DE(hitPos, trap);
     vec3 factors = getFactors(trap);
-    vec3 baseColor = applyMaterial(factors);
+
+    vec3 baseColor;
+    float localEmissive;
+
+#ifdef HAS_PER_OBJECT_MATERIAL
+    ObjectMaterial objMat = getObjectMaterial(trap);
+    baseColor = objMat.albedo;
+    localEmissive = objMat.emissive;
+#else
+    baseColor = applyMaterial(factors);
+    localEmissive = emissiveIntensity;
+#endif
 
     float NdotL = max(dot(normal, light), 0.0);
     float shadowBias = 0.005 + length(hitPos - camPos) * 0.01;
@@ -223,12 +234,16 @@ vec3 shadeSimple(vec3 hitPos, Ray ray) {
     vec3 color = ambient + diffuse + specular;
 
     // Emission on reflected surface
-    if (emissiveIntensity > 0.0) {
+    if (localEmissive > 0.0) {
+#ifdef HAS_PER_OBJECT_MATERIAL
+        color += baseColor;
+#else
         float structural = factors.x;
         float depth = factors.z;
         float emFactor = mix(structural, 1.0 - depth, 0.5);
         emFactor = pow(clamp(emFactor, 0.0, 1.0), 2.0);
-        color += baseColor * emissiveIntensity * emFactor;
+        color += baseColor * localEmissive * emFactor;
+#endif
     }
 
     return color;
@@ -245,9 +260,27 @@ vec3 shade(RayHit hit, Ray ray) {
     vec3 viewDir = -ray.direction;
     vec3 light = normalize(lightDir);
 
-    // Base color from unified material system
+    // Base color and material properties
     vec3 factors = getFactors(hit.trap);
-    vec3 baseColor = applyMaterial(factors);
+
+    vec3 baseColor;
+    int localMatType;
+    float localIor, localMetalness, localEmissive;
+
+#ifdef HAS_PER_OBJECT_MATERIAL
+    ObjectMaterial objMat = getObjectMaterial(hit.trap);
+    baseColor = objMat.albedo;
+    localMatType = objMat.type;
+    localIor = objMat.ior;
+    localMetalness = objMat.metalness;
+    localEmissive = objMat.emissive;
+#else
+    baseColor = applyMaterial(factors);
+    localMatType = materialType;
+    localIor = ior;
+    localMetalness = metalness;
+    localEmissive = emissiveIntensity;
+#endif
 
     // Diffuse (Lambert)
     float NdotL = max(dot(normal, light), 0.0);
@@ -257,45 +290,40 @@ vec3 shade(RayHit hit, Ray ray) {
     float spec = pow(max(dot(normal, halfDir), 0.0), specularPower);
 
     // Shadow
-    // Increased bias to prevent banding/acne on detailed fractals
-    float shadowBias = 0.005 + hit.dist * 0.01; 
+    float shadowBias = 0.005 + hit.dist * 0.01;
     float shadow = calcShadow(hit.pos + normal * shadowBias, light, shadowBias, 15.0);
 
     // Ambient occlusion
     float ao = calcAO(hit.pos, normal);
 
-    // Combine lighting - use environment-aware ambient
+    // Combine lighting
     vec3 ambient = getAmbientLighting(normal) * baseColor * ao;
     vec3 diffuse = lightColor * lightIntensity * baseColor * NdotL * shadow;
     vec3 specular = lightColor * spec * specularIntensity * shadow;
 
     // Material system adjustments
-    if (materialType == MATERIAL_METALLIC) {
-        // Metallic: Darken diffuse, boost reflections
-        diffuse *= (1.0 - metalness);
-        ambient *= (1.0 - metalness);
-        
+    if (localMatType == MATERIAL_METALLIC) {
+        diffuse *= (1.0 - localMetalness);
+        ambient *= (1.0 - localMetalness);
+
         if (useEnvMap != 0) {
             vec3 reflectDir = reflect(ray.direction, normal);
             vec3 envReflect = sampleEnvironment(reflectDir);
-            float F0 = mix(0.04, 1.0, metalness);
+            float F0 = mix(0.04, 1.0, localMetalness);
             float fr = fresnelSchlick(max(dot(normal, viewDir), 0.0), F0);
             specular += envReflect * specularIntensity * fr;
         }
-    } else if (materialType == MATERIAL_GLASS) {
-        // Glass: High fresnel, reduced diffuse
-        float fr = fresnelDielectric(max(dot(normal, viewDir), 0.0), ior);
+    } else if (localMatType == MATERIAL_GLASS) {
+        float fr = fresnelDielectric(max(dot(normal, viewDir), 0.0), localIor);
         diffuse *= (1.0 - fr);
         ambient *= (1.0 - fr);
-        
+
         if (useEnvMap != 0) {
             vec3 reflectDir = reflect(ray.direction, normal);
             specular += sampleEnvironment(reflectDir) * specularIntensity * fr;
         }
-        // Fake transparency/refraction rim
         specular += lightColor * pow(1.0 - NdotL, 4.0) * 0.5 * specularIntensity;
     } else {
-        // Standard Lambertian environment reflection (subtle)
         if (useEnvMap != 0 && envLightingMix > 0.0) {
             vec3 reflectDir = reflect(ray.direction, normal);
             vec3 envReflect = sampleEnvironment(reflectDir);
@@ -311,12 +339,16 @@ vec3 shade(RayHit hit, Ray ray) {
     vec3 color = ambient + diffuse + specular + rimLight;
 
     // ====== EMISSIVE / SELF-ILLUMINATION ======
-    if (emissiveIntensity > 0.0) {
+    if (localEmissive > 0.0) {
+#ifdef HAS_PER_OBJECT_MATERIAL
+        color += baseColor;
+#else
         float structural = factors.x;
         float depth = factors.z;
         float emFactor = mix(structural, 1.0 - depth, 0.5);
         emFactor = pow(clamp(emFactor, 0.0, 1.0), 2.0);
-        color += baseColor * emissiveIntensity * emFactor;
+        color += baseColor * localEmissive * emFactor;
+#endif
     }
 
     // ====== SUBSURFACE SCATTERING ======
@@ -326,14 +358,14 @@ vec3 shade(RayHit hit, Ray ray) {
     }
 
     // ====== RAY-MARCHED REFLECTIONS ======
-    if (reflectionIntensity > 0.0 && (materialType == MATERIAL_METALLIC || materialType == MATERIAL_GLASS)) {
+    if (reflectionIntensity > 0.0 && (localMatType == MATERIAL_METALLIC || localMatType == MATERIAL_GLASS)) {
         vec3 reflectDir = reflect(ray.direction, normal);
         float fresnelFactor;
-        if (materialType == MATERIAL_METALLIC) {
-            float F0 = mix(0.04, 1.0, metalness);
+        if (localMatType == MATERIAL_METALLIC) {
+            float F0 = mix(0.04, 1.0, localMetalness);
             fresnelFactor = fresnelSchlick(max(dot(normal, viewDir), 0.0), F0);
         } else {
-            fresnelFactor = fresnelDielectric(max(dot(normal, viewDir), 0.0), ior);
+            fresnelFactor = fresnelDielectric(max(dot(normal, viewDir), 0.0), localIor);
         }
 
         Ray reflectRay;
@@ -426,30 +458,55 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         vec3 normal = calcNormal(hitPos);
         vec3 faceNormal = (dot(currentRay.direction, normal) > 0.0) ? -normal : normal;
 
-        // Get surface color (albedo)
+        // Get surface color and material properties
         OrbitTrap trap;
         DE(hitPos, trap);
-        vec3 albedo = applyMaterial(getFactors(trap));
+
+        vec3 albedo;
+        int localMatType;
+        float localIor, localMetalness, localEmissive;
+        float safeRoughness;
+
+#ifdef HAS_PER_OBJECT_MATERIAL
+        ObjectMaterial objMat = getObjectMaterial(trap);
+        albedo = objMat.albedo;
+        localMatType = objMat.type;
+        localIor = objMat.ior;
+        localMetalness = objMat.metalness;
+        safeRoughness = max(objMat.roughness, 0.02);
+        localEmissive = objMat.emissive;
+#else
+        albedo = applyMaterial(getFactors(trap));
+        localMatType = materialType;
+        localIor = ior;
+        localMetalness = metalness;
+        safeRoughness = max(roughness, 0.02);
+        localEmissive = emissiveIntensity;
+#endif
 
         vec3 viewDir = -currentRay.direction;
         float cosTheta = max(dot(viewDir, faceNormal), 0.0);
 
         // Emissive contribution at hit point (additive, unaffected by shadows)
-        if (emissiveIntensity > 0.0) {
+        if (localEmissive > 0.0) {
+#ifdef HAS_PER_OBJECT_MATERIAL
+            // Per-object: emissive is direct (light panel emits uniformly)
+            radiance += clamp(throughput * albedo, 0.0, FIREFLY_CLAMP);
+            break; // Light source reached — stop bouncing
+#else
             vec3 factors = getFactors(trap);
             float structural = factors.x;
             float depth = factors.z;
             float emFactor = mix(structural, 1.0 - depth, 0.5);
             emFactor = pow(clamp(emFactor, 0.0, 1.0), 2.0);
-            radiance += clamp(throughput * albedo * emissiveIntensity * emFactor, 0.0, FIREFLY_CLAMP);
+            radiance += clamp(throughput * albedo * localEmissive * emFactor, 0.0, FIREFLY_CLAMP);
+#endif
         }
 
-        // Enforce minimum roughness to reduce fireflies
-        float safeRoughness = max(roughness, 0.02);
-
-        if (materialType == MATERIAL_GLASS) {
-            // GLASS (Dielectric)
-            float fr = fresnelDielectric(cosTheta, ior);
+        if (localMatType == MATERIAL_GLASS) {
+            // GLASS (Dielectric) — full two-surface refraction for SDF
+            bool entering = dot(currentRay.direction, normal) < 0.0;
+            float fr = fresnelDielectric(cosTheta, localIor);
             if (safeRoughness > 0.01) fr = mix(fr, 0.5, safeRoughness * 0.5);
 
             if (random(seed) < fr) {
@@ -463,19 +520,57 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 currentRay.direction = normalize(reflectDir);
                 throughput *= mix(vec3(1.0), albedo, 0.05);
             } else {
-                // Transmission (Refraction simulation)
+                // Transmission — refract entry, march interior, refract exit
+                float entryEta = entering ? (1.0 / localIor) : localIor;
                 vec3 refractedDir;
-                if (refractRay(currentRay.direction, faceNormal, 1.0/ior, refractedDir)) {
-                    currentRay.origin = hitPos - faceNormal * 0.005;
-                    float bend = clamp((ior - 1.0) * 2.0, 0.0, 1.0);
-                    currentRay.direction = normalize(mix(currentRay.direction, refractedDir, bend));
-                    throughput *= vec3(0.98, 1.0, 1.02) * albedo;
-                } else {
+
+                if (!refractRay(currentRay.direction, faceNormal, entryEta, refractedDir)) {
+                    // Total internal reflection
                     currentRay.origin = hitPos + faceNormal * 0.005;
                     currentRay.direction = reflect(currentRay.direction, faceNormal);
+                    throughput *= mix(vec3(1.0), albedo, 0.05);
+                } else if (entering) {
+                    // Entering glass — trace through interior and exit in one step
+                    vec3 interiorDir = normalize(refractedDir);
+
+                    // March through glass interior using abs(DE) for stepping
+                    float t = 0.02;
+                    vec3 exitPos = hitPos;
+                    for (int gs = 0; gs < 128; gs++) {
+                        exitPos = hitPos + interiorDir * t;
+                        float d = DE_simple(exitPos);
+                        if (d > 0.0) {
+                            // Overshot exit surface — step back to surface
+                            exitPos -= interiorDir * d;
+                            break;
+                        }
+                        t += max(abs(d), 0.002);
+                        if (t > 10.0) break;
+                    }
+
+                    // Compute exit normal and refract out (glass → air)
+                    vec3 exitNormal = calcNormal(exitPos);
+                    vec3 exitFaceN = (dot(interiorDir, exitNormal) > 0.0) ? -exitNormal : exitNormal;
+                    vec3 exitRefracted;
+
+                    if (refractRay(interiorDir, exitFaceN, localIor, exitRefracted)) {
+                        currentRay.direction = normalize(exitRefracted);
+                    } else {
+                        // TIR at exit — let ray pass through (approximation)
+                        currentRay.direction = interiorDir;
+                    }
+                    currentRay.origin = exitPos + exitNormal * 0.005;
+
+                    // Chromatic dispersion through glass thickness
+                    throughput *= vec3(0.98, 1.0, 1.02) * albedo;
+                } else {
+                    // Already exiting glass
+                    currentRay.origin = hitPos - faceNormal * 0.005;
+                    currentRay.direction = normalize(refractedDir);
+                    throughput *= vec3(0.98, 1.0, 1.02) * albedo;
                 }
             }
-        } else if (materialType == MATERIAL_METALLIC) {
+        } else if (localMatType == MATERIAL_METALLIC) {
             // METALLIC
             vec3 lightDirNorm = normalize(lightDir);
             vec3 H_light = normalize(lightDirNorm + viewDir);
@@ -488,7 +583,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 shadowRay.direction = lightDirNorm;
                 vec3 shPos; float shDist;
                 if (!rayMarchSimple(shadowRay, shPos, shDist)) {
-                    vec3 F0 = mix(vec3(0.04), albedo, metalness);
+                    vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
                     vec3 F = fresnelSchlickVec(max(dot(H_light, viewDir), 0.0), F0);
                     float a = safeRoughness * safeRoughness;
                     float D = a * a / (PI * pow(max(dot(faceNormal, H_light), 0.0) * dot(faceNormal, H_light) * (a * a - 1.0) + 1.0, 2.0));
@@ -503,7 +598,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             }
             vec3 H = randomGGX(seed, faceNormal, safeRoughness);
             vec3 reflectDir = reflect(-viewDir, H);
-            vec3 F0 = mix(vec3(0.04), albedo, metalness);
+            vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
             throughput *= fresnelSchlickVec(cosTheta, F0);
             currentRay.origin = hitPos + faceNormal * 0.005;
             currentRay.direction = normalize(reflectDir);

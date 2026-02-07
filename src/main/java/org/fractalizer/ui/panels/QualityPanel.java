@@ -21,12 +21,16 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private final RenderCallback renderCallback;
     private final Consumer<Boolean> autoFullQualityCallback;
 
+    // Render samples callbacks
+    private Consumer<Integer> fullSamplesCallback;
+    private Supplier<Integer> fullSamplesSupplier;
+
     // Suppress render during refresh
     private boolean suppressRender = false;
 
     // Render pass
     private ComboBox<String> passCombo;
-    
+
     // Projection mode
     private ComboBox<String> projectionCombo;
 
@@ -51,6 +55,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
 
     // Path tracing
     private CheckBox pathTracingCheck;
+    private EnhancedSlider renderSamplesSlider;
     private EnhancedSlider bouncesSlider;
     private EnhancedSlider skyIntensitySlider;
     private EnhancedSlider indirectSlider;
@@ -64,6 +69,14 @@ public class QualityPanel extends ScrollPane implements Refreshable {
 
         setContent(createContent());
         setFitToWidth(true);
+    }
+
+    /**
+     * Set callbacks for controlling render samples (fullSamples in the controller).
+     */
+    public void setFullSamplesCallbacks(Consumer<Integer> setter, Supplier<Integer> getter) {
+        this.fullSamplesCallback = setter;
+        this.fullSamplesSupplier = getter;
     }
 
     private VBox createContent() {
@@ -326,6 +339,16 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             }
         });
 
+        renderSamplesSlider = new EnhancedSlider("Preview Samples", 16, 4096, 64, true);
+        renderSamplesSlider.showTickMarks(true);
+        renderSamplesSlider.setMajorTickUnit(512);
+        renderSamplesSlider.setOnAction(v -> {
+            if (!suppressRender && fullSamplesCallback != null) {
+                fullSamplesCallback.accept(v.intValue());
+                renderCallback.requestRender();
+            }
+        });
+
         bouncesSlider = new EnhancedSlider("Max Bounces", 1, 8, 4, true);
         bouncesSlider.showTickMarks(true);
         bouncesSlider.setMajorTickUnit(1.0);
@@ -356,10 +379,10 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         Label indirectInfo = new Label("0% = Hard shadows (direct only)\n100% = Soft shadows (full GI)");
         indirectInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        Label pathTracingInfo = new Label("Path tracing adds global illumination.\nSlower but more realistic.");
+        Label pathTracingInfo = new Label("Preview Samples = iterations for\nAuto Full Quality preview render.");
         pathTracingInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        box.getChildren().addAll(pathTracingCheck, bouncesSlider,
+        box.getChildren().addAll(pathTracingCheck, renderSamplesSlider, bouncesSlider,
                 skyIntensitySlider, indirectSlider,
                 indirectInfo, pathTracingInfo);
 
@@ -447,6 +470,9 @@ public class QualityPanel extends ScrollPane implements Refreshable {
 
             // Path tracing
             pathTracingCheck.setSelected(p.isPathTracingEnabled());
+            if (fullSamplesSupplier != null) {
+                renderSamplesSlider.setValue(fullSamplesSupplier.get());
+            }
             bouncesSlider.setValue(p.getMaxBounces());
             skyIntensitySlider.setValue(p.getSkyIntensity());
             indirectSlider.setValue(p.getIndirectMultiplier() * 100.0);

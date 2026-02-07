@@ -438,6 +438,8 @@ public class FractalConfig {
             map.put("rot2Z", p.getRot2Z());
         } else if (params instanceof TestSceneParams ts) {
             map.put("sceneScale", ts.getSceneScale());
+        } else if (params instanceof CornellBoxParams cb) {
+            map.put("sceneScale", cb.getSceneScale());
         }
     }
 
@@ -491,6 +493,8 @@ public class FractalConfig {
             if (map.containsKey("rot2Z")) p.setRot2Z(getFloat(map, "rot2Z"));
         } else if (params instanceof TestSceneParams ts) {
             if (map.containsKey("sceneScale")) ts.setSceneScale(getFloat(map, "sceneScale"));
+        } else if (params instanceof CornellBoxParams cb) {
+            if (map.containsKey("sceneScale")) cb.setSceneScale(getFloat(map, "sceneScale"));
         }
     }
 

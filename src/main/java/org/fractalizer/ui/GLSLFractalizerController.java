@@ -111,6 +111,7 @@ public class GLSLFractalizerController implements RenderController {
                 case JULIA_3D -> this.currentParams = new Julia3DParams();
                 case POLYHEDRAL_IFS -> this.currentParams = new PolyhedralIFSParams();
                 case TEST_SCENE -> this.currentParams = new TestSceneParams();
+                case CORNELL_BOX -> this.currentParams = new CornellBoxParams();
             }
             paramsCache.put(type, currentParams);
         }
@@ -184,6 +185,11 @@ public class GLSLFractalizerController implements RenderController {
      */
     @Override
     public CompletableFuture<Void> exportToPNG(File file, Consumer<Double> onProgress) {
+        return exportToPNG(file, fullSamples * 2, onProgress);
+    }
+
+    @Override
+    public CompletableFuture<Void> exportToPNG(File file, int samples, Consumer<Double> onProgress) {
         return CompletableFuture.runAsync(() -> {
             try {
                 cancelRender();
@@ -193,8 +199,7 @@ public class GLSLFractalizerController implements RenderController {
 
                 Map<String, Object> uniforms = buildUniforms();
 
-                // Render with more samples for export
-                int exportSamples = fullSamples * 2;
+                int exportSamples = Math.max(1, samples);
                 for (int i = 0; i < exportSamples; i++) {
                     engine.renderSample(uniforms);
                     if (onProgress != null) {
@@ -571,6 +576,10 @@ public class GLSLFractalizerController implements RenderController {
                 TestSceneParams p = (TestSceneParams) currentParams;
                 uniforms.put("sceneScale", p.getSceneScale());
             }
+            case CORNELL_BOX -> {
+                CornellBoxParams p = (CornellBoxParams) currentParams;
+                uniforms.put("sceneScale", p.getSceneScale());
+            }
         }
 
         return uniforms;
@@ -650,6 +659,10 @@ public class GLSLFractalizerController implements RenderController {
 
     public void setFullSamples(int samples) {
         this.fullSamples = Math.max(1, samples);
+    }
+
+    public int getFullSamples() {
+        return fullSamples;
     }
 
     @Override

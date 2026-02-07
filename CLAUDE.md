@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## IMPORTANT Rules
+- **NEVER** include `Co-Authored-By`, AI mentions, Claude mentions, or any reference to AI/LLM in commit messages, code comments, or any generated content. This rule is absolute and permanent.
+
 ## Build Commands
 
 ```bash
@@ -41,7 +44,8 @@ org.fractalizer
 │   ├── MengerSpongeParams.java      # Menger Sponge: iterations, scale, offset
 │   ├── KaleidoscopicIFSParams.java  # KIFS: scale, offset, fold angles
 │   ├── Julia3DParams.java           # 3D Julia: quaternion c parameter
-│   └── PolyhedralIFSParams.java     # Polyhedral IFS: symmetry type, scale, rotations, offsets
+│   ├── PolyhedralIFSParams.java     # Polyhedral IFS: symmetry type, scale, rotations, offsets
+│   └── CornellBoxParams.java        # Cornell Box: sceneScale (per-object materials in shader)
 ├── render/
 │   ├── ProgressiveRenderer.java     # Progressive sample accumulation
 │   └── FFmpegExporter.java          # MP4 video export via FFmpeg
@@ -59,9 +63,9 @@ org.fractalizer
     │   ├── FractalPanel.java           # Fractal type and parameters (uses EnhancedSlider)
     │   ├── MaterialPanel.java          # Material type, physical props, and artistic palettes (uses EnhancedSlider)
     │   ├── LightingPanel.java          # Light direction and colors (uses EnhancedSlider)
-    │   ├── QualityPanel.java           # Ray steps, DoF, path tracing (uses EnhancedSlider)
+    │   ├── QualityPanel.java           # Ray steps, DoF, path tracing, preview samples (uses EnhancedSlider)
     │   ├── PostProcessingPanel.java    # Bloom, tone mapping, color correction (uses EnhancedSlider)
-    │   └── ExportPanel.java            # Image/animation export with motion blur
+    │   └── ExportPanel.java            # Image/animation export with motion blur & export samples
 ```
 
 ### GLSL Shaders
@@ -79,7 +83,8 @@ shaders/
     ├── menger.glsl
     ├── kaleidoscopic.glsl
     ├── julia3d.glsl
-    └── polyhedral.glsl    # Polyhedral IFS with Octa/Dodeca/Icosa/Tetra symmetries
+    ├── polyhedral.glsl    # Polyhedral IFS with Octa/Dodeca/Icosa/Tetra symmetries
+    └── cornellbox.glsl    # Cornell Box with per-object materials (#define HAS_PER_OBJECT_MATERIAL)
 ```
 
 ## Advanced UI Features
@@ -112,6 +117,15 @@ The coloring system uses a GPU-based 1D texture (256x1, RGB32F) driven by a visu
 
 ### Improved Orbit Traps
 Major fractals use cumulative "Plane Traps" (weighted sum of absolute coordinates) to ensure rich, non-uniform coloring that reacts dynamically to fractal parameters.
+
+### Sample Controls
+Three separate sample counts control rendering quality at different stages:
+- **Preview Samples** (QualityPanel, 16-4096, default 64): Controls `fullSamples` in the controller — the number of iterations for Auto Full Quality preview rendering.
+- **Export Samples** (ExportPanel Image section, 16-1024, default 128): Passed directly to `exportToPNG(file, samples, progress)` for single image export.
+- **Animation Samples** (ExportPanel Animation section, 1-128, default 16): Per-frame samples for animation sequence export.
+
+### Cornell Box & Glass Refraction
+The Cornell Box scene (`cornellbox.glsl`) uses `#define HAS_PER_OBJECT_MATERIAL` for per-object material assignment via `getObjectMaterial(OrbitTrap)`. Glass refraction in path tracing uses a two-surface approach: entry refraction + interior march using `abs(DE_simple)` + exit refraction, solving the SDF negative-distance problem inside glass bodies.
 
 ## Cinematic Rendering Pipeline
 

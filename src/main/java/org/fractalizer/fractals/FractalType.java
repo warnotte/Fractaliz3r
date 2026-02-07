@@ -10,7 +10,8 @@ public enum FractalType {
     KALEIDOSCOPIC_IFS("Kaleidoscopic IFS", "kaleidoscopic"),
     JULIA_3D("Julia 3D", "julia3d"),
     POLYHEDRAL_IFS("Polyhedral IFS", "polyhedral"),
-    TEST_SCENE("Test Scene", "testscene");
+    TEST_SCENE("Test Scene", "testscene"),
+    CORNELL_BOX("Cornell Box", "cornellbox");
 
     private final String displayName;
     private final String kernelName;
