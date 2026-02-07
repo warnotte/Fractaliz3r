@@ -127,6 +127,7 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
                 afp.setFogDensity(0.12f);
                 afp.setFogColor(0.5f, 0.6f, 0.7f);
                 afp.setFogScattering(0.6f);
+                afp.setLensEffectsEnabled(true);
                 afp.setLensDirtIntensity(params.lensDirtIntensity);
                 afp.setStarburstIntensity(params.starburstIntensity);
             }
@@ -140,6 +141,7 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
             AbstractFractalParams afp = fractalParamsSupplier.get();
             if (afp != null) {
                 afp.setVolumetricFogEnabled(false);
+                afp.setLensEffectsEnabled(false);
                 afp.setLensDirtIntensity(0.0f);
                 afp.setStarburstIntensity(0.0f);
             }
@@ -156,6 +158,7 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
                 afp.setFogDensity(0.25f);
                 afp.setFogColor(0.8f, 0.6f, 0.4f);
                 afp.setFogScattering(0.8f);
+                afp.setLensEffectsEnabled(true);
                 afp.setLensDirtIntensity(params.lensDirtIntensity);
                 afp.setStarburstIntensity(params.starburstIntensity);
             }
@@ -169,6 +172,7 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
             AbstractFractalParams afp = fractalParamsSupplier.get();
             if (afp != null) {
                 afp.setVolumetricFogEnabled(false);
+                afp.setLensEffectsEnabled(false);
                 afp.setLensDirtIntensity(0.0f);
                 afp.setStarburstIntensity(0.0f);
             }

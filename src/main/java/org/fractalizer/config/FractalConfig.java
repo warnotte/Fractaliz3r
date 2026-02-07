@@ -440,6 +440,19 @@ public class FractalConfig {
             map.put("sceneScale", ts.getSceneScale());
         } else if (params instanceof CornellBoxParams cb) {
             map.put("sceneScale", cb.getSceneScale());
+            map.put("glassSphereX", cb.getGlassSphereX());
+            map.put("glassSphereY", cb.getGlassSphereY());
+            map.put("glassSphereZ", cb.getGlassSphereZ());
+            map.put("glassSphereRadius", cb.getGlassSphereRadius());
+            map.put("metalSphereX", cb.getMetalSphereX());
+            map.put("metalSphereY", cb.getMetalSphereY());
+            map.put("metalSphereZ", cb.getMetalSphereZ());
+            map.put("metalSphereRadius", cb.getMetalSphereRadius());
+            map.put("lightPanelX", cb.getLightPanelX());
+            map.put("lightPanelY", cb.getLightPanelY());
+            map.put("lightPanelZ", cb.getLightPanelZ());
+            map.put("lightPanelW", cb.getLightPanelW());
+            map.put("lightPanelD", cb.getLightPanelD());
         }
     }
 
@@ -495,6 +508,19 @@ public class FractalConfig {
             if (map.containsKey("sceneScale")) ts.setSceneScale(getFloat(map, "sceneScale"));
         } else if (params instanceof CornellBoxParams cb) {
             if (map.containsKey("sceneScale")) cb.setSceneScale(getFloat(map, "sceneScale"));
+            if (map.containsKey("glassSphereX")) cb.setGlassSphereX(getFloat(map, "glassSphereX"));
+            if (map.containsKey("glassSphereY")) cb.setGlassSphereY(getFloat(map, "glassSphereY"));
+            if (map.containsKey("glassSphereZ")) cb.setGlassSphereZ(getFloat(map, "glassSphereZ"));
+            if (map.containsKey("glassSphereRadius")) cb.setGlassSphereRadius(getFloat(map, "glassSphereRadius"));
+            if (map.containsKey("metalSphereX")) cb.setMetalSphereX(getFloat(map, "metalSphereX"));
+            if (map.containsKey("metalSphereY")) cb.setMetalSphereY(getFloat(map, "metalSphereY"));
+            if (map.containsKey("metalSphereZ")) cb.setMetalSphereZ(getFloat(map, "metalSphereZ"));
+            if (map.containsKey("metalSphereRadius")) cb.setMetalSphereRadius(getFloat(map, "metalSphereRadius"));
+            if (map.containsKey("lightPanelX")) cb.setLightPanelX(getFloat(map, "lightPanelX"));
+            if (map.containsKey("lightPanelY")) cb.setLightPanelY(getFloat(map, "lightPanelY"));
+            if (map.containsKey("lightPanelZ")) cb.setLightPanelZ(getFloat(map, "lightPanelZ"));
+            if (map.containsKey("lightPanelW")) cb.setLightPanelW(getFloat(map, "lightPanelW"));
+            if (map.containsKey("lightPanelD")) cb.setLightPanelD(getFloat(map, "lightPanelD"));
         }
     }
 

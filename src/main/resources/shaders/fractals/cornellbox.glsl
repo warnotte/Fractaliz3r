@@ -21,6 +21,25 @@
 
 uniform float sceneScale;
 
+// Glass sphere
+uniform float glassSphereX;
+uniform float glassSphereY;
+uniform float glassSphereZ;
+uniform float glassSphereRadius;
+
+// Metal sphere
+uniform float metalSphereX;
+uniform float metalSphereY;
+uniform float metalSphereZ;
+uniform float metalSphereRadius;
+
+// Light panel
+uniform float lightPanelX;
+uniform float lightPanelY;
+uniform float lightPanelZ;
+uniform float lightPanelW;
+uniform float lightPanelD;
+
 // ============================================================================
 // Per-Object Material Structure
 // ============================================================================
@@ -103,13 +122,13 @@ vec2 mapScene(vec3 pos) {
     res = opU(res, vec2(sdPlaneNegZ(p, 2.0), 4.0));            // Back wall (ID 4)
 
     // Light panel — thin box at ceiling (ID 5)
-    res = opU(res, vec2(sdBox(p - vec3(0.0, 1.99, 1.0), vec3(0.3, 0.01, 0.3)), 5.0));
+    res = opU(res, vec2(sdBox(p - vec3(lightPanelX, lightPanelY, lightPanelZ), vec3(lightPanelW, 0.01, lightPanelD)), 5.0));
 
     // Glass sphere (ID 6)
-    res = opU(res, vec2(sdSphere(p - vec3(-0.35, 0.4, 1.2), 0.4), 6.0));
+    res = opU(res, vec2(sdSphere(p - vec3(glassSphereX, glassSphereY, glassSphereZ), glassSphereRadius), 6.0));
 
     // Metal sphere (ID 7)
-    res = opU(res, vec2(sdSphere(p - vec3(0.35, 0.3, 0.7), 0.3), 7.0));
+    res = opU(res, vec2(sdSphere(p - vec3(metalSphereX, metalSphereY, metalSphereZ), metalSphereRadius), 7.0));
 
     // Apply scene scale
     res.x *= sc;

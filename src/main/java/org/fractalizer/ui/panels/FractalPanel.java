@@ -88,6 +88,9 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
     // Cornell Box sliders
     private EnhancedSlider cbScaleSlider;
+    private EnhancedSlider cbGlassXSlider, cbGlassYSlider, cbGlassZSlider, cbGlassRadiusSlider;
+    private EnhancedSlider cbMetalXSlider, cbMetalYSlider, cbMetalZSlider, cbMetalRadiusSlider;
+    private EnhancedSlider cbLightXSlider, cbLightYSlider, cbLightZSlider, cbLightWSlider, cbLightDSlider;
 
     public FractalPanel(RenderController controller, AbstractFractalParams initialParams,
                         RenderCallback renderCallback) {
@@ -589,7 +592,66 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        cornellBoxControls.getChildren().addAll(titleLabel, infoLabel, cbScaleSlider);
+        // --- Glass Sphere ---
+        Label glassLabel = new Label("Glass Sphere");
+        glassLabel.setStyle("-fx-font-weight: bold;");
+
+        cbGlassXSlider = new EnhancedSlider("X", -0.9, 0.9, -0.35, false);
+        cbGlassXSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setGlassSphereX(v.floatValue()); renderCallback.requestRender(); } });
+
+        cbGlassYSlider = new EnhancedSlider("Y", 0.05, 1.8, 0.4, false);
+        cbGlassYSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setGlassSphereY(v.floatValue()); renderCallback.requestRender(); } });
+
+        cbGlassZSlider = new EnhancedSlider("Z", 0.1, 1.9, 1.2, false);
+        cbGlassZSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setGlassSphereZ(v.floatValue()); renderCallback.requestRender(); } });
+
+        cbGlassRadiusSlider = new EnhancedSlider("Radius", 0.05, 0.8, 0.4, false);
+        cbGlassRadiusSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setGlassSphereRadius(v.floatValue()); renderCallback.requestRender(); } });
+
+        // --- Metal Sphere ---
+        Label metalLabel = new Label("Metal Sphere");
+        metalLabel.setStyle("-fx-font-weight: bold;");
+
+        cbMetalXSlider = new EnhancedSlider("X", -0.9, 0.9, 0.35, false);
+        cbMetalXSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setMetalSphereX(v.floatValue()); renderCallback.requestRender(); } });
+
+        cbMetalYSlider = new EnhancedSlider("Y", 0.05, 1.8, 0.3, false);
+        cbMetalYSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setMetalSphereY(v.floatValue()); renderCallback.requestRender(); } });
+
+        cbMetalZSlider = new EnhancedSlider("Z", 0.1, 1.9, 0.7, false);
+        cbMetalZSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setMetalSphereZ(v.floatValue()); renderCallback.requestRender(); } });
+
+        cbMetalRadiusSlider = new EnhancedSlider("Radius", 0.05, 0.8, 0.3, false);
+        cbMetalRadiusSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setMetalSphereRadius(v.floatValue()); renderCallback.requestRender(); } });
+
+        // --- Light Panel ---
+        Label lightLabel = new Label("Light Panel");
+        lightLabel.setStyle("-fx-font-weight: bold;");
+
+        cbLightXSlider = new EnhancedSlider("X", -0.8, 0.8, 0.0, false);
+        cbLightXSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setLightPanelX(v.floatValue()); renderCallback.requestRender(); } });
+
+        cbLightYSlider = new EnhancedSlider("Y", 0.5, 1.99, 1.99, false);
+        cbLightYSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setLightPanelY(v.floatValue()); renderCallback.requestRender(); } });
+
+        cbLightZSlider = new EnhancedSlider("Z", 0.1, 1.9, 1.0, false);
+        cbLightZSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setLightPanelZ(v.floatValue()); renderCallback.requestRender(); } });
+
+        cbLightWSlider = new EnhancedSlider("Width", 0.05, 0.8, 0.3, false);
+        cbLightWSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setLightPanelW(v.floatValue()); renderCallback.requestRender(); } });
+
+        cbLightDSlider = new EnhancedSlider("Depth", 0.05, 0.8, 0.3, false);
+        cbLightDSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setLightPanelD(v.floatValue()); renderCallback.requestRender(); } });
+
+        cornellBoxControls.getChildren().addAll(
+            titleLabel, infoLabel, cbScaleSlider,
+            new Separator(),
+            glassLabel, cbGlassXSlider, cbGlassYSlider, cbGlassZSlider, cbGlassRadiusSlider,
+            new Separator(),
+            metalLabel, cbMetalXSlider, cbMetalYSlider, cbMetalZSlider, cbMetalRadiusSlider,
+            new Separator(),
+            lightLabel, cbLightXSlider, cbLightYSlider, cbLightZSlider, cbLightWSlider, cbLightDSlider
+        );
         cornellBoxControls.setVisible(false);
         cornellBoxControls.setManaged(false);
     }
@@ -784,6 +846,19 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 cornellBoxControls.setVisible(true);
                 cornellBoxControls.setManaged(true);
                 cbScaleSlider.setValue(cb.getSceneScale());
+                cbGlassXSlider.setValue(cb.getGlassSphereX());
+                cbGlassYSlider.setValue(cb.getGlassSphereY());
+                cbGlassZSlider.setValue(cb.getGlassSphereZ());
+                cbGlassRadiusSlider.setValue(cb.getGlassSphereRadius());
+                cbMetalXSlider.setValue(cb.getMetalSphereX());
+                cbMetalYSlider.setValue(cb.getMetalSphereY());
+                cbMetalZSlider.setValue(cb.getMetalSphereZ());
+                cbMetalRadiusSlider.setValue(cb.getMetalSphereRadius());
+                cbLightXSlider.setValue(cb.getLightPanelX());
+                cbLightYSlider.setValue(cb.getLightPanelY());
+                cbLightZSlider.setValue(cb.getLightPanelZ());
+                cbLightWSlider.setValue(cb.getLightPanelW());
+                cbLightDSlider.setValue(cb.getLightPanelD());
             }
 
             // Update common controls

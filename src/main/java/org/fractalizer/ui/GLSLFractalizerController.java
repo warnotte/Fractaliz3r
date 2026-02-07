@@ -294,8 +294,10 @@ public class GLSLFractalizerController implements RenderController {
                 }
             }
 
-            // Write to file
-            ImageIO.write(bufferedImage, "PNG", file);
+            // Write to file (detect format from extension)
+            boolean is360 = (currentParams instanceof AbstractFractalParams afp) && 
+                            (afp.getProjectionMode() == AbstractFractalParams.PROJECTION_360_EQUIRECTANGULAR);
+            ImageWriterHelper.writeImage(bufferedImage, file, is360);
 
             // Write to JavaFX image
             fxImage.getPixelWriter().setPixels(0, 0, width, height,
@@ -387,7 +389,9 @@ public class GLSLFractalizerController implements RenderController {
             }
 
             // Write to file
-            ImageIO.write(bufferedImage, "PNG", file);
+            boolean is360 = (currentParams instanceof AbstractFractalParams afp) && 
+                            (afp.getProjectionMode() == AbstractFractalParams.PROJECTION_360_EQUIRECTANGULAR);
+            ImageWriterHelper.writeImage(bufferedImage, file, is360);
 
             // Write to JavaFX image
             fxImage.getPixelWriter().setPixels(0, 0, width, height,
@@ -579,6 +583,19 @@ public class GLSLFractalizerController implements RenderController {
             case CORNELL_BOX -> {
                 CornellBoxParams p = (CornellBoxParams) currentParams;
                 uniforms.put("sceneScale", p.getSceneScale());
+                uniforms.put("glassSphereX", p.getGlassSphereX());
+                uniforms.put("glassSphereY", p.getGlassSphereY());
+                uniforms.put("glassSphereZ", p.getGlassSphereZ());
+                uniforms.put("glassSphereRadius", p.getGlassSphereRadius());
+                uniforms.put("metalSphereX", p.getMetalSphereX());
+                uniforms.put("metalSphereY", p.getMetalSphereY());
+                uniforms.put("metalSphereZ", p.getMetalSphereZ());
+                uniforms.put("metalSphereRadius", p.getMetalSphereRadius());
+                uniforms.put("lightPanelX", p.getLightPanelX());
+                uniforms.put("lightPanelY", p.getLightPanelY());
+                uniforms.put("lightPanelZ", p.getLightPanelZ());
+                uniforms.put("lightPanelW", p.getLightPanelW());
+                uniforms.put("lightPanelD", p.getLightPanelD());
             }
         }
 
