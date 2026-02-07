@@ -37,6 +37,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private VBox kaleidoscopicControls;
     private VBox julia3dControls;
     private VBox polyhedralControls;
+    private VBox testSceneControls;
 
     // Common controls
     private EnhancedSlider speedSlider;
@@ -81,6 +82,9 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider polyRot1XSlider, polyRot1YSlider, polyRot1ZSlider;
     private EnhancedSlider polyRot2XSlider, polyRot2YSlider, polyRot2ZSlider;
 
+    // Test Scene sliders
+    private EnhancedSlider tsScaleSlider;
+
     public FractalPanel(RenderController controller, AbstractFractalParams initialParams,
                         RenderCallback renderCallback) {
         this.controller = controller;
@@ -107,6 +111,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         createKaleidoscopicControls();
         createJulia3dControls();
         createPolyhedralControls();
+        createTestSceneControls();
 
         // Movement speed
         speedSlider = new EnhancedSlider("Move Speed", 0.001, 0.5, 0.1, false);
@@ -148,6 +153,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             kaleidoscopicControls,
             julia3dControls,
             polyhedralControls,
+            testSceneControls,
             new Separator(),
             speedSlider,
             new Separator(),
@@ -538,6 +544,28 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         );
     }
 
+    private void createTestSceneControls() {
+        testSceneControls = new VBox(8);
+
+        Label titleLabel = new Label("SDF Primitives Showcase");
+        titleLabel.setStyle("-fx-font-weight: bold;");
+
+        Label infoLabel = new Label("Non-fractal scene for testing effects");
+        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        tsScaleSlider = new EnhancedSlider("Scene Scale", 0.5, 3.0, 1.0, false);
+        tsScaleSlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof TestSceneParams ts) {
+                ts.setSceneScale(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        testSceneControls.getChildren().addAll(titleLabel, infoLabel, tsScaleSlider);
+        testSceneControls.setVisible(false);
+        testSceneControls.setManaged(false);
+    }
+
     private ComboBox<FractalType> createTypeComboBox() {
         ComboBox<FractalType> combo = new ComboBox<>();
         combo.getItems().addAll(FractalType.values());
@@ -581,6 +609,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             julia3dControls.setManaged(false);
             polyhedralControls.setVisible(false);
             polyhedralControls.setManaged(false);
+            testSceneControls.setVisible(false);
+            testSceneControls.setManaged(false);
 
             // Show only the relevant controls
             switch (selectedType) {
@@ -607,6 +637,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 case POLYHEDRAL_IFS -> {
                     polyhedralControls.setVisible(true);
                     polyhedralControls.setManaged(true);
+                }
+                case TEST_SCENE -> {
+                    testSceneControls.setVisible(true);
+                    testSceneControls.setManaged(true);
                 }
             }
 
@@ -649,6 +683,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             julia3dControls.setManaged(false);
             polyhedralControls.setVisible(false);
             polyhedralControls.setManaged(false);
+            testSceneControls.setVisible(false);
+            testSceneControls.setManaged(false);
 
             // Update fractal-specific controls based on type
             if (params instanceof MandelbulbParams mb) {
@@ -704,6 +740,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 polyRot2XSlider.setValue(p.getRot2X());
                 polyRot2YSlider.setValue(p.getRot2Y());
                 polyRot2ZSlider.setValue(p.getRot2Z());
+            } else if (params instanceof TestSceneParams ts) {
+                testSceneControls.setVisible(true);
+                testSceneControls.setManaged(true);
+                tsScaleSlider.setValue(ts.getSceneScale());
             }
 
             // Update common controls

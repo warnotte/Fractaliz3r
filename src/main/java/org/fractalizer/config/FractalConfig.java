@@ -97,6 +97,13 @@ public class FractalConfig {
         public float metalness = 0.9f;
         public float ior = 1.5f;
         public List<GradientStopConfig> gradientStops;
+
+        // Advanced Effects
+        public float reflectionIntensity = 0.0f;
+        public float emissiveIntensity = 0.0f;
+        public float sssIntensity = 0.0f;
+        public float sssRadius = 0.1f;
+        public float[] sssColor = {1.0f, 0.4f, 0.2f};
     }
 
     public static class GradientStopConfig {
@@ -221,6 +228,13 @@ public class FractalConfig {
         config.material.metalness = params.getMetalness();
         config.material.ior = params.getIor();
 
+        // Advanced Effects
+        config.material.reflectionIntensity = params.getReflectionIntensity();
+        config.material.emissiveIntensity = params.getEmissiveIntensity();
+        config.material.sssIntensity = params.getSssIntensity();
+        config.material.sssRadius = params.getSssRadius();
+        config.material.sssColor = params.getSssColor().clone();
+
         // Serialize custom gradient stops
         GradientPalette gradient = params.getCustomGradient();
         if (gradient != null) {
@@ -304,6 +318,15 @@ public class FractalConfig {
         params.setMaterialType(material.type);
         params.setMetalness(material.metalness);
         params.setIor(material.ior);
+
+        // Advanced Effects
+        params.setReflectionIntensity(material.reflectionIntensity);
+        params.setEmissiveIntensity(material.emissiveIntensity);
+        params.setSssIntensity(material.sssIntensity);
+        params.setSssRadius(material.sssRadius);
+        if (material.sssColor != null && material.sssColor.length == 3) {
+            params.setSssColor(material.sssColor[0], material.sssColor[1], material.sssColor[2]);
+        }
 
         // Deserialize custom gradient stops
         if (material.gradientStops != null && material.gradientStops.size() >= 2) {
@@ -413,6 +436,8 @@ public class FractalConfig {
             map.put("rot2X", p.getRot2X());
             map.put("rot2Y", p.getRot2Y());
             map.put("rot2Z", p.getRot2Z());
+        } else if (params instanceof TestSceneParams ts) {
+            map.put("sceneScale", ts.getSceneScale());
         }
     }
 
@@ -464,6 +489,8 @@ public class FractalConfig {
             if (map.containsKey("rot2X")) p.setRot2X(getFloat(map, "rot2X"));
             if (map.containsKey("rot2Y")) p.setRot2Y(getFloat(map, "rot2Y"));
             if (map.containsKey("rot2Z")) p.setRot2Z(getFloat(map, "rot2Z"));
+        } else if (params instanceof TestSceneParams ts) {
+            if (map.containsKey("sceneScale")) ts.setSceneScale(getFloat(map, "sceneScale"));
         }
     }
 

@@ -110,6 +110,7 @@ public class GLSLFractalizerController implements RenderController {
                 case KALEIDOSCOPIC_IFS -> this.currentParams = new KaleidoscopicIFSParams();
                 case JULIA_3D -> this.currentParams = new Julia3DParams();
                 case POLYHEDRAL_IFS -> this.currentParams = new PolyhedralIFSParams();
+                case TEST_SCENE -> this.currentParams = new TestSceneParams();
             }
             paramsCache.put(type, currentParams);
         }
@@ -502,6 +503,13 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("metalness", params.getMetalness());
             uniforms.put("ior", params.getIor());
 
+            // Advanced Effects
+            uniforms.put("reflectionIntensity", params.getReflectionIntensity());
+            uniforms.put("emissiveIntensity", params.getEmissiveIntensity());
+            uniforms.put("sssIntensity", params.getSssIntensity());
+            uniforms.put("sssRadius", params.getSssRadius());
+            uniforms.put("sssColor", params.getSssColor());
+
             // Render mode
             uniforms.put("renderMode", params.getRenderMode());
         }
@@ -554,10 +562,14 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("scale", p.getScale());
                 uniforms.put("offset", new float[]{p.getOffsetX(), p.getOffsetY(), p.getOffsetZ()});
                 uniforms.put("shift", new float[]{p.getShiftX(), p.getShiftY(), p.getShiftZ()});
-                
+
                 // Convert Euler angles to 3x3 matrices
                 uniforms.put("fractalRotation1", createRotationMatrix(p.getRot1X(), p.getRot1Y(), p.getRot1Z()));
                 uniforms.put("fractalRotation2", createRotationMatrix(p.getRot2X(), p.getRot2Y(), p.getRot2Z()));
+            }
+            case TEST_SCENE -> {
+                TestSceneParams p = (TestSceneParams) currentParams;
+                uniforms.put("sceneScale", p.getSceneScale());
             }
         }
 

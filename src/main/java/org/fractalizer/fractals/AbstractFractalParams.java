@@ -128,6 +128,13 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float metalness;       // For metallic: blend between dielectric and metal (0-1)
     protected float ior;             // Index of refraction for glass (typically 1.5)
 
+    // Advanced Effects
+    protected float reflectionIntensity;  // 0-1, ray-marched reflections (classic mode)
+    protected float emissiveIntensity;    // 0-3, self-illumination based on orbit traps
+    protected float sssIntensity;         // 0-2, subsurface scattering strength
+    protected float sssRadius;            // 0.01-0.5, SSS sampling depth
+    protected float[] sssColorVec;        // RGB color for SSS (warm = wax/skin, cool = jade/marble)
+
     // Motion Blur (for animation export)
     // shutterAngle: 0 = no blur, 180 = half frame, 360 = full frame blur (cinematic default)
     protected float shutterAngle;
@@ -206,6 +213,13 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.materialType = MATERIAL_LAMBERTIAN;
         this.metalness = 0.9f;
         this.ior = 1.5f;  // Glass IOR
+
+        // Advanced Effects (all disabled by default)
+        this.reflectionIntensity = 0.0f;
+        this.emissiveIntensity = 0.0f;
+        this.sssIntensity = 0.0f;
+        this.sssRadius = 0.1f;
+        this.sssColorVec = new float[]{1.0f, 0.4f, 0.2f};
 
         // Motion blur defaults (180° = cinematic film standard)
         this.shutterAngle = 180.0f;
@@ -304,6 +318,13 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.materialType = this.materialType;
         target.metalness = this.metalness;
         target.ior = this.ior;
+
+        // Copy Advanced Effects
+        target.reflectionIntensity = this.reflectionIntensity;
+        target.emissiveIntensity = this.emissiveIntensity;
+        target.sssIntensity = this.sssIntensity;
+        target.sssRadius = this.sssRadius;
+        target.sssColorVec = this.sssColorVec.clone();
 
         // Copy custom gradient
         target.customGradient = this.customGradient.copy();
@@ -575,6 +596,22 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setMetalness(float metalness) { this.metalness = Math.max(0, Math.min(1, metalness)); }
     public float getIor() { return ior; }
     public void setIor(float ior) { this.ior = Math.max(1.0f, Math.min(3.0f, ior)); }
+
+    // Advanced Effects
+    public float getReflectionIntensity() { return reflectionIntensity; }
+    public void setReflectionIntensity(float intensity) { this.reflectionIntensity = Math.max(0, Math.min(1, intensity)); }
+    public float getEmissiveIntensity() { return emissiveIntensity; }
+    public void setEmissiveIntensity(float intensity) { this.emissiveIntensity = Math.max(0, Math.min(3, intensity)); }
+    public float getSssIntensity() { return sssIntensity; }
+    public void setSssIntensity(float intensity) { this.sssIntensity = Math.max(0, Math.min(2, intensity)); }
+    public float getSssRadius() { return sssRadius; }
+    public void setSssRadius(float radius) { this.sssRadius = Math.max(0.01f, Math.min(0.5f, radius)); }
+    public float[] getSssColor() { return sssColorVec; }
+    public void setSssColor(float r, float g, float b) {
+        this.sssColorVec[0] = r;
+        this.sssColorVec[1] = g;
+        this.sssColorVec[2] = b;
+    }
 
     // Motion Blur
     public float getShutterAngle() { return shutterAngle; }

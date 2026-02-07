@@ -43,6 +43,12 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider specularIntensitySlider;
     private EnhancedSlider specularPowerSlider;
 
+    // Advanced Effects
+    private EnhancedSlider reflectionIntensitySlider;
+    private EnhancedSlider emissiveIntensitySlider;
+    private EnhancedSlider sssIntensitySlider;
+    private EnhancedSlider sssRadiusSlider;
+
     public MaterialPanel(Supplier<AbstractFractalParams> paramsSupplier, RenderCallback renderCallback) {
         this.paramsSupplier = paramsSupplier;
         this.renderCallback = renderCallback;
@@ -164,6 +170,43 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             }
         });
 
+        // === ADVANCED EFFECTS SECTION ===
+        Label advLabel = new Label("Advanced Effects");
+        advLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
+
+        reflectionIntensitySlider = new EnhancedSlider("Reflections", 0, 1, 0, false);
+        reflectionIntensitySlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setReflectionIntensity(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        emissiveIntensitySlider = new EnhancedSlider("Emission", 0, 3, 0, false);
+        emissiveIntensitySlider.setPrecision(1);
+        emissiveIntensitySlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setEmissiveIntensity(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        sssIntensitySlider = new EnhancedSlider("Subsurface", 0, 2, 0, false);
+        sssIntensitySlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setSssIntensity(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        sssRadiusSlider = new EnhancedSlider("SSS Depth", 0.01, 0.5, 0.1, false);
+        sssRadiusSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setSssRadius(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
         root.getChildren().addAll(
             paletteLabel,
             gradientEditor,
@@ -181,7 +224,13 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             new Separator(),
             specLabel,
             specularIntensitySlider,
-            specularPowerSlider
+            specularPowerSlider,
+            new Separator(),
+            advLabel,
+            reflectionIntensitySlider,
+            emissiveIntensitySlider,
+            sssIntensitySlider,
+            sssRadiusSlider
         );
 
         return root;
@@ -276,6 +325,12 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             // Specular
             specularIntensitySlider.setValue(p.getSpecularIntensity());
             specularPowerSlider.setValue(p.getSpecularPower());
+
+            // Advanced Effects
+            reflectionIntensitySlider.setValue(p.getReflectionIntensity());
+            emissiveIntensitySlider.setValue(p.getEmissiveIntensity());
+            sssIntensitySlider.setValue(p.getSssIntensity());
+            sssRadiusSlider.setValue(p.getSssRadius());
 
             updateVisibility();
         } finally {

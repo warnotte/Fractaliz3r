@@ -9,7 +9,8 @@ public enum FractalType {
     MENGER_SPONGE("Menger Sponge", "menger"),
     KALEIDOSCOPIC_IFS("Kaleidoscopic IFS", "kaleidoscopic"),
     JULIA_3D("Julia 3D", "julia3d"),
-    POLYHEDRAL_IFS("Polyhedral IFS", "polyhedral");
+    POLYHEDRAL_IFS("Polyhedral IFS", "polyhedral"),
+    TEST_SCENE("Test Scene", "testscene");
 
     private final String displayName;
     private final String kernelName;

@@ -103,6 +103,13 @@ uniform vec3 fogColor;
 uniform float fogScattering; // Anisotropy
 uniform int fogSteps;
 
+// Advanced Effects
+uniform float reflectionIntensity;
+uniform float emissiveIntensity;
+uniform float sssIntensity;
+uniform float sssRadius;
+uniform vec3 sssColor;
+
 // ============================================================================
 // Math & Random Helpers
 // ============================================================================

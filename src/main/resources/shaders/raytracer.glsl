@@ -105,6 +105,23 @@ float calcAO(vec3 pos, vec3 normal) {
 }
 
 // ============================================================================
+// Subsurface Scattering Approximation
+// ============================================================================
+
+float calcSSS(vec3 pos, vec3 normal, vec3 lightDir) {
+    float thickness = 0.0;
+    float step = sssRadius / 5.0;
+    for (int i = 1; i <= 5; i++) {
+        float expectedDist = float(i) * step;
+        float actualDist = DE_simple(pos - normal * expectedDist);
+        thickness += max(0.0, expectedDist - actualDist);
+    }
+    // Wrap lighting: light coming from behind illuminates thin areas
+    float wrap = max(0.0, (dot(-normal, lightDir) + 0.5) / 1.5);
+    return wrap * exp(-thickness * 8.0);
+}
+
+// ============================================================================
 // Ray Marching
 // ============================================================================
 
@@ -176,6 +193,46 @@ vec3 computeVolumetricFog(Ray ray, float hitDist, vec3 surfaceColor, out float e
 // ============================================================================
 // Shading
 // ============================================================================
+
+// Forward declaration (defined in Path Tracing section below)
+bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist);
+
+// Simplified shading for reflection bounce (no recursion, no volumetrics)
+vec3 shadeSimple(vec3 hitPos, Ray ray) {
+    vec3 normal = calcNormal(hitPos);
+    vec3 viewDir = -ray.direction;
+    vec3 light = normalize(lightDir);
+
+    OrbitTrap trap;
+    DE(hitPos, trap);
+    vec3 factors = getFactors(trap);
+    vec3 baseColor = applyMaterial(factors);
+
+    float NdotL = max(dot(normal, light), 0.0);
+    float shadowBias = 0.005 + length(hitPos - camPos) * 0.01;
+    float shadow = calcShadow(hitPos + normal * shadowBias, light, shadowBias, 15.0);
+    float ao = calcAO(hitPos, normal);
+
+    vec3 ambient = getAmbientLighting(normal) * baseColor * ao;
+    vec3 diffuse = lightColor * lightIntensity * baseColor * NdotL * shadow;
+
+    vec3 halfDir = normalize(light + viewDir);
+    float spec = pow(max(dot(normal, halfDir), 0.0), specularPower);
+    vec3 specular = lightColor * spec * specularIntensity * shadow;
+
+    vec3 color = ambient + diffuse + specular;
+
+    // Emission on reflected surface
+    if (emissiveIntensity > 0.0) {
+        float structural = factors.x;
+        float depth = factors.z;
+        float emFactor = mix(structural, 1.0 - depth, 0.5);
+        emFactor = pow(clamp(emFactor, 0.0, 1.0), 2.0);
+        color += baseColor * emissiveIntensity * emFactor;
+    }
+
+    return color;
+}
 
 vec3 shadeBackground(Ray ray, float minDist) {
     vec3 bg = sampleEnvironmentWithGlow(ray.direction, minDist);
@@ -252,11 +309,51 @@ vec3 shade(RayHit hit, Ray ray) {
     vec3 rimLight = lightColor * rim * 0.15;
 
     vec3 color = ambient + diffuse + specular + rimLight;
-    
+
+    // ====== EMISSIVE / SELF-ILLUMINATION ======
+    if (emissiveIntensity > 0.0) {
+        float structural = factors.x;
+        float depth = factors.z;
+        float emFactor = mix(structural, 1.0 - depth, 0.5);
+        emFactor = pow(clamp(emFactor, 0.0, 1.0), 2.0);
+        color += baseColor * emissiveIntensity * emFactor;
+    }
+
+    // ====== SUBSURFACE SCATTERING ======
+    if (sssIntensity > 0.0) {
+        float sss = calcSSS(hit.pos, normal, light);
+        color += baseColor * sssColor * sss * sssIntensity * lightColor * lightIntensity;
+    }
+
+    // ====== RAY-MARCHED REFLECTIONS ======
+    if (reflectionIntensity > 0.0 && (materialType == MATERIAL_METALLIC || materialType == MATERIAL_GLASS)) {
+        vec3 reflectDir = reflect(ray.direction, normal);
+        float fresnelFactor;
+        if (materialType == MATERIAL_METALLIC) {
+            float F0 = mix(0.04, 1.0, metalness);
+            fresnelFactor = fresnelSchlick(max(dot(normal, viewDir), 0.0), F0);
+        } else {
+            fresnelFactor = fresnelDielectric(max(dot(normal, viewDir), 0.0), ior);
+        }
+
+        Ray reflectRay;
+        reflectRay.origin = hit.pos + normal * 0.005;
+        reflectRay.direction = reflectDir;
+        vec3 reflHitPos;
+        float reflHitDist;
+        vec3 reflColor;
+        if (rayMarchSimple(reflectRay, reflHitPos, reflHitDist)) {
+            reflColor = shadeSimple(reflHitPos, reflectRay);
+        } else {
+            reflColor = sampleEnvironment(reflectDir);
+        }
+        color = mix(color, reflColor, reflectionIntensity * fresnelFactor);
+    }
+
     // ====== VOLUMETRIC FOG (God Rays) ======
     float extinction;
     color = computeVolumetricFog(ray, hit.dist, color, extinction);
-    
+
     // Fallback distance fog (if volumetric is disabled)
     if (volumetricFogEnabled == 0) {
         float fogFactor = 1.0 - exp(-hit.dist * 0.05);
@@ -336,7 +433,17 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 
         vec3 viewDir = -currentRay.direction;
         float cosTheta = max(dot(viewDir, faceNormal), 0.0);
-        
+
+        // Emissive contribution at hit point (additive, unaffected by shadows)
+        if (emissiveIntensity > 0.0) {
+            vec3 factors = getFactors(trap);
+            float structural = factors.x;
+            float depth = factors.z;
+            float emFactor = mix(structural, 1.0 - depth, 0.5);
+            emFactor = pow(clamp(emFactor, 0.0, 1.0), 2.0);
+            radiance += clamp(throughput * albedo * emissiveIntensity * emFactor, 0.0, FIREFLY_CLAMP);
+        }
+
         // Enforce minimum roughness to reduce fireflies
         float safeRoughness = max(roughness, 0.02);
 
@@ -389,6 +496,11 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     radiance += clamp(throughput * spec, 0.0, FIREFLY_CLAMP);
                 }
             }
+            // SSS contribution in path tracing (metallic)
+            if (sssIntensity > 0.0) {
+                float sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
+                radiance += clamp(throughput * albedo * sssColor * sss * sssIntensity * lightColor * lightIntensity, 0.0, FIREFLY_CLAMP);
+            }
             vec3 H = randomGGX(seed, faceNormal, safeRoughness);
             vec3 reflectDir = reflect(-viewDir, H);
             vec3 F0 = mix(vec3(0.04), albedo, metalness);
@@ -409,9 +521,25 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI, 0.0, FIREFLY_CLAMP);
                 }
             }
+            // SSS contribution in path tracing
+            if (sssIntensity > 0.0) {
+                float sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
+                radiance += clamp(throughput * albedo * sssColor * sss * sssIntensity * lightColor * lightIntensity, 0.0, FIREFLY_CLAMP);
+            }
             currentRay.origin = hitPos + faceNormal * 0.005;
-            currentRay.direction = randomCosineHemisphere(seed, faceNormal);
-            throughput *= albedo;
+
+            // Stochastic reflection for Lambertian surfaces
+            float reflProb = reflectionIntensity * fresnelSchlick(cosTheta, 0.04);
+            if (reflectionIntensity > 0.0 && random(seed) < reflProb) {
+                // Specular reflection bounce (glossy via GGX)
+                vec3 H = randomGGX(seed, faceNormal, max(safeRoughness, 0.3));
+                currentRay.direction = normalize(reflect(-viewDir, H));
+                throughput *= albedo / reflProb;
+            } else {
+                // Diffuse bounce
+                currentRay.direction = randomCosineHemisphere(seed, faceNormal);
+                throughput *= albedo;
+            }
         }
 
         // Russian Roulette
