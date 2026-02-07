@@ -60,6 +60,13 @@ public class ExportPanel extends ScrollPane {
     private Label viewportInfoLabel;
     private Spinner<Integer> imageExportSamplesSpinner;
 
+    // Image export UI
+    private Button exportImageBtn;
+    private Button cancelImageBtn;
+    private ProgressBar imageProgress;
+    private Label imageExportStatusLabel;
+    private volatile boolean imageExportCancelled;
+
     // Animation export UI
     private ProgressBar frameProgress;
     private ProgressBar totalProgress;
@@ -236,9 +243,30 @@ public class ExportPanel extends ScrollPane {
         renderBtn.setMaxWidth(Double.MAX_VALUE);
         renderBtn.setStyle("-fx-font-weight: bold;");
 
-        Button exportBtn = new Button("Export Image...");
-        exportBtn.setOnAction(e -> exportImage());
-        exportBtn.setMaxWidth(Double.MAX_VALUE);
+        exportImageBtn = new Button("Export Image...");
+        exportImageBtn.setOnAction(e -> exportImage());
+        exportImageBtn.setMaxWidth(Double.MAX_VALUE);
+
+        cancelImageBtn = new Button("Cancel");
+        cancelImageBtn.setVisible(false);
+        cancelImageBtn.setOnAction(e -> cancelImageExport());
+
+        HBox exportButtonBox = new HBox(5);
+        exportButtonBox.setAlignment(Pos.CENTER);
+        exportButtonBox.getChildren().addAll(exportImageBtn, cancelImageBtn);
+        exportImageBtn.setMaxWidth(Double.MAX_VALUE);
+        javafx.scene.layout.HBox.setHgrow(exportImageBtn, javafx.scene.layout.Priority.ALWAYS);
+
+        // Progress bar (hidden by default)
+        imageProgress = new ProgressBar(0);
+        imageProgress.setPrefWidth(Double.MAX_VALUE);
+        imageProgress.setMaxWidth(Double.MAX_VALUE);
+        imageProgress.setVisible(false);
+
+        // Status label (hidden by default)
+        imageExportStatusLabel = new Label("");
+        imageExportStatusLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+        imageExportStatusLabel.setWrapText(true);
 
         // Info
         Label infoLabel = new Label(
@@ -250,7 +278,8 @@ public class ExportPanel extends ScrollPane {
         infoLabel.setStyle("-fx-font-size: 11px;");
         infoLabel.setWrapText(true);
 
-        box.getChildren().addAll(imageSamplesBox, renderBtn, exportBtn, infoLabel);
+        box.getChildren().addAll(imageSamplesBox, renderBtn, exportButtonBox,
+                imageProgress, imageExportStatusLabel, infoLabel);
 
         TitledPane pane = new TitledPane("Image", box);
         pane.setExpanded(true);
@@ -414,26 +443,67 @@ public class ExportPanel extends ScrollPane {
 
         File file = fileChooser.showSaveDialog(getScene().getWindow());
         if (file != null) {
+            imageExportCancelled = false;
+            exportImageBtn.setDisable(true);
+            cancelImageBtn.setVisible(true);
+            imageProgress.setVisible(true);
+            imageProgress.setProgress(0);
+            imageExportStatusLabel.setText("Starting export...");
+
             statusCallback.accept("Exporting...");
             progressCallback.accept(0.0);
-            int samples = imageExportSamplesSpinner.getValue();
 
-            controller.exportToPNG(file, samples, progressCallback::accept)
+            int samples = imageExportSamplesSpinner.getValue();
+            long startTime = System.currentTimeMillis();
+
+            Consumer<Double> enrichedProgress = progress -> {
+                progressCallback.accept(progress);
+                int currentSample = (int) Math.round(progress * samples);
+                long elapsed = System.currentTimeMillis() - startTime;
+                String eta;
+                if (progress > 0 && progress < 1.0) {
+                    long estimatedTotal = (long) (elapsed / progress);
+                    long remaining = estimatedTotal - elapsed;
+                    eta = "~" + formatDuration(remaining) + " remaining";
+                } else if (progress >= 1.0) {
+                    eta = "finishing...";
+                } else {
+                    eta = "calculating...";
+                }
+                Platform.runLater(() -> {
+                    imageProgress.setProgress(progress);
+                    imageExportStatusLabel.setText(
+                        String.format("Sample %d / %d — %s", currentSample, samples, eta));
+                });
+            };
+
+            controller.exportToPNG(file, samples, enrichedProgress, () -> imageExportCancelled)
                 .thenRun(() -> Platform.runLater(() -> {
-                    statusCallback.accept("Exported to: " + file.getName());
-                    // Open the exported file
-                    openFile(file);
+                    if (imageExportCancelled) {
+                        finishImageExport("Export cancelled");
+                    } else {
+                        finishImageExport("Exported to: " + file.getName());
+                        openFile(file);
+                    }
                 }))
                 .exceptionally(e -> {
-                    Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.ERROR);
-                        alert.setTitle("Export failed");
-                        alert.setContentText(e.getMessage());
-                        alert.showAndWait();
-                    });
+                    Platform.runLater(() -> finishImageExport("Export failed: " + e.getMessage()));
                     return null;
                 });
         }
+    }
+
+    private void cancelImageExport() {
+        imageExportCancelled = true;
+    }
+
+    private void finishImageExport(String msg) {
+        exportImageBtn.setDisable(false);
+        cancelImageBtn.setVisible(false);
+        imageProgress.setVisible(false);
+        imageExportStatusLabel.setText(msg);
+        statusCallback.accept(msg);
+        progressCallback.accept(0.0);
     }
 
     // ========================================================================

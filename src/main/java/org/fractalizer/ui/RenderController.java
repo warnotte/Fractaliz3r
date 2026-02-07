@@ -7,6 +7,7 @@ import org.fractalizer.fractals.FractalType;
 import java.io.File;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Interface for render controllers.
@@ -40,6 +41,7 @@ public interface RenderController {
 
     CompletableFuture<Void> exportToPNG(File file, Consumer<Double> onProgress);
     CompletableFuture<Void> exportToPNG(File file, int samples, Consumer<Double> onProgress);
+    CompletableFuture<Void> exportToPNG(File file, int samples, Consumer<Double> onProgress, Supplier<Boolean> cancelCheck);
 
     void cancelRender();
     boolean isRendering();

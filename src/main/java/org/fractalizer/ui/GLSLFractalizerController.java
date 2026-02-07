@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * GLSL-based controller for fractal rendering.
@@ -190,6 +191,11 @@ public class GLSLFractalizerController implements RenderController {
 
     @Override
     public CompletableFuture<Void> exportToPNG(File file, int samples, Consumer<Double> onProgress) {
+        return exportToPNG(file, samples, onProgress, () -> false);
+    }
+
+    @Override
+    public CompletableFuture<Void> exportToPNG(File file, int samples, Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         return CompletableFuture.runAsync(() -> {
             try {
                 cancelRender();
@@ -201,11 +207,21 @@ public class GLSLFractalizerController implements RenderController {
 
                 int exportSamples = Math.max(1, samples);
                 for (int i = 0; i < exportSamples; i++) {
+                    if (cancelCheck.get()) {
+                        engine.resize(viewportWidth, viewportHeight);
+                        return;
+                    }
                     engine.renderSample(uniforms);
                     if (onProgress != null) {
                         double progress = (double) (i + 1) / exportSamples;
                         Platform.runLater(() -> onProgress.accept(progress));
                     }
+                }
+
+                // Cancelled after loop
+                if (cancelCheck.get()) {
+                    engine.resize(viewportWidth, viewportHeight);
+                    return;
                 }
 
                 // Read pixels
