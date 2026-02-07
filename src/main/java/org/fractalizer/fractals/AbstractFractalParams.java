@@ -197,8 +197,8 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.aperture = 0.02f;
         this.dofSamples = 16;
 
-        // Path tracing defaults (disabled by default)
-        this.pathTracingEnabled = false;
+        // Path tracing defaults
+        this.pathTracingEnabled = true;
         this.maxBounces = 4;
         this.roughness = 0.5f;
         this.skyIntensity = 1.0f;

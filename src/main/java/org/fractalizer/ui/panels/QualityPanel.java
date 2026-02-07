@@ -331,7 +331,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         VBox box = new VBox(5);
 
         pathTracingCheck = new CheckBox("Enable Path Tracing");
-        pathTracingCheck.setSelected(false);
+        pathTracingCheck.setSelected(true);
         pathTracingCheck.setOnAction(e -> {
             if (!suppressRender) {
                 getParams().setPathTracingEnabled(pathTracingCheck.isSelected());
