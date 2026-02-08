@@ -165,8 +165,10 @@ public class ExportPanel extends ScrollPane {
             "1920x1080 (Full HD)",
             "3840x2160 (4K)",
             "7680x4320 (8K)",
+            "15360x8640 (16K)",
             "2048x1024 (360\u00B0 2K)",
             "4096x2048 (360\u00B0 4K)",
+            "8192x4096 (360\u00B0 8K)",
             "Custom"
         );
         presetCombo.setValue("1920x1080 (Full HD)");
@@ -182,12 +184,18 @@ public class ExportPanel extends ScrollPane {
             } else if (preset.startsWith("7680")) {
                 widthField.setText("7680");
                 heightField.setText("4320");
+            } else if (preset.startsWith("15360")) {
+                widthField.setText("15360");
+                heightField.setText("8640");
             } else if (preset.startsWith("2048")) {
                 widthField.setText("2048");
                 heightField.setText("1024");
             } else if (preset.startsWith("4096")) {
                 widthField.setText("4096");
                 heightField.setText("2048");
+            } else if (preset.startsWith("8192")) {
+                widthField.setText("8192");
+                heightField.setText("4096");
             }
             updateExportSize();
         });

@@ -34,6 +34,9 @@ const int MATERIAL_GLASS = 2;
 // ============================================================================
 
 uniform vec2 resolution;
+uniform vec2 tileOffset;       // [0,1] tile position in full image (default: 0,0)
+uniform vec2 tileScale;        // [0,1] tile fraction of full image (default: 1,1)
+uniform vec2 fullResolution;   // full image resolution in pixels (default: = resolution)
 uniform int sampleIndex;
 uniform float time;
 
@@ -431,7 +434,7 @@ Ray getCameraRay(vec2 screenUV) {
         
         ray.direction = rotateByQuaternion(vec3(x, y, z), camQuat);
     } else { // PERSPECTIVE (Standard)
-        float aspect = resolution.x / resolution.y;
+        float aspect = fullResolution.x / fullResolution.y;
         float halfHeight = tan(radians(fov) * 0.5);
         float halfWidth = halfHeight * aspect;
         vec3 localDir = normalize(vec3(screenUV.x * halfWidth, screenUV.y * halfHeight, 1.0));

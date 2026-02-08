@@ -699,11 +699,13 @@ void main() {
     // Initialize random for this pixel/sample
     uint seed = initRandom(gl_FragCoord.xy, sampleIndex);
 
-    // Anti-aliasing jitter
-    vec2 jitter = (random2(seed) - 0.5) / resolution;
+    // Anti-aliasing jitter (scaled to full image resolution for consistent AA across tiles)
+    vec2 jitter = (random2(seed) - 0.5) / fullResolution;
 
-    // Screen UV with jitter
-    vec2 screenUV = fragCoord + jitter * 2.0;
+    // Remap tile-local fragCoord to full-image NDC [-1,1]
+    vec2 tileUV = fragCoord * 0.5 + 0.5;                          // [0,1] within tile
+    vec2 fullUV = tileOffset + tileUV * tileScale;                 // [0,1] within full image
+    vec2 screenUV = fullUV * 2.0 - 1.0 + jitter * 2.0;           // [-1,1] NDC + jitter
 
     // Get camera ray (with optional DoF)
     Ray ray = getCameraRayDOF(screenUV, seed);
@@ -716,7 +718,8 @@ void main() {
         // ====== PATH TRACING ======
         color = pathTrace(ray, seed);
         // For path tracing, get depth from center ray (first bounce)
-        Ray centerRay = getCameraRay(fragCoord); // No DoF jitter
+        vec2 centerFullUV = tileOffset + (fragCoord * 0.5 + 0.5) * tileScale;
+        Ray centerRay = getCameraRay(centerFullUV * 2.0 - 1.0); // No DoF jitter
         RayHit depthHit = rayMarch(centerRay);
         depth = depthHit.hit ? depthHit.dist : 100.0;
         

@@ -196,6 +196,15 @@ public class GLSLFractalizerController implements RenderController {
 
     @Override
     public CompletableFuture<Void> exportToPNG(File file, int samples, Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
+        if (exportWidth > MAX_TILE_SIZE || exportHeight > MAX_TILE_SIZE) {
+            return exportTiledToPNG(file, samples, onProgress, cancelCheck);
+        }
+        return exportSingleToPNG(file, samples, onProgress, cancelCheck);
+    }
+
+    private static final int MAX_TILE_SIZE = 4096;
+
+    private CompletableFuture<Void> exportSingleToPNG(File file, int samples, Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         return CompletableFuture.runAsync(() -> {
             try {
                 cancelRender();
@@ -254,6 +263,89 @@ public class GLSLFractalizerController implements RenderController {
         });
     }
 
+    private CompletableFuture<Void> exportTiledToPNG(File file, int samples, Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                cancelRender();
+
+                int fullW = exportWidth;
+                int fullH = exportHeight;
+                float fullWf = (float) fullW;
+                float fullHf = (float) fullH;
+
+                int tilesX = (fullW + MAX_TILE_SIZE - 1) / MAX_TILE_SIZE;
+                int tilesY = (fullH + MAX_TILE_SIZE - 1) / MAX_TILE_SIZE;
+                int totalTiles = tilesX * tilesY;
+                int exportSamples = Math.max(1, samples);
+
+                BufferedImage fullImage = new BufferedImage(fullW, fullH, BufferedImage.TYPE_INT_RGB);
+
+                for (int ty = 0; ty < tilesY; ty++) {
+                    for (int tx = 0; tx < tilesX; tx++) {
+                        int tileIndex = ty * tilesX + tx;
+
+                        int tileX = tx * MAX_TILE_SIZE;
+                        int tileY = ty * MAX_TILE_SIZE;
+                        int tileW = Math.min(MAX_TILE_SIZE, fullW - tileX);
+                        int tileH = Math.min(MAX_TILE_SIZE, fullH - tileY);
+
+                        engine.resize(tileW, tileH);
+                        engine.setActiveProgram(currentFractalType.getKernelName());
+                        engine.resetAccumulation();
+
+                        Map<String, Object> uniforms = buildUniforms();
+                        uniforms.put("tileOffset", new float[]{tileX / fullWf, (fullH - tileY - tileH) / fullHf});
+                        uniforms.put("tileScale", new float[]{tileW / fullWf, tileH / fullHf});
+                        uniforms.put("fullResolution", new float[]{fullWf, fullHf});
+
+                        for (int i = 0; i < exportSamples; i++) {
+                            if (cancelCheck.get()) {
+                                engine.resize(viewportWidth, viewportHeight);
+                                return;
+                            }
+                            engine.renderSample(uniforms);
+                            engine.glSync();
+                            if (onProgress != null) {
+                                double progress = (double) (tileIndex * exportSamples + i + 1) / (totalTiles * exportSamples);
+                                Platform.runLater(() -> onProgress.accept(progress));
+                            }
+                        }
+
+                        if (cancelCheck.get()) {
+                            engine.resize(viewportWidth, viewportHeight);
+                            return;
+                        }
+
+                        // Read tile pixels and copy into full image
+                        float[] pixels = engine.readImage();
+                        for (int py = 0; py < tileH; py++) {
+                            for (int px = 0; px < tileW; px++) {
+                                int idx = (py * tileW + px) * 4;
+                                int r = Math.max(0, Math.min(255, (int) (pixels[idx] * 255)));
+                                int g = Math.max(0, Math.min(255, (int) (pixels[idx + 1] * 255)));
+                                int b = Math.max(0, Math.min(255, (int) (pixels[idx + 2] * 255)));
+                                fullImage.setRGB(tileX + px, tileY + py, (r << 16) | (g << 8) | b);
+                            }
+                        }
+                    }
+                }
+
+                // Check for 360 mode
+                boolean is360 = false;
+                if (currentParams instanceof AbstractFractalParams afp) {
+                    is360 = (afp.getProjectionMode() == AbstractFractalParams.PROJECTION_360_EQUIRECTANGULAR);
+                }
+
+                ImageWriterHelper.writeImage(fullImage, file, is360);
+
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to export tiled image", e);
+            } finally {
+                engine.resize(viewportWidth, viewportHeight);
+            }
+        });
+    }
+
     /**
      * Export a single animation frame to a file (synchronous).
      * Uses viewport size for faster export.
@@ -292,6 +384,14 @@ public class GLSLFractalizerController implements RenderController {
      */
     public WritableImage exportAnimationFrame(File file, int width, int height, int samples,
                                                Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
+        if (width > MAX_TILE_SIZE || height > MAX_TILE_SIZE) {
+            return exportAnimationFrameTiled(file, width, height, samples, onProgress, cancelCheck);
+        }
+        return exportAnimationFrameSingle(file, width, height, samples, onProgress, cancelCheck);
+    }
+
+    private WritableImage exportAnimationFrameSingle(File file, int width, int height, int samples,
+                                                      Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         try {
             // Resize engine to export dimensions
             engine.resize(width, height);
@@ -331,7 +431,7 @@ public class GLSLFractalizerController implements RenderController {
             }
 
             // Write to file (detect format from extension)
-            boolean is360 = (currentParams instanceof AbstractFractalParams afp) && 
+            boolean is360 = (currentParams instanceof AbstractFractalParams afp) &&
                             (afp.getProjectionMode() == AbstractFractalParams.PROJECTION_360_EQUIRECTANGULAR);
             ImageWriterHelper.writeImage(bufferedImage, file, is360);
 
@@ -348,6 +448,85 @@ public class GLSLFractalizerController implements RenderController {
             // Restore viewport size on error
             engine.resize(viewportWidth, viewportHeight);
             throw new RuntimeException("Failed to export animation frame", e);
+        }
+    }
+
+    private WritableImage exportAnimationFrameTiled(File file, int width, int height, int samples,
+                                                     Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
+        try {
+            float fullWf = (float) width;
+            float fullHf = (float) height;
+
+            int tilesX = (width + MAX_TILE_SIZE - 1) / MAX_TILE_SIZE;
+            int tilesY = (height + MAX_TILE_SIZE - 1) / MAX_TILE_SIZE;
+            int totalTiles = tilesX * tilesY;
+
+            BufferedImage bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            int[] intPixels = new int[width * height];
+
+            for (int ty = 0; ty < tilesY; ty++) {
+                for (int tx = 0; tx < tilesX; tx++) {
+                    int tileIndex = ty * tilesX + tx;
+
+                    int tileX = tx * MAX_TILE_SIZE;
+                    int tileY = ty * MAX_TILE_SIZE;
+                    int tileW = Math.min(MAX_TILE_SIZE, width - tileX);
+                    int tileH = Math.min(MAX_TILE_SIZE, height - tileY);
+
+                    engine.resize(tileW, tileH);
+                    engine.setActiveProgram(currentFractalType.getKernelName());
+                    engine.resetAccumulation();
+
+                    Map<String, Object> uniforms = buildUniforms();
+                    uniforms.put("tileOffset", new float[]{tileX / fullWf, (height - tileY - tileH) / fullHf});
+                    uniforms.put("tileScale", new float[]{tileW / fullWf, tileH / fullHf});
+                    uniforms.put("fullResolution", new float[]{fullWf, fullHf});
+
+                    for (int i = 0; i < samples; i++) {
+                        if (cancelCheck != null && cancelCheck.get()) {
+                            engine.resize(viewportWidth, viewportHeight);
+                            return null;
+                        }
+                        engine.renderSample(uniforms);
+                        engine.glSync();
+                        if (onProgress != null) {
+                            double progress = (double) (tileIndex * samples + i + 1) / (totalTiles * samples);
+                            onProgress.accept(progress);
+                        }
+                    }
+
+                    // Read tile pixels and copy into full image
+                    float[] pixels = engine.readImage();
+                    for (int py = 0; py < tileH; py++) {
+                        for (int px = 0; px < tileW; px++) {
+                            int idx = (py * tileW + px) * 4;
+                            int r = Math.max(0, Math.min(255, (int) (pixels[idx] * 255)));
+                            int g = Math.max(0, Math.min(255, (int) (pixels[idx + 1] * 255)));
+                            int b = Math.max(0, Math.min(255, (int) (pixels[idx + 2] * 255)));
+                            int rgb = (r << 16) | (g << 8) | b;
+                            bufferedImage.setRGB(tileX + px, tileY + py, rgb);
+                            intPixels[(tileY + py) * width + (tileX + px)] = 0xFF000000 | rgb;
+                        }
+                    }
+                }
+            }
+
+            // Write to file
+            boolean is360 = (currentParams instanceof AbstractFractalParams afp) &&
+                            (afp.getProjectionMode() == AbstractFractalParams.PROJECTION_360_EQUIRECTANGULAR);
+            ImageWriterHelper.writeImage(bufferedImage, file, is360);
+
+            // Create WritableImage for display
+            WritableImage fxImage = new WritableImage(width, height);
+            fxImage.getPixelWriter().setPixels(0, 0, width, height,
+                PixelFormat.getIntArgbInstance(), intPixels, 0, width);
+
+            engine.resize(viewportWidth, viewportHeight);
+            return fxImage;
+
+        } catch (Exception e) {
+            engine.resize(viewportWidth, viewportHeight);
+            throw new RuntimeException("Failed to export tiled animation frame", e);
         }
     }
 
@@ -381,6 +560,19 @@ public class GLSLFractalizerController implements RenderController {
             double frameTime, double fps, float shutterAngle,
             Consumer<Double> timeApplier,
             Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
+        if (width > MAX_TILE_SIZE || height > MAX_TILE_SIZE) {
+            return exportAnimationFrameWithMotionBlurTiled(file, width, height, samples,
+                    frameTime, fps, shutterAngle, timeApplier, onProgress, cancelCheck);
+        }
+        return exportAnimationFrameWithMotionBlurSingle(file, width, height, samples,
+                frameTime, fps, shutterAngle, timeApplier, onProgress, cancelCheck);
+    }
+
+    private WritableImage exportAnimationFrameWithMotionBlurSingle(
+            File file, int width, int height, int samples,
+            double frameTime, double fps, float shutterAngle,
+            Consumer<Double> timeApplier,
+            Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         try {
             // Resize engine to export dimensions
             engine.resize(width, height);
@@ -388,7 +580,7 @@ public class GLSLFractalizerController implements RenderController {
             engine.resetAccumulation();
 
             // Calculate shutter window
-            // Shutter angle 180° = shutter open for half the frame duration
+            // Shutter angle 180 = shutter open for half the frame duration
             double frameDuration = 1.0 / fps;
             double shutterDuration = frameDuration * (shutterAngle / 360.0);
 
@@ -441,7 +633,7 @@ public class GLSLFractalizerController implements RenderController {
             }
 
             // Write to file
-            boolean is360 = (currentParams instanceof AbstractFractalParams afp) && 
+            boolean is360 = (currentParams instanceof AbstractFractalParams afp) &&
                             (afp.getProjectionMode() == AbstractFractalParams.PROJECTION_360_EQUIRECTANGULAR);
             ImageWriterHelper.writeImage(bufferedImage, file, is360);
 
@@ -457,6 +649,103 @@ public class GLSLFractalizerController implements RenderController {
         } catch (Exception e) {
             engine.resize(viewportWidth, viewportHeight);
             throw new RuntimeException("Failed to export animation frame with motion blur", e);
+        }
+    }
+
+    private WritableImage exportAnimationFrameWithMotionBlurTiled(
+            File file, int width, int height, int samples,
+            double frameTime, double fps, float shutterAngle,
+            Consumer<Double> timeApplier,
+            Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
+        try {
+            float fullWf = (float) width;
+            float fullHf = (float) height;
+
+            int tilesX = (width + MAX_TILE_SIZE - 1) / MAX_TILE_SIZE;
+            int tilesY = (height + MAX_TILE_SIZE - 1) / MAX_TILE_SIZE;
+            int totalTiles = tilesX * tilesY;
+
+            double frameDuration = 1.0 / fps;
+            double shutterDuration = frameDuration * (shutterAngle / 360.0);
+
+            BufferedImage bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            int[] intPixels = new int[width * height];
+
+            for (int ty = 0; ty < tilesY; ty++) {
+                for (int tx = 0; tx < tilesX; tx++) {
+                    int tileIndex = ty * tilesX + tx;
+
+                    int tileX = tx * MAX_TILE_SIZE;
+                    int tileY = ty * MAX_TILE_SIZE;
+                    int tileW = Math.min(MAX_TILE_SIZE, width - tileX);
+                    int tileH = Math.min(MAX_TILE_SIZE, height - tileY);
+
+                    engine.resize(tileW, tileH);
+                    engine.setActiveProgram(currentFractalType.getKernelName());
+                    engine.resetAccumulation();
+
+                    Random random = new Random(tileIndex); // Consistent per-tile seed
+
+                    for (int i = 0; i < samples; i++) {
+                        if (cancelCheck != null && cancelCheck.get()) {
+                            engine.resize(viewportWidth, viewportHeight);
+                            return null;
+                        }
+
+                        double jitteredTime;
+                        if (shutterAngle > 0) {
+                            jitteredTime = frameTime + (random.nextDouble() - 0.5) * shutterDuration;
+                        } else {
+                            jitteredTime = frameTime;
+                        }
+
+                        timeApplier.accept(jitteredTime);
+
+                        Map<String, Object> uniforms = buildUniforms();
+                        uniforms.put("tileOffset", new float[]{tileX / fullWf, (height - tileY - tileH) / fullHf});
+                        uniforms.put("tileScale", new float[]{tileW / fullWf, tileH / fullHf});
+                        uniforms.put("fullResolution", new float[]{fullWf, fullHf});
+
+                        engine.renderSample(uniforms);
+                        engine.glSync();
+                        if (onProgress != null) {
+                            double progress = (double) (tileIndex * samples + i + 1) / (totalTiles * samples);
+                            onProgress.accept(progress);
+                        }
+                    }
+
+                    // Read tile pixels and copy into full image
+                    float[] pixels = engine.readImage();
+                    for (int py = 0; py < tileH; py++) {
+                        for (int px = 0; px < tileW; px++) {
+                            int idx = (py * tileW + px) * 4;
+                            int r = Math.max(0, Math.min(255, (int) (pixels[idx] * 255)));
+                            int g = Math.max(0, Math.min(255, (int) (pixels[idx + 1] * 255)));
+                            int b = Math.max(0, Math.min(255, (int) (pixels[idx + 2] * 255)));
+                            int rgb = (r << 16) | (g << 8) | b;
+                            bufferedImage.setRGB(tileX + px, tileY + py, rgb);
+                            intPixels[(tileY + py) * width + (tileX + px)] = 0xFF000000 | rgb;
+                        }
+                    }
+                }
+            }
+
+            // Write to file
+            boolean is360 = (currentParams instanceof AbstractFractalParams afp) &&
+                            (afp.getProjectionMode() == AbstractFractalParams.PROJECTION_360_EQUIRECTANGULAR);
+            ImageWriterHelper.writeImage(bufferedImage, file, is360);
+
+            // Create WritableImage for display
+            WritableImage fxImage = new WritableImage(width, height);
+            fxImage.getPixelWriter().setPixels(0, 0, width, height,
+                PixelFormat.getIntArgbInstance(), intPixels, 0, width);
+
+            engine.resize(viewportWidth, viewportHeight);
+            return fxImage;
+
+        } catch (Exception e) {
+            engine.resize(viewportWidth, viewportHeight);
+            throw new RuntimeException("Failed to export tiled animation frame with motion blur", e);
         }
     }
 
@@ -650,6 +939,12 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("lightPanelD", p.getLightPanelD());
             }
         }
+
+        // Tiled rendering defaults (identity: full image = single tile)
+        uniforms.put("tileOffset", new float[]{0.0f, 0.0f});
+        uniforms.put("tileScale", new float[]{1.0f, 1.0f});
+        uniforms.put("fullResolution", new float[]{
+            (float) engine.getWidth(), (float) engine.getHeight()});
 
         return uniforms;
     }

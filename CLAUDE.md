@@ -146,6 +146,7 @@ Fractaliz3r features a full cinematic rendering pipeline:
         - Includes a silent audio track to ensure YouTube/Facebook VR processing.
 - **Multi-format Export**: Support for high-quality PNG and JPEG (95% quality).
 - **Standard VR Presets**: 2048x1024 (2K) and 4096x2048 (4K) 2:1 aspect ratio presets.
+- **Tiled Rendering**: Automatic tile-based rendering for exports exceeding 4096px in any dimension. The image is split into MAX_TILE_SIZE (4096px) tiles, each rendered independently with proper UV remapping via `tileOffset`, `tileScale`, and `fullResolution` shader uniforms, then assembled CPU-side. Transparent to the user — same export UI, progress bar spans all tiles linearly. Presets up to 16K (15360x8640) and 360° 8K (8192x4096). Bloom may have minor seams at tile boundaries (invisible at 4096px tiles).
 - **Video Encoding**: Automatic MP4 creation via FFmpeg (H.265 HEVC) with `+faststart` for web optimization.
 
 ## Navigation Controls
