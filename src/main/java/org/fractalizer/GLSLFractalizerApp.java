@@ -238,21 +238,17 @@ public class GLSLFractalizerApp extends Application {
         // Connect export panel to timeline (after animationManager is created)
         exportPanel.setTimelineSupplier(() -> animationManager.getTimeline());
         exportPanel.setPrepareFrameCallback(() -> animationManager.applyTimelineToParams());
-        exportPanel.setAnimationExportCallback((file, width, height, samples) -> {
-            // Called on background thread - render only (GL delegates internally)
-            javafx.scene.image.Image image = controller.exportAnimationFrame(file, width, height, samples);
-            Platform.runLater(() -> updateImage(image));
+        exportPanel.setAnimationExportCallback((file, width, height, samples, onProgress, cancelCheck) -> {
+            return controller.exportAnimationFrame(file, width, height, samples, onProgress, cancelCheck);
         });
-        exportPanel.setMotionBlurExportCallback((file, width, height, samples, frameTime, fps, shutterAngle) -> {
-            // Called on background thread - render only (GL delegates internally)
-            javafx.scene.image.Image image = controller.exportAnimationFrameWithMotionBlur(
+        exportPanel.setMotionBlurExportCallback((file, width, height, samples, frameTime, fps, shutterAngle, onProgress, cancelCheck) -> {
+            return controller.exportAnimationFrameWithMotionBlur(
                 file, width, height, samples, frameTime, fps, shutterAngle,
                 time -> {
-                    // Sub-frame time jittering
                     animationManager.getTimeline().setCurrentTime(time);
                     animationManager.applyTimelineToParams();
-                });
-            Platform.runLater(() -> updateImage(image));
+                },
+                onProgress, cancelCheck);
         });
         exportPanel.setExportStateCallback(exporting -> {
             this.exportingAnimation = exporting;

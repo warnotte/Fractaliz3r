@@ -11,6 +11,7 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import org.fractalizer.animation.Timeline;
 import org.fractalizer.render.FFmpegExporter;
+import org.fractalizer.ui.ExportProgressDialog;
 import org.fractalizer.ui.RenderController;
 
 import java.awt.Desktop;
@@ -39,13 +40,15 @@ public class ExportPanel extends ScrollPane {
 
     @FunctionalInterface
     public interface AnimationExportCallback {
-        void exportFrame(File file, int width, int height, int samples);
+        Image exportFrame(File file, int width, int height, int samples,
+                          Consumer<Double> onProgress, Supplier<Boolean> cancelCheck);
     }
 
     @FunctionalInterface
     public interface MotionBlurExportCallback {
-        void exportFrameWithMotionBlur(File file, int width, int height, int samples,
-                                        double frameTime, double fps, float shutterAngle);
+        Image exportFrameWithMotionBlur(File file, int width, int height, int samples,
+                                        double frameTime, double fps, float shutterAngle,
+                                        Consumer<Double> onProgress, Supplier<Boolean> cancelCheck);
     }
 
     // Motion blur callback
@@ -62,18 +65,10 @@ public class ExportPanel extends ScrollPane {
 
     // Image export UI
     private Button exportImageBtn;
-    private Button cancelImageBtn;
-    private ProgressBar imageProgress;
-    private Label imageExportStatusLabel;
     private volatile boolean imageExportCancelled;
 
     // Animation export UI
-    private ProgressBar frameProgress;
-    private ProgressBar totalProgress;
-    private Label frameProgressLabel;
-    private Label animExportStatusLabel;
     private Button exportAnimButton;
-    private Button cancelAnimButton;
     private Spinner<Integer> exportSamplesSpinner;
     private Spinner<Integer> motionBlurSpinner;  // Shutter angle 0-360
     private CheckBox createMP4Checkbox;
@@ -167,9 +162,9 @@ public class ExportPanel extends ScrollPane {
 
         ComboBox<String> presetCombo = new ComboBox<>();
         presetCombo.getItems().addAll(
-            "1920x1080 (Full HD)", 
-            "3840x2160 (4K)", 
-            "7680x4320 (8K)", 
+            "1920x1080 (Full HD)",
+            "3840x2160 (4K)",
+            "7680x4320 (8K)",
             "2048x1024 (360\u00B0 2K)",
             "4096x2048 (360\u00B0 4K)",
             "Custom"
@@ -247,27 +242,6 @@ public class ExportPanel extends ScrollPane {
         exportImageBtn.setOnAction(e -> exportImage());
         exportImageBtn.setMaxWidth(Double.MAX_VALUE);
 
-        cancelImageBtn = new Button("Cancel");
-        cancelImageBtn.setVisible(false);
-        cancelImageBtn.setOnAction(e -> cancelImageExport());
-
-        HBox exportButtonBox = new HBox(5);
-        exportButtonBox.setAlignment(Pos.CENTER);
-        exportButtonBox.getChildren().addAll(exportImageBtn, cancelImageBtn);
-        exportImageBtn.setMaxWidth(Double.MAX_VALUE);
-        javafx.scene.layout.HBox.setHgrow(exportImageBtn, javafx.scene.layout.Priority.ALWAYS);
-
-        // Progress bar (hidden by default)
-        imageProgress = new ProgressBar(0);
-        imageProgress.setPrefWidth(Double.MAX_VALUE);
-        imageProgress.setMaxWidth(Double.MAX_VALUE);
-        imageProgress.setVisible(false);
-
-        // Status label (hidden by default)
-        imageExportStatusLabel = new Label("");
-        imageExportStatusLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
-        imageExportStatusLabel.setWrapText(true);
-
         // Info
         Label infoLabel = new Label(
             "Tips:\n" +
@@ -278,8 +252,7 @@ public class ExportPanel extends ScrollPane {
         infoLabel.setStyle("-fx-font-size: 11px;");
         infoLabel.setWrapText(true);
 
-        box.getChildren().addAll(imageSamplesBox, renderBtn, exportButtonBox,
-                imageProgress, imageExportStatusLabel, infoLabel);
+        box.getChildren().addAll(imageSamplesBox, renderBtn, exportImageBtn, infoLabel);
 
         TitledPane pane = new TitledPane("Image", box);
         pane.setExpanded(true);
@@ -292,9 +265,6 @@ public class ExportPanel extends ScrollPane {
         // Animation info
         Label animInfoLabel = new Label("No animation");
         animInfoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
-
-        // Update info when timeline changes
-        // This will be called later via a method
 
         // Samples per frame
         HBox samplesBox = new HBox(5);
@@ -314,23 +284,6 @@ public class ExportPanel extends ScrollPane {
         motionBlurSpinner.setEditable(true);
         motionBlurSpinner.setTooltip(new Tooltip("Shutter angle: 0=none, 180=cinematic, 360=full frame blur"));
         motionBlurBox.getChildren().addAll(motionBlurSpinner, new Label("\u00B0"));
-
-        // Progress indicators
-        frameProgressLabel = new Label("Frame 0/0");
-        frameProgressLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
-        frameProgressLabel.setVisible(false);
-
-        frameProgress = new ProgressBar(0);
-        frameProgress.setPrefWidth(Double.MAX_VALUE);
-        frameProgress.setVisible(false);
-
-        totalProgress = new ProgressBar(0);
-        totalProgress.setPrefWidth(Double.MAX_VALUE);
-        totalProgress.setVisible(false);
-
-        animExportStatusLabel = new Label("");
-        animExportStatusLabel.setStyle("-fx-font-size: 10px;");
-        animExportStatusLabel.setWrapText(true);
 
         // MP4 options
         HBox mp4Box = new HBox(8);
@@ -355,31 +308,19 @@ public class ExportPanel extends ScrollPane {
         updateFFmpegStatus();
         ffmpegStatusLabel.setStyle("-fx-font-size: 10px;");
 
-        // Buttons
-        HBox buttonBox = new HBox(5);
-        buttonBox.setAlignment(Pos.CENTER);
-
+        // Export button
         exportAnimButton = new Button("Export Animation...");
         exportAnimButton.setOnAction(e -> startAnimationExport());
-
-        cancelAnimButton = new Button("Cancel");
-        cancelAnimButton.setVisible(false);
-        cancelAnimButton.setOnAction(e -> cancelAnimationExport());
-
-        buttonBox.getChildren().addAll(exportAnimButton, cancelAnimButton);
+        exportAnimButton.setMaxWidth(Double.MAX_VALUE);
 
         box.getChildren().addAll(
             animInfoLabel,
             samplesBox,
             motionBlurBox,
-            frameProgressLabel,
-            frameProgress,
-            totalProgress,
-            animExportStatusLabel,
             new Separator(),
             mp4Box,
             ffmpegStatusLabel,
-            buttonBox
+            exportAnimButton
         );
 
         // Store reference to update animation info
@@ -445,19 +386,17 @@ public class ExportPanel extends ScrollPane {
         if (file != null) {
             imageExportCancelled = false;
             exportImageBtn.setDisable(true);
-            cancelImageBtn.setVisible(true);
-            imageProgress.setVisible(true);
-            imageProgress.setProgress(0);
-            imageExportStatusLabel.setText("Starting export...");
 
-            statusCallback.accept("Exporting...");
-            progressCallback.accept(0.0);
+            ExportProgressDialog dialog = new ExportProgressDialog(getScene().getWindow(), "Image Export");
+            dialog.setAnimationMode(false);
+            dialog.setOnCancelRequested(() -> imageExportCancelled = true);
 
             int samples = imageExportSamplesSpinner.getValue();
             long startTime = System.currentTimeMillis();
 
+            // Note: this callback is already invoked on the FX thread by the controller
+            // (via Platform.runLater), so no need to wrap in another Platform.runLater
             Consumer<Double> enrichedProgress = progress -> {
-                progressCallback.accept(progress);
                 int currentSample = (int) Math.round(progress * samples);
                 long elapsed = System.currentTimeMillis() - startTime;
                 String eta;
@@ -470,40 +409,35 @@ public class ExportPanel extends ScrollPane {
                 } else {
                     eta = "calculating...";
                 }
-                Platform.runLater(() -> {
-                    imageProgress.setProgress(progress);
-                    imageExportStatusLabel.setText(
-                        String.format("Sample %d / %d — %s", currentSample, samples, eta));
-                });
+                dialog.updateFrameProgress(progress,
+                    String.format("Sample %d / %d", currentSample, samples));
+                dialog.updateStatus(formatDuration(elapsed) + " elapsed \u2014 " + eta);
             };
 
             controller.exportToPNG(file, samples, enrichedProgress, () -> imageExportCancelled)
                 .thenRun(() -> Platform.runLater(() -> {
                     if (imageExportCancelled) {
-                        finishImageExport("Export cancelled");
+                        dialog.showCancelled("Export cancelled");
+                        statusCallback.accept("Export cancelled");
                     } else {
-                        finishImageExport("Exported to: " + file.getName());
+                        long totalElapsed = System.currentTimeMillis() - startTime;
+                        dialog.showSuccess("Exported to: " + file.getName() + " in " + formatDuration(totalElapsed));
+                        statusCallback.accept("Exported: " + file.getName());
                         openFile(file);
                     }
+                    exportImageBtn.setDisable(false);
                 }))
                 .exceptionally(e -> {
-                    Platform.runLater(() -> finishImageExport("Export failed: " + e.getMessage()));
+                    Platform.runLater(() -> {
+                        dialog.showCancelled("Export failed: " + e.getMessage());
+                        statusCallback.accept("Export failed");
+                        exportImageBtn.setDisable(false);
+                    });
                     return null;
                 });
+
+            dialog.show();
         }
-    }
-
-    private void cancelImageExport() {
-        imageExportCancelled = true;
-    }
-
-    private void finishImageExport(String msg) {
-        exportImageBtn.setDisable(false);
-        cancelImageBtn.setVisible(false);
-        imageProgress.setVisible(false);
-        imageExportStatusLabel.setText(msg);
-        statusCallback.accept(msg);
-        progressCallback.accept(0.0);
     }
 
     // ========================================================================
@@ -581,22 +515,25 @@ public class ExportPanel extends ScrollPane {
         }
 
         exportAnimButton.setDisable(true);
-        cancelAnimButton.setVisible(true);
-        frameProgress.setVisible(true);
-        frameProgress.setProgress(0);
-        totalProgress.setVisible(true);
-        totalProgress.setProgress(0);
-        frameProgressLabel.setVisible(true);
 
-        System.out.println("[AnimExport] Starting animation export: " + totalFrames + " frames at " + exportWidth + "x" + exportHeight);
+        // Create and show progress dialog
+        ExportProgressDialog dialog = new ExportProgressDialog(getScene().getWindow(), "Animation Export");
+        dialog.setAnimationMode(true);
+        dialog.setOnCancelRequested(() -> exportCancelled = true);
+
+        String motionBlurInfo = useMotionBlur ? ", motion blur " + shutterAngle + "\u00B0" : "";
+        System.out.println("[AnimExport] Starting: " + totalFrames + " frames at " + exportWidth + "x" + exportHeight
+                + ", " + exportSamples + " samples/frame" + motionBlurInfo);
 
         long exportStartTime = System.currentTimeMillis();
 
         Thread exportThread = new Thread(() -> {
+            int renderedFrames = 0;
             try {
                 for (int frame = 0; frame < totalFrames && !exportCancelled; frame++) {
                     final int currentFrame = frame;
                     double time = frame / timeline.getFrameRate();
+                    long frameStartTime = System.currentTimeMillis();
 
                     // Step 1: Apply params on FX thread (quick, <1ms)
                     java.util.concurrent.CountDownLatch prepareLatch = new java.util.concurrent.CountDownLatch(1);
@@ -604,107 +541,151 @@ public class ExportPanel extends ScrollPane {
                         try {
                             timeline.setCurrentTime(time);
                             if (prepareFrameCallback != null) prepareFrameCallback.run();
-                            frameProgressLabel.setText(String.format("Frame %d / %d", currentFrame + 1, totalFrames));
-                            animExportStatusLabel.setText("Rendering...");
+                            dialog.updateFrameProgress(0,
+                                String.format("Frame %d / %d \u2014 Sample 0/%d", currentFrame + 1, totalFrames, exportSamples));
                         } finally {
                             prepareLatch.countDown();
                         }
                     });
                     prepareLatch.await();
 
+                    // Per-sample progress callback
+                    final int fCurrentFrame = currentFrame;
+                    Consumer<Double> sampleProgress = progress -> {
+                        int currentSample = (int) Math.round(progress * exportSamples);
+                        Platform.runLater(() -> {
+                            dialog.updateFrameProgress(progress,
+                                String.format("Frame %d / %d \u2014 Sample %d/%d",
+                                    fCurrentFrame + 1, totalFrames, currentSample, exportSamples));
+                        });
+                    };
+
+                    // Cancel check supplier
+                    Supplier<Boolean> cancelSupplier = () -> exportCancelled;
+
                     // Step 2: Render on background thread (GL work delegates to GL thread internally)
                     File frameFile = new File(exportDir, String.format("frame_%05d.png", currentFrame));
                     final double frameTime = time;
+                    Image frameImage;
                     if (useMotionBlur) {
-                        motionBlurExportCallback.exportFrameWithMotionBlur(
+                        frameImage = motionBlurExportCallback.exportFrameWithMotionBlur(
                             frameFile, exportWidth, exportHeight, exportSamples,
-                            frameTime, fps, shutterAngle);
+                            frameTime, fps, shutterAngle, sampleProgress, cancelSupplier);
                     } else {
-                        animationExportCallback.exportFrame(frameFile, exportWidth, exportHeight, exportSamples);
+                        frameImage = animationExportCallback.exportFrame(frameFile, exportWidth, exportHeight, exportSamples,
+                            sampleProgress, cancelSupplier);
                     }
 
-                    // Step 3: Update progress on FX thread (quick)
+                    // Update preview in dialog
+                    if (frameImage != null) {
+                        Platform.runLater(() -> dialog.updatePreview(frameImage));
+                    }
+
+                    renderedFrames++;
+
+                    // Check if cancelled mid-frame
+                    if (exportCancelled) {
+                        System.out.println("[AnimExport] Frame " + (currentFrame + 1) + "/" + totalFrames + " \u2014 cancelled by user");
+                        break;
+                    }
+
+                    // Step 3: Update progress on FX thread + console log
                     final double progress = (double) (currentFrame + 1) / totalFrames;
                     long elapsed = System.currentTimeMillis() - exportStartTime;
+                    long frameElapsed = System.currentTimeMillis() - frameStartTime;
                     long estimatedTotal = (long) (elapsed / progress);
                     long remaining = estimatedTotal - elapsed;
-                    final String etaText = String.format(
-                        "Frame %d / %d — %s elapsed — ~%s remaining",
-                        currentFrame + 1, totalFrames,
-                        formatDuration(elapsed), formatDuration(remaining));
+                    final String etaText = formatDuration(elapsed) + " elapsed \u2014 ~" + formatDuration(remaining) + " remaining";
+
+                    System.out.printf("[AnimExport] Frame %d/%d (%.1f%%) \u2014 %.1fs/frame \u2014 ETA %s%n",
+                            currentFrame + 1, totalFrames, progress * 100,
+                            frameElapsed / 1000.0, formatDuration(remaining));
+
+                    final int fCurrentFrame2 = currentFrame;
                     Platform.runLater(() -> {
-                        totalProgress.setProgress(progress);
-                        frameProgress.setProgress(1.0);
-                        animExportStatusLabel.setText(etaText);
+                        dialog.updateFrameProgress(1.0,
+                            String.format("Frame %d / %d \u2014 done", fCurrentFrame2 + 1, totalFrames));
+                        dialog.updateTotalProgress(progress,
+                            String.format("Total: %d / %d frames", fCurrentFrame2 + 1, totalFrames));
+                        dialog.updateStatus(etaText);
                     });
+                }
+
+                // Summary log
+                long totalElapsed = System.currentTimeMillis() - exportStartTime;
+                if (exportCancelled) {
+                    System.out.println("[AnimExport] Cancelled after " + renderedFrames + "/" + totalFrames
+                            + " frames in " + formatDuration(totalElapsed));
+                } else {
+                    double avgFrame = renderedFrames > 0 ? (totalElapsed / 1000.0) / renderedFrames : 0;
+                    System.out.printf("[AnimExport] Rendered %d/%d frames in %s (%.1fs avg/frame)%n",
+                            renderedFrames, totalFrames, formatDuration(totalElapsed), avgFrame);
                 }
 
                 // PNG export done - now create MP4 if requested
                 if (!exportCancelled && shouldCreateMP4) {
-                    Platform.runLater(() -> {
-                        animExportStatusLabel.setText("Creating MP4 video...");
-                        frameProgressLabel.setText("Encoding...");
-                        frameProgress.setProgress(-1); // Indeterminate
-                    });
+                    System.out.println("[AnimExport] Creating MP4 from " + renderedFrames + " frames...");
+                    Platform.runLater(() -> dialog.setIndeterminate("Encoding MP4..."));
 
                     FFmpegExporter.ExportResult result = FFmpegExporter.createMP4InPlace(
                             exportDir, fps, crf, finalIs360,
-                            progress -> Platform.runLater(() -> frameProgress.setProgress(progress))
+                            progress -> Platform.runLater(() -> dialog.updateFrameProgress(progress, "Encoding MP4..."))
                     );
 
                     final int finalTotalFrames = totalFrames;
+                    final int finalRenderedFrames = renderedFrames;
+                    final long finalTotalElapsed = System.currentTimeMillis() - exportStartTime;
                     Platform.runLater(() -> {
                         if (result.success) {
-                            String msg = "Export complete!\n" + finalTotalFrames + " frames + MP4:\n" + result.outputFile.getAbsolutePath();
-                            animExportStatusLabel.setText(msg);
-                            
+                            System.out.println("[AnimExport] Done: " + finalRenderedFrames + "/" + finalTotalFrames
+                                    + " frames in " + formatDuration(finalTotalElapsed) + " \u2014 MP4: " + result.outputFile.getAbsolutePath());
+                            dialog.showSuccess(finalTotalFrames + " frames + MP4 in " + formatDuration(finalTotalElapsed)
+                                    + "\n" + result.outputFile.getAbsolutePath());
+
                             // 360 Metadata Warning (only if not already injected by ExifTool)
                             if (finalIs360 && !result.message.contains("360 Metadata Injected")) {
                                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
                                 alert.setTitle("360\u00B0 Video Export");
                                 alert.setHeaderText("Manual Metadata Injection Required");
                                 alert.setContentText("ExifTool was not found. To be recognized by YouTube/Facebook, you must inject metadata into the MP4 using the 'Spatial Media Metadata Injector' or install ExifTool.");
-                                
+
                                 ButtonType downloadBtn = new ButtonType("Get Injector Tool");
                                 alert.getButtonTypes().add(downloadBtn);
-                                
+
                                 alert.showAndWait().ifPresent(type -> {
                                     if (type == downloadBtn) {
                                         openUrl("https://github.com/google/spatial-media/releases");
                                     }
                                 });
                             }
-                            
-                            // Open the MP4 file
+
                             openFile(result.outputFile);
                         } else {
-                            animExportStatusLabel.setText("Frames exported. MP4 failed:\n" + result.message);
-                            // Open the directory with frames
+                            dialog.showCancelled("Frames exported. MP4 failed:\n" + result.message);
                             openFile(exportDir);
                         }
                         finishAnimationExport();
                     });
-                } else if (exportCancelled && shouldCreateMP4) {
+                } else if (exportCancelled && shouldCreateMP4 && renderedFrames > 0) {
                     // Cancelled but create MP4 from rendered frames
-                    Platform.runLater(() -> {
-                        animExportStatusLabel.setText("Creating MP4 from rendered frames...");
-                        frameProgressLabel.setText("Encoding...");
-                        frameProgress.setProgress(-1);
-                    });
+                    System.out.println("[AnimExport] Creating MP4 from " + renderedFrames + " frames...");
+                    Platform.runLater(() -> dialog.setIndeterminate("Encoding MP4 from rendered frames..."));
 
                     FFmpegExporter.ExportResult result = FFmpegExporter.createMP4InPlace(
                             exportDir, fps, crf, finalIs360,
-                            progress -> Platform.runLater(() -> frameProgress.setProgress(progress))
+                            progress -> Platform.runLater(() -> dialog.updateFrameProgress(progress, "Encoding MP4..."))
                     );
 
+                    final int finalRenderedFrames2 = renderedFrames;
+                    final long finalTotalElapsed2 = System.currentTimeMillis() - exportStartTime;
                     Platform.runLater(() -> {
                         if (result.success) {
-                            animExportStatusLabel.setText("Export cancelled. MP4 created:\n" + result.outputFile.getAbsolutePath());
-                            // Open the MP4 file
+                            System.out.println("[AnimExport] Done: " + finalRenderedFrames2 + "/" + totalFrames
+                                    + " frames in " + formatDuration(finalTotalElapsed2) + " \u2014 MP4: " + result.outputFile.getAbsolutePath());
+                            dialog.showCancelled("Cancelled. MP4 created from " + finalRenderedFrames2 + " frames:\n" + result.outputFile.getAbsolutePath());
                             openFile(result.outputFile);
                         } else {
-                            animExportStatusLabel.setText("Export cancelled. MP4 failed:\n" + result.message);
-                            // Open the directory with frames
+                            dialog.showCancelled("Cancelled. MP4 failed:\n" + result.message);
                             openFile(exportDir);
                         }
                         finishAnimationExport();
@@ -712,13 +693,15 @@ public class ExportPanel extends ScrollPane {
                 } else {
                     // Done (PNG only) or cancelled without MP4
                     final int finalTotalFrames = totalFrames;
+                    final int finalRenderedFrames = renderedFrames;
+                    final long finalTotalElapsed = System.currentTimeMillis() - exportStartTime;
                     Platform.runLater(() -> {
                         if (exportCancelled) {
-                            animExportStatusLabel.setText("Export cancelled. Frames in:\n" + exportDir.getAbsolutePath());
+                            dialog.showCancelled("Cancelled after " + finalRenderedFrames + "/" + finalTotalFrames + " frames.\n" + exportDir.getAbsolutePath());
                         } else {
-                            animExportStatusLabel.setText("Export complete! " + finalTotalFrames + " frames saved to:\n" + exportDir.getAbsolutePath());
+                            dialog.showSuccess(finalTotalFrames + " frames exported in " + formatDuration(finalTotalElapsed)
+                                    + "\n" + exportDir.getAbsolutePath());
                         }
-                        // Open the directory with frames
                         openFile(exportDir);
                         finishAnimationExport();
                     });
@@ -727,7 +710,7 @@ public class ExportPanel extends ScrollPane {
             } catch (Exception e) {
                 e.printStackTrace();
                 Platform.runLater(() -> {
-                    showError("Export Error", e.getMessage());
+                    dialog.showCancelled("Export error: " + e.getMessage());
                     finishAnimationExport();
                 });
             }
@@ -735,19 +718,13 @@ public class ExportPanel extends ScrollPane {
 
         exportThread.setDaemon(true);
         exportThread.start();
-    }
 
-    private void cancelAnimationExport() {
-        exportCancelled = true;
+        dialog.show();
     }
 
     private void finishAnimationExport() {
         exporting = false;
         exportAnimButton.setDisable(false);
-        cancelAnimButton.setVisible(false);
-        frameProgress.setVisible(false);
-        totalProgress.setVisible(false);
-        frameProgressLabel.setVisible(false);
 
         // Notify that export is finished (unblocks render loop)
         if (exportStateCallback != null) {

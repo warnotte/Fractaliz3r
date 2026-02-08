@@ -212,6 +212,7 @@ public class GLSLFractalizerController implements RenderController {
                         return;
                     }
                     engine.renderSample(uniforms);
+                    engine.glSync();
                     if (onProgress != null) {
                         double progress = (double) (i + 1) / exportSamples;
                         Platform.runLater(() -> onProgress.accept(progress));
@@ -275,6 +276,22 @@ public class GLSLFractalizerController implements RenderController {
      * @return The rendered image for display
      */
     public WritableImage exportAnimationFrame(File file, int width, int height, int samples) {
+        return exportAnimationFrame(file, width, height, samples, null, null);
+    }
+
+    /**
+     * Export a single animation frame with per-sample progress and cancel support.
+     *
+     * @param file The file to save the frame to
+     * @param width Export width
+     * @param height Export height
+     * @param samples Number of samples per frame
+     * @param onProgress Called after each sample with progress 0.0-1.0
+     * @param cancelCheck Checked each sample; if true, stops early and writes partial result
+     * @return The rendered image for display
+     */
+    public WritableImage exportAnimationFrame(File file, int width, int height, int samples,
+                                               Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         try {
             // Resize engine to export dimensions
             engine.resize(width, height);
@@ -285,7 +302,10 @@ public class GLSLFractalizerController implements RenderController {
 
             // Render with specified samples
             for (int i = 0; i < samples; i++) {
+                if (cancelCheck != null && cancelCheck.get()) break;
                 engine.renderSample(uniforms);
+                engine.glSync();
+                if (onProgress != null) onProgress.accept((double) (i + 1) / samples);
             }
 
             // Read pixels
@@ -349,6 +369,18 @@ public class GLSLFractalizerController implements RenderController {
             File file, int width, int height, int samples,
             double frameTime, double fps, float shutterAngle,
             Consumer<Double> timeApplier) {
+        return exportAnimationFrameWithMotionBlur(file, width, height, samples,
+                frameTime, fps, shutterAngle, timeApplier, null, null);
+    }
+
+    /**
+     * Export a single animation frame with motion blur, per-sample progress and cancel support.
+     */
+    public WritableImage exportAnimationFrameWithMotionBlur(
+            File file, int width, int height, int samples,
+            double frameTime, double fps, float shutterAngle,
+            Consumer<Double> timeApplier,
+            Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         try {
             // Resize engine to export dimensions
             engine.resize(width, height);
@@ -364,6 +396,8 @@ public class GLSLFractalizerController implements RenderController {
 
             // Render samples with time jittering for motion blur
             for (int i = 0; i < samples; i++) {
+                if (cancelCheck != null && cancelCheck.get()) break;
+
                 // Jitter time within shutter window (centered on frame time)
                 double jitteredTime;
                 if (shutterAngle > 0) {
@@ -380,6 +414,8 @@ public class GLSLFractalizerController implements RenderController {
 
                 // Render this sample
                 engine.renderSample(uniforms);
+                engine.glSync();
+                if (onProgress != null) onProgress.accept((double) (i + 1) / samples);
             }
 
             // Read pixels

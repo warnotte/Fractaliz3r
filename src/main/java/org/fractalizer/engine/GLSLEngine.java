@@ -288,6 +288,14 @@ public class GLSLEngine implements AutoCloseable {
     }
 
     /**
+     * Wait for all pending GPU operations to complete.
+     * Use after renderSample() in export loops to get accurate progress.
+     */
+    public void glSync() {
+        runOnGLThread(() -> glFinish());
+    }
+
+    /**
      * Render multiple samples at once.
      */
     public void renderSamples(Map<String, Object> uniforms, int count) {
