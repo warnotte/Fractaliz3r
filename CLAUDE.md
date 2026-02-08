@@ -159,6 +159,23 @@ Fractaliz3r features a full cinematic rendering pipeline:
 - **Space**: Render full quality
 - **Scroll wheel**: Adjust movement speed (when not hovering a slider)
 
+## Visual Regression Test
+
+A headless rendering test (`TiledRenderTest.java`) that exports the same Mandelbulb scene at multiple resolutions. **Run this after any shader or rendering pipeline change** to verify no visual regression.
+
+```bash
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.TiledRenderTest"
+```
+
+Outputs PNGs to `test_output/` (gitignored). After running, **read the images with the Read tool** to visually verify:
+- `01_1920x1080_reference.png` — baseline, no tiling
+- `02_4096x4096_boundary.png` — boundary case (exactly MAX_TILE_SIZE)
+- `03_5000x2000_2x1tiles.png` — 2x1 tiles (X exceeds threshold)
+- `04_8192x4096_2x1tiles.png` — 2x1 tiles (360° 8K preset size)
+- `05_7680x4320_8K.png` — 2x2 tiles (8K preset)
+
+What to check: fractal centered, correct aspect ratio, no tile seams, no Y-flip, background continuous across tiles.
+
 ## Dependencies
 
 - **LWJGL 3.3.3** - OpenGL bindings for GPU rendering
