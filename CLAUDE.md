@@ -176,6 +176,16 @@ Outputs PNGs to `test_output/` (gitignored). After running, **read the images wi
 
 What to check: fractal centered, correct aspect ratio, no tile seams, no Y-flip, background continuous across tiles.
 
+## Building a Release (jlink)
+
+```bash
+mvn clean javafx:jlink package -DskipTests
+```
+
+This creates a self-contained runtime in `target/image/` with launcher script `bin/fractaliz3r.bat`. The `package` phase automatically extracts LWJGL native DLLs (glfw.dll, lwjgl.dll, etc.) into `bin/` and patches the launcher to set `-Dorg.lwjgl.librarypath`. Without this step, the app crashes on machines that never ran LWJGL before (no native cache in temp).
+
+Distribute: zip `target/image/` — no JDK needed on the target machine.
+
 ## Dependencies
 
 - **LWJGL 3.3.3** - OpenGL bindings for GPU rendering
