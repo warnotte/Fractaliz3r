@@ -270,7 +270,7 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
             lightingMixSlider.setValue(engine.getEnvLightingMix() * 100.0);
             
             if (engine.isEnvMapLoaded()) {
-                statusLabel.setText("HDRI Map Loaded");
+                statusLabel.setText("HDRI map loaded");
             } else {
                 statusLabel.setText("Using procedural sky");
             }

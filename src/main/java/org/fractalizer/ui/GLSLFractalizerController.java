@@ -1064,7 +1064,6 @@ public class GLSLFractalizerController implements RenderController {
 
         if (depth > 0 && depth < 100.0f && currentParams instanceof AbstractFractalParams params) {
             params.setFocalDistance(depth);
-            System.out.println("[Focus] Picked focal distance: " + depth);
             return depth;
         }
 

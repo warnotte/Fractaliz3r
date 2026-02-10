@@ -338,7 +338,7 @@ public class GLSLFractalizerApp extends Application {
                 float distance = controller.pickFocalDistance(x, y);
 
                 if (distance > 0) {
-                    statusLabel.setText(String.format("Focal distance: %.3f", distance));
+                    statusLabel.setText(String.format("Focal distance set: %.3f", distance));
                     // Update quality panel if it has a focal distance control
                     qualityPanel.updateFocalDistanceDisplay(distance);
                     requestRender();
@@ -473,7 +473,7 @@ public class GLSLFractalizerApp extends Application {
         exitItem.setOnAction(e -> Platform.exit());
 
         fileMenu.getItems().addAll(loadItem, saveItem, new SeparatorMenuItem(), exitItem);
-        
+
         Menu viewMenu = new Menu("View");
         CheckMenuItem darkThemeItem = new CheckMenuItem("Modern Dark Theme");
         darkThemeItem.setSelected(true);
@@ -484,11 +484,61 @@ public class GLSLFractalizerApp extends Application {
                 primaryStage.getScene().getStylesheets().clear();
             }
         });
-        viewMenu.getItems().add(darkThemeItem);
 
-        menuBar.getMenus().addAll(fileMenu, viewMenu);
+        MenuItem fullscreenItem = new MenuItem("Fullscreen");
+        fullscreenItem.setAccelerator(new KeyCodeCombination(KeyCode.F11));
+        fullscreenItem.setOnAction(e -> primaryStage.setFullScreen(!primaryStage.isFullScreen()));
+
+        viewMenu.getItems().addAll(darkThemeItem, new SeparatorMenuItem(), fullscreenItem);
+
+        Menu helpMenu = new Menu("Help");
+        MenuItem shortcutsItem = new MenuItem("Keyboard Shortcuts");
+        shortcutsItem.setAccelerator(new KeyCodeCombination(KeyCode.F1));
+        shortcutsItem.setOnAction(e -> showKeyboardShortcuts());
+        helpMenu.getItems().add(shortcutsItem);
+
+        menuBar.getMenus().addAll(fileMenu, viewMenu, helpMenu);
 
         return menuBar;
+    }
+
+    private void showKeyboardShortcuts() {
+        Alert dialog = new Alert(Alert.AlertType.NONE);
+        dialog.setTitle("Keyboard Shortcuts");
+        dialog.setHeaderText("Fractaliz3r Shortcuts");
+        dialog.getDialogPane().getButtonTypes().add(javafx.scene.control.ButtonType.CLOSE);
+        dialog.getDialogPane().setPrefWidth(420);
+
+        String shortcuts = """
+                Navigation
+                  Arrow Keys          Move forward/back/strafe
+                  Page Up / Down    Move up/down
+                  Mouse Drag          Look around
+                  Q / E                     Roll left/right
+                  Scroll Wheel          Adjust movement speed
+                  R                           Reset camera
+
+                Rendering
+                  Space                    Render full quality
+
+                Depth of Field
+                  Middle Click          Pick focal distance
+                  Ctrl + Click           Pick focal distance
+
+                File
+                  Ctrl + O                Load configuration
+                  Ctrl + S                Save configuration
+
+                View
+                  F11                       Toggle fullscreen
+                  F1                         This dialog
+                """;
+
+        Label content = new Label(shortcuts);
+        content.setStyle("-fx-font-family: monospace; -fx-font-size: 12;");
+        dialog.getDialogPane().setContent(content);
+        dialog.initOwner(primaryStage);
+        dialog.showAndWait();
     }
 
     private void requestRender() {
@@ -496,6 +546,7 @@ public class GLSLFractalizerApp extends Application {
         isHighQualityActive = false; // Stop HQ accumulation
         lastInteractionTime = System.currentTimeMillis();
         controller.cancelRender();
+        primaryStage.getScene().setCursor(null); // Clear busy cursor
     }
 
     private void startRenderLoop() {
@@ -544,14 +595,18 @@ public class GLSLFractalizerApp extends Application {
     private void renderPreview() {
         controller.renderPreview(this::updateImage, progress -> {
             progressBar.setProgress(progress);
-            statusLabel.setText("Rendering Preview...");
+            statusLabel.setText("Rendering preview...");
         });
     }
 
     private void renderFull() {
+        primaryStage.getScene().setCursor(javafx.scene.Cursor.WAIT);
         controller.renderFull(this::updateImage, progress -> {
             progressBar.setProgress(progress);
-            statusLabel.setText("Rendering High Quality...");
+            statusLabel.setText("Rendering high quality...");
+            if (progress >= 1.0) {
+                primaryStage.getScene().setCursor(null);
+            }
         }, null);
     }
 
@@ -565,7 +620,7 @@ public class GLSLFractalizerApp extends Application {
         imageView.setImage(image);
         sampleLabel.setText("Samples: " + controller.getEngine().getSampleCount());
         if (controller.getEngine().getSampleCount() >= 1) {
-            statusLabel.setText("Render convergence: " + controller.getEngine().getSampleCount() + " samples");
+            statusLabel.setText("Rendered: " + controller.getEngine().getSampleCount() + " samples");
         }
     }
 
