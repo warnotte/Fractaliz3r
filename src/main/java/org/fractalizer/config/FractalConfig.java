@@ -86,6 +86,18 @@ public class FractalConfig {
 
         public float[] ambientColor = {0.1f, 0.15f, 0.25f};
         public float ambientIntensity = 0.3f;
+
+        // Additional light source
+        public int extraType = AbstractFractalParams.EXTRA_LIGHT_OFF;
+        public boolean extraAttachToCamera = true;
+        public float[] extraPosition = {0f, 0f, 0f};
+        public float[] extraDirection = {0f, 0f, 1f};
+        public float[] extraColor = {1f, 0.95f, 0.9f};
+        public float extraIntensity = 1.5f;
+        public float extraRange = 2.0f;
+        public float extraAreaRadius = 0.03f;
+        public float extraConeAngle = 35.0f;
+        public float extraConeSoftness = 0.3f;
     }
 
     public static class MaterialConfig {
@@ -218,6 +230,16 @@ public class FractalConfig {
         config.lighting.intensity = params.getLightIntensity();
         config.lighting.ambientColor = new float[]{params.getAmbientR(), params.getAmbientG(), params.getAmbientB()};
         config.lighting.ambientIntensity = params.getAmbientIntensity();
+        config.lighting.extraType = params.getExtraLightType();
+        config.lighting.extraAttachToCamera = params.isExtraLightAttachToCamera();
+        config.lighting.extraPosition = new float[]{params.getExtraLightX(), params.getExtraLightY(), params.getExtraLightZ()};
+        config.lighting.extraDirection = new float[]{params.getExtraLightDirX(), params.getExtraLightDirY(), params.getExtraLightDirZ()};
+        config.lighting.extraColor = new float[]{params.getExtraLightR(), params.getExtraLightG(), params.getExtraLightB()};
+        config.lighting.extraIntensity = params.getExtraLightIntensity();
+        config.lighting.extraRange = params.getExtraLightRange();
+        config.lighting.extraAreaRadius = params.getExtraLightAreaRadius();
+        config.lighting.extraConeAngle = params.getExtraLightConeAngle();
+        config.lighting.extraConeSoftness = params.getExtraLightConeSoftness();
 
         // Material
         config.material.hue = new float[]{params.getHueR(), params.getHueG(), params.getHueB()};
@@ -309,6 +331,22 @@ public class FractalConfig {
         params.setLightIntensity(lighting.intensity);
         params.setAmbientColor(lighting.ambientColor[0], lighting.ambientColor[1], lighting.ambientColor[2]);
         params.setAmbientIntensity(lighting.ambientIntensity);
+        params.setExtraLightType(lighting.extraType);
+        params.setExtraLightAttachToCamera(true);
+        if (lighting.extraPosition != null && lighting.extraPosition.length == 3) {
+            params.setExtraLightPosition(lighting.extraPosition[0], lighting.extraPosition[1], lighting.extraPosition[2]);
+        }
+        if (lighting.extraDirection != null && lighting.extraDirection.length == 3) {
+            params.setExtraLightDirection(lighting.extraDirection[0], lighting.extraDirection[1], lighting.extraDirection[2]);
+        }
+        if (lighting.extraColor != null && lighting.extraColor.length == 3) {
+            params.setExtraLightColor(lighting.extraColor[0], lighting.extraColor[1], lighting.extraColor[2]);
+        }
+        params.setExtraLightIntensity(lighting.extraIntensity);
+        params.setExtraLightRange(lighting.extraRange);
+        params.setExtraLightAreaRadius(lighting.extraAreaRadius);
+        params.setExtraLightConeAngle(lighting.extraConeAngle);
+        params.setExtraLightConeSoftness(lighting.extraConeSoftness);
 
         // Material
         params.setMaterialHue(material.hue[0], material.hue[1], material.hue[2]);

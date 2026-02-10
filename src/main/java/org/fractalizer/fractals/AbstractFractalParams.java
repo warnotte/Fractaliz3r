@@ -66,6 +66,20 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float ambientR, ambientG, ambientB;
     protected float ambientIntensity;
 
+    // Additional light source
+    // Type: 0 = Off, 1 = Directional, 2 = Point (omni), 3 = Spot
+    protected int extraLightType;
+    protected boolean extraLightAttachToCamera;
+    // Camera-local transform for additional light (offset + local direction).
+    protected float extraLightX, extraLightY, extraLightZ;
+    protected float extraLightDirX, extraLightDirY, extraLightDirZ;
+    protected float extraLightR, extraLightG, extraLightB;
+    protected float extraLightIntensity;
+    protected float extraLightRange;
+    protected float extraLightAreaRadius;
+    protected float extraLightConeAngle;
+    protected float extraLightConeSoftness;
+
     // Material hue offset for color palette
     protected float hueR, hueG, hueB;
     protected int paletteIndex;
@@ -124,6 +138,12 @@ public abstract class AbstractFractalParams implements FractalParams {
     public static final int MATERIAL_METALLIC = 1;
     public static final int MATERIAL_GLASS = 2;
 
+    // Additional Light Types
+    public static final int EXTRA_LIGHT_OFF = 0;
+    public static final int EXTRA_LIGHT_DIRECTIONAL = 1;
+    public static final int EXTRA_LIGHT_POINT = 2;
+    public static final int EXTRA_LIGHT_SPOT = 3;
+
     protected int materialType;
     protected float metalness;       // For metallic: blend between dielectric and metal (0-1)
     protected float ior;             // Index of refraction for glass (typically 1.5)
@@ -171,6 +191,24 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.ambientG = 0.15f;
         this.ambientB = 0.25f;
         this.ambientIntensity = 0.3f;
+
+        // Additional light defaults (disabled)
+        this.extraLightType = EXTRA_LIGHT_OFF;
+        this.extraLightAttachToCamera = true;
+        this.extraLightX = 0.0f;
+        this.extraLightY = 0.0f;
+        this.extraLightZ = 0.0f;
+        this.extraLightDirX = 0.0f;
+        this.extraLightDirY = 0.0f;
+        this.extraLightDirZ = 1.0f;
+        this.extraLightR = 1.0f;
+        this.extraLightG = 0.95f;
+        this.extraLightB = 0.9f;
+        this.extraLightIntensity = 1.5f;
+        this.extraLightRange = 2.0f;
+        this.extraLightAreaRadius = 0.03f;
+        this.extraLightConeAngle = 35.0f;
+        this.extraLightConeSoftness = 0.3f;
 
         // Default material hue (blue-purple)
         this.hueR = 0.0f;
@@ -263,6 +301,22 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.ambientG = this.ambientG;
         target.ambientB = this.ambientB;
         target.ambientIntensity = this.ambientIntensity;
+        target.extraLightType = this.extraLightType;
+        target.extraLightAttachToCamera = this.extraLightAttachToCamera;
+        target.extraLightX = this.extraLightX;
+        target.extraLightY = this.extraLightY;
+        target.extraLightZ = this.extraLightZ;
+        target.extraLightDirX = this.extraLightDirX;
+        target.extraLightDirY = this.extraLightDirY;
+        target.extraLightDirZ = this.extraLightDirZ;
+        target.extraLightR = this.extraLightR;
+        target.extraLightG = this.extraLightG;
+        target.extraLightB = this.extraLightB;
+        target.extraLightIntensity = this.extraLightIntensity;
+        target.extraLightRange = this.extraLightRange;
+        target.extraLightAreaRadius = this.extraLightAreaRadius;
+        target.extraLightConeAngle = this.extraLightConeAngle;
+        target.extraLightConeSoftness = this.extraLightConeSoftness;
         target.hueR = this.hueR;
         target.hueG = this.hueG;
         target.hueB = this.hueB;
@@ -488,6 +542,50 @@ public abstract class AbstractFractalParams implements FractalParams {
     }
     public float getAmbientIntensity() { return ambientIntensity; }
     public void setAmbientIntensity(float intensity) { this.ambientIntensity = intensity; }
+
+    // Additional light
+    public int getExtraLightType() { return extraLightType; }
+    public void setExtraLightType(int type) {
+        int clamped = Math.max(EXTRA_LIGHT_OFF, Math.min(EXTRA_LIGHT_SPOT, type));
+        // Directional mode is intentionally disabled for this additional light workflow.
+        this.extraLightType = (clamped == EXTRA_LIGHT_DIRECTIONAL) ? EXTRA_LIGHT_OFF : clamped;
+    }
+    public boolean isExtraLightAttachToCamera() { return true; }
+    public void setExtraLightAttachToCamera(boolean attachToCamera) { this.extraLightAttachToCamera = true; }
+    public float getExtraLightX() { return extraLightX; }
+    public float getExtraLightY() { return extraLightY; }
+    public float getExtraLightZ() { return extraLightZ; }
+    public void setExtraLightPosition(float x, float y, float z) {
+        this.extraLightX = x;
+        this.extraLightY = y;
+        this.extraLightZ = z;
+    }
+    public float getExtraLightDirX() { return extraLightDirX; }
+    public float getExtraLightDirY() { return extraLightDirY; }
+    public float getExtraLightDirZ() { return extraLightDirZ; }
+    public void setExtraLightDirection(float x, float y, float z) {
+        this.extraLightDirX = x;
+        this.extraLightDirY = y;
+        this.extraLightDirZ = z;
+    }
+    public float getExtraLightR() { return extraLightR; }
+    public float getExtraLightG() { return extraLightG; }
+    public float getExtraLightB() { return extraLightB; }
+    public void setExtraLightColor(float r, float g, float b) {
+        this.extraLightR = Math.max(0.0f, r);
+        this.extraLightG = Math.max(0.0f, g);
+        this.extraLightB = Math.max(0.0f, b);
+    }
+    public float getExtraLightIntensity() { return extraLightIntensity; }
+    public void setExtraLightIntensity(float intensity) { this.extraLightIntensity = Math.max(0.0f, intensity); }
+    public float getExtraLightRange() { return extraLightRange; }
+    public void setExtraLightRange(float range) { this.extraLightRange = Math.max(0.01f, range); }
+    public float getExtraLightAreaRadius() { return extraLightAreaRadius; }
+    public void setExtraLightAreaRadius(float radius) { this.extraLightAreaRadius = Math.max(0.0f, Math.min(0.1f, radius)); }
+    public float getExtraLightConeAngle() { return extraLightConeAngle; }
+    public void setExtraLightConeAngle(float angle) { this.extraLightConeAngle = Math.max(1.0f, Math.min(89.0f, angle)); }
+    public float getExtraLightConeSoftness() { return extraLightConeSoftness; }
+    public void setExtraLightConeSoftness(float softness) { this.extraLightConeSoftness = Math.max(0.0f, Math.min(1.0f, softness)); }
 
     // Material hue
     public float getHueR() { return hueR; }

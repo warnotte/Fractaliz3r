@@ -803,6 +803,22 @@ public class GLSLFractalizerController implements RenderController {
                 params.getAmbientR(), params.getAmbientG(), params.getAmbientB()
             });
             uniforms.put("ambientIntensity", params.getAmbientIntensity());
+            uniforms.put("extraLightType", params.getExtraLightType());
+            uniforms.put("extraLightAttachToCamera", params.isExtraLightAttachToCamera() ? 1 : 0);
+            uniforms.put("extraLightPos", new float[]{
+                params.getExtraLightX(), params.getExtraLightY(), params.getExtraLightZ()
+            });
+            uniforms.put("extraLightDir", new float[]{
+                params.getExtraLightDirX(), params.getExtraLightDirY(), params.getExtraLightDirZ()
+            });
+            uniforms.put("extraLightColor", new float[]{
+                params.getExtraLightR(), params.getExtraLightG(), params.getExtraLightB()
+            });
+            uniforms.put("extraLightIntensity", params.getExtraLightIntensity());
+            uniforms.put("extraLightRange", params.getExtraLightRange());
+            uniforms.put("extraLightAreaRadius", params.getExtraLightAreaRadius());
+            uniforms.put("extraLightConeAngle", params.getExtraLightConeAngle());
+            uniforms.put("extraLightConeSoftness", params.getExtraLightConeSoftness());
 
             // Material
             uniforms.put("baseHue", new float[]{

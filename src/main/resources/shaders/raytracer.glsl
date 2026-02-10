@@ -197,6 +197,117 @@ vec3 computeVolumetricFog(Ray ray, float hitDist, vec3 surfaceColor, out float e
 // Forward declaration (defined in Path Tracing section below)
 bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist);
 
+vec3 getExtraLightAxisWS() {
+    // Dampen lateral direction controls to keep spot steering predictable.
+    vec3 localDir = vec3(extraLightDir.x * 0.2, extraLightDir.y * 0.2, extraLightDir.z);
+    if (dot(localDir, localDir) < 1e-8) {
+        localDir = vec3(0.0, 0.0, 1.0);
+    }
+    return normalize(rotateByQuaternion(localDir, camQuat));
+}
+
+vec3 getExtraLightPositionWS() {
+    // Camera-local offset intentionally scaled down for finer positioning.
+    return camPos + rotateByQuaternion(extraLightPos * 0.1, camQuat);
+}
+
+float calcExtraLightVisibility(vec3 hitPos, vec3 normal, vec3 lightDirNorm, float maxDistance, float surfaceDist) {
+    Ray shadowRay;
+    float shadowBias = 0.005 + surfaceDist * 0.01;
+    shadowRay.origin = hitPos + normal * shadowBias;
+    shadowRay.direction = lightDirNorm;
+    vec3 shPos; float shDist;
+
+    if (!rayMarchSimple(shadowRay, shPos, shDist)) {
+        return 1.0;
+    }
+
+    // Self-hit due to numerical precision: keep light visible.
+    if (shDist <= shadowBias * 2.0) {
+        return 1.0;
+    }
+
+    // Directional light: any blocker means shadowed.
+    if (maxDistance <= 0.0) {
+        return 0.0;
+    }
+
+    // Local light: blocker only matters if it's between point and light.
+    return (shDist >= maxDistance - shadowBias) ? 1.0 : 0.0;
+}
+
+vec3 randomUnitSphere(inout uint seed) {
+    float z = random(seed) * 2.0 - 1.0;
+    float a = random(seed) * TAU;
+    float r = sqrt(max(0.0, 1.0 - z * z));
+    return vec3(r * cos(a), r * sin(a), z);
+}
+
+vec3 sampleExtraLightRadiance(vec3 hitPos, vec3 normal, float surfaceDist, inout uint seed, out vec3 lightDirNorm) {
+    lightDirNorm = vec3(0.0);
+
+    if (extraLightType == EXTRA_LIGHT_OFF || extraLightIntensity <= 0.0) {
+        return vec3(0.0);
+    }
+
+    // Directional mode is intentionally disabled for this additional light workflow.
+    if (extraLightType == EXTRA_LIGHT_DIRECTIONAL) {
+        return vec3(0.0);
+    }
+
+    vec3 baseRadiance = extraLightColor * extraLightIntensity;
+
+    vec3 lightPos = getExtraLightPositionWS();
+    float areaRadius = max(extraLightAreaRadius, 0.0);
+    if (areaRadius > 0.0) {
+        // Sample point on a spherical emitter to create physically soft penumbra.
+        lightPos += randomUnitSphere(seed) * areaRadius;
+    }
+    vec3 toLight = lightPos - hitPos;
+    float distSq = dot(toLight, toLight);
+    if (distSq < 1e-8) {
+        return vec3(0.0);
+    }
+
+    float dist = sqrt(distSq);
+    float range = max(extraLightRange, 0.0001);
+    if (dist >= range) {
+        return vec3(0.0);
+    }
+
+    lightDirNorm = toLight / dist;
+
+    // Stronger near-field attenuation: range control is now much tighter.
+    float normalizedDist = dist / range;
+    float falloff = 1.0 / (1.0 + normalizedDist * normalizedDist * 8.0);
+    float rangeAtt = pow(max(1.0 - normalizedDist, 0.0), 3.0);
+
+    float spotAtt = 1.0;
+    if (extraLightType == EXTRA_LIGHT_SPOT) {
+        vec3 spotDir = getExtraLightAxisWS();
+        vec3 lightToHit = -lightDirNorm;
+        float cosTheta = dot(lightToHit, spotDir);
+        float outerAngle = clamp(extraLightConeAngle, 1.0, 89.0);
+        float softness = clamp(extraLightConeSoftness, 0.0, 1.0);
+        float innerAngle = mix(outerAngle, 0.0, softness);
+        float cosOuter = cos(radians(outerAngle));
+        float cosInner = cos(radians(innerAngle));
+
+        if (softness < 0.001) {
+            spotAtt = (cosTheta >= cosOuter) ? 1.0 : 0.0;
+        } else {
+            spotAtt = smoothstep(cosOuter, cosInner, cosTheta);
+        }
+
+        if (spotAtt <= 0.0) {
+            return vec3(0.0);
+        }
+    }
+
+    float visibility = calcExtraLightVisibility(hitPos, normal, lightDirNorm, dist, surfaceDist);
+    return baseRadiance * (falloff * rangeAtt * spotAtt * visibility);
+}
+
 // Simplified shading for reflection bounce (no recursion, no volumetrics)
 vec3 shadeSimple(vec3 hitPos, Ray ray) {
     vec3 normal = calcNormal(hitPos);
@@ -486,6 +597,9 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 
         vec3 viewDir = -currentRay.direction;
         float cosTheta = max(dot(viewDir, faceNormal), 0.0);
+        vec3 extraLightDirNorm;
+        vec3 extraLightRadiance = sampleExtraLightRadiance(hitPos, faceNormal, hitDist, seed, extraLightDirNorm);
+        bool hasExtraLight = dot(extraLightRadiance, extraLightRadiance) > 0.0;
 
         // Emissive contribution at hit point (additive, unaffected by shadows)
         if (localEmissive > 0.0) {
@@ -591,10 +705,28 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     radiance += clamp(throughput * spec, 0.0, FIREFLY_CLAMP);
                 }
             }
+
+            if (hasExtraLight) {
+                float extraNdotL = max(dot(faceNormal, extraLightDirNorm), 0.0);
+                if (extraNdotL > 0.0) {
+                    vec3 H_extra = normalize(extraLightDirNorm + viewDir);
+                    vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
+                    vec3 F = fresnelSchlickVec(max(dot(H_extra, viewDir), 0.0), F0);
+                    float a = safeRoughness * safeRoughness;
+                    float D = a * a / (PI * pow(max(dot(faceNormal, H_extra), 0.0) * dot(faceNormal, H_extra) * (a * a - 1.0) + 1.0, 2.0));
+                    vec3 specExtra = F * D * extraNdotL * extraLightRadiance;
+                    radiance += clamp(throughput * specExtra, 0.0, FIREFLY_CLAMP);
+                }
+            }
+
             // SSS contribution in path tracing (metallic)
             if (sssIntensity > 0.0) {
                 float sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
                 radiance += clamp(throughput * albedo * sssColor * sss * sssIntensity * lightColor * lightIntensity, 0.0, FIREFLY_CLAMP);
+                if (hasExtraLight) {
+                    float sssExtra = calcSSS(hitPos, faceNormal, extraLightDirNorm);
+                    radiance += clamp(throughput * albedo * sssColor * sssExtra * sssIntensity * extraLightRadiance, 0.0, FIREFLY_CLAMP);
+                }
             }
             vec3 H = randomGGX(seed, faceNormal, safeRoughness);
             vec3 reflectDir = reflect(-viewDir, H);
@@ -616,10 +748,22 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI, 0.0, FIREFLY_CLAMP);
                 }
             }
+
+            if (hasExtraLight) {
+                float extraNdotL = max(dot(faceNormal, extraLightDirNorm), 0.0);
+                if (extraNdotL > 0.0) {
+                    radiance += clamp(throughput * albedo * extraLightRadiance * extraNdotL / PI, 0.0, FIREFLY_CLAMP);
+                }
+            }
+
             // SSS contribution in path tracing
             if (sssIntensity > 0.0) {
                 float sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
                 radiance += clamp(throughput * albedo * sssColor * sss * sssIntensity * lightColor * lightIntensity, 0.0, FIREFLY_CLAMP);
+                if (hasExtraLight) {
+                    float sssExtra = calcSSS(hitPos, faceNormal, extraLightDirNorm);
+                    radiance += clamp(throughput * albedo * sssColor * sssExtra * sssIntensity * extraLightRadiance, 0.0, FIREFLY_CLAMP);
+                }
             }
             currentRay.origin = hitPos + faceNormal * 0.005;
 

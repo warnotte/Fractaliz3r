@@ -29,6 +29,11 @@ const int MATERIAL_LAMBERTIAN = 0;
 const int MATERIAL_METALLIC = 1;
 const int MATERIAL_GLASS = 2;
 
+const int EXTRA_LIGHT_OFF = 0;
+const int EXTRA_LIGHT_DIRECTIONAL = 1;
+const int EXTRA_LIGHT_POINT = 2;
+const int EXTRA_LIGHT_SPOT = 3;
+
 // ============================================================================
 // Common Uniforms
 // ============================================================================
@@ -50,6 +55,16 @@ uniform vec3 lightColor;
 uniform float lightIntensity;
 uniform vec3 ambientColor;
 uniform float ambientIntensity;
+uniform int extraLightType;
+uniform int extraLightAttachToCamera;
+uniform vec3 extraLightPos;
+uniform vec3 extraLightDir;
+uniform vec3 extraLightColor;
+uniform float extraLightIntensity;
+uniform float extraLightRange;
+uniform float extraLightAreaRadius;
+uniform float extraLightConeAngle;
+uniform float extraLightConeSoftness;
 
 uniform vec3 baseHue;
 uniform int paletteIndex;

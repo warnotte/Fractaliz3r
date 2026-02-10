@@ -2,7 +2,6 @@ package org.fractalizer.ui.panels;
 
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import org.fractalizer.fractals.AbstractFractalParams;
@@ -34,6 +33,21 @@ public class LightingPanel extends ScrollPane implements Refreshable {
     // Color pickers
     private ColorPicker lightColorPicker;
     private ColorPicker ambientColorPicker;
+    private ColorPicker extraLightColorPicker;
+
+    // Additional light controls
+    private ComboBox<String> extraLightTypeCombo;
+    private EnhancedSlider extraLightPosXSlider;
+    private EnhancedSlider extraLightPosYSlider;
+    private EnhancedSlider extraLightPosZSlider;
+    private EnhancedSlider extraLightDirXSlider;
+    private EnhancedSlider extraLightDirYSlider;
+    private EnhancedSlider extraLightDirZSlider;
+    private EnhancedSlider extraLightIntensitySlider;
+    private EnhancedSlider extraLightRangeSlider;
+    private EnhancedSlider extraLightAreaRadiusSlider;
+    private EnhancedSlider extraLightConeAngleSlider;
+    private EnhancedSlider extraLightConeSoftnessSlider;
 
     public LightingPanel(Supplier<AbstractFractalParams> paramsSupplier, RenderCallback renderCallback) {
         this.paramsSupplier = paramsSupplier;
@@ -120,6 +134,133 @@ public class LightingPanel extends ScrollPane implements Refreshable {
             }
         });
 
+        // === Additional Light ===
+        Label extraLightLabel = new Label("Additional Light:");
+        extraLightLabel.setStyle("-fx-font-weight: bold;");
+        Label extraLightInfo = new Label("Used in Path Tracing mode.\nPosition/Direction are camera-relative.");
+        extraLightInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        extraLightTypeCombo = new ComboBox<>();
+        extraLightTypeCombo.getItems().addAll("Off", "Point (Omni)", "Spot");
+        extraLightTypeCombo.getSelectionModel().select(0);
+        extraLightTypeCombo.setMaxWidth(Double.MAX_VALUE);
+        extraLightTypeCombo.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setExtraLightType(uiIndexToExtraLightType(extraLightTypeCombo.getSelectionModel().getSelectedIndex()));
+                updateAdditionalLightControlState();
+                renderCallback.requestRender();
+            }
+        });
+
+        extraLightPosXSlider = new EnhancedSlider("Offset X", -5, 5, 0, false);
+        extraLightPosXSlider.setPrecision(2);
+        extraLightPosXSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setExtraLightPosition(v.floatValue(), (float) extraLightPosYSlider.getValue(), (float) extraLightPosZSlider.getValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        extraLightPosYSlider = new EnhancedSlider("Offset Y", -5, 5, 0, false);
+        extraLightPosYSlider.setPrecision(2);
+        extraLightPosYSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setExtraLightPosition((float) extraLightPosXSlider.getValue(), v.floatValue(), (float) extraLightPosZSlider.getValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        extraLightPosZSlider = new EnhancedSlider("Offset Z", -5, 5, 0, false);
+        extraLightPosZSlider.setPrecision(2);
+        extraLightPosZSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setExtraLightPosition((float) extraLightPosXSlider.getValue(), (float) extraLightPosYSlider.getValue(), v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        extraLightDirXSlider = new EnhancedSlider("Direction X (Local)", -1, 1, 0, false);
+        extraLightDirXSlider.setPrecision(2);
+        extraLightDirXSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setExtraLightDirection(v.floatValue(), (float) extraLightDirYSlider.getValue(), (float) extraLightDirZSlider.getValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        extraLightDirYSlider = new EnhancedSlider("Direction Y (Local)", -1, 1, 0, false);
+        extraLightDirYSlider.setPrecision(2);
+        extraLightDirYSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setExtraLightDirection((float) extraLightDirXSlider.getValue(), v.floatValue(), (float) extraLightDirZSlider.getValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        extraLightDirZSlider = new EnhancedSlider("Direction Z (Local)", -1, 1, 1, false);
+        extraLightDirZSlider.setPrecision(2);
+        extraLightDirZSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setExtraLightDirection((float) extraLightDirXSlider.getValue(), (float) extraLightDirYSlider.getValue(), v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        extraLightColorPicker = new ColorPicker(Color.rgb(255, 242, 230));
+        extraLightColorPicker.setMaxWidth(Double.MAX_VALUE);
+        extraLightColorPicker.setOnAction(e -> {
+            if (!suppressRender) {
+                Color c = extraLightColorPicker.getValue();
+                getParams().setExtraLightColor((float) c.getRed(), (float) c.getGreen(), (float) c.getBlue());
+                renderCallback.requestRender();
+            }
+        });
+
+        extraLightIntensitySlider = new EnhancedSlider("Extra Intensity", 0, 10, 1.5, false);
+        extraLightIntensitySlider.setPrecision(2);
+        extraLightIntensitySlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setExtraLightIntensity(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        extraLightRangeSlider = new EnhancedSlider("Extra Range", 0.05, 20, 2, false);
+        extraLightRangeSlider.setPrecision(3);
+        extraLightRangeSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setExtraLightRange(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        extraLightAreaRadiusSlider = new EnhancedSlider("Area Radius (Soft Shadows)", 0.0, 0.1, 0.03, false);
+        extraLightAreaRadiusSlider.setPrecision(3);
+        extraLightAreaRadiusSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setExtraLightAreaRadius(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        extraLightConeAngleSlider = new EnhancedSlider("Spot Cone Angle", 5, 89, 35, false);
+        extraLightConeAngleSlider.setPrecision(1);
+        extraLightConeAngleSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setExtraLightConeAngle(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        extraLightConeSoftnessSlider = new EnhancedSlider("Spot Edge Softness", 0, 1, 0.3, false);
+        extraLightConeSoftnessSlider.setPrecision(2);
+        extraLightConeSoftnessSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setExtraLightConeSoftness(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
         panel.getChildren().addAll(
             dirLabel,
             lightXSlider,
@@ -130,10 +271,69 @@ public class LightingPanel extends ScrollPane implements Refreshable {
             lightIntensitySlider,
             new Separator(),
             ambientLabel, ambientColorPicker,
-            ambientIntensitySlider
+            ambientIntensitySlider,
+            new Separator(),
+            extraLightLabel,
+            extraLightInfo,
+            extraLightTypeCombo,
+            extraLightPosXSlider,
+            extraLightPosYSlider,
+            extraLightPosZSlider,
+            extraLightDirXSlider,
+            extraLightDirYSlider,
+            extraLightDirZSlider,
+            extraLightColorPicker,
+            extraLightIntensitySlider,
+            extraLightRangeSlider,
+            extraLightAreaRadiusSlider,
+            extraLightConeAngleSlider,
+            extraLightConeSoftnessSlider
         );
 
+        updateAdditionalLightControlState();
         return panel;
+    }
+
+    private int uiIndexToExtraLightType(int uiIndex) {
+        return switch (uiIndex) {
+            case 1 -> AbstractFractalParams.EXTRA_LIGHT_POINT;
+            case 2 -> AbstractFractalParams.EXTRA_LIGHT_SPOT;
+            default -> AbstractFractalParams.EXTRA_LIGHT_OFF;
+        };
+    }
+
+    private int extraLightTypeToUiIndex(int type) {
+        return switch (type) {
+            case AbstractFractalParams.EXTRA_LIGHT_POINT -> 1;
+            case AbstractFractalParams.EXTRA_LIGHT_SPOT -> 2;
+            default -> 0; // Includes directional for backward compatibility.
+        };
+    }
+
+    private void updateAdditionalLightControlState() {
+        if (extraLightTypeCombo == null) return;
+
+        int type = uiIndexToExtraLightType(extraLightTypeCombo.getSelectionModel().getSelectedIndex());
+        boolean off = type == AbstractFractalParams.EXTRA_LIGHT_OFF;
+        boolean spot = type == AbstractFractalParams.EXTRA_LIGHT_SPOT;
+
+        boolean posEnabled = !off;
+        boolean dirEnabled = !off && spot;
+        boolean rangeEnabled = !off;
+        boolean coneEnabled = !off && spot;
+
+        extraLightPosXSlider.setDisable(!posEnabled);
+        extraLightPosYSlider.setDisable(!posEnabled);
+        extraLightPosZSlider.setDisable(!posEnabled);
+        extraLightDirXSlider.setDisable(!dirEnabled);
+        extraLightDirYSlider.setDisable(!dirEnabled);
+        extraLightDirZSlider.setDisable(!dirEnabled);
+        extraLightRangeSlider.setDisable(!rangeEnabled);
+        extraLightAreaRadiusSlider.setDisable(!rangeEnabled);
+        extraLightConeAngleSlider.setDisable(!coneEnabled);
+        extraLightConeSoftnessSlider.setDisable(!coneEnabled);
+        extraLightColorPicker.setDisable(off);
+        extraLightIntensitySlider.setDisable(off);
     }
 
     private AbstractFractalParams getParams() {
@@ -162,6 +362,26 @@ public class LightingPanel extends ScrollPane implements Refreshable {
             // Ambient
             ambientColorPicker.setValue(Color.color(p.getAmbientR(), p.getAmbientG(), p.getAmbientB()));
             ambientIntensitySlider.setValue(p.getAmbientIntensity());
+
+            // Additional light
+            int extraType = p.getExtraLightType();
+            if (extraType < 0 || extraType > AbstractFractalParams.EXTRA_LIGHT_SPOT) {
+                extraType = AbstractFractalParams.EXTRA_LIGHT_OFF;
+            }
+            extraLightTypeCombo.getSelectionModel().select(extraLightTypeToUiIndex(extraType));
+            extraLightPosXSlider.setValue(p.getExtraLightX());
+            extraLightPosYSlider.setValue(p.getExtraLightY());
+            extraLightPosZSlider.setValue(p.getExtraLightZ());
+            extraLightDirXSlider.setValue(p.getExtraLightDirX());
+            extraLightDirYSlider.setValue(p.getExtraLightDirY());
+            extraLightDirZSlider.setValue(p.getExtraLightDirZ());
+            extraLightColorPicker.setValue(Color.color(p.getExtraLightR(), p.getExtraLightG(), p.getExtraLightB()));
+            extraLightIntensitySlider.setValue(p.getExtraLightIntensity());
+            extraLightRangeSlider.setValue(p.getExtraLightRange());
+            extraLightAreaRadiusSlider.setValue(p.getExtraLightAreaRadius());
+            extraLightConeAngleSlider.setValue(p.getExtraLightConeAngle());
+            extraLightConeSoftnessSlider.setValue(p.getExtraLightConeSoftness());
+            updateAdditionalLightControlState();
 
         } finally {
             suppressRender = false;
