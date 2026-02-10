@@ -54,6 +54,8 @@ public class TimelineWidget extends VBox {
         // Lighting group
         TrackInfo.groupHeader("Lighting", Color.rgb(255, 255, 150)),
         new TrackInfo("lightDir", "Direction", Color.rgb(255, 255, 150)),
+        new TrackInfo("extraLightIntensity", "Extra Intensity", Color.rgb(255, 220, 130)),
+        new TrackInfo("extraLightAreaRadius", "Extra Area Radius", Color.rgb(255, 200, 110)),
         // Color group
         TrackInfo.groupHeader("Color", Color.rgb(255, 150, 200)),
         new TrackInfo("baseHue", "Base Hue", Color.rgb(255, 150, 200))

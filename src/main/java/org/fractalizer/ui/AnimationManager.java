@@ -79,6 +79,8 @@ public class AnimationManager {
 
         // Light direction
         timeline.createTrack("lightDir", float[].class, new float[]{1.0f, 1.0f, 0.5f});
+        timeline.createTrack("extraLightIntensity", Float.class, 1.5f);
+        timeline.createTrack("extraLightAreaRadius", Float.class, 0.03f);
 
         // Base hue
         timeline.createTrack("baseHue", float[].class, new float[]{0.6f, 0.3f, 0.1f});
@@ -165,6 +167,8 @@ public class AnimationManager {
         addKeyframeForTrack("focalDistance", time, easing, params);
         addKeyframeForTrack("aperture", time, easing, params);
         addKeyframeForTrack("lightDir", time, easing, params);
+        addKeyframeForTrack("extraLightIntensity", time, easing, params);
+        addKeyframeForTrack("extraLightAreaRadius", time, easing, params);
         addKeyframeForTrack("baseHue", time, easing, params);
 
         // Add keyframes for fractal-specific tracks
@@ -233,6 +237,8 @@ public class AnimationManager {
             case "lightDir" -> timeline.setKeyframe("lightDir", time, new float[]{
                     params.getLightX(), params.getLightY(), params.getLightZ()
             }, easing);
+            case "extraLightIntensity" -> timeline.setKeyframe("extraLightIntensity", time, params.getExtraLightIntensity(), easing);
+            case "extraLightAreaRadius" -> timeline.setKeyframe("extraLightAreaRadius", time, params.getExtraLightAreaRadius(), easing);
             case "baseHue" -> timeline.setKeyframe("baseHue", time, new float[]{
                     params.getHueR(), params.getHueG(), params.getHueB()
             }, easing);
@@ -328,6 +334,12 @@ public class AnimationManager {
         if (timeline.getTrack("lightDir").hasKeyframes()) {
             float[] lightDir = timeline.getValue("lightDir");
             params.lightDirection(lightDir[0], lightDir[1], lightDir[2]);
+        }
+        if (timeline.getTrack("extraLightIntensity").hasKeyframes()) {
+            params.setExtraLightIntensity(timeline.getValue("extraLightIntensity"));
+        }
+        if (timeline.getTrack("extraLightAreaRadius").hasKeyframes()) {
+            params.setExtraLightAreaRadius(timeline.getValue("extraLightAreaRadius"));
         }
 
         // Apply base hue
