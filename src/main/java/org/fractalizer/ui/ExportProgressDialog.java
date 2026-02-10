@@ -9,12 +9,12 @@ import javafx.scene.control.ProgressBar;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
+import java.util.function.Consumer;
 
 /**
  * Modal dialog that displays export progress with an image preview,
@@ -30,6 +30,7 @@ public class ExportProgressDialog extends Stage {
     private final ProgressBar totalBar;
     private final Label totalLabel;
     private final Label statusLabel;
+    private final Button pauseButton;
     private final Button actionButton;
 
     private static final double DIALOG_WIDTH = 480;
@@ -38,7 +39,9 @@ public class ExportProgressDialog extends Stage {
     // Animation mode shows both bars; image mode shows only frame bar
     private boolean animationMode = false;
     private Runnable onCancelRequested;
+    private Consumer<Boolean> onPauseToggled;
     private boolean finished = false;
+    private boolean paused = false;
 
     public ExportProgressDialog(Window owner, String title) {
         initOwner(owner);
@@ -91,6 +94,12 @@ public class ExportProgressDialog extends Stage {
         statusLabel.setWrapText(true);
         statusLabel.setMaxWidth(Double.MAX_VALUE);
 
+        // Pause / Resume button (animation mode only)
+        pauseButton = new Button("Pause");
+        pauseButton.setPrefWidth(120);
+        pauseButton.setPrefHeight(30);
+        pauseButton.setOnAction(e -> setPausedInternal(!paused, true));
+
         // Cancel / Close button
         actionButton = new Button("Cancel");
         actionButton.setPrefWidth(140);
@@ -100,12 +109,14 @@ public class ExportProgressDialog extends Stage {
                 close();
             } else if (onCancelRequested != null) {
                 onCancelRequested.run();
+                setPausedInternal(false, false);
+                pauseButton.setDisable(true);
                 actionButton.setDisable(true);
                 actionButton.setText("Cancelling...");
             }
         });
 
-        HBox buttonBox = new HBox(actionButton);
+        HBox buttonBox = new HBox(10, pauseButton, actionButton);
         buttonBox.setAlignment(Pos.CENTER);
         buttonBox.setPadding(new Insets(4, 0, 0, 0));
 
@@ -124,6 +135,9 @@ public class ExportProgressDialog extends Stage {
         totalBar.setManaged(false);
         previewContainer.setVisible(false);
         previewContainer.setManaged(false);
+        pauseButton.setVisible(false);
+        pauseButton.setManaged(false);
+        pauseButton.setDisable(true);
 
         Scene scene = new Scene(root, DIALOG_WIDTH, -1);
         // Inherit stylesheets from owner
@@ -138,6 +152,8 @@ public class ExportProgressDialog extends Stage {
                 e.consume();
                 if (onCancelRequested != null) {
                     onCancelRequested.run();
+                    setPausedInternal(false, false);
+                    pauseButton.setDisable(true);
                     actionButton.setDisable(true);
                     actionButton.setText("Cancelling...");
                 }
@@ -167,6 +183,9 @@ public class ExportProgressDialog extends Stage {
         totalBar.setManaged(animationMode);
         previewContainer.setVisible(animationMode);
         previewContainer.setManaged(animationMode);
+        pauseButton.setVisible(animationMode);
+        pauseButton.setManaged(animationMode);
+        setPauseEnabled(animationMode);
         applyHeight();
     }
 
@@ -221,6 +240,32 @@ public class ExportProgressDialog extends Stage {
     }
 
     /**
+     * Set the pause toggle handler (true = paused, false = resumed).
+     */
+    public void setOnPauseToggled(Consumer<Boolean> handler) {
+        this.onPauseToggled = handler;
+    }
+
+    /**
+     * Enable or disable pause/resume control.
+     */
+    public void setPauseEnabled(boolean enabled) {
+        if (!enabled) {
+            setPausedInternal(false, false);
+        }
+        pauseButton.setDisable(!enabled || finished || !animationMode);
+    }
+
+    private void setPausedInternal(boolean paused, boolean notify) {
+        if (this.paused == paused) return;
+        this.paused = paused;
+        pauseButton.setText(paused ? "Resume" : "Pause");
+        if (notify && onPauseToggled != null) {
+            onPauseToggled.accept(paused);
+        }
+    }
+
+    /**
      * Show a success message and switch button to "Close".
      */
     public void showSuccess(String message) {
@@ -228,6 +273,8 @@ public class ExportProgressDialog extends Stage {
         statusLabel.setText(message);
         frameBar.setProgress(1.0);
         if (animationMode) totalBar.setProgress(1.0);
+        setPausedInternal(false, false);
+        pauseButton.setDisable(true);
         actionButton.setText("Close");
         actionButton.setDisable(false);
     }
@@ -238,6 +285,8 @@ public class ExportProgressDialog extends Stage {
     public void showCancelled(String message) {
         finished = true;
         statusLabel.setText(message);
+        setPausedInternal(false, false);
+        pauseButton.setDisable(true);
         actionButton.setText("Close");
         actionButton.setDisable(false);
     }

@@ -76,6 +76,7 @@ public class ExportPanel extends ScrollPane {
     private Label ffmpegStatusLabel;
 
     private volatile boolean exportCancelled;
+    private volatile boolean exportPaused;
     private volatile boolean exporting;
 
     public ExportPanel(RenderController controller,
@@ -516,6 +517,7 @@ public class ExportPanel extends ScrollPane {
         // Start export
         exporting = true;
         exportCancelled = false;
+        exportPaused = false;
 
         // Notify that export is starting (blocks render loop)
         if (exportStateCallback != null) {
@@ -527,7 +529,11 @@ public class ExportPanel extends ScrollPane {
         // Create and show progress dialog
         ExportProgressDialog dialog = new ExportProgressDialog(getScene().getWindow(), "Animation Export");
         dialog.setAnimationMode(true);
-        dialog.setOnCancelRequested(() -> exportCancelled = true);
+        dialog.setOnCancelRequested(() -> {
+            exportCancelled = true;
+            exportPaused = false;
+        });
+        dialog.setOnPauseToggled(paused -> exportPaused = paused);
 
         String motionBlurInfo = useMotionBlur ? ", motion blur " + shutterAngle + "\u00B0" : "";
         System.out.println("[AnimExport] Starting: " + totalFrames + " frames at " + exportWidth + "x" + exportHeight
@@ -539,6 +545,11 @@ public class ExportPanel extends ScrollPane {
             int renderedFrames = 0;
             try {
                 for (int frame = 0; frame < totalFrames && !exportCancelled; frame++) {
+                    waitWhileAnimationPaused(dialog, renderedFrames, totalFrames, exportStartTime);
+                    if (exportCancelled) {
+                        break;
+                    }
+
                     final int currentFrame = frame;
                     double time = frame / timeline.getFrameRate();
                     long frameStartTime = System.currentTimeMillis();
@@ -633,7 +644,11 @@ public class ExportPanel extends ScrollPane {
                 // PNG export done - now create MP4 if requested
                 if (!exportCancelled && shouldCreateMP4) {
                     System.out.println("[AnimExport] Creating MP4 from " + renderedFrames + " frames...");
-                    Platform.runLater(() -> dialog.setIndeterminate("Encoding MP4..."));
+                    exportPaused = false;
+                    Platform.runLater(() -> {
+                        dialog.setPauseEnabled(false);
+                        dialog.setIndeterminate("Encoding MP4...");
+                    });
 
                     FFmpegExporter.ExportResult result = FFmpegExporter.createMP4InPlace(
                             exportDir, fps, crf, finalIs360,
@@ -677,7 +692,11 @@ public class ExportPanel extends ScrollPane {
                 } else if (exportCancelled && shouldCreateMP4 && renderedFrames > 0) {
                     // Cancelled but create MP4 from rendered frames
                     System.out.println("[AnimExport] Creating MP4 from " + renderedFrames + " frames...");
-                    Platform.runLater(() -> dialog.setIndeterminate("Encoding MP4 from rendered frames..."));
+                    exportPaused = false;
+                    Platform.runLater(() -> {
+                        dialog.setPauseEnabled(false);
+                        dialog.setIndeterminate("Encoding MP4 from rendered frames...");
+                    });
 
                     FFmpegExporter.ExportResult result = FFmpegExporter.createMP4InPlace(
                             exportDir, fps, crf, finalIs360,
@@ -732,11 +751,37 @@ public class ExportPanel extends ScrollPane {
 
     private void finishAnimationExport() {
         exporting = false;
+        exportPaused = false;
         exportAnimButton.setDisable(false);
 
         // Notify that export is finished (unblocks render loop)
         if (exportStateCallback != null) {
             exportStateCallback.accept(false);
+        }
+    }
+
+    private void waitWhileAnimationPaused(ExportProgressDialog dialog, int renderedFrames, int totalFrames, long exportStartTime)
+            throws InterruptedException {
+        if (!exportPaused || exportCancelled) {
+            return;
+        }
+
+        long elapsed = System.currentTimeMillis() - exportStartTime;
+        final String pausedText = String.format(
+                "Paused after %d / %d frames \u2014 %s elapsed",
+                renderedFrames, totalFrames, formatDuration(elapsed));
+        Platform.runLater(() -> dialog.updateStatus(pausedText));
+        System.out.println("[AnimExport] Paused after " + renderedFrames + "/" + totalFrames + " frames");
+
+        while (exportPaused && !exportCancelled) {
+            Thread.sleep(120);
+        }
+
+        if (!exportCancelled) {
+            long resumedElapsed = System.currentTimeMillis() - exportStartTime;
+            final String resumedText = formatDuration(resumedElapsed) + " elapsed \u2014 resumed";
+            Platform.runLater(() -> dialog.updateStatus(resumedText));
+            System.out.println("[AnimExport] Resumed");
         }
     }
 
