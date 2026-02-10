@@ -111,6 +111,10 @@ public class GLSLFractalizerController implements RenderController {
                 case KALEIDOSCOPIC_IFS -> this.currentParams = new KaleidoscopicIFSParams();
                 case JULIA_3D -> this.currentParams = new Julia3DParams();
                 case POLYHEDRAL_IFS -> this.currentParams = new PolyhedralIFSParams();
+                case SIERPINSKI -> this.currentParams = new SierpinskiParams();
+                case PSEUDO_KLEINIAN -> this.currentParams = new PseudoKleinianParams();
+                case APOLLONIAN -> this.currentParams = new ApollonianParams();
+                case BRISTORBROT -> this.currentParams = new BristorbrotParams();
                 case TEST_SCENE -> this.currentParams = new TestSceneParams();
                 case CORNELL_BOX -> this.currentParams = new CornellBoxParams();
             }
@@ -932,6 +936,31 @@ public class GLSLFractalizerController implements RenderController {
                 // Convert Euler angles to 3x3 matrices
                 uniforms.put("fractalRotation1", createRotationMatrix(p.getRot1X(), p.getRot1Y(), p.getRot1Z()));
                 uniforms.put("fractalRotation2", createRotationMatrix(p.getRot2X(), p.getRot2Y(), p.getRot2Z()));
+            }
+            case SIERPINSKI -> {
+                SierpinskiParams p = (SierpinskiParams) currentParams;
+                uniforms.put("maxIterations", p.getMaxIterations());
+                uniforms.put("scale", p.getScale());
+            }
+            case PSEUDO_KLEINIAN -> {
+                PseudoKleinianParams p = (PseudoKleinianParams) currentParams;
+                uniforms.put("maxIterations", p.getMaxIterations());
+                uniforms.put("CSize", new float[]{p.getCSizeX(), p.getCSizeY(), p.getCSizeZ()});
+                uniforms.put("Size", p.getSize());
+                uniforms.put("DEoffset", p.getDEOffset());
+                uniforms.put("foldC", new float[]{p.getFoldCx(), p.getFoldCy(), p.getFoldCz()});
+            }
+            case APOLLONIAN -> {
+                ApollonianParams p = (ApollonianParams) currentParams;
+                uniforms.put("maxIterations", p.getMaxIterations());
+                uniforms.put("scale", p.getScale());
+                uniforms.put("foldRadius", p.getFoldRadius());
+            }
+            case BRISTORBROT -> {
+                BristorbrotParams p = (BristorbrotParams) currentParams;
+                uniforms.put("maxIterations", p.getMaxIterations());
+                uniforms.put("bailout", p.getBailout());
+                uniforms.put("juliaC", new float[]{p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz()});
             }
             case TEST_SCENE -> {
                 TestSceneParams p = (TestSceneParams) currentParams;

@@ -37,6 +37,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private VBox kaleidoscopicControls;
     private VBox julia3dControls;
     private VBox polyhedralControls;
+    private VBox sierpinskiControls;
+    private VBox pseudoKleinianControls;
+    private VBox apollonianControls;
+    private VBox bristorbrotControls;
     private VBox testSceneControls;
     private VBox cornellBoxControls;
 
@@ -86,6 +90,33 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     // Test Scene sliders
     private EnhancedSlider tsScaleSlider;
 
+    // Sierpinski sliders
+    private EnhancedSlider siIterSlider;
+    private EnhancedSlider siScaleSlider;
+
+    // Pseudo-Kleinian sliders
+    private EnhancedSlider pkIterSlider;
+    private EnhancedSlider pkCSizeXSlider;
+    private EnhancedSlider pkCSizeYSlider;
+    private EnhancedSlider pkCSizeZSlider;
+    private EnhancedSlider pkSizeSlider;
+    private EnhancedSlider pkDEOffsetSlider;
+    private EnhancedSlider pkFoldCxSlider;
+    private EnhancedSlider pkFoldCySlider;
+    private EnhancedSlider pkFoldCzSlider;
+
+    // Apollonian sliders
+    private EnhancedSlider apIterSlider;
+    private EnhancedSlider apScaleSlider;
+    private EnhancedSlider apFoldRadiusSlider;
+
+    // Bristorbrot sliders
+    private EnhancedSlider brIterSlider;
+    private EnhancedSlider brBailoutSlider;
+    private EnhancedSlider brJuliaCxSlider;
+    private EnhancedSlider brJuliaCySlider;
+    private EnhancedSlider brJuliaCzSlider;
+
     // Cornell Box sliders
     private EnhancedSlider cbScaleSlider;
     private EnhancedSlider cbGlassXSlider, cbGlassYSlider, cbGlassZSlider, cbGlassRadiusSlider;
@@ -118,6 +149,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         createKaleidoscopicControls();
         createJulia3dControls();
         createPolyhedralControls();
+        createSierpinskiControls();
+        createPseudoKleinianControls();
+        createApollonianControls();
+        createBristorbrotControls();
         createTestSceneControls();
         createCornellBoxControls();
 
@@ -161,6 +196,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             kaleidoscopicControls,
             julia3dControls,
             polyhedralControls,
+            sierpinskiControls,
+            pseudoKleinianControls,
+            apollonianControls,
+            bristorbrotControls,
             testSceneControls,
             cornellBoxControls,
             new Separator(),
@@ -553,6 +592,115 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         );
     }
 
+    private void createSierpinskiControls() {
+        sierpinskiControls = new VBox(8);
+
+        siIterSlider = new EnhancedSlider("Iterations", 5, 30, 15, true);
+        siIterSlider.showTickMarks(true);
+        siIterSlider.setMajorTickUnit(5.0);
+        siIterSlider.setOnAction(v -> { if (!suppressRender && params instanceof SierpinskiParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
+
+        siScaleSlider = new EnhancedSlider("Scale", 1.5, 3.0, 2.0, false);
+        siScaleSlider.setOnAction(v -> { if (!suppressRender && params instanceof SierpinskiParams p) { p.setScale(v.floatValue()); renderCallback.requestRender(); } });
+
+        sierpinskiControls.getChildren().addAll(siIterSlider, siScaleSlider);
+        sierpinskiControls.setVisible(false);
+        sierpinskiControls.setManaged(false);
+    }
+
+    private void createPseudoKleinianControls() {
+        pseudoKleinianControls = new VBox(8);
+
+        pkIterSlider = new EnhancedSlider("Iterations", 5, 30, 7, true);
+        pkIterSlider.showTickMarks(true);
+        pkIterSlider.setMajorTickUnit(5.0);
+        pkIterSlider.setOnAction(v -> { if (!suppressRender && params instanceof PseudoKleinianParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
+
+        pkCSizeXSlider = new EnhancedSlider("CSize X", 0.1, 2.0, 1.0, false);
+        pkCSizeXSlider.setOnAction(v -> { if (!suppressRender && params instanceof PseudoKleinianParams p) { p.setCSizeX(v.floatValue()); renderCallback.requestRender(); } });
+
+        pkCSizeYSlider = new EnhancedSlider("CSize Y", 0.1, 2.0, 1.0, false);
+        pkCSizeYSlider.setOnAction(v -> { if (!suppressRender && params instanceof PseudoKleinianParams p) { p.setCSizeY(v.floatValue()); renderCallback.requestRender(); } });
+
+        pkCSizeZSlider = new EnhancedSlider("CSize Z", 0.1, 2.0, 1.3, false);
+        pkCSizeZSlider.setOnAction(v -> { if (!suppressRender && params instanceof PseudoKleinianParams p) { p.setCSizeZ(v.floatValue()); renderCallback.requestRender(); } });
+
+        pkSizeSlider = new EnhancedSlider("Size", 0.5, 2.0, 1.0, false);
+        pkSizeSlider.setOnAction(v -> { if (!suppressRender && params instanceof PseudoKleinianParams p) { p.setSize(v.floatValue()); renderCallback.requestRender(); } });
+
+        pkDEOffsetSlider = new EnhancedSlider("DE Offset", 0.0, 0.5, 0.0, false);
+        pkDEOffsetSlider.setOnAction(v -> { if (!suppressRender && params instanceof PseudoKleinianParams p) { p.setDEOffset(v.floatValue()); renderCallback.requestRender(); } });
+
+        Label foldLabel = new Label("Fold C (Julia constant):");
+        foldLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        pkFoldCxSlider = new EnhancedSlider("Fold Cx", -2.0, 2.0, -0.62, false);
+        pkFoldCxSlider.setOnAction(v -> { if (!suppressRender && params instanceof PseudoKleinianParams p) { p.setFoldCx(v.floatValue()); renderCallback.requestRender(); } });
+
+        pkFoldCySlider = new EnhancedSlider("Fold Cy", -2.0, 2.0, -0.015, false);
+        pkFoldCySlider.setOnAction(v -> { if (!suppressRender && params instanceof PseudoKleinianParams p) { p.setFoldCy(v.floatValue()); renderCallback.requestRender(); } });
+
+        pkFoldCzSlider = new EnhancedSlider("Fold Cz", -2.0, 2.0, -0.025, false);
+        pkFoldCzSlider.setOnAction(v -> { if (!suppressRender && params instanceof PseudoKleinianParams p) { p.setFoldCz(v.floatValue()); renderCallback.requestRender(); } });
+
+        pseudoKleinianControls.getChildren().addAll(
+            pkIterSlider, pkCSizeXSlider, pkCSizeYSlider, pkCSizeZSlider,
+            pkSizeSlider, pkDEOffsetSlider,
+            new Separator(), foldLabel, pkFoldCxSlider, pkFoldCySlider, pkFoldCzSlider
+        );
+        pseudoKleinianControls.setVisible(false);
+        pseudoKleinianControls.setManaged(false);
+    }
+
+    private void createApollonianControls() {
+        apollonianControls = new VBox(8);
+
+        apIterSlider = new EnhancedSlider("Iterations", 5, 30, 15, true);
+        apIterSlider.showTickMarks(true);
+        apIterSlider.setMajorTickUnit(5.0);
+        apIterSlider.setOnAction(v -> { if (!suppressRender && params instanceof ApollonianParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
+
+        apScaleSlider = new EnhancedSlider("Scale", 1.5, 4.0, 2.0, false);
+        apScaleSlider.setOnAction(v -> { if (!suppressRender && params instanceof ApollonianParams p) { p.setScale(v.floatValue()); renderCallback.requestRender(); } });
+
+        apFoldRadiusSlider = new EnhancedSlider("Fold Radius", 0.5, 2.0, 1.0, false);
+        apFoldRadiusSlider.setOnAction(v -> { if (!suppressRender && params instanceof ApollonianParams p) { p.setFoldRadius(v.floatValue()); renderCallback.requestRender(); } });
+
+        apollonianControls.getChildren().addAll(apIterSlider, apScaleSlider, apFoldRadiusSlider);
+        apollonianControls.setVisible(false);
+        apollonianControls.setManaged(false);
+    }
+
+    private void createBristorbrotControls() {
+        bristorbrotControls = new VBox(8);
+
+        brIterSlider = new EnhancedSlider("Iterations", 5, 30, 15, true);
+        brIterSlider.showTickMarks(true);
+        brIterSlider.setMajorTickUnit(5.0);
+        brIterSlider.setOnAction(v -> { if (!suppressRender && params instanceof BristorbrotParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
+
+        brBailoutSlider = new EnhancedSlider("Bailout", 1, 16, 4.0, false);
+        brBailoutSlider.setPrecision(1);
+        brBailoutSlider.setOnAction(v -> { if (!suppressRender && params instanceof BristorbrotParams p) { p.setBailout(v.floatValue()); renderCallback.requestRender(); } });
+
+        Label juliaLabel = new Label("Julia C (0 = Mandelbrot mode):");
+        juliaLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        brJuliaCxSlider = new EnhancedSlider("Julia Cx", -2.0, 2.0, 0.0, false);
+        brJuliaCxSlider.setOnAction(v -> { if (!suppressRender && params instanceof BristorbrotParams p) { p.setJuliaCx(v.floatValue()); renderCallback.requestRender(); } });
+
+        brJuliaCySlider = new EnhancedSlider("Julia Cy", -2.0, 2.0, 0.0, false);
+        brJuliaCySlider.setOnAction(v -> { if (!suppressRender && params instanceof BristorbrotParams p) { p.setJuliaCy(v.floatValue()); renderCallback.requestRender(); } });
+
+        brJuliaCzSlider = new EnhancedSlider("Julia Cz", -2.0, 2.0, 0.0, false);
+        brJuliaCzSlider.setOnAction(v -> { if (!suppressRender && params instanceof BristorbrotParams p) { p.setJuliaCz(v.floatValue()); renderCallback.requestRender(); } });
+
+        bristorbrotControls.getChildren().addAll(brIterSlider, brBailoutSlider,
+            new Separator(), juliaLabel, brJuliaCxSlider, brJuliaCySlider, brJuliaCzSlider);
+        bristorbrotControls.setVisible(false);
+        bristorbrotControls.setManaged(false);
+    }
+
     private void createTestSceneControls() {
         testSceneControls = new VBox(8);
 
@@ -699,6 +847,14 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             julia3dControls.setManaged(false);
             polyhedralControls.setVisible(false);
             polyhedralControls.setManaged(false);
+            sierpinskiControls.setVisible(false);
+            sierpinskiControls.setManaged(false);
+            pseudoKleinianControls.setVisible(false);
+            pseudoKleinianControls.setManaged(false);
+            apollonianControls.setVisible(false);
+            apollonianControls.setManaged(false);
+            bristorbrotControls.setVisible(false);
+            bristorbrotControls.setManaged(false);
             testSceneControls.setVisible(false);
             testSceneControls.setManaged(false);
             cornellBoxControls.setVisible(false);
@@ -729,6 +885,22 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 case POLYHEDRAL_IFS -> {
                     polyhedralControls.setVisible(true);
                     polyhedralControls.setManaged(true);
+                }
+                case SIERPINSKI -> {
+                    sierpinskiControls.setVisible(true);
+                    sierpinskiControls.setManaged(true);
+                }
+                case PSEUDO_KLEINIAN -> {
+                    pseudoKleinianControls.setVisible(true);
+                    pseudoKleinianControls.setManaged(true);
+                }
+                case APOLLONIAN -> {
+                    apollonianControls.setVisible(true);
+                    apollonianControls.setManaged(true);
+                }
+                case BRISTORBROT -> {
+                    bristorbrotControls.setVisible(true);
+                    bristorbrotControls.setManaged(true);
                 }
                 case TEST_SCENE -> {
                     testSceneControls.setVisible(true);
@@ -779,6 +951,14 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             julia3dControls.setManaged(false);
             polyhedralControls.setVisible(false);
             polyhedralControls.setManaged(false);
+            sierpinskiControls.setVisible(false);
+            sierpinskiControls.setManaged(false);
+            pseudoKleinianControls.setVisible(false);
+            pseudoKleinianControls.setManaged(false);
+            apollonianControls.setVisible(false);
+            apollonianControls.setManaged(false);
+            bristorbrotControls.setVisible(false);
+            bristorbrotControls.setManaged(false);
             testSceneControls.setVisible(false);
             testSceneControls.setManaged(false);
             cornellBoxControls.setVisible(false);
@@ -838,6 +1018,37 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 polyRot2XSlider.setValue(p.getRot2X());
                 polyRot2YSlider.setValue(p.getRot2Y());
                 polyRot2ZSlider.setValue(p.getRot2Z());
+            } else if (params instanceof SierpinskiParams si) {
+                sierpinskiControls.setVisible(true);
+                sierpinskiControls.setManaged(true);
+                siIterSlider.setValue(si.getMaxIterations());
+                siScaleSlider.setValue(si.getScale());
+            } else if (params instanceof PseudoKleinianParams pk) {
+                pseudoKleinianControls.setVisible(true);
+                pseudoKleinianControls.setManaged(true);
+                pkIterSlider.setValue(pk.getMaxIterations());
+                pkCSizeXSlider.setValue(pk.getCSizeX());
+                pkCSizeYSlider.setValue(pk.getCSizeY());
+                pkCSizeZSlider.setValue(pk.getCSizeZ());
+                pkSizeSlider.setValue(pk.getSize());
+                pkDEOffsetSlider.setValue(pk.getDEOffset());
+                pkFoldCxSlider.setValue(pk.getFoldCx());
+                pkFoldCySlider.setValue(pk.getFoldCy());
+                pkFoldCzSlider.setValue(pk.getFoldCz());
+            } else if (params instanceof ApollonianParams ap) {
+                apollonianControls.setVisible(true);
+                apollonianControls.setManaged(true);
+                apIterSlider.setValue(ap.getMaxIterations());
+                apScaleSlider.setValue(ap.getScale());
+                apFoldRadiusSlider.setValue(ap.getFoldRadius());
+            } else if (params instanceof BristorbrotParams br) {
+                bristorbrotControls.setVisible(true);
+                bristorbrotControls.setManaged(true);
+                brIterSlider.setValue(br.getMaxIterations());
+                brBailoutSlider.setValue(br.getBailout());
+                brJuliaCxSlider.setValue(br.getJuliaCx());
+                brJuliaCySlider.setValue(br.getJuliaCy());
+                brJuliaCzSlider.setValue(br.getJuliaCz());
             } else if (params instanceof TestSceneParams ts) {
                 testSceneControls.setVisible(true);
                 testSceneControls.setManaged(true);

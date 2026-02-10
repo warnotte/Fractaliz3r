@@ -474,6 +474,29 @@ public class FractalConfig {
             map.put("rot2X", p.getRot2X());
             map.put("rot2Y", p.getRot2Y());
             map.put("rot2Z", p.getRot2Z());
+        } else if (params instanceof SierpinskiParams si) {
+            map.put("maxIterations", si.getMaxIterations());
+            map.put("scale", si.getScale());
+        } else if (params instanceof PseudoKleinianParams pk) {
+            map.put("maxIterations", pk.getMaxIterations());
+            map.put("cSizeX", pk.getCSizeX());
+            map.put("cSizeY", pk.getCSizeY());
+            map.put("cSizeZ", pk.getCSizeZ());
+            map.put("size", pk.getSize());
+            map.put("deOffset", pk.getDEOffset());
+            map.put("foldCx", pk.getFoldCx());
+            map.put("foldCy", pk.getFoldCy());
+            map.put("foldCz", pk.getFoldCz());
+        } else if (params instanceof ApollonianParams ap) {
+            map.put("maxIterations", ap.getMaxIterations());
+            map.put("scale", ap.getScale());
+            map.put("foldRadius", ap.getFoldRadius());
+        } else if (params instanceof BristorbrotParams br) {
+            map.put("maxIterations", br.getMaxIterations());
+            map.put("bailout", br.getBailout());
+            map.put("juliaCx", br.getJuliaCx());
+            map.put("juliaCy", br.getJuliaCy());
+            map.put("juliaCz", br.getJuliaCz());
         } else if (params instanceof TestSceneParams ts) {
             map.put("sceneScale", ts.getSceneScale());
         } else if (params instanceof CornellBoxParams cb) {
@@ -542,6 +565,29 @@ public class FractalConfig {
             if (map.containsKey("rot2X")) p.setRot2X(getFloat(map, "rot2X"));
             if (map.containsKey("rot2Y")) p.setRot2Y(getFloat(map, "rot2Y"));
             if (map.containsKey("rot2Z")) p.setRot2Z(getFloat(map, "rot2Z"));
+        } else if (params instanceof SierpinskiParams si) {
+            if (map.containsKey("maxIterations")) si.setMaxIterations(getInt(map, "maxIterations"));
+            if (map.containsKey("scale")) si.setScale(getFloat(map, "scale"));
+        } else if (params instanceof PseudoKleinianParams pk) {
+            if (map.containsKey("maxIterations")) pk.setMaxIterations(getInt(map, "maxIterations"));
+            if (map.containsKey("cSizeX")) pk.setCSizeX(getFloat(map, "cSizeX"));
+            if (map.containsKey("cSizeY")) pk.setCSizeY(getFloat(map, "cSizeY"));
+            if (map.containsKey("cSizeZ")) pk.setCSizeZ(getFloat(map, "cSizeZ"));
+            if (map.containsKey("size")) pk.setSize(getFloat(map, "size"));
+            if (map.containsKey("deOffset")) pk.setDEOffset(getFloat(map, "deOffset"));
+            if (map.containsKey("foldCx")) pk.setFoldCx(getFloat(map, "foldCx"));
+            if (map.containsKey("foldCy")) pk.setFoldCy(getFloat(map, "foldCy"));
+            if (map.containsKey("foldCz")) pk.setFoldCz(getFloat(map, "foldCz"));
+        } else if (params instanceof ApollonianParams ap) {
+            if (map.containsKey("maxIterations")) ap.setMaxIterations(getInt(map, "maxIterations"));
+            if (map.containsKey("scale")) ap.setScale(getFloat(map, "scale"));
+            if (map.containsKey("foldRadius")) ap.setFoldRadius(getFloat(map, "foldRadius"));
+        } else if (params instanceof BristorbrotParams br) {
+            if (map.containsKey("maxIterations")) br.setMaxIterations(getInt(map, "maxIterations"));
+            if (map.containsKey("bailout")) br.setBailout(getFloat(map, "bailout"));
+            if (map.containsKey("juliaCx")) br.setJuliaCx(getFloat(map, "juliaCx"));
+            if (map.containsKey("juliaCy")) br.setJuliaCy(getFloat(map, "juliaCy"));
+            if (map.containsKey("juliaCz")) br.setJuliaCz(getFloat(map, "juliaCz"));
         } else if (params instanceof TestSceneParams ts) {
             if (map.containsKey("sceneScale")) ts.setSceneScale(getFloat(map, "sceneScale"));
         } else if (params instanceof CornellBoxParams cb) {

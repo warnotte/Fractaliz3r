@@ -45,6 +45,10 @@ org.fractalizer
 │   ├── KaleidoscopicIFSParams.java  # KIFS: scale, offset, fold angles
 │   ├── Julia3DParams.java           # 3D Julia: quaternion c parameter
 │   ├── PolyhedralIFSParams.java     # Polyhedral IFS: symmetry type, scale, rotations, offsets
+│   ├── SierpinskiParams.java        # Sierpinski Tetrahedron: iterations, scale
+│   ├── PseudoKleinianParams.java    # Pseudo-Kleinian: iterations, CSize vec3, Size, DEoffset
+│   ├── ApollonianParams.java        # Apollonian Gasket: iterations, scale, foldRadius
+│   ├── BristorbrotParams.java       # Bristorbrot: iterations, bailout
 │   └── CornellBoxParams.java        # Cornell Box: sceneScale (per-object materials in shader)
 ├── render/
 │   ├── ProgressiveRenderer.java     # Progressive sample accumulation
@@ -84,6 +88,10 @@ shaders/
     ├── kaleidoscopic.glsl
     ├── julia3d.glsl
     ├── polyhedral.glsl    # Polyhedral IFS with Octa/Dodeca/Icosa/Tetra symmetries
+    ├── sierpinski.glsl    # Sierpinski Tetrahedron (tetrahedral fold IFS)
+    ├── pseudokleinian.glsl # Pseudo-Kleinian (box fold + sphere fold, tubular caves)
+    ├── apollonian.glsl    # Apollonian Gasket (tetrahedral fold + sphere inversion)
+    ├── bristorbrot.glsl   # Bristorbrot (component-wise 3D Mandelbrot)
     └── cornellbox.glsl    # Cornell Box with per-object materials (#define HAS_PER_OBJECT_MATERIAL)
 ```
 
@@ -185,6 +193,119 @@ mvn clean javafx:jlink package -DskipTests
 This creates a self-contained runtime in `target/image/` with launcher script `bin/fractaliz3r.bat`. The `package` phase automatically extracts LWJGL native DLLs (glfw.dll, lwjgl.dll, etc.) into `bin/` and patches the launcher to set `-Dorg.lwjgl.librarypath`. Without this step, the app crashes on machines that never ran LWJGL before (no native cache in temp).
 
 Distribute: zip `target/image/` — no JDK needed on the target machine.
+
+## How to Add a New Fractal Type
+
+Adding a fractal requires **2 new files** and **4 existing file edits**. Follow this checklist exactly.
+
+### Step 1: Choose names
+
+Pick a `kernelName` (lowercase, no spaces — used for shader filename and animation track prefix) and a `displayName` (human-readable). Example: `kernelName = "mandelbulb"`, `displayName = "Mandelbulb"`.
+
+### Step 2: Create the Params class
+
+**File:** `src/main/java/org/fractalizer/fractals/{Name}Params.java`
+
+Follow `MandelbulbParams.java` as the minimal template:
+- Extend `AbstractFractalParams`
+- Declare fractal-specific fields with `@Animatable(display = "...")` annotation
+- Set defaults in constructor (including `camera.setPosition(...)` if needed)
+- Override `getType()` → return matching `FractalType` enum
+- Override `withReducedQuality()` → copy specific params + reduce iterations
+- Add getters/setters for each field
+
+### Step 3: Create the GLSL shader
+
+**File:** `src/main/resources/shaders/fractals/{kernelName}.glsl`
+
+Follow `mandelbulb.glsl` as the template. Must define exactly these 4 things:
+1. **Uniforms** — matching the names you'll bind in `buildUniforms()`
+2. **`struct OrbitTrap`** — always has: `float minDist, planeX, planeY, planeZ; int iterations;`
+3. **`float DE(vec3 pos, out OrbitTrap trap)`** — full DE with orbit trap tracking
+4. **`float DE_simple(vec3 pos)`** — same math, no orbit traps (used for shadows/AO/normals)
+5. **`vec3 getFactors(OrbitTrap trap)`** — converts traps to 3 coloring factors (structural, flow, iterNorm)
+
+The `getFactors` pattern is standard — copy from mandelbulb.glsl and adjust exponential falloff coefficients if desired.
+
+### Step 4: Wire into 4 existing files
+
+#### 4a. `FractalType.java` — Add enum value
+
+Add before `TEST_SCENE`:
+```java
+MY_FRACTAL("Display Name", "kernelname"),
+```
+
+#### 4b. `GLSLFractalizerController.java` — 2 switch blocks
+
+**`setFractalType()` method** (~line 107) — add instantiation case:
+```java
+case MY_FRACTAL -> this.currentParams = new MyFractalParams();
+```
+
+**`buildUniforms()` method** (~line 884) — add uniform binding case:
+```java
+case MY_FRACTAL -> {
+    MyFractalParams p = (MyFractalParams) currentParams;
+    uniforms.put("maxIterations", p.getMaxIterations());
+    uniforms.put("scale", p.getScale());
+    // ... all fractal-specific uniforms matching the shader
+}
+```
+
+For `vec3` uniforms: `uniforms.put("name", new float[]{x, y, z})`.
+For `mat3` uniforms: use `createRotationMatrix()` helper.
+
+#### 4c. `FractalConfig.java` (in `org.fractalizer.config`) — 2 methods
+
+**`extractFractalParams()`** — add `else if` block to serialize params to map:
+```java
+} else if (params instanceof MyFractalParams p) {
+    map.put("maxIterations", p.getMaxIterations());
+    map.put("scale", p.getScale());
+}
+```
+
+**`applyFractalParams()`** — add `else if` block to deserialize map to params:
+```java
+} else if (params instanceof MyFractalParams p) {
+    if (map.containsKey("maxIterations")) p.setMaxIterations(getInt(map, "maxIterations"));
+    if (map.containsKey("scale")) p.setScale(getFloat(map, "scale"));
+}
+```
+
+Both blocks must go **before** the `TestSceneParams` / `CornellBoxParams` blocks (those are non-fractal scenes).
+
+#### 4d. `FractalPanel.java` — 5 locations
+
+1. **Field declarations** (~line 34): Add `private VBox myFractalControls;` and slider fields (`private EnhancedSlider mfIterSlider;`, etc.)
+
+2. **`createContent()`** (~line 114): Add `createMyFractalControls();` call, and add `myFractalControls` to the `panel.getChildren().addAll(...)` list (before `testSceneControls`)
+
+3. **`createMyFractalControls()` method**: Create the VBox, instantiate sliders with `new EnhancedSlider(label, min, max, default, isInteger)`, wire `.setOnAction(v -> { if (!suppressRender && params instanceof ...) { ... renderCallback.requestRender(); } })`. End with `setVisible(false); setManaged(false);`
+
+4. **Combo box handler** (~line 689): Add hide lines (`myFractalControls.setVisible(false); myFractalControls.setManaged(false);`) and a `case` in the show switch
+
+5. **`refreshFromParams()`** (~line 902): Add hide lines in the "hide all" block, and an `else if (params instanceof MyFractalParams p)` block that shows the controls and sets slider values
+
+### Naming conventions
+
+| Concept | Convention | Example |
+|---------|-----------|---------|
+| Enum value | `UPPER_SNAKE` | `PSEUDO_KLEINIAN` |
+| kernelName | `lowercase` | `pseudokleinian` |
+| Params class | `PascalCase + Params` | `PseudoKleinianParams` |
+| Shader file | `{kernelName}.glsl` | `pseudokleinian.glsl` |
+| VBox field | `{camelCase}Controls` | `pseudoKleinianControls` |
+| Slider prefix | 2-3 letter abbreviation | `pk` → `pkIterSlider` |
+
+### Verification
+
+After implementation:
+1. `mvn compile` — must succeed
+2. `mvn javafx:run` — select the new fractal in the dropdown, verify geometry renders
+3. Test save/load with File > Save/Load
+4. Run visual regression: `mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.TiledRenderTest"` (existing fractals must not change)
 
 ## Dependencies
 

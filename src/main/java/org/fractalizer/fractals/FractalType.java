@@ -10,6 +10,10 @@ public enum FractalType {
     KALEIDOSCOPIC_IFS("Kaleidoscopic IFS", "kaleidoscopic"),
     JULIA_3D("Julia 3D", "julia3d"),
     POLYHEDRAL_IFS("Polyhedral IFS", "polyhedral"),
+    SIERPINSKI("Sierpinski Tetrahedron", "sierpinski"),
+    PSEUDO_KLEINIAN("Pseudo-Kleinian", "pseudokleinian"),
+    APOLLONIAN("Apollonian Gasket", "apollonian"),
+    BRISTORBROT("Bristorbrot", "bristorbrot"),
     TEST_SCENE("Test Scene", "testscene"),
     CORNELL_BOX("Cornell Box", "cornellbox");
 
