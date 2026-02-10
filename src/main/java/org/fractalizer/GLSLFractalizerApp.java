@@ -50,6 +50,8 @@ public class GLSLFractalizerApp extends Application {
     private Label statusLabel;
     private Label sampleLabel;
     private StackPane imageContainer;
+    private SplitPane verticalSplit;
+    private SplitPane horizontalSplit;
 
     // File handling
     private File currentConfigFile;
@@ -150,16 +152,18 @@ public class GLSLFractalizerApp extends Application {
 
         // Center: Image view - fills available space dynamically
         imageView = new ImageView();
-        imageView.setPreserveRatio(true);
+        imageView.setPreserveRatio(false);
         imageView.setSmooth(true);
         imageView.setCache(true);
+        imageView.setManaged(false); // Exclude from layout calculations
 
         imageContainer = new StackPane(imageView);
         imageContainer.setStyle("-fx-background-color: black;");
-        
+        imageContainer.setMinSize(0, 0); // Allow SplitPane to resize freely
+
         // Left: Controls
         TabPane controlTabs = createControlTabs(initialParams);
-        controlTabs.setMinWidth(350);
+        controlTabs.setMinWidth(280);
         controlTabs.setPrefWidth(380);
 
         // Bottom: Timeline
@@ -183,17 +187,20 @@ public class GLSLFractalizerApp extends Application {
         });
 
         // Layout with SplitPanes
-        SplitPane horizontalSplit = new SplitPane();
+        horizontalSplit = new SplitPane();
         horizontalSplit.getItems().addAll(imageContainer, controlTabs);
         horizontalSplit.setDividerPositions(0.75);
 
-        SplitPane verticalSplit = new SplitPane();
+        verticalSplit = new SplitPane();
         verticalSplit.setOrientation(Orientation.VERTICAL);
         verticalSplit.getItems().addAll(horizontalSplit, timelineWidget);
         verticalSplit.setDividerPositions(0.85);
-        
+
         // Prevent timeline from disappearing
         horizontalSplit.setMinHeight(150);
+        // When window resizes, extra space goes to the viewport, not timeline/params
+        SplitPane.setResizableWithParent(timelineWidget, false);
+        SplitPane.setResizableWithParent(controlTabs, false);
 
         // Status bar - always at bottom, outside SplitPane
         HBox statusBar = createStatusBar();
@@ -268,9 +275,14 @@ public class GLSLFractalizerApp extends Application {
         controller.updatePaletteTexture(initialParams.getCustomGradient());
 
         // Initial viewport size update (after layout is done)
+        // Double-runLater ensures SplitPane layout is finalized before we enforce positions
         Platform.runLater(() -> {
-            updateViewportSize();
-            renderPreview();
+            Platform.runLater(() -> {
+                verticalSplit.setDividerPositions(0.85);
+                horizontalSplit.setDividerPositions(0.75);
+                updateViewportSize();
+                renderPreview();
+            });
         });
     }
 
@@ -302,6 +314,9 @@ public class GLSLFractalizerApp extends Application {
         // Enforce minimum size to prevent OpenGL crashes during SplitPane resize
         if (width >= 64 && height >= 64) {
             controller.setViewportSize(width, height);
+            // Scale ImageView to fill container (no binding to avoid circular layout)
+            imageView.setFitWidth(width);
+            imageView.setFitHeight(height);
             exportPanel.updateViewportInfo();
         }
     }
