@@ -197,13 +197,18 @@ public class FFmpegExporter {
         command.add("anullsrc=channel_layout=stereo:sample_rate=44100");
         
         command.add("-c:v");
-        command.add("libx265"); // Back to HEVC for best quality/size ratio
+        command.add("libx265");
         command.add("-crf");
         command.add(String.valueOf(crf));
         command.add("-pix_fmt");
         command.add("yuv420p");
         command.add("-tag:v");
         command.add("hvc1"); // Apple compatibility
+        // Force keyframe every 1 second — required for YouTube/streaming seek
+        command.add("-x265-params");
+        command.add("keyint=" + frameRate + ":min-keyint=" + frameRate);
+        command.add("-force_key_frames");
+        command.add("expr:gte(t,0)");
         
         // Audio codec
         command.add("-c:a");
