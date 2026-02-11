@@ -55,6 +55,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
 
     // Path tracing
     private CheckBox pathTracingCheck;
+    private CheckBox neeEnabledCheck;
     private EnhancedSlider renderSamplesSlider;
     private EnhancedSlider bouncesSlider;
     private EnhancedSlider skyIntensitySlider;
@@ -339,6 +340,15 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             }
         });
 
+        neeEnabledCheck = new CheckBox("NEE + MIS (env importance sampling)");
+        neeEnabledCheck.setSelected(true);
+        neeEnabledCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setNeeEnabled(neeEnabledCheck.isSelected());
+                renderCallback.requestRender();
+            }
+        });
+
         renderSamplesSlider = new EnhancedSlider("Preview Samples", 16, 4096, 64, true);
         renderSamplesSlider.showTickMarks(true);
         renderSamplesSlider.setMajorTickUnit(512);
@@ -382,7 +392,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         Label pathTracingInfo = new Label("Preview Samples = iterations for\nAuto Full Quality preview render.");
         pathTracingInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        box.getChildren().addAll(pathTracingCheck, renderSamplesSlider, bouncesSlider,
+        box.getChildren().addAll(pathTracingCheck, neeEnabledCheck, renderSamplesSlider, bouncesSlider,
                 skyIntensitySlider, indirectSlider,
                 indirectInfo, pathTracingInfo);
 
@@ -470,6 +480,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
 
             // Path tracing
             pathTracingCheck.setSelected(p.isPathTracingEnabled());
+            neeEnabledCheck.setSelected(p.isNeeEnabled());
             if (fullSamplesSupplier != null) {
                 renderSamplesSlider.setValue(fullSamplesSupplier.get());
             }

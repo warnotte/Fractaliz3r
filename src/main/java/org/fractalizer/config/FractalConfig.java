@@ -168,6 +168,9 @@ public class FractalConfig {
 
         // Motion Blur
         public float shutterAngle = 180f;
+
+        // NEE + MIS
+        public boolean neeEnabled = true;
     }
 
     public static class AnimationConfig {
@@ -293,6 +296,7 @@ public class FractalConfig {
         config.effects.fogScattering = params.getFogScattering();
         config.effects.fogSteps = params.getFogSteps();
         config.effects.shutterAngle = params.getShutterAngle();
+        config.effects.neeEnabled = params.isNeeEnabled();
 
         // Fractal-specific parameters
         extractFractalParams(params, config.fractalParams);
@@ -406,6 +410,7 @@ public class FractalConfig {
         params.setFogScattering(effects.fogScattering);
         params.setFogSteps(effects.fogSteps);
         params.setShutterAngle(effects.shutterAngle);
+        params.setNeeEnabled(effects.neeEnabled);
 
         // Fractal-specific parameters
         applyFractalParams(params, fractalParams);

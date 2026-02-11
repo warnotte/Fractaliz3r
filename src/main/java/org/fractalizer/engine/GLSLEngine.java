@@ -55,6 +55,14 @@ public class GLSLEngine implements AutoCloseable {
     private float envRotation = 0.0f;
     private float envLightingMix = 0.5f;  // 0 = directional only, 1 = full HDRI lighting
 
+    // Environment importance sampling CDF textures
+    private int envMarginalCDFTexture;
+    private int envConditionalCDFTexture;
+    private int envMapWidth;
+    private int envMapHeight;
+    private float envTotalLuminance;
+    private boolean envCDFReady = false;
+
     // Fullscreen quad VAO
     private int quadVAO;
     private int quadVBO;
@@ -149,6 +157,7 @@ public class GLSLEngine implements AutoCloseable {
         createBloomFramebuffers(currentWidth, currentHeight);
         createLensDirtTexture();
         createDefaultEnvMap();
+        createDefaultCDFTextures();
         createDefaultPaletteTexture();
         loadDisplayShader();
         loadPostProcessShaders();
@@ -270,6 +279,23 @@ public class GLSLEngine implements AutoCloseable {
             glActiveTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_2D, paletteTexture);
             program.setUniform("paletteTexture", 1);
+
+            // Environment importance sampling CDF textures
+            if (envCDFReady) {
+                glActiveTexture(GL_TEXTURE3);
+                glBindTexture(GL_TEXTURE_2D, envMarginalCDFTexture);
+                program.setUniform("envMarginalCDF", 3);
+                glActiveTexture(GL_TEXTURE4);
+                glBindTexture(GL_TEXTURE_2D, envConditionalCDFTexture);
+                program.setUniform("envConditionalCDF", 4);
+                program.setUniform("envTotalLuminance", envTotalLuminance);
+                program.setUniform("envMapWidth", envMapWidth);
+                program.setUniform("envMapHeight", envMapHeight);
+            } else {
+                program.setUniform("envMapWidth", 0);
+                program.setUniform("envMapHeight", 0);
+                program.setUniform("envTotalLuminance", 0.0f);
+            }
 
             // Set user uniforms
             for (Map.Entry<String, Object> entry : uniforms.entrySet()) {
@@ -837,6 +863,9 @@ public class GLSLEngine implements AutoCloseable {
 
                 boolean isHDR = filePath.toLowerCase().endsWith(".hdr");
 
+                // Flip vertically so row 0 = bottom (OpenGL convention)
+                org.lwjgl.stb.STBImage.stbi_set_flip_vertically_on_load(true);
+
                 // Delete old texture and create new one
                 glDeleteTextures(envMapTexture);
                 envMapTexture = glGenTextures();
@@ -896,6 +925,12 @@ public class GLSLEngine implements AutoCloseable {
 
                 glGenerateMipmap(GL_TEXTURE_2D);
 
+                // Reset flip state for other STB loads
+                org.lwjgl.stb.STBImage.stbi_set_flip_vertically_on_load(false);
+
+                int resolvedW = width.get(0);
+                int resolvedH = height.get(0);
+
                 MemoryUtil.memFree(width);
                 MemoryUtil.memFree(height);
                 MemoryUtil.memFree(channels);
@@ -903,6 +938,9 @@ public class GLSLEngine implements AutoCloseable {
                 glBindTexture(GL_TEXTURE_2D, 0);
 
                 envMapLoaded = true;
+
+                // Build importance sampling CDF for NEE+MIS
+                buildEnvironmentCDF(resolvedW, resolvedH);
 
             } catch (Exception e) {
                 System.err.println("Error loading environment map: " + e.getMessage());
@@ -929,6 +967,9 @@ public class GLSLEngine implements AutoCloseable {
                 IntBuffer width = MemoryUtil.memAllocInt(1);
                 IntBuffer height = MemoryUtil.memAllocInt(1);
                 IntBuffer channels = MemoryUtil.memAllocInt(1);
+
+                // Flip vertically so row 0 = bottom (OpenGL convention)
+                org.lwjgl.stb.STBImage.stbi_set_flip_vertically_on_load(true);
 
                 ByteBuffer imageData = org.lwjgl.stb.STBImage.stbi_load_from_memory(buffer, width, height, channels, 4);
 
@@ -958,6 +999,9 @@ public class GLSLEngine implements AutoCloseable {
 
                 glGenerateMipmap(GL_TEXTURE_2D);
 
+                // Reset flip state for other STB loads
+                org.lwjgl.stb.STBImage.stbi_set_flip_vertically_on_load(false);
+
                 org.lwjgl.stb.STBImage.stbi_image_free(imageData);
                 MemoryUtil.memFree(width);
                 MemoryUtil.memFree(height);
@@ -967,6 +1011,9 @@ public class GLSLEngine implements AutoCloseable {
 
                 envMapLoaded = true;
                 System.out.println("Loaded environment map: " + resourcePath + " (" + w + "x" + h + ")");
+
+                // Build importance sampling CDF for NEE+MIS
+                buildEnvironmentCDF(w, h);
 
             } catch (Exception e) {
                 System.err.println("Error loading environment map: " + e.getMessage());
@@ -981,7 +1028,141 @@ public class GLSLEngine implements AutoCloseable {
         runOnGLThread(() -> {
             glDeleteTextures(envMapTexture);
             createDefaultEnvMap();
+            glDeleteTextures(envMarginalCDFTexture);
+            glDeleteTextures(envConditionalCDFTexture);
+            createDefaultCDFTextures();
         });
+    }
+
+    /**
+     * Create default 1x1 CDF textures (no importance sampling data).
+     */
+    private void createDefaultCDFTextures() {
+        FloatBuffer pixel = MemoryUtil.memAllocFloat(1);
+        pixel.put(1.0f).flip();
+
+        envMarginalCDFTexture = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, envMarginalCDFTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 1, 1, 0, GL_RED, GL_FLOAT, pixel);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        envConditionalCDFTexture = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, envConditionalCDFTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 1, 1, 0, GL_RED, GL_FLOAT, pixel);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        MemoryUtil.memFree(pixel);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        envMapWidth = 0;
+        envMapHeight = 0;
+        envTotalLuminance = 0.0f;
+        envCDFReady = false;
+    }
+
+    /**
+     * Build luminance-weighted CDF textures for environment importance sampling.
+     * Called after successfully loading an environment map.
+     *
+     * @param width  env map width
+     * @param height env map height
+     */
+    private void buildEnvironmentCDF(int width, int height) {
+        this.envMapWidth = width;
+        this.envMapHeight = height;
+
+        // Read back the environment map pixels
+        glBindTexture(GL_TEXTURE_2D, envMapTexture);
+        FloatBuffer pixels = MemoryUtil.memAllocFloat(width * height * 3);
+        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_FLOAT, pixels);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        // Compute luminance weighted by sin(theta) for each pixel
+        float[] rowWeights = new float[height];
+        float[] conditionalCDF = new float[width * height]; // CDF per row
+        float totalWeight = 0.0f;
+
+        for (int row = 0; row < height; row++) {
+            float theta = (float) Math.PI * (row + 0.5f) / height;
+            float sinTheta = (float) Math.sin(theta);
+
+            float rowSum = 0.0f;
+            for (int col = 0; col < width; col++) {
+                int idx = (row * width + col) * 3;
+                float r = pixels.get(idx);
+                float g = pixels.get(idx + 1);
+                float b = pixels.get(idx + 2);
+                float lum = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+                float weight = lum * sinTheta;
+                rowSum += weight;
+                conditionalCDF[row * width + col] = rowSum;
+            }
+
+            // Normalize conditional CDF for this row
+            if (rowSum > 0.0f) {
+                for (int col = 0; col < width; col++) {
+                    conditionalCDF[row * width + col] /= rowSum;
+                }
+            } else {
+                // Uniform distribution for zero-luminance rows
+                for (int col = 0; col < width; col++) {
+                    conditionalCDF[row * width + col] = (float)(col + 1) / width;
+                }
+            }
+
+            rowWeights[row] = rowSum;
+            totalWeight += rowSum;
+        }
+
+        MemoryUtil.memFree(pixels);
+
+        this.envTotalLuminance = totalWeight;
+
+        // Build marginal CDF (cumulative over rows)
+        float[] marginalCDF = new float[height];
+        float cumulative = 0.0f;
+        for (int row = 0; row < height; row++) {
+            cumulative += rowWeights[row];
+            marginalCDF[row] = (totalWeight > 0.0f) ? cumulative / totalWeight : (float)(row + 1) / height;
+        }
+
+        // Upload marginal CDF texture (1 x height)
+        glDeleteTextures(envMarginalCDFTexture);
+        envMarginalCDFTexture = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, envMarginalCDFTexture);
+        FloatBuffer marginalBuf = MemoryUtil.memAllocFloat(height);
+        marginalBuf.put(marginalCDF).flip();
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 1, height, 0, GL_RED, GL_FLOAT, marginalBuf);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        MemoryUtil.memFree(marginalBuf);
+
+        // Upload conditional CDF texture (width x height)
+        glDeleteTextures(envConditionalCDFTexture);
+        envConditionalCDFTexture = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, envConditionalCDFTexture);
+        FloatBuffer condBuf = MemoryUtil.memAllocFloat(width * height);
+        condBuf.put(conditionalCDF).flip();
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width, height, 0, GL_RED, GL_FLOAT, condBuf);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        MemoryUtil.memFree(condBuf);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        envCDFReady = true;
+        System.out.println("Built env importance sampling CDF (" + width + "x" + height +
+                           ", total luminance=" + String.format("%.2f", totalWeight) + ")");
     }
 
     /**
@@ -1125,6 +1306,8 @@ public class GLSLEngine implements AutoCloseable {
             glDeleteTextures(bloomTexture1);
             glDeleteTextures(bloomTexture2);
             glDeleteTextures(envMapTexture);
+            glDeleteTextures(envMarginalCDFTexture);
+            glDeleteTextures(envConditionalCDFTexture);
             glDeleteTextures(paletteTexture);
             glDeleteVertexArrays(quadVAO);
             glDeleteBuffers(quadVBO);

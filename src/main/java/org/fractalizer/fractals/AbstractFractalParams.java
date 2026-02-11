@@ -159,6 +159,9 @@ public abstract class AbstractFractalParams implements FractalParams {
     // shutterAngle: 0 = no blur, 180 = half frame, 360 = full frame blur (cinematic default)
     protected float shutterAngle;
 
+    // NEE + MIS (environment importance sampling)
+    protected boolean neeEnabled = true;
+
     // Custom gradient palette (used when paletteIndex == 6)
     protected GradientPalette customGradient;
 
@@ -379,6 +382,9 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.sssIntensity = this.sssIntensity;
         target.sssRadius = this.sssRadius;
         target.sssColorVec = this.sssColorVec.clone();
+
+        // Copy NEE + MIS
+        target.neeEnabled = this.neeEnabled;
 
         // Copy custom gradient
         target.customGradient = this.customGradient.copy();
@@ -714,6 +720,10 @@ public abstract class AbstractFractalParams implements FractalParams {
     // Motion Blur
     public float getShutterAngle() { return shutterAngle; }
     public void setShutterAngle(float angle) { this.shutterAngle = Math.max(0, Math.min(360, angle)); }
+
+    // NEE + MIS
+    public boolean isNeeEnabled() { return neeEnabled; }
+    public void setNeeEnabled(boolean enabled) { this.neeEnabled = enabled; }
 
     // Custom Gradient
     public GradientPalette getCustomGradient() { return customGradient; }

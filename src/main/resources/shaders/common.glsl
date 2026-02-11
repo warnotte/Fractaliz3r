@@ -333,14 +333,18 @@ vec3 proceduralSky(vec3 dir) {
 struct Ray { vec3 origin; vec3 direction; };
 
 vec2 dirToEquirectangular(vec3 dir) {
-    float u = atan(dir.z, dir.x) / TAU + 0.5;
+    float u = fract(atan(dir.z, dir.x) / TAU + 0.5 - envRotation / TAU);
     float v = asin(clamp(dir.y, -1.0, 1.0)) / PI + 0.5;
     return vec2(u, v);
 }
 
 vec3 sampleEnvironment(vec3 dir) {
     if (useEnvMap != 0) return texture(envMap, dirToEquirectangular(dir)).rgb * skyIntensity;
-    return proceduralSky(dir) * skyIntensity;
+    // Rotate direction for procedural sky to match env rotation convention
+    float cosR = cos(envRotation);
+    float sinR = sin(envRotation);
+    vec3 rotDir = vec3(cosR * dir.x + sinR * dir.z, dir.y, -sinR * dir.x + cosR * dir.z);
+    return proceduralSky(rotDir) * skyIntensity;
 }
 
 vec3 sampleEnvironmentWithGlow(vec3 dir, float minDist) {
@@ -414,6 +418,110 @@ float fresnelDielectric(float cosTheta, float ior) {
     float r0 = (1.0 - ior) / (1.0 + ior);
     float F0 = r0 * r0;
     return fresnelSchlick(cosTheta, F0);
+}
+
+// ============================================================================
+// GGX Geometry Term (Smith)
+// ============================================================================
+
+float smithG1GGX(float NdotX, float a2) {
+    return 2.0 * NdotX / (NdotX + sqrt(a2 + (1.0 - a2) * NdotX * NdotX));
+}
+
+float smithG2GGX(float NdotL, float NdotV, float a2) {
+    return smithG1GGX(NdotL, a2) * smithG1GGX(NdotV, a2);
+}
+
+float powerHeuristic(float pdf_a, float pdf_b) {
+    float a2 = pdf_a * pdf_a;
+    float b2 = pdf_b * pdf_b;
+    return a2 / max(a2 + b2, 1e-8);
+}
+
+// ============================================================================
+// Environment Importance Sampling (NEE + MIS)
+// ============================================================================
+
+uniform sampler2D envMarginalCDF;   // 1 x height, R32F
+uniform sampler2D envConditionalCDF; // width x height, R32F
+uniform float envTotalLuminance;
+uniform int envMapWidth;
+uniform int envMapHeight;
+uniform int neeEnabled;
+
+// Binary search a 1D CDF stored in a texture row
+int binarySearchCDF(sampler2D cdfTex, float xi, int row, int width, bool isMarginal) {
+    int lo = 0, hi = width - 1;
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        float cdfVal;
+        if (isMarginal) {
+            cdfVal = texelFetch(cdfTex, ivec2(0, mid), 0).r;
+        } else {
+            cdfVal = texelFetch(cdfTex, ivec2(mid, row), 0).r;
+        }
+        if (cdfVal < xi) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    return lo;
+}
+
+// Convert equirectangular UV to world direction (exact inverse of dirToEquirectangular)
+// dirToEquirectangular: u = atan(z,x)/TAU + 0.5, v = asin(y)/PI + 0.5
+// Inverse: phi = (u-0.5)*TAU, lat = (v-0.5)*PI
+//   dir = (cos(phi)*cos(lat), sin(lat), sin(phi)*cos(lat))
+vec3 equirectangularToDir(vec2 uv) {
+    float phi = (uv.x - 0.5) * TAU;
+    float lat = (uv.y - 0.5) * PI;
+    float cosLat = cos(lat);
+    return vec3(cos(phi) * cosLat, sin(lat), sin(phi) * cosLat);
+}
+
+// Sample a direction from the HDRI luminance CDF
+// Returns: sampled color, direction, pdf in solid angle measure
+void sampleEnvironmentImportance(inout uint seed, out vec3 envColor, out vec3 envDir, out float envPdf) {
+    float xi1 = random(seed);
+    float xi2 = random(seed);
+
+    // 1) Pick row from marginal CDF
+    int row = binarySearchCDF(envMarginalCDF, xi1, 0, envMapHeight, true);
+
+    // 2) Pick column from conditional CDF for that row
+    int col = binarySearchCDF(envConditionalCDF, xi2, row, envMapWidth, false);
+
+    // 3) Convert pixel to UV (in texture space, unrotated)
+    float u = (float(col) + 0.5) / float(envMapWidth);
+    float v = (float(row) + 0.5) / float(envMapHeight);
+
+    // 4) Sample environment color directly from texture
+    envColor = texture(envMap, vec2(u, v)).rgb * skyIntensity;
+
+    // 5) Convert UV to texture-space direction, then rotate to world space
+    envDir = equirectangularToDir(vec2(u, v));
+    float cosR = cos(envRotation);
+    float sinR = sin(envRotation);
+    envDir = vec3(cosR * envDir.x - sinR * envDir.z, envDir.y, sinR * envDir.x + cosR * envDir.z);
+
+    // 6) Compute PDF in solid angle
+    float theta = acos(clamp(envDir.y, -1.0, 1.0));
+    float sinTheta = max(sin(theta), 1e-8);
+    float luminance = dot(envColor / skyIntensity, vec3(0.2126, 0.7152, 0.0722));
+    envPdf = (luminance * float(envMapWidth) * float(envMapHeight)) / (envTotalLuminance * 2.0 * PI * PI * sinTheta);
+    envPdf = max(envPdf, 1e-8);
+}
+
+// Compute PDF for a given direction under the environment importance distribution
+float environmentPDF(vec3 dir) {
+    vec2 uv = dirToEquirectangular(dir);
+    vec3 color = texture(envMap, uv).rgb;
+    float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+
+    float theta = acos(clamp(dir.y, -1.0, 1.0));
+    float sinTheta = max(sin(theta), 1e-8);
+    return (luminance * float(envMapWidth) * float(envMapHeight)) / (envTotalLuminance * 2.0 * PI * PI * sinTheta);
 }
 
 vec3 rotateByQuaternion(vec3 v, vec4 q) {

@@ -545,8 +545,8 @@ bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist) {
     return false;
 }
 
-// Path trace with multiple bounces - supports Lambertian, Metallic, and Glass materials
-vec3 pathTrace(Ray ray, inout uint seed) {
+// Classic path trace (legacy, for A/B comparison - no NEE+MIS, no GGX G term fix)
+vec3 pathTraceClassic(Ray ray, inout uint seed) {
     vec3 throughput = vec3(1.0);  // Path throughput (accumulated BRDF)
     vec3 radiance = vec3(0.0);    // Accumulated light
     const float FIREFLY_CLAMP = 8.0; // Limit maximum intensity per bounce
@@ -792,6 +792,329 @@ vec3 pathTrace(Ray ray, inout uint seed) {
     return clamp(radiance, 0.0, FIREFLY_CLAMP * 2.0);
 }
 
+// Path trace with GGX geometry fix + environment NEE + MIS
+vec3 pathTrace(Ray ray, inout uint seed) {
+    vec3 throughput = vec3(1.0);
+    vec3 radiance = vec3(0.0);
+    const float FIREFLY_CLAMP = 8.0;
+    float lastBsdfPdf = 0.0; // Track BSDF pdf for MIS on escape
+    bool lastWasSpecular = false; // Glass/mirror bounces have delta pdf
+
+    Ray currentRay = ray;
+
+    for (int bounce = 0; bounce <= maxBounces; bounce++) {
+        vec3 hitPos;
+        float hitDist;
+
+        if (!rayMarchSimple(currentRay, hitPos, hitDist)) {
+            // Ray escaped - add environment light with MIS weight
+            float envScale = (bounce == 0) ? 1.0 : indirectMultiplier;
+            vec3 envColor = sampleEnvironment(currentRay.direction) * envScale;
+
+            if (neeEnabled != 0 && useEnvMap != 0 && bounce > 0 && envMapWidth > 0 && !lastWasSpecular) {
+                // Apply MIS weight: BSDF sampling vs env NEE
+                float envPdf = environmentPDF(currentRay.direction);
+                float misW = powerHeuristic(lastBsdfPdf, envPdf);
+                radiance += clamp(throughput * envColor * misW, 0.0, FIREFLY_CLAMP);
+            } else {
+                radiance += clamp(throughput * envColor, 0.0, FIREFLY_CLAMP);
+            }
+            break;
+        }
+
+        vec3 normal = calcNormal(hitPos);
+        vec3 faceNormal = (dot(currentRay.direction, normal) > 0.0) ? -normal : normal;
+
+        OrbitTrap trap;
+        DE(hitPos, trap);
+
+        vec3 albedo;
+        int localMatType;
+        float localIor, localMetalness, localEmissive;
+        float safeRoughness;
+
+#ifdef HAS_PER_OBJECT_MATERIAL
+        ObjectMaterial objMat = getObjectMaterial(trap);
+        albedo = objMat.albedo;
+        localMatType = objMat.type;
+        localIor = objMat.ior;
+        localMetalness = objMat.metalness;
+        safeRoughness = max(objMat.roughness, 0.02);
+        localEmissive = objMat.emissive;
+#else
+        albedo = applyMaterial(getFactors(trap));
+        localMatType = materialType;
+        localIor = ior;
+        localMetalness = metalness;
+        safeRoughness = max(roughness, 0.02);
+        localEmissive = emissiveIntensity;
+#endif
+
+        vec3 viewDir = -currentRay.direction;
+        float NdotV = max(dot(viewDir, faceNormal), 0.001);
+        vec3 extraLightDirNorm;
+        vec3 extraLightRadiance = sampleExtraLightRadiance(hitPos, faceNormal, hitDist, seed, extraLightDirNorm);
+        bool hasExtraLight = dot(extraLightRadiance, extraLightRadiance) > 0.0;
+
+        float a = safeRoughness * safeRoughness;
+        float a2 = a * a;
+
+        // Emissive
+        if (localEmissive > 0.0) {
+#ifdef HAS_PER_OBJECT_MATERIAL
+            radiance += clamp(throughput * albedo, 0.0, FIREFLY_CLAMP);
+            break;
+#else
+            vec3 factors = getFactors(trap);
+            float structural = factors.x;
+            float depth = factors.z;
+            float emFactor = mix(structural, 1.0 - depth, 0.5);
+            emFactor = pow(clamp(emFactor, 0.0, 1.0), 2.0);
+            radiance += clamp(throughput * albedo * localEmissive * emFactor, 0.0, FIREFLY_CLAMP);
+#endif
+        }
+
+        if (localMatType == MATERIAL_GLASS) {
+            // GLASS — identical to classic (no GGX fix needed for dielectrics)
+            bool entering = dot(currentRay.direction, normal) < 0.0;
+            float cosTheta = max(dot(viewDir, faceNormal), 0.0);
+            float fr = fresnelDielectric(cosTheta, localIor);
+            if (safeRoughness > 0.01) fr = mix(fr, 0.5, safeRoughness * 0.5);
+
+            if (random(seed) < fr) {
+                vec3 reflectDir = reflect(currentRay.direction, faceNormal);
+                if (safeRoughness > 0.001) {
+                    vec3 H = randomGGX(seed, faceNormal, safeRoughness);
+                    reflectDir = reflect(-viewDir, H);
+                }
+                currentRay.origin = hitPos + faceNormal * 0.005;
+                currentRay.direction = normalize(reflectDir);
+                throughput *= mix(vec3(1.0), albedo, 0.05);
+            } else {
+                float entryEta = entering ? (1.0 / localIor) : localIor;
+                vec3 refractedDir;
+
+                if (!refractRay(currentRay.direction, faceNormal, entryEta, refractedDir)) {
+                    currentRay.origin = hitPos + faceNormal * 0.005;
+                    currentRay.direction = reflect(currentRay.direction, faceNormal);
+                    throughput *= mix(vec3(1.0), albedo, 0.05);
+                } else if (entering) {
+                    vec3 interiorDir = normalize(refractedDir);
+                    float t = 0.02;
+                    vec3 exitPos = hitPos;
+                    for (int gs = 0; gs < 128; gs++) {
+                        exitPos = hitPos + interiorDir * t;
+                        float d = DE_simple(exitPos);
+                        if (d > 0.0) {
+                            exitPos -= interiorDir * d;
+                            break;
+                        }
+                        t += max(abs(d), 0.002);
+                        if (t > 10.0) break;
+                    }
+                    vec3 exitNormal = calcNormal(exitPos);
+                    vec3 exitFaceN = (dot(interiorDir, exitNormal) > 0.0) ? -exitNormal : exitNormal;
+                    vec3 exitRefracted;
+                    if (refractRay(interiorDir, exitFaceN, localIor, exitRefracted)) {
+                        currentRay.direction = normalize(exitRefracted);
+                    } else {
+                        currentRay.direction = interiorDir;
+                    }
+                    currentRay.origin = exitPos + exitNormal * 0.005;
+                    throughput *= vec3(0.98, 1.0, 1.02) * albedo;
+                } else {
+                    currentRay.origin = hitPos - faceNormal * 0.005;
+                    currentRay.direction = normalize(refractedDir);
+                    throughput *= vec3(0.98, 1.0, 1.02) * albedo;
+                }
+            }
+            lastWasSpecular = true; // Glass has delta-like pdf
+            lastBsdfPdf = 0.0;
+        } else if (localMatType == MATERIAL_METALLIC) {
+            // METALLIC with corrected GGX BRDF (Smith G2 geometry term)
+            vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
+
+            // --- Direct light NEE (delta light) ---
+            vec3 lightDirNorm = normalize(lightDir);
+            float NdotL = max(dot(faceNormal, lightDirNorm), 0.0);
+            if (NdotL > 0.0) {
+                Ray shadowRay;
+                float shadowBias = 0.005 + hitDist * 0.01;
+                shadowRay.origin = hitPos + faceNormal * shadowBias;
+                shadowRay.direction = lightDirNorm;
+                vec3 shPos; float shDist;
+                if (!rayMarchSimple(shadowRay, shPos, shDist)) {
+                    vec3 H_light = normalize(lightDirNorm + viewDir);
+                    float NdotH = max(dot(faceNormal, H_light), 0.0);
+                    float VdotH = max(dot(viewDir, H_light), 0.0);
+                    vec3 F = fresnelSchlickVec(VdotH, F0);
+                    float D = a2 / (PI * pow(NdotH * NdotH * (a2 - 1.0) + 1.0, 2.0));
+                    float G = smithG2GGX(NdotL, NdotV, a2);
+                    vec3 spec = F * D * G / (4.0 * NdotV) * lightColor * lightIntensity;
+                    radiance += clamp(throughput * spec, 0.0, FIREFLY_CLAMP);
+                }
+            }
+
+            // --- Extra light NEE ---
+            if (hasExtraLight) {
+                float extraNdotL = max(dot(faceNormal, extraLightDirNorm), 0.0);
+                if (extraNdotL > 0.0) {
+                    vec3 H_extra = normalize(extraLightDirNorm + viewDir);
+                    float NdotH_e = max(dot(faceNormal, H_extra), 0.0);
+                    float VdotH_e = max(dot(viewDir, H_extra), 0.0);
+                    vec3 F = fresnelSchlickVec(VdotH_e, F0);
+                    float D = a2 / (PI * pow(NdotH_e * NdotH_e * (a2 - 1.0) + 1.0, 2.0));
+                    float G = smithG2GGX(extraNdotL, NdotV, a2);
+                    vec3 specExtra = F * D * G / (4.0 * NdotV) * extraLightRadiance;
+                    radiance += clamp(throughput * specExtra, 0.0, FIREFLY_CLAMP);
+                }
+            }
+
+            // --- Environment NEE + MIS ---
+            if (neeEnabled != 0 && useEnvMap != 0 && envMapWidth > 0) {
+                vec3 envColor; vec3 envDir; float envPdf;
+                sampleEnvironmentImportance(seed, envColor, envDir, envPdf);
+
+                float envNdotL = dot(faceNormal, envDir);
+                if (envNdotL > 0.0) {
+                    // Shadow test
+                    Ray envShadowRay;
+                    envShadowRay.origin = hitPos + faceNormal * 0.005;
+                    envShadowRay.direction = envDir;
+                    vec3 eShPos; float eShDist;
+                    if (!rayMarchSimple(envShadowRay, eShPos, eShDist)) {
+                        // Evaluate GGX BRDF for this direction
+                        vec3 H_env = normalize(envDir + viewDir);
+                        float NdotH_env = max(dot(faceNormal, H_env), 0.0);
+                        float VdotH_env = max(dot(viewDir, H_env), 0.0);
+                        vec3 F_env = fresnelSchlickVec(VdotH_env, F0);
+                        float D_env = a2 / (PI * pow(NdotH_env * NdotH_env * (a2 - 1.0) + 1.0, 2.0));
+                        float G_env = smithG2GGX(envNdotL, NdotV, a2);
+                        vec3 brdfVal = F_env * D_env * G_env / (4.0 * NdotV * envNdotL);
+
+                        // BSDF pdf for this direction (GGX importance sampling pdf)
+                        float bsdfPdf = D_env * NdotH_env / (4.0 * VdotH_env);
+                        float misW = powerHeuristic(envPdf, bsdfPdf);
+
+                        radiance += clamp(throughput * brdfVal * envColor * envNdotL * misW / envPdf, 0.0, FIREFLY_CLAMP);
+                    }
+                }
+            }
+
+            // SSS contribution
+            if (sssIntensity > 0.0) {
+                float sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
+                radiance += clamp(throughput * albedo * sssColor * sss * sssIntensity * lightColor * lightIntensity, 0.0, FIREFLY_CLAMP);
+                if (hasExtraLight) {
+                    float sssExtra = calcSSS(hitPos, faceNormal, extraLightDirNorm);
+                    radiance += clamp(throughput * albedo * sssColor * sssExtra * sssIntensity * extraLightRadiance, 0.0, FIREFLY_CLAMP);
+                }
+            }
+
+            // --- Bounce with corrected throughput ---
+            vec3 H = randomGGX(seed, faceNormal, safeRoughness);
+            vec3 reflectDir = reflect(-viewDir, H);
+            float NdotH = max(dot(faceNormal, H), 0.001);
+            float VdotH = max(dot(viewDir, H), 0.001);
+            float NdotL_bounce = max(dot(faceNormal, reflectDir), 0.0);
+            vec3 F = fresnelSchlickVec(VdotH, F0);
+            float G = smithG2GGX(max(NdotL_bounce, 0.001), NdotV, a2);
+            // GGX importance sampling: throughput = F * G * VdotH / (NdotV * NdotH)
+            throughput *= F * G * VdotH / (NdotV * NdotH);
+            // GGX pdf = D * NdotH / (4 * VdotH)
+            float D_bounce = a2 / (PI * pow(NdotH * NdotH * (a2 - 1.0) + 1.0, 2.0));
+            lastBsdfPdf = D_bounce * NdotH / (4.0 * VdotH);
+            lastWasSpecular = false;
+
+            currentRay.origin = hitPos + faceNormal * 0.005;
+            currentRay.direction = normalize(reflectDir);
+        } else {
+            // LAMBERTIAN
+            vec3 lightDirNorm = normalize(lightDir);
+            float NdotL = max(dot(faceNormal, lightDirNorm), 0.0);
+            if (NdotL > 0.0) {
+                Ray shadowRay;
+                float shadowBias = 0.005 + hitDist * 0.01;
+                shadowRay.origin = hitPos + faceNormal * shadowBias;
+                shadowRay.direction = lightDirNorm;
+                vec3 shPos; float shDist;
+                if (!rayMarchSimple(shadowRay, shPos, shDist)) {
+                    radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI, 0.0, FIREFLY_CLAMP);
+                }
+            }
+
+            if (hasExtraLight) {
+                float extraNdotL = max(dot(faceNormal, extraLightDirNorm), 0.0);
+                if (extraNdotL > 0.0) {
+                    radiance += clamp(throughput * albedo * extraLightRadiance * extraNdotL / PI, 0.0, FIREFLY_CLAMP);
+                }
+            }
+
+            // --- Environment NEE + MIS for Lambertian ---
+            if (neeEnabled != 0 && useEnvMap != 0 && envMapWidth > 0) {
+                vec3 envColor; vec3 envDir; float envPdf;
+                sampleEnvironmentImportance(seed, envColor, envDir, envPdf);
+
+                float envNdotL = dot(faceNormal, envDir);
+                if (envNdotL > 0.0) {
+                    Ray envShadowRay;
+                    envShadowRay.origin = hitPos + faceNormal * 0.005;
+                    envShadowRay.direction = envDir;
+                    vec3 eShPos; float eShDist;
+                    if (!rayMarchSimple(envShadowRay, eShPos, eShDist)) {
+                        // Lambertian BRDF = albedo / PI
+                        vec3 brdfVal = albedo / PI;
+                        // Cosine hemisphere pdf = NdotL / PI
+                        float bsdfPdf = envNdotL / PI;
+                        float misW = powerHeuristic(envPdf, bsdfPdf);
+
+                        radiance += clamp(throughput * brdfVal * envColor * envNdotL * misW / envPdf, 0.0, FIREFLY_CLAMP);
+                    }
+                }
+            }
+
+            // SSS
+            if (sssIntensity > 0.0) {
+                float sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
+                radiance += clamp(throughput * albedo * sssColor * sss * sssIntensity * lightColor * lightIntensity, 0.0, FIREFLY_CLAMP);
+                if (hasExtraLight) {
+                    float sssExtra = calcSSS(hitPos, faceNormal, extraLightDirNorm);
+                    radiance += clamp(throughput * albedo * sssColor * sssExtra * sssIntensity * extraLightRadiance, 0.0, FIREFLY_CLAMP);
+                }
+            }
+
+            currentRay.origin = hitPos + faceNormal * 0.005;
+
+            // Stochastic reflection for Lambertian surfaces
+            float cosTheta = max(dot(viewDir, faceNormal), 0.0);
+            float reflProb = reflectionIntensity * fresnelSchlick(cosTheta, 0.04);
+            if (reflectionIntensity > 0.0 && random(seed) < reflProb) {
+                vec3 H = randomGGX(seed, faceNormal, max(safeRoughness, 0.3));
+                currentRay.direction = normalize(reflect(-viewDir, H));
+                throughput *= albedo / reflProb;
+                lastWasSpecular = true; // Glossy reflection
+                lastBsdfPdf = 0.0;
+            } else {
+                currentRay.direction = randomCosineHemisphere(seed, faceNormal);
+                throughput *= albedo;
+                // Cosine hemisphere pdf = NdotL / PI
+                float bouncedNdotL = max(dot(faceNormal, currentRay.direction), 0.001);
+                lastBsdfPdf = bouncedNdotL / PI;
+                lastWasSpecular = false;
+            }
+        }
+
+        // Russian Roulette
+        if (bounce >= 3) {
+            float p = max(throughput.x, max(throughput.y, throughput.z));
+            if (random(seed) > p) break;
+            throughput /= p;
+        }
+    }
+
+    return clamp(radiance, 0.0, FIREFLY_CLAMP * 2.0);
+}
+
 // ============================================================================
 // Render Mode Dispatcher
 // ============================================================================
@@ -860,7 +1183,11 @@ void main() {
     // Choose rendering mode: Path Tracing or Raytracing
     if (pathTracingEnabled != 0 && renderMode == RENDER_MODE_FINAL) {
         // ====== PATH TRACING ======
-        color = pathTrace(ray, seed);
+        if (neeEnabled != 0) {
+            color = pathTrace(ray, seed);      // NEE+MIS + corrected GGX
+        } else {
+            color = pathTraceClassic(ray, seed); // Legacy behavior
+        }
         // For path tracing, get depth from center ray (first bounce)
         vec2 centerFullUV = tileOffset + (fragCoord * 0.5 + 0.5) * tileScale;
         Ray centerRay = getCameraRay(centerFullUV * 2.0 - 1.0); // No DoF jitter
