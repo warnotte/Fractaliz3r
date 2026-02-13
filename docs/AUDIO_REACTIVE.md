@@ -65,30 +65,110 @@ Fichier MP3/WAV ──► FFmpeg decode ──► PCM float32 mono     │
 
 ---
 
+## Concepts clés : Beat, Onset, Bandes, Solo
+
+### Beat detection (LED rouge)
+
+Le **beat** détecte les coups de grosse caisse / basse. L'engine regarde uniquement les 2 premières bandes (Sub-bass + Bass), calcule l'énergie moyenne sur ~1 seconde d'historique, et quand l'énergie courante dépasse un seuil dynamique, ça déclenche un beat. C'est rythmique et régulier — le "boom boom" d'un morceau.
+
+- **Seuil** = `moyenneÉnergie × (2.0 − sensitivity × 1.5)` → visible en ligne pointillée rouge ("Thr") sur le visualiseur
+- Plus la **sensitivity** est haute, plus le seuil est bas → beats plus fréquents
+- La valeur beat décroît exponentiellement entre les déclenchements (decay = 0.85)
+
+### Onset detection (LED bleue)
+
+L'**onset** détecte les transitoires / attaques sur **tout le spectre**. L'engine compare chaque frame FFT à la précédente et mesure le "flux spectral" — la somme de toutes les augmentations d'énergie sur toutes les fréquences. Un onset se déclenche quand il y a un changement brusque n'importe où : caisse claire, crash de cymbale, note de synthé qui attaque, entrée d'une voix. C'est plus nerveux et irrégulier que le beat.
+
+- Seules les différences **positives** comptent (apparition de son, pas disparition)
+- Le flux est normalisé et amplifié par la sensitivity
+- La valeur onset décroît entre les pics (decay = 0.8)
+
+**En résumé :**
+| | Beat | Onset |
+|---|---|---|
+| Fréquences analysées | Sub-bass + Bass uniquement | Tout le spectre |
+| Détecte | Kicks, basses rythmiques | Toute attaque/transitoire |
+| Caractère | Régulier, prévisible | Nerveux, irrégulier |
+| Mapping typique | FOV Pulse (zoom sur le beat) | Emissive Pulse (flash lumineux) |
+
+### Les 8 bandes de fréquences
+
+Le spectre FFT (128 bins) est découpé en 8 bandes avec une distribution quasi-logarithmique :
+
+| Bande | Label | Fréquences | Contenu typique |
+|-------|-------|------------|-----------------|
+| 0 | Sub | 20-60 Hz | Sub-basse, kick profond |
+| 1 | Bass | 60-250 Hz | Basse, kick, toms |
+| 2 | Low | 250-500 Hz | Corps de la voix, guitare basse |
+| 3 | Mid | 500-2000 Hz | Voix, piano, guitare |
+| 4 | Hi | 2-4 kHz | Présence voix, attaque percussion |
+| 5 | Pres | 4-6 kHz | Brillance, sibilance |
+| 6 | Brill | 6-12 kHz | Hi-hats, cymbales, air |
+| 7 | Air | 12-20 kHz | Ultra-aigus, shimmer |
+
+Les bandes sont regroupées en 3 catégories pour les mappings :
+- **Bass** = bandes 0-1 → Fractal Morph
+- **Mid** = bandes 2-4 → Color Shift
+- **Treble** = bandes 5-7 → Glow
+
+### Mode Solo (clic sur les barres)
+
+Cliquer sur une barre du spectre active le **solo** pour cette bande. Les autres bandes sont mises à zéro dans les données envoyées au shader — le fractal ne réagit plus qu'à cette fréquence. Cliquer à nouveau désactive le solo.
+
+**Important :** Le solo filtre uniquement les données `bands[]` envoyées au shader. Le beat, l'onset, le level et le VU meter restent calculés sur le signal complet. C'est voulu : le solo sert à **isoler l'effet visuel d'une bande spécifique** pour régler les mappings, pas à modifier la détection.
+
+### Attack / Release (remplace Smoothing)
+
+Le lissage EMA (Exponential Moving Average) utilise deux coefficients séparés :
+- **Attack** : coefficient quand le signal **monte** (0 = instantané, 0.99 = très lent)
+- **Release** : coefficient quand le signal **descend** (0 = instantané, 0.99 = très lent)
+
+Presets disponibles :
+| Preset | Attack | Release | Effet |
+|--------|--------|---------|-------|
+| Smooth | 0.85 | 0.85 | Très lissé, mouvements doux |
+| Default | 0.7 | 0.7 | Équivalent à l'ancien smoothing=0.7 |
+| Punchy | 0.3 | 0.8 | Monte vite, redescend lentement |
+| Instant | 0.0 | 0.5 | Suit la musique en temps réel |
+
+Pour l'export offline, `setSmoothing(value)` reste disponible et met attack=release=value.
+
+---
+
+## Visualiseur (Canvas 300×160px)
+
+Le canvas du panneau Spectrum est découpé en 6 zones :
+
+```
+┌─────────────────────────────────────────┐
+│  [0-80px]   Spectrum bars (8 bandes)    │  Barres colorées, solo = gris
+│  [80-92px]  Band labels                 │  Sub, Bass, Low, Mid, Hi, Pres, Brill, Air
+│  [94-120px] Level history (rolling)     │  Courbe verte, ~5s d'historique
+│  [122-128px] VU meter                   │  Barre vert/jaune/rouge
+│  [132-150px] Beat/onset LEDs + Solo     │  Indicateurs état
+└─────────────────────────────────────────┘
+```
+
+- **Ligne de seuil** (Thr) : ligne pointillée rouge superposée sur les barres sub-bass/bass, montre le seuil dynamique du beat detector
+- **Level history** : courbe de 150 échantillons (~5s à 30fps) montrant l'évolution du niveau global
+- **VU meter** : vert (0-60%), jaune (60-85%), rouge (85-100%) — level × 3 comme facteur d'échelle
+
+---
+
 ## Fichiers créés (3)
 
 ### 1. `src/main/java/org/fractalizer/audio/AudioReactiveEngine.java`
 
 **Rôle** : Analyse spectrale temps réel et offline.
 
-- `AudioData` record immutable : `bands[8]`, `level`, `beat`, `onset`, `bass`, `mid`, `treble`
+- `AudioData` record immutable : `bands[8]`, `level`, `beat`, `onset`
 - `processSpectrum(float[] magnitudes, float[] phases)` — appelé par AudioSpectrumListener
 - `getLatestData()` — renvoie le dernier snapshot
-- `setSmoothing(float)` / `setSensitivity(float)` — paramètres configurables
-- `reset()` — réinitialise l'historique (beat detection, smoothing)
-
-**Bandes de fréquences** (distribution logarithmique sur 128 bins) :
-
-| Index | Nom       | Fréquence approx. |
-|-------|-----------|--------------------|
-| 0     | Sub-bass  | 20-60 Hz           |
-| 1     | Bass      | 60-250 Hz          |
-| 2     | Low-mid   | 250-500 Hz         |
-| 3     | Mid       | 500-2000 Hz        |
-| 4     | Upper-mid | 2-4 kHz            |
-| 5     | Presence  | 4-6 kHz            |
-| 6     | Brilliance| 6-12 kHz           |
-| 7     | Air       | 12-20 kHz          |
+- `setAttack(float)` / `setRelease(float)` — EMA séparés montée/descente
+- `setSmoothing(float)` — raccourci : met attack=release=value (compatibilité AudioPreAnalyzer)
+- `setSensitivity(float)` — sensibilité beat detection
+- `getLastBeatThreshold()` / `getLastBeatEnergy()` — état interne pour visualisation
+- `reset()` — réinitialise l'historique (beat detection, EMA)
 
 ### 2. `src/main/java/org/fractalizer/audio/AudioPreAnalyzer.java`
 
@@ -110,7 +190,7 @@ Fichier MP3/WAV ──► FFmpeg decode ──► PCM float32 mono     │
 **Sections UI** :
 - **Fichier** : Chargement MP3/WAV/AAC (FileChooser)
 - **Transport** : Play/Pause/Stop, barre de progression, temps
-- **Visualiseur** : Canvas 300x80, 8 barres colorées + indicateurs beat/onset
+- **Visualiseur** : Canvas 300×160, 8 barres colorées, labels fréquences, seuil beat, historique level, VU meter, LEDs beat/onset, mode solo par bande
 - **Mappings réactifs** (6 EnhancedSliders) :
   - Bass → Fractal Morph (0-1, défaut 0.5)
   - Mid → Color Shift (0-1, défaut 0.5)
@@ -118,8 +198,8 @@ Fichier MP3/WAV ──► FFmpeg decode ──► PCM float32 mono     │
   - Beat → FOV Pulse (0-1, défaut 0.3)
   - Onset → Emissive Pulse (0-1, défaut 0.4)
   - Level → Fog/AO (0-1, défaut 0.2)
-- **Sensibilité** : Smoothing (0-0.99), Beat Sensitivity (0-1)
-- **Presets** : Subtle, Medium, Intense, Psychedelic
+- **Sensibilité** : Attack (0-0.99), Release (0-0.99), Beat Sensitivity (0-1), + presets réactivité (Smooth/Default/Punchy/Instant)
+- **Presets mappings** : Subtle, Medium, Intense, Psychedelic
 - **Export vidéo offline** : Résolution, Samples/frame, FPS, Durée, bouton Export
   - Utilise `ExportProgressDialog` (modal) : preview du frame, 2 barres (sample + total), ETA, pause/resume, cancel
   - MP4 partiel créé automatiquement en cas d'annulation (si frames > 0)

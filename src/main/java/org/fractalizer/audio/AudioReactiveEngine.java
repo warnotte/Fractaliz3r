@@ -30,8 +30,13 @@ public class AudioReactiveEngine {
     private float level = 0f;
 
     // Configurable parameters
-    private float smoothing = 0.7f;     // EMA factor (0 = instant, 0.99 = very slow)
+    private float attack = 0.7f;        // EMA factor when signal rises (0 = instant, 0.99 = very slow)
+    private float release = 0.7f;       // EMA factor when signal falls (0 = instant, 0.99 = very slow)
     private float sensitivity = 0.5f;   // Beat detection sensitivity (0-1)
+
+    // Exposed beat detection state (for visualization)
+    private float lastBeatThreshold = 0f;
+    private float lastBeatEnergy = 0f;
 
     // Latest published data
     private volatile AudioData latestData = AudioData.SILENT;
@@ -89,14 +94,16 @@ public class AudioReactiveEngine {
             totalEnergy += avg;
         }
 
-        // --- 2. Smooth bands with EMA ---
+        // --- 2. Smooth bands with attack/release EMA ---
         for (int b = 0; b < NUM_BANDS; b++) {
-            bands[b] = smoothing * bands[b] + (1f - smoothing) * rawBands[b];
+            float coeff = (rawBands[b] > bands[b]) ? attack : release;
+            bands[b] = coeff * bands[b] + (1f - coeff) * rawBands[b];
         }
 
         // --- 3. Overall level ---
         float rawLevel = totalEnergy / NUM_BANDS;
-        level = smoothing * level + (1f - smoothing) * rawLevel;
+        float levelCoeff = (rawLevel > level) ? attack : release;
+        level = levelCoeff * level + (1f - levelCoeff) * rawLevel;
 
         // --- 4. Beat detection (energy-based) ---
         float currentEnergy = rawBands[0] + rawBands[1]; // Sub-bass + Bass
@@ -109,6 +116,8 @@ public class AudioReactiveEngine {
 
         // Threshold: higher sensitivity = easier to trigger
         float threshold = avgEnergy * (2.0f - sensitivity * 1.5f);
+        lastBeatThreshold = threshold;
+        lastBeatEnergy = currentEnergy;
         if (currentEnergy > threshold && avgEnergy > 0.01f) {
             beatValue = Math.min(1.0f, currentEnergy / Math.max(avgEnergy, 0.01f) - 0.5f);
         } else {
@@ -152,12 +161,30 @@ public class AudioReactiveEngine {
         latestData = AudioData.SILENT;
     }
 
-    public float getSmoothing() {
-        return smoothing;
+    public float getAttack() {
+        return attack;
     }
 
+    public void setAttack(float attack) {
+        this.attack = Math.max(0f, Math.min(0.99f, attack));
+    }
+
+    public float getRelease() {
+        return release;
+    }
+
+    public void setRelease(float release) {
+        this.release = Math.max(0f, Math.min(0.99f, release));
+    }
+
+    /**
+     * Convenience method: sets both attack and release to the same value.
+     * Used by AudioPreAnalyzer for offline export compatibility.
+     */
     public void setSmoothing(float smoothing) {
-        this.smoothing = Math.max(0f, Math.min(0.99f, smoothing));
+        float clamped = Math.max(0f, Math.min(0.99f, smoothing));
+        this.attack = clamped;
+        this.release = clamped;
     }
 
     public float getSensitivity() {
@@ -166,6 +193,16 @@ public class AudioReactiveEngine {
 
     public void setSensitivity(float sensitivity) {
         this.sensitivity = Math.max(0f, Math.min(1f, sensitivity));
+    }
+
+    /** Get the last computed beat detection threshold (for visualization). */
+    public float getLastBeatThreshold() {
+        return lastBeatThreshold;
+    }
+
+    /** Get the last beat energy value (for visualization). */
+    public float getLastBeatEnergy() {
+        return lastBeatEnergy;
     }
 
     /**
