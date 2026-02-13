@@ -65,6 +65,10 @@ public class AudioPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider beatToFOV;
     private EnhancedSlider onsetPulse;
     private EnhancedSlider levelToFog;
+    private EnhancedSlider beatToShake;
+    private EnhancedSlider reactPump;
+    private EnhancedSlider onsetToPaletteJump;
+    private EnhancedSlider bassToWarp;
 
     // Sensitivity sliders
     private EnhancedSlider attackSlider;
@@ -88,6 +92,9 @@ public class AudioPanel extends ScrollPane implements Refreshable {
     private Spinner<Integer> exportSamplesSpinner;
     private Spinner<Integer> exportFpsSpinner;
     private ComboBox<String> exportResolutionCombo;
+
+    // Deterministic frame counter for audio-reactive effects
+    private int audioFrameCounter = 0;
 
     // Beat indicator for visualizer
     private double beatFlash = 0;
@@ -253,8 +260,13 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         beatToFOV = new EnhancedSlider("Beat \u2192 FOV Pulse", 0, 1, 0.3, false);
         onsetPulse = new EnhancedSlider("Onset \u2192 Emissive Pulse", 0, 1, 0.4, false);
         levelToFog = new EnhancedSlider("Level \u2192 Fog/AO", 0, 1, 0.2, false);
+        beatToShake = new EnhancedSlider("Beat \u2192 Camera Shake", 0, 1, 0, false);
+        reactPump = new EnhancedSlider("Beat \u2192 Post-Process Pump", 0, 1, 0, false);
+        onsetToPaletteJump = new EnhancedSlider("Onset \u2192 Palette Jump", 0, 1, 0, false);
+        bassToWarp = new EnhancedSlider("Bass \u2192 Space Warp", 0, 1, 0, false);
 
-        section.getChildren().addAll(bassMorph, midToColor, trebleToGlow, beatToFOV, onsetPulse, levelToFog);
+        section.getChildren().addAll(bassMorph, midToColor, trebleToGlow, beatToFOV, onsetPulse, levelToFog,
+                beatToShake, reactPump, onsetToPaletteJump, bassToWarp);
         return section;
     }
 
@@ -308,28 +320,33 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         section.setAlignment(Pos.CENTER_LEFT);
 
         Button subtle = new Button("Subtle");
-        subtle.setOnAction(e -> applyPreset(0.2, 0.2, 0.1, 0.1, 0.2, 0.1));
+        subtle.setOnAction(e -> applyPreset(0.2, 0.2, 0.1, 0.1, 0.2, 0.1, 0, 0, 0, 0));
 
         Button medium = new Button("Medium");
-        medium.setOnAction(e -> applyPreset(0.5, 0.5, 0.3, 0.3, 0.4, 0.2));
+        medium.setOnAction(e -> applyPreset(0.5, 0.5, 0.3, 0.3, 0.4, 0.2, 0.2, 0.2, 0.15, 0.15));
 
         Button intense = new Button("Intense");
-        intense.setOnAction(e -> applyPreset(0.8, 0.8, 0.6, 0.6, 0.7, 0.4));
+        intense.setOnAction(e -> applyPreset(0.8, 0.8, 0.6, 0.6, 0.7, 0.4, 0.5, 0.5, 0.4, 0.4));
 
         Button psychedelic = new Button("Psychedelic");
-        psychedelic.setOnAction(e -> applyPreset(1.0, 1.0, 1.0, 0.8, 1.0, 0.6));
+        psychedelic.setOnAction(e -> applyPreset(1.0, 1.0, 1.0, 0.8, 1.0, 0.6, 0.8, 0.8, 0.7, 0.7));
 
         section.getChildren().addAll(subtle, medium, intense, psychedelic);
         return section;
     }
 
-    private void applyPreset(double morph, double mid, double treble, double beat, double onset, double fog) {
+    private void applyPreset(double morph, double mid, double treble, double beat, double onset, double fog,
+                              double shake, double pump, double paletteJump, double warp) {
         bassMorph.setValue(morph);
         midToColor.setValue(mid);
         trebleToGlow.setValue(treble);
         beatToFOV.setValue(beat);
         onsetPulse.setValue(onset);
         levelToFog.setValue(fog);
+        beatToShake.setValue(shake);
+        reactPump.setValue(pump);
+        onsetToPaletteJump.setValue(paletteJump);
+        bassToWarp.setValue(warp);
     }
 
     // ========================================================================
@@ -521,6 +538,7 @@ public class AudioPanel extends ScrollPane implements Refreshable {
 
                     // Set current audio data for this frame
                     currentOfflineData = audioFrames[frame];
+                    audioFrameCounter = frame;
 
                     // Prepare frame on FX thread
                     final int currentFrame = frame;
@@ -775,6 +793,7 @@ public class AudioPanel extends ScrollPane implements Refreshable {
             mediaPlayer.stop();
             mediaPlayer.dispose();
             mediaPlayer = null;
+            audioFrameCounter = 0;
         }
 
         try {
@@ -855,6 +874,7 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         isPlaying = false;
         playPauseButton.setText("\u25B6");
         audioEngine.reset();
+        audioFrameCounter = 0;
     }
 
     private void updateTimeLabel() {
@@ -889,6 +909,7 @@ public class AudioPanel extends ScrollPane implements Refreshable {
                 lastUpdate = now;
 
                 if (isPlaying) {
+                    audioFrameCounter++;
                     drawSpectrum();
                     renderCallback.requestRender();
                 }
@@ -1137,6 +1158,11 @@ public class AudioPanel extends ScrollPane implements Refreshable {
     public float getReactFOV() { return (float) beatToFOV.getValue(); }
     public float getReactOnset() { return (float) onsetPulse.getValue(); }
     public float getReactFog() { return (float) levelToFog.getValue(); }
+    public float getReactShake() { return (float) beatToShake.getValue(); }
+    public float getReactPump() { return (float) reactPump.getValue(); }
+    public float getReactPaletteJump() { return (float) onsetToPaletteJump.getValue(); }
+    public float getReactWarp() { return (float) bassToWarp.getValue(); }
+    public int getAudioFrameIndex() { return audioFrameCounter; }
 
     /**
      * Set the callback for offline frame rendering.

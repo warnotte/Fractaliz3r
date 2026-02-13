@@ -386,18 +386,26 @@ public class GLSLEngine implements AutoCloseable {
             // Post-processing parameters
             PostProcessParams pp = postProcessParams;
             postProcessProgram.setUniform("toneMapMode", pp.toneMapMode);
-            postProcessProgram.setUniform("exposure", pp.exposure);
+            postProcessProgram.setUniform("exposure", pp.exposure + pp.audioDeltaExposure);
 
             postProcessProgram.setUniform("bloomEnabled", pp.bloomEnabled ? 1 : 0);
             postProcessProgram.setUniform("bloomIntensity", pp.bloomIntensity);
             postProcessProgram.setUniform("bloomThreshold", pp.bloomThreshold);
 
-            postProcessProgram.setUniform("chromaticAberrationEnabled", pp.chromaticAberrationEnabled ? 1 : 0);
-            postProcessProgram.setUniform("chromaticAberrationIntensity", pp.chromaticAberrationIntensity);
+            postProcessProgram.setUniform("chromaticAberrationEnabled",
+                (pp.chromaticAberrationEnabled || pp.audioForceCA) ? 1 : 0);
+            postProcessProgram.setUniform("chromaticAberrationIntensity",
+                pp.chromaticAberrationIntensity + pp.audioDeltaCA);
 
-            postProcessProgram.setUniform("vignetteEnabled", pp.vignetteEnabled ? 1 : 0);
-            postProcessProgram.setUniform("vignetteIntensity", pp.vignetteIntensity);
-            postProcessProgram.setUniform("vignetteSoftness", pp.vignetteSoftness);
+            postProcessProgram.setUniform("vignetteEnabled",
+                (pp.vignetteEnabled || pp.audioForceVignette) ? 1 : 0);
+            postProcessProgram.setUniform("vignetteIntensity",
+                pp.vignetteIntensity + pp.audioDeltaVignette);
+            if (!pp.vignetteEnabled && pp.audioForceVignette) {
+                postProcessProgram.setUniform("vignetteSoftness", 0.6f);
+            } else {
+                postProcessProgram.setUniform("vignetteSoftness", pp.vignetteSoftness);
+            }
 
             postProcessProgram.setUniform("filmGrainEnabled", pp.filmGrainEnabled ? 1 : 0);
             postProcessProgram.setUniform("filmGrainIntensity", pp.filmGrainIntensity);
@@ -405,7 +413,7 @@ public class GLSLEngine implements AutoCloseable {
 
             postProcessProgram.setUniform("sharpenEnabled", pp.sharpenEnabled ? 1 : 0);
             postProcessProgram.setUniform("sharpenIntensity", pp.sharpenIntensity);
-            postProcessProgram.setUniform("saturation", pp.saturation);
+            postProcessProgram.setUniform("saturation", pp.saturation + pp.audioDeltaSaturation);
             
             postProcessProgram.setUniform("lensEffectsEnabled", pp.lensEffectsEnabled ? 1 : 0);
             postProcessProgram.setUniform("lensDirtIntensity", pp.lensDirtIntensity);
@@ -1459,6 +1467,14 @@ public class GLSLEngine implements AutoCloseable {
         public int colorGradingMode = 0; // 0=None, 1=Cinema, 2=Vintage, 3=Matrix, 4=Neon, 5=B&W
         public float colorGradingIntensity = 1.0f;
 
+        // Audio-reactive post-process deltas (transient, not serialized)
+        public transient float audioDeltaExposure = 0f;
+        public transient float audioDeltaSaturation = 0f;
+        public transient float audioDeltaVignette = 0f;
+        public transient float audioDeltaCA = 0f;
+        public transient boolean audioForceVignette = false;
+        public transient boolean audioForceCA = false;
+
         /**
          * Create default parameters (no effects).
          */
@@ -1490,6 +1506,13 @@ public class GLSLEngine implements AutoCloseable {
             copy.starburstIntensity = this.starburstIntensity;
             copy.colorGradingMode = this.colorGradingMode;
             copy.colorGradingIntensity = this.colorGradingIntensity;
+            // Audio deltas are transient but copy them for consistency
+            copy.audioDeltaExposure = this.audioDeltaExposure;
+            copy.audioDeltaSaturation = this.audioDeltaSaturation;
+            copy.audioDeltaVignette = this.audioDeltaVignette;
+            copy.audioDeltaCA = this.audioDeltaCA;
+            copy.audioForceVignette = this.audioForceVignette;
+            copy.audioForceCA = this.audioForceCA;
             return copy;
         }
 
@@ -1591,6 +1614,12 @@ public class GLSLEngine implements AutoCloseable {
             starburstIntensity = 0.0f;
             colorGradingMode = 0;
             colorGradingIntensity = 1.0f;
+            audioDeltaExposure = 0f;
+            audioDeltaSaturation = 0f;
+            audioDeltaVignette = 0f;
+            audioDeltaCA = 0f;
+            audioForceVignette = false;
+            audioForceCA = false;
         }
     }
 }

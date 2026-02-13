@@ -1,5 +1,9 @@
 # Audio-Reactive Fractals — Documentation technique
 
+> **TODO ouvert :** L'export audio-reactive n'applique pas les keyframes de la timeline
+> (camera fixe pendant l'export). Voir [TODO_AUDIO_TIMELINE_SYNC.md](TODO_AUDIO_TIMELINE_SYNC.md)
+> pour l'analyse et le plan de solution.
+
 ## Vue d'ensemble
 
 Système de fractales audio-réactives pour Fractaliz3r. Charge un fichier audio (MP3/WAV/AAC),

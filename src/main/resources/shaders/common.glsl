@@ -140,6 +140,10 @@ uniform float audioReactGlow;
 uniform float audioReactFOV;
 uniform float audioReactOnset;
 uniform float audioReactFog;
+uniform float audioReactShake;       // Camera shake intensity
+uniform float audioReactWarp;        // Space warp intensity
+uniform float audioReactPaletteJump; // Palette jump intensity
+uniform int audioFrameIndex;         // Deterministic per-frame counter
 
 // ============================================================================
 // Math & Random Helpers
@@ -575,6 +579,26 @@ Ray getCameraRay(vec2 screenUV) {
         if (audioEnabled != 0) {
             effectiveFov += audioBeat * audioReactFOV * 8.0;
         }
+
+        // Audio-reactive camera shake
+        if (audioEnabled != 0 && audioReactShake > 0.0) {
+            float shakeAmount = audioBeat * audioReactShake * 0.02;
+            float shakeTime = float(audioFrameIndex) * 1.7;
+            float sx = noise(vec3(shakeTime, 0.0, 0.0)) * 2.0 - 1.0;
+            float sy = noise(vec3(0.0, shakeTime, 0.0)) * 2.0 - 1.0;
+            screenUV += vec2(sx, sy) * shakeAmount;
+        }
+
+        // Audio-reactive space warp (bass-driven ray distortion)
+        if (audioEnabled != 0 && audioReactWarp > 0.0) {
+            float bassEnergy = (audioBands[0] + audioBands[1]) * 0.5;
+            float warpAmount = bassEnergy * audioReactWarp * 0.03;
+            float warpTime = float(audioFrameIndex) * 0.3;
+            float nx = noise(vec3(screenUV * 3.0, warpTime)) * 2.0 - 1.0;
+            float ny = noise(vec3(screenUV * 3.0 + vec2(17.0, 31.0), warpTime)) * 2.0 - 1.0;
+            screenUV += vec2(nx, ny) * warpAmount;
+        }
+
         float aspect = fullResolution.x / fullResolution.y;
         float halfHeight = tan(radians(effectiveFov) * 0.5);
         float halfWidth = halfHeight * aspect;

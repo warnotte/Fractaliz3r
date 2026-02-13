@@ -1022,6 +1022,40 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("audioReactOnset", audioPanel.getReactOnset());
             uniforms.put("audioReactFog", audioPanel.getReactFog());
 
+            // New dynamic visual reaction uniforms
+            uniforms.put("audioReactShake", audioPanel.getReactShake());
+            uniforms.put("audioReactWarp", audioPanel.getReactWarp());
+            uniforms.put("audioReactPaletteJump", audioPanel.getReactPaletteJump());
+            uniforms.put("audioFrameIndex", audioPanel.getAudioFrameIndex());
+
+            // Post-process pump: modulate exposure/vignette/CA/saturation
+            float pump = audioPanel.getReactPump();
+            GLSLEngine.PostProcessParams pp = engine.getPostProcessParams();
+            if (pump > 0.01f) {
+                float beat = data.beat();
+                float level = data.level();
+                pp.audioDeltaExposure = beat * pump * 0.8f;
+                pp.audioDeltaSaturation = level * pump * 0.5f;
+                if (beat * pump > 0.1f) {
+                    pp.audioForceCA = true;
+                    pp.audioDeltaCA = beat * pump * 0.015f;
+                    pp.audioForceVignette = true;
+                    pp.audioDeltaVignette = beat * pump * 0.4f;
+                } else {
+                    pp.audioForceCA = false;
+                    pp.audioDeltaCA = 0f;
+                    pp.audioForceVignette = false;
+                    pp.audioDeltaVignette = 0f;
+                }
+            } else {
+                pp.audioDeltaExposure = 0f;
+                pp.audioDeltaSaturation = 0f;
+                pp.audioDeltaCA = 0f;
+                pp.audioDeltaVignette = 0f;
+                pp.audioForceCA = false;
+                pp.audioForceVignette = false;
+            }
+
             // ============================================================
             // Java-side fractal parameter modulation (overwrites uniforms)
             // This is where the geometry actually transforms with the music
@@ -1041,6 +1075,19 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("audioReactFOV", 0.0f);
             uniforms.put("audioReactOnset", 0.0f);
             uniforms.put("audioReactFog", 0.0f);
+            uniforms.put("audioReactShake", 0.0f);
+            uniforms.put("audioReactWarp", 0.0f);
+            uniforms.put("audioReactPaletteJump", 0.0f);
+            uniforms.put("audioFrameIndex", 0);
+
+            // Reset post-process pump deltas
+            GLSLEngine.PostProcessParams pp = engine.getPostProcessParams();
+            pp.audioDeltaExposure = 0f;
+            pp.audioDeltaSaturation = 0f;
+            pp.audioDeltaCA = 0f;
+            pp.audioDeltaVignette = 0f;
+            pp.audioForceCA = false;
+            pp.audioForceVignette = false;
         }
 
         return uniforms;

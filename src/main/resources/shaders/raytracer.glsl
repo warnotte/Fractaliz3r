@@ -458,6 +458,19 @@ vec3 shade(RayHit hit, Ray ray) {
         hsv.x = fract(hsv.x + hueShift * 0.6);
         // Also boost saturation with audio level
         hsv.y = min(1.0, hsv.y + audioLevel * audioReactColor * 0.4);
+
+        // Palette jump: onset-triggered stroboscopic hue shift
+        if (audioReactPaletteJump > 0.0) {
+            float jumpStrength = audioOnset * audioReactPaletteJump;
+            if (jumpStrength > 0.05) {
+                // Each onset jumps to a different hue via hash of audioFrameIndex
+                float hueTarget = hash1(uint(audioFrameIndex) * 7919u);
+                float hueOffset = mix(0.33, 0.67, hueTarget);
+                hsv.x = fract(hsv.x + hueOffset * jumpStrength);
+                hsv.y = min(1.0, hsv.y + jumpStrength * 0.3);
+            }
+        }
+
         color = hsv2rgb(hsv);
 
         // Treble glow: high-frequency energy adds luminance
