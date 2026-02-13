@@ -100,6 +100,13 @@
       <version>${javafx.version}</version>
     </dependency>
 
+    <!-- JavaFX Media (audio playback + spectrum analysis) -->
+    <dependency>
+      <groupId>org.openjfx</groupId>
+      <artifactId>javafx-media</artifactId>
+      <version>${javafx.version}</version>
+    </dependency>
+
     <!-- JUnit 5 -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>

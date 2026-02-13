@@ -449,16 +449,40 @@ vec3 shade(RayHit hit, Ray ray) {
 
     vec3 color = ambient + diffuse + specular + rimLight;
 
+    // Audio-reactive color shift and glow
+    if (audioEnabled != 0) {
+        // Color shift: mid-frequency energy rotates the hue
+        float midEnergy = (audioBands[2] + audioBands[3]) * 0.5;
+        float hueShift = midEnergy * audioReactColor;
+        vec3 hsv = rgb2hsv(color);
+        hsv.x = fract(hsv.x + hueShift * 0.6);
+        // Also boost saturation with audio level
+        hsv.y = min(1.0, hsv.y + audioLevel * audioReactColor * 0.4);
+        color = hsv2rgb(hsv);
+
+        // Treble glow: high-frequency energy adds luminance
+        float trebleEnergy = (audioBands[5] + audioBands[6] + audioBands[7]) / 3.0;
+        color += baseColor * trebleEnergy * audioReactGlow * 4.0;
+
+        // Beat flash: brief white punch on strong beats
+        color += vec3(audioBeat * audioReactGlow * 0.5);
+    }
+
     // ====== EMISSIVE / SELF-ILLUMINATION ======
-    if (localEmissive > 0.0) {
+    float effectiveEmissive = localEmissive;
+    // Audio onset pulse adds temporary emissive burst
+    if (audioEnabled != 0) {
+        effectiveEmissive += audioOnset * audioReactOnset * 3.0;
+    }
+    if (effectiveEmissive > 0.0) {
 #ifdef HAS_PER_OBJECT_MATERIAL
-        color += baseColor;
+        color += baseColor * effectiveEmissive;
 #else
         float structural = factors.x;
         float depth = factors.z;
         float emFactor = mix(structural, 1.0 - depth, 0.5);
         emFactor = pow(clamp(emFactor, 0.0, 1.0), 2.0);
-        color += baseColor * localEmissive * emFactor;
+        color += baseColor * effectiveEmissive * emFactor;
 #endif
     }
 
@@ -502,6 +526,14 @@ vec3 shade(RayHit hit, Ray ray) {
         float fogFactor = 1.0 - exp(-hit.dist * 0.05);
         vec3 fogColorBase = (useEnvMap != 0) ? sampleEnvironment(ray.direction) * 0.3 : ambientColor * 0.5;
         color = mix(color, fogColorBase, fogFactor * 0.3);
+    }
+
+    // Audio-reactive fog modulation
+    if (audioEnabled != 0) {
+        float audioFogAmount = audioLevel * audioReactFog;
+        vec3 audioFogColor = (useEnvMap != 0) ? sampleEnvironment(ray.direction) * 0.4 : ambientColor * 0.6;
+        float audioFogFactor = 1.0 - exp(-hit.dist * audioFogAmount * 0.3);
+        color = mix(color, audioFogColor, audioFogFactor);
     }
 
     return color;

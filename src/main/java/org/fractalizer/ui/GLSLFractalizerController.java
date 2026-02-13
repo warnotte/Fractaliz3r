@@ -50,6 +50,9 @@ public class GLSLFractalizerController implements RenderController {
     private int previewSamples = 4;
     private int fullSamples = 64;
 
+    // Audio panel reference (optional, for audio-reactive uniforms)
+    private org.fractalizer.ui.panels.AudioPanel audioPanel;
+
     // Listeners
     private Consumer<WritableImage> imageListener;
     private Consumer<Double> progressListener;
@@ -58,6 +61,10 @@ public class GLSLFractalizerController implements RenderController {
     public GLSLFractalizerController() throws IOException {
         this.engine = new GLSLEngine(viewportWidth, viewportHeight);
         this.progressiveRenderer = new ProgressiveRenderer(engine);
+    }
+
+    public void setAudioPanel(org.fractalizer.ui.panels.AudioPanel panel) {
+        this.audioPanel = panel;
     }
 
     /**
@@ -992,6 +999,50 @@ public class GLSLFractalizerController implements RenderController {
         uniforms.put("fullResolution", new float[]{
             (float) engine.getWidth(), (float) engine.getHeight()});
 
+        // Audio-reactive uniforms + fractal parameter modulation
+        if (audioPanel != null && audioPanel.isAudioPlaying()) {
+            var data = audioPanel.getAudioData();
+            float morph = audioPanel.getReactMorph();
+            float[] bands = data.bands();
+
+            // Bass energy for fractal morphing (sub-bass + bass bands)
+            float bassEnergy = (bands[0] + bands[1]) * 0.5f;
+            // Mid energy for secondary modulations
+            float midEnergy = (bands[2] + bands[3]) * 0.5f;
+
+            uniforms.put("audioEnabled", 1);
+            uniforms.put("audioLevel", data.level());
+            uniforms.put("audioBeat", data.beat());
+            uniforms.put("audioOnset", data.onset());
+            uniforms.put("audioBands", bands);
+            uniforms.put("audioReactPower", morph);
+            uniforms.put("audioReactColor", audioPanel.getReactColor());
+            uniforms.put("audioReactGlow", audioPanel.getReactGlow());
+            uniforms.put("audioReactFOV", audioPanel.getReactFOV());
+            uniforms.put("audioReactOnset", audioPanel.getReactOnset());
+            uniforms.put("audioReactFog", audioPanel.getReactFog());
+
+            // ============================================================
+            // Java-side fractal parameter modulation (overwrites uniforms)
+            // This is where the geometry actually transforms with the music
+            // ============================================================
+            if (morph > 0.01f) {
+                applyAudioMorphing(uniforms, bassEnergy, midEnergy, data.beat(), morph);
+            }
+        } else {
+            uniforms.put("audioEnabled", 0);
+            uniforms.put("audioLevel", 0.0f);
+            uniforms.put("audioBeat", 0.0f);
+            uniforms.put("audioOnset", 0.0f);
+            uniforms.put("audioBands", new float[8]);
+            uniforms.put("audioReactPower", 0.0f);
+            uniforms.put("audioReactColor", 0.0f);
+            uniforms.put("audioReactGlow", 0.0f);
+            uniforms.put("audioReactFOV", 0.0f);
+            uniforms.put("audioReactOnset", 0.0f);
+            uniforms.put("audioReactFog", 0.0f);
+        }
+
         return uniforms;
     }
 
@@ -1012,6 +1063,160 @@ public class GLSLFractalizerController implements RenderController {
             sx*sy*cz + cx*sz, -sx*sy*sz + cx*cz, -sx*cy,
             -cx*sy*cz + sx*sz, cx*sy*sz + sx*cz, cx*cy
         };
+    }
+
+    /**
+     * Apply audio-reactive morphing to fractal uniforms.
+     * Modulates the actual geometry parameters (power, scale, folds, juliaC...)
+     * so the fractal visibly transforms with the music.
+     *
+     * @param uniforms  The uniform map to modify in-place
+     * @param bass      Smoothed bass energy [0..~1]
+     * @param mid       Smoothed mid energy [0..~1]
+     * @param beat      Beat pulse [0..1]
+     * @param morph     User morph amount slider [0..1]
+     */
+    private void applyAudioMorphing(Map<String, Object> uniforms, float bass, float mid, float beat, float morph) {
+        switch (currentFractalType) {
+            case MANDELBULB -> {
+                MandelbulbParams p = (MandelbulbParams) currentParams;
+                // Power: base ± up to 4.0 driven by bass (e.g. 8 → 4..12+)
+                float powerDelta = bass * morph * 4.0f;
+                // Beat adds sharp spikes
+                powerDelta += beat * morph * 2.0f;
+                // Mid adds gentle modulation
+                powerDelta += mid * morph * 1.0f;
+                uniforms.put("power", p.getPower() + powerDelta);
+                // Bailout modulation — makes bulbs grow/shrink
+                uniforms.put("bailout", p.getBailout() + bass * morph * 1.5f);
+            }
+            case MANDELBOX -> {
+                MandelboxParams p = (MandelboxParams) currentParams;
+                // Scale: base ± 0.8 driven by bass (very sensitive parameter)
+                float scaleDelta = bass * morph * 0.8f;
+                scaleDelta += beat * morph * 0.3f;
+                uniforms.put("scale", p.getScale() + scaleDelta);
+                // FoldingLimit modulated by mid
+                float foldDelta = mid * morph * 0.5f;
+                uniforms.put("foldingLimit", p.getFoldingLimit() + foldDelta);
+            }
+            case MENGER_SPONGE -> {
+                MengerSpongeParams p = (MengerSpongeParams) currentParams;
+                // Scale modulation
+                float scaleDelta = bass * morph * 0.5f;
+                uniforms.put("scale", p.getScale() + scaleDelta);
+                // Offset wobble driven by mid
+                float wobble = mid * morph * 0.3f;
+                uniforms.put("offset", new float[]{
+                    p.getOffsetX() + wobble,
+                    p.getOffsetY() + wobble * 0.7f,
+                    p.getOffsetZ() + beat * morph * 0.2f
+                });
+            }
+            case KALEIDOSCOPIC_IFS -> {
+                KaleidoscopicIFSParams p = (KaleidoscopicIFSParams) currentParams;
+                // Scale modulation ±0.6
+                float scaleDelta = bass * morph * 0.6f + beat * morph * 0.2f;
+                uniforms.put("scale", p.getScale() + scaleDelta);
+                // Fold angles: VERY visible on KIFS — kaleidoscope rotation
+                float angleModX = bass * morph * 30.0f + beat * morph * 15.0f;
+                float angleModY = mid * morph * 25.0f;
+                uniforms.put("foldAngleX", (float) Math.toRadians(p.getFoldAngleX() + angleModX));
+                uniforms.put("foldAngleY", (float) Math.toRadians(p.getFoldAngleY() + angleModY));
+                // Offset modulation
+                uniforms.put("ifsOffset", p.getOffsetX() + mid * morph * 0.5f);
+            }
+            case JULIA_3D -> {
+                Julia3DParams p = (Julia3DParams) currentParams;
+                // Julia constant orbits with audio — creates morphing shapes
+                float cx = bass * morph * 0.5f;
+                float cy = mid * morph * 0.4f;
+                float cz = beat * morph * 0.3f;
+                float cw = mid * morph * 0.2f;
+                uniforms.put("juliaC", new float[]{
+                    p.getJuliaCx() + cx,
+                    p.getJuliaCy() + cy,
+                    p.getJuliaCz() + cz,
+                    p.getJuliaCw() + cw
+                });
+            }
+            case POLYHEDRAL_IFS -> {
+                PolyhedralIFSParams p = (PolyhedralIFSParams) currentParams;
+
+                // Scale: ±0.6 — makes structure expand/contract visibly
+                float scaleDelta = bass * morph * 0.6f + beat * morph * 0.25f;
+                uniforms.put("scale", p.getScale() + scaleDelta);
+
+                // Offset: the fold center — bass moves it, very geometric effect
+                float offMod = bass * morph * 0.4f;
+                uniforms.put("offset", new float[]{
+                    p.getOffsetX() + offMod,
+                    p.getOffsetY() + mid * morph * 0.3f,
+                    p.getOffsetZ() + beat * morph * 0.2f
+                });
+
+                // Shift: displacement — mid-frequency driven
+                float shiftMod = mid * morph * 0.35f;
+                uniforms.put("shift", new float[]{
+                    p.getShiftX() + shiftMod,
+                    p.getShiftY() + bass * morph * 0.25f,
+                    p.getShiftZ() + beat * morph * 0.2f
+                });
+
+                // Rotation 1: DRAMATIC — bass rotates the fractal (kaleidoscopic twisting)
+                float rot1Mod = bass * morph * 25.0f; // up to 25 degrees
+                float rot1Beat = beat * morph * 12.0f;
+                uniforms.put("fractalRotation1", createRotationMatrix(
+                    p.getRot1X() + rot1Mod,
+                    p.getRot1Y() + mid * morph * 15.0f,
+                    p.getRot1Z() + rot1Beat
+                ));
+
+                // Rotation 2: secondary twist — mid frequencies
+                float rot2Mod = mid * morph * 20.0f;
+                uniforms.put("fractalRotation2", createRotationMatrix(
+                    p.getRot2X() + rot2Mod * 0.7f,
+                    p.getRot2Y() + bass * morph * 10.0f,
+                    p.getRot2Z() + beat * morph * 8.0f
+                ));
+            }
+            case SIERPINSKI -> {
+                SierpinskiParams p = (SierpinskiParams) currentParams;
+                float scaleDelta = bass * morph * 0.3f;
+                uniforms.put("scale", p.getScale() + scaleDelta);
+            }
+            case PSEUDO_KLEINIAN -> {
+                PseudoKleinianParams p = (PseudoKleinianParams) currentParams;
+                // CSize modulation — very responsive to changes
+                float mod = bass * morph * 0.15f;
+                uniforms.put("CSize", new float[]{
+                    p.getCSizeX() + mod,
+                    p.getCSizeY() + mid * morph * 0.1f,
+                    p.getCSizeZ() + beat * morph * 0.08f
+                });
+                uniforms.put("Size", p.getSize() + bass * morph * 0.1f);
+            }
+            case APOLLONIAN -> {
+                ApollonianParams p = (ApollonianParams) currentParams;
+                float scaleDelta = bass * morph * 0.3f;
+                uniforms.put("scale", p.getScale() + scaleDelta);
+                float foldDelta = mid * morph * 0.2f;
+                uniforms.put("foldRadius", p.getFoldRadius() + foldDelta);
+            }
+            case BRISTORBROT -> {
+                BristorbrotParams p = (BristorbrotParams) currentParams;
+                float cx = bass * morph * 0.2f;
+                float cy = mid * morph * 0.15f;
+                uniforms.put("juliaC", new float[]{
+                    p.getJuliaCx() + cx,
+                    p.getJuliaCy() + cy,
+                    p.getJuliaCz()
+                });
+            }
+            default -> {
+                // TEST_SCENE, CORNELL_BOX: no morphing
+            }
+        }
     }
 
     // ========================================================================

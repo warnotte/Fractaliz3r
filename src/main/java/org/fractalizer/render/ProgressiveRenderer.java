@@ -67,6 +67,11 @@ public class ProgressiveRenderer {
 
         engine.resetAccumulation();
 
+        // After resetAccumulation(), sampleCount is only cleared on the GL thread
+        // (inside the next renderSample). On the first iteration the old count
+        // may still be visible, so we skip the completion check once.
+        final AtomicBoolean firstIteration = new AtomicBoolean(true);
+
         // Schedule render loop
         renderTask = scheduler.scheduleAtFixedRate(() -> {
             if (cancelled.get()) {
@@ -76,7 +81,9 @@ public class ProgressiveRenderer {
             try {
                 int currentSamples = engine.getSampleCount();
 
-                if (currentSamples >= targetSamples.get()) {
+                // Skip completion check on first iteration — sampleCount may not
+                // have been reset yet on the GL thread after resetAccumulation().
+                if (!firstIteration.getAndSet(false) && currentSamples >= targetSamples.get()) {
                     // Done!
                     rendering.set(false);
                     updateImage();
@@ -90,6 +97,7 @@ public class ProgressiveRenderer {
 
                 // Render batch of samples
                 int batchSize = Math.min(8, targetSamples.get() - currentSamples);
+                if (batchSize <= 0) batchSize = 1; // Ensure at least one sample on first iteration
                 engine.renderSamples(uniforms, batchSize);
 
                 // Update image and progress

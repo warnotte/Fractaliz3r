@@ -331,4 +331,160 @@ public class FFmpegExporter {
         File outputFile = new File(inputDir.getParentFile(), outputName);
         return createMP4(inputDir, outputFile, frameRate, crf, is360, progressCallback);
     }
+
+    /**
+     * Create an MP4 video from a PNG sequence muxed with an audio file.
+     * Computes the actual framerate from frame count and real audio duration
+     * to ensure perfect audio-video synchronization.
+     *
+     * @param inputDir            Directory containing PNG frames (frame_00000.png, ...)
+     * @param audioFile           Audio file to use as soundtrack (MP3, WAV, AAC)
+     * @param outputFile          Output MP4 file
+     * @param actualDurationSec   Actual audio duration in seconds (from MediaPlayer)
+     * @param crf                 Constant Rate Factor (quality)
+     * @param progressCallback    Optional progress callback
+     * @return ExportResult
+     */
+    public static ExportResult createMP4WithAudio(File inputDir, File audioFile, File outputFile,
+                                                   double actualDurationSec, int crf,
+                                                   Consumer<Double> progressCallback) {
+        log("Starting MP4+Audio export...");
+        log("Frames: " + inputDir.getAbsolutePath());
+        log("Audio: " + audioFile.getAbsolutePath());
+        log("Output: " + outputFile.getAbsolutePath());
+
+        if (!isFFmpegAvailable()) {
+            return new ExportResult(false, "FFmpeg is not installed or not in PATH", null);
+        }
+
+        File[] frames = inputDir.listFiles((dir, name) -> name.matches("frame_\\d+\\.png"));
+        if (frames == null || frames.length == 0) {
+            return new ExportResult(false, "No frame files found in: " + inputDir.getAbsolutePath(), null);
+        }
+
+        log("Found " + frames.length + " frames");
+
+        // Verify first frame exists (frame_00000.png)
+        File firstFrame = new File(inputDir, "frame_00000.png");
+        if (!firstFrame.exists()) {
+            logError("First frame missing: " + firstFrame.getAbsolutePath());
+            return new ExportResult(false, "First frame (frame_00000.png) not found", null);
+        }
+
+        // Check frame dimensions and warn if odd
+        try {
+            java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(firstFrame);
+            if (img != null) {
+                log("Frame dimensions: " + img.getWidth() + "x" + img.getHeight());
+            }
+        } catch (IOException e) {
+            log("Could not read first frame: " + e.getMessage());
+        }
+
+        // Compute actual framerate from real duration for perfect sync
+        double actualFps = frames.length / actualDurationSec;
+        int keyint = Math.max(1, (int) Math.round(actualFps));
+        log(String.format(java.util.Locale.US,
+            "Sync: %d frames / %.3fs = %.4f fps (duration: %.3fs)",
+            frames.length, actualDurationSec, actualFps, actualDurationSec));
+
+        List<String> command = new ArrayList<>();
+        command.add("ffmpeg");
+        command.add("-y");
+        // Use actual framerate for perfect sync with audio
+        command.add("-framerate");
+        command.add(String.format(java.util.Locale.US, "%.4f", actualFps));
+        command.add("-i");
+        command.add(new File(inputDir, "frame_%05d.png").getAbsolutePath());
+        command.add("-i");
+        command.add(audioFile.getAbsolutePath());
+        // Pad to even dimensions (required for yuv420p)
+        command.add("-vf");
+        command.add("pad=ceil(iw/2)*2:ceil(ih/2)*2");
+        command.add("-c:v");
+        command.add("libx265");
+        command.add("-crf");
+        command.add(String.valueOf(crf));
+        command.add("-pix_fmt");
+        command.add("yuv420p");
+        command.add("-tag:v");
+        command.add("hvc1");
+        command.add("-x265-params");
+        command.add("keyint=" + keyint + ":min-keyint=" + keyint);
+        command.add("-c:a");
+        command.add("aac");
+        command.add("-b:a");
+        command.add("192k");
+        // Trim to exact audio duration captured
+        command.add("-t");
+        command.add(String.format(java.util.Locale.US, "%.3f", actualDurationSec));
+        command.add("-movflags");
+        command.add("+faststart");
+        command.add(outputFile.getAbsolutePath());
+
+        log("FFmpeg command: " + String.join(" ", command));
+
+        try {
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+            int frameCount = frames.length;
+            StringBuilder outputLog = new StringBuilder();
+
+            while ((line = reader.readLine()) != null) {
+                outputLog.append(line).append("\n");
+                log("FFmpeg: " + line);
+                if (line.contains("frame=") && progressCallback != null) {
+                    try {
+                        int frameIdx = line.indexOf("frame=");
+                        String frameStr = line.substring(frameIdx + 6).trim().split("\\s+")[0];
+                        int currentFrame = Integer.parseInt(frameStr);
+                        progressCallback.accept(Math.min((double) currentFrame / frameCount, 1.0));
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+
+            int exitCode = process.waitFor();
+            log("FFmpeg exit code: " + exitCode);
+
+            if (exitCode == 0 && outputFile.exists() && outputFile.length() > 0) {
+                if (progressCallback != null) progressCallback.accept(1.0);
+                long sizeMB = outputFile.length() / (1024 * 1024);
+                return new ExportResult(true,
+                    String.format("Video+Audio created: %s (%d MB)", outputFile.getName(), sizeMB),
+                    outputFile);
+            } else {
+                // Extract last few lines of FFmpeg output for error diagnosis
+                String fullLog = outputLog.toString();
+                String[] lines = fullLog.split("\n");
+                StringBuilder errorDetail = new StringBuilder();
+                int startIdx = Math.max(0, lines.length - 5);
+                for (int i = startIdx; i < lines.length; i++) {
+                    if (!lines[i].isBlank()) {
+                        errorDetail.append(lines[i]).append("\n");
+                    }
+                }
+
+                if (outputFile.exists() && outputFile.length() == 0) {
+                    logError("Output file is empty (0 bytes)!");
+                    logError("FFmpeg output:\n" + fullLog);
+                    return new ExportResult(false,
+                        "FFmpeg created empty file.\n" + errorDetail, null);
+                }
+
+                logError("FFmpeg failed. Exit code: " + exitCode);
+                logError("FFmpeg output:\n" + fullLog);
+                return new ExportResult(false,
+                    "FFmpeg exit code " + exitCode + ":\n" + errorDetail, null);
+            }
+        } catch (IOException e) {
+            return new ExportResult(false, "Failed to run FFmpeg: " + e.getMessage(), null);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new ExportResult(false, "FFmpeg interrupted", null);
+        }
+    }
 }

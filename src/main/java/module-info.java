@@ -1,6 +1,7 @@
 module Fractaliz3r {
     requires javafx.graphics;
     requires javafx.controls;
+    requires javafx.media;
     requires org.lwjgl.glfw;
     requires org.lwjgl.opengl;
     requires org.lwjgl.stb;

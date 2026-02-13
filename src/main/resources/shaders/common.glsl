@@ -128,6 +128,19 @@ uniform float sssIntensity;
 uniform float sssRadius;
 uniform vec3 sssColor;
 
+// Audio-reactive uniforms
+uniform int audioEnabled;
+uniform float audioLevel;
+uniform float audioBeat;
+uniform float audioOnset;
+uniform float audioBands[8];
+uniform float audioReactPower;
+uniform float audioReactColor;
+uniform float audioReactGlow;
+uniform float audioReactFOV;
+uniform float audioReactOnset;
+uniform float audioReactFog;
+
 // ============================================================================
 // Math & Random Helpers
 // ============================================================================
@@ -557,8 +570,13 @@ Ray getCameraRay(vec2 screenUV) {
         
         ray.direction = rotateByQuaternion(vec3(x, y, z), camQuat);
     } else { // PERSPECTIVE (Standard)
+        float effectiveFov = fov;
+        // Audio-reactive FOV pulse on beats
+        if (audioEnabled != 0) {
+            effectiveFov += audioBeat * audioReactFOV * 8.0;
+        }
         float aspect = fullResolution.x / fullResolution.y;
-        float halfHeight = tan(radians(fov) * 0.5);
+        float halfHeight = tan(radians(effectiveFov) * 0.5);
         float halfWidth = halfHeight * aspect;
         vec3 localDir = normalize(vec3(screenUV.x * halfWidth, screenUV.y * halfHeight, 1.0));
         ray.direction = rotateByQuaternion(localDir, camQuat);
@@ -583,6 +601,15 @@ vec3 hsv2rgb(vec3 c) {
     vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
     vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
     return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 rgb2hsv(vec3 c) {
+    vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
 }
 
 float fresnel(vec3 viewDir, vec3 normal, float power) { return pow(1.0 - max(dot(viewDir, normal), 0.0), power); }

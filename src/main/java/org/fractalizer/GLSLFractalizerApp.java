@@ -66,6 +66,7 @@ public class GLSLFractalizerApp extends Application {
     private GLSLDevicePanel devicePanel;
     private PostProcessingPanel postProcessPanel;
     private EnvironmentPanel environmentPanel;
+    private AudioPanel audioPanel;
 
     // List of panels that need refreshing when config changes
     private final List<Refreshable> refreshablePanels = new ArrayList<>();
@@ -419,7 +420,14 @@ public class GLSLFractalizerApp extends Application {
         refreshablePanels.add(environmentPanel);
         Tab environmentTab = new Tab("Env", environmentPanel);
 
-        tabPane.getTabs().addAll(fractalTab, lightingTab, materialTab, qualityTab, postProcessTab, environmentTab, exportTab, deviceTab);
+        // Audio tab (audio-reactive fractals)
+        audioPanel = new AudioPanel(this::requestRender);
+        controller.setAudioPanel(audioPanel);
+        audioPanel.setFrameExportCallback((file, width, height, samples, progress, cancel) ->
+                controller.exportAnimationFrame(file, width, height, samples, progress, cancel));
+        Tab audioTab = new Tab("Audio", audioPanel);
+
+        tabPane.getTabs().addAll(fractalTab, lightingTab, materialTab, qualityTab, postProcessTab, environmentTab, audioTab, exportTab, deviceTab);
 
         return tabPane;
     }
@@ -566,8 +574,10 @@ public class GLSLFractalizerApp extends Application {
                     requestRender();
                 }
 
-                // 1. Preview Render (Interactive)
-                if (needsRender && (currentTime - lastRenderTime > RENDER_DELAY_MS)) {
+                // 1. Preview Render (Interactive) — skip during any export to avoid engine resize races
+                boolean audioExporting = (audioPanel != null && audioPanel.isExporting());
+                if (needsRender && !exportingAnimation && !audioExporting
+                        && (currentTime - lastRenderTime > RENDER_DELAY_MS)) {
                     renderPreview();
                     needsRender = false;
                     lastRenderTime = currentTime;
@@ -576,12 +586,20 @@ public class GLSLFractalizerApp extends Application {
                     isHighQualityActive = false;
                 }
                 
+                // Audio-reactive: force continuous preview when audio is playing (not during offline export)
+                if (audioPanel != null && audioPanel.isAudioPlaying() && !audioPanel.isExporting()) {
+                    if (!needsRender && (currentTime - lastRenderTime > RENDER_DELAY_MS)) {
+                        needsRender = true;
+                    }
+                }
+
                 // 2. Auto Full Quality (Refinement after idle)
                 if (!needsRender && !isHighQualityActive && autoFullQuality && !exportingAnimation) {
-                    // Don't start HQ render if animation is playing
+                    // Don't start HQ render if animation or audio is playing
                     boolean isPlaying = (animationManager != null && animationManager.isPlaying());
-                    
-                    if (!isPlaying && (currentTime - lastInteractionTime > HQ_DELAY_MS)) {
+                    boolean isAudioPlaying = (audioPanel != null && audioPanel.isAudioPlaying());
+
+                    if (!isPlaying && !isAudioPlaying && (currentTime - lastInteractionTime > HQ_DELAY_MS)) {
                         // User stopped moving -> Start refining
                         renderFull();
                         isHighQualityActive = true;
@@ -707,6 +725,16 @@ public class GLSLFractalizerApp extends Application {
             showError("Load Error", "Failed to load configuration: " + ex.getMessage());
         } catch (Exception ex) {
             showError("Load Error", "Invalid configuration file: " + ex.getMessage());
+        }
+    }
+
+    @Override
+    public void stop() {
+        if (audioPanel != null) {
+            audioPanel.dispose();
+        }
+        if (controller != null) {
+            controller.close();
         }
     }
 

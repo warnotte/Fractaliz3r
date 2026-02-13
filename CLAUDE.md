@@ -50,6 +50,9 @@ org.fractalizer
 │   ├── ApollonianParams.java        # Apollonian Gasket: iterations, scale, foldRadius
 │   ├── BristorbrotParams.java       # Bristorbrot: iterations, bailout
 │   └── CornellBoxParams.java        # Cornell Box: sceneScale (per-object materials in shader)
+├── audio/
+│   ├── AudioReactiveEngine.java     # Spectrum analysis, beat/onset detection
+│   └── AudioPreAnalyzer.java        # Offline FFT pre-analysis (FFmpeg decode)
 ├── render/
 │   ├── ProgressiveRenderer.java     # Progressive sample accumulation
 │   └── FFmpegExporter.java          # MP4 video export via FFmpeg
@@ -69,6 +72,7 @@ org.fractalizer
     │   ├── LightingPanel.java          # Light direction and colors (uses EnhancedSlider)
     │   ├── QualityPanel.java           # Ray steps, DoF, path tracing, preview samples (uses EnhancedSlider)
     │   ├── PostProcessingPanel.java    # Bloom, tone mapping, color correction (uses EnhancedSlider)
+    │   ├── AudioPanel.java             # Audio-reactive controls + offline video export
     │   └── ExportPanel.java            # Image/animation export with motion blur & export samples
 ```
 
@@ -307,9 +311,22 @@ After implementation:
 3. Test save/load with File > Save/Load
 4. Run visual regression: `mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.TiledRenderTest"` (existing fractals must not change)
 
+## Audio-Reactive Fractals
+
+Système optionnel de fractales audio-réactives. Documentation complète : **[docs/AUDIO_REACTIVE.md](docs/AUDIO_REACTIVE.md)**
+
+- Chargement MP3/WAV/AAC via JavaFX MediaPlayer
+- Analyse spectrale temps réel (8 bandes, beat detection, onset detection)
+- Modulation des paramètres fractals (power, scale, rotations) + effets GLSL (couleur, glow, FOV, fog)
+- **Export offline** : pré-analyse audio complète → rendu frame par frame haute qualité (path tracer, N samples) → MP4 synchronisé
+- Instructions de suppression complète dans la doc
+
+**Fichiers** : `audio/AudioReactiveEngine.java`, `audio/AudioPreAnalyzer.java`, `ui/panels/AudioPanel.java`
+
 ## Dependencies
 
 - **LWJGL 3.3.3** - OpenGL bindings for GPU rendering
 - **JavaFX 21.0.2** - UI framework
+- **JavaFX Media** - Audio playback and spectrum analysis (audio-reactive feature)
 - **Java 21+** required
-- **FFmpeg** (optional) - For MP4 video export (must be in system PATH)
+- **FFmpeg** (optional) - For MP4 video export and audio pre-analysis (must be in system PATH)

@@ -225,7 +225,10 @@ public class GLSLEngine implements AutoCloseable {
      */
     public void resetAccumulation() {
         needsReset = true;
-        sampleCount = 0;  // Reset immediately so render loop knows to start fresh
+        // Note: sampleCount is reset inside clearAccumulation() on the GL thread,
+        // NOT here. Setting it here creates a race condition where readImage() sees
+        // sampleCount=0 while the accumulation FBO still has old samples, causing
+        // the post-process shader to divide by 1 → massive brightness flash.
     }
 
     /**
@@ -1216,7 +1219,7 @@ public class GLSLEngine implements AutoCloseable {
                 case 4 -> program.setUniform(name, arr[0], arr[1], arr[2], arr[3]);
                 case 9 -> program.setUniformMatrix3(name, arr);
                 case 16 -> program.setUniformMatrix4(name, arr);
-                default -> throw new IllegalArgumentException("Unsupported float array length: " + arr.length);
+                default -> program.setUniform1fv(name, arr);
             }
         } else if (value instanceof int[] arr) {
             if (arr.length == 1) {
@@ -1398,6 +1401,10 @@ public class GLSLEngine implements AutoCloseable {
 
         public void setUniformMatrix4(String name, float[] values) {
             glUniformMatrix4fv(getUniformLocation(name), false, values);
+        }
+
+        public void setUniform1fv(String name, float[] values) {
+            glUniform1fv(getUniformLocation(name), values);
         }
 
         public void delete() {
