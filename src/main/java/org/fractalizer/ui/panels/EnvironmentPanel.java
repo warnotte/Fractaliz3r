@@ -54,17 +54,9 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
         VBox panel = new VBox(10);
         panel.setPadding(new Insets(10));
 
-        // Title
-        Label titleLabel = new Label("Environment & Sky");
-        titleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
-
         // Status
         statusLabel = new Label("Using procedural sky");
         statusLabel.setStyle("-fx-font-style: italic;");
-
-        // HDRI Section
-        Label hdriLabel = new Label("HDRI Environment Map");
-        hdriLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
 
         Button loadButton = new Button("Load HDRI...");
         loadButton.setMaxWidth(Double.MAX_VALUE);
@@ -97,8 +89,6 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
         });
 
         // Procedural Sky Section
-        Label skyLabel = new Label("Dynamic Procedural Sky");
-        skyLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
 
         // Sky Type
         HBox typeBox = new HBox(10);
@@ -152,11 +142,9 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
         });
 
         // Volumetric Fog Section
-        Label fogLabel = new Label("Volumetric Fog & God Rays");
-        fogLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
         
         fogEnabledCheck = new CheckBox("Enable Volumetric Fog");
-        fogEnabledCheck.setStyle("-fx-font-weight: bold;");
+        fogEnabledCheck.getStyleClass().add("bold-label");
         fogEnabledCheck.setOnAction(e -> {
             if (!suppressRender) {
                 getParams().setVolumetricFogEnabled(fogEnabledCheck.isSelected());
@@ -210,19 +198,22 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
             "Procedural sky uses FBM noise clouds.\n" +
             "Volumetric fog creates rays of light (God Rays)."
         );
-        infoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+        infoLabel.getStyleClass().add("info-label");
 
-        panel.getChildren().addAll(
-            titleLabel, statusLabel,
-            new Separator(),
-            hdriLabel, buttonBox, rotationSlider, lightingMixSlider,
-            new Separator(),
-            skyLabel, typeBox, cloudDensitySlider, skySpeedSlider, skyTimeSlider, skyParallaxSlider,
-            new Separator(),
-            fogLabel, fogEnabledCheck, fogDensitySlider, fogColorBox, fogScatteringSlider, fogStepsSlider,
-            new Separator(),
-            infoLabel
-        );
+        VBox hdriBox = new VBox(5, statusLabel, buttonBox, rotationSlider, lightingMixSlider);
+        TitledPane hdriPane = new TitledPane("HDRI Environment Map", hdriBox);
+        hdriPane.setExpanded(true);
+
+        VBox skyBox = new VBox(5, typeBox, cloudDensitySlider, skySpeedSlider, skyTimeSlider, skyParallaxSlider);
+        TitledPane skyPane = new TitledPane("Dynamic Procedural Sky", skyBox);
+        skyPane.setExpanded(true);
+
+        VBox fogBox = new VBox(5, fogEnabledCheck, fogDensitySlider, fogColorBox,
+            fogScatteringSlider, fogStepsSlider, infoLabel);
+        TitledPane fogPane = new TitledPane("Volumetric Fog & God Rays", fogBox);
+        fogPane.setExpanded(false);
+
+        panel.getChildren().addAll(hdriPane, skyPane, fogPane);
 
         return panel;
     }

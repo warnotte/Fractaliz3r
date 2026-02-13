@@ -93,7 +93,7 @@ public class AnimationPanel extends VBox {
 
         // Info about export
         Label exportInfo = new Label("Use the Export tab to export animation frames.");
-        exportInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        exportInfo.getStyleClass().add("hint-label");
         add(exportInfo);
     }
 
@@ -192,9 +192,9 @@ public class AnimationPanel extends VBox {
         HBox labels = new HBox();
         labels.setAlignment(Pos.CENTER);
         timeLabel = new Label("0.000s");
-        timeLabel.setStyle("-fx-font-family: monospace;");
+        timeLabel.getStyleClass().add("mono-label");
         frameLabel = new Label(" (Frame 0/0)");
-        frameLabel.setStyle("-fx-font-family: monospace;");
+        frameLabel.getStyleClass().add("mono-label");
         labels.getChildren().addAll(timeLabel, frameLabel);
 
         timeSlider = new Slider(0, timeline.getDuration(), 0);
@@ -242,7 +242,7 @@ public class AnimationPanel extends VBox {
 
         // Info about what gets saved
         Label infoLabel = new Label("Saves: Camera, FOV, DoF, Light Dir, Base Hue");
-        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        infoLabel.getStyleClass().add("hint-label");
         box.getChildren().add(infoLabel);
 
         TitledPane pane = new TitledPane("Keyframes", box);

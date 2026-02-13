@@ -7,6 +7,7 @@ import javafx.scene.control.*;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -52,7 +53,15 @@ public class GradientEditor extends VBox {
         setPadding(new Insets(5, 0, 5, 0));
 
         canvas = new Canvas(200, CANVAS_HEIGHT + STOP_AREA_HEIGHT);
-        canvas.widthProperty().bind(this.widthProperty().subtract(10));
+
+        // Wrap Canvas in a resizable Pane so it can shrink properly.
+        // Canvas is not resizable in JavaFX — its minWidth equals its current width,
+        // which prevents parent containers from shrinking below the canvas's largest size.
+        Pane canvasHolder = new Pane(canvas);
+        canvasHolder.setMinWidth(0);
+        canvasHolder.setPrefHeight(CANVAS_HEIGHT + STOP_AREA_HEIGHT);
+        canvasHolder.setMaxHeight(CANVAS_HEIGHT + STOP_AREA_HEIGHT);
+        canvas.widthProperty().bind(canvasHolder.widthProperty());
 
         canvas.setOnMousePressed(this::handleMousePressed);
         canvas.setOnMouseDragged(this::handleMouseDragged);
@@ -76,10 +85,11 @@ public class GradientEditor extends VBox {
             createPresetBtn("Mono", GradientPalette::createMonochrome)
         );
 
-        getChildren().addAll(canvas, row1, row2);
+        setMinWidth(0);
+        getChildren().addAll(canvasHolder, row1, row2);
 
-        // Redraw when width changes
-        this.widthProperty().addListener((obs, old, nw) -> draw());
+        // Redraw when holder width changes
+        canvasHolder.widthProperty().addListener((obs, old, nw) -> draw());
 
         draw();
     }

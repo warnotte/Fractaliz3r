@@ -159,7 +159,7 @@ public class ExportPanel extends ScrollPane {
 
         // Viewport info (read-only)
         viewportInfoLabel = new Label("Viewport: --");
-        viewportInfoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+        viewportInfoLabel.getStyleClass().add("info-label");
 
         ComboBox<String> presetCombo = new ComboBox<>();
         presetCombo.getItems().addAll(
@@ -245,7 +245,7 @@ public class ExportPanel extends ScrollPane {
         Button renderBtn = new Button("Render Full Quality (Space)");
         renderBtn.setOnAction(e -> renderFullCallback.run());
         renderBtn.setMaxWidth(Double.MAX_VALUE);
-        renderBtn.setStyle("-fx-font-weight: bold;");
+        renderBtn.getStyleClass().add("bold-label");
 
         exportImageBtn = new Button("Export Image...");
         exportImageBtn.setOnAction(e -> exportImage());
@@ -258,7 +258,7 @@ public class ExportPanel extends ScrollPane {
             "- Export uses the size above\n" +
             "- 4K/8K export may take minutes"
         );
-        infoLabel.setStyle("-fx-font-size: 11px;");
+        infoLabel.getStyleClass().add("small-label");
         infoLabel.setWrapText(true);
 
         box.getChildren().addAll(imageSamplesBox, renderBtn, exportImageBtn, infoLabel);
@@ -273,7 +273,7 @@ public class ExportPanel extends ScrollPane {
 
         // Animation info
         Label animInfoLabel = new Label("No animation");
-        animInfoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+        animInfoLabel.getStyleClass().add("info-label");
 
         // Samples per frame
         HBox samplesBox = new HBox(5);
@@ -315,7 +315,6 @@ public class ExportPanel extends ScrollPane {
         // FFmpeg status
         ffmpegStatusLabel = new Label();
         updateFFmpegStatus();
-        ffmpegStatusLabel.setStyle("-fx-font-size: 10px;");
 
         // Export button
         exportAnimButton = new Button("Export Animation...");
@@ -363,14 +362,15 @@ public class ExportPanel extends ScrollPane {
     }
 
     private void updateFFmpegStatus() {
+        ffmpegStatusLabel.getStyleClass().removeAll("status-ok", "status-error");
         if (FFmpegExporter.isFFmpegAvailable()) {
             String version = FFmpegExporter.getFFmpegVersion();
             ffmpegStatusLabel.setText("FFmpeg: " + version);
-            ffmpegStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+            ffmpegStatusLabel.getStyleClass().add("status-ok");
             createMP4Checkbox.setDisable(false);
         } else {
             ffmpegStatusLabel.setText("FFmpeg not found in PATH");
-            ffmpegStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+            ffmpegStatusLabel.getStyleClass().add("status-error");
             createMP4Checkbox.setSelected(false);
             createMP4Checkbox.setDisable(true);
         }

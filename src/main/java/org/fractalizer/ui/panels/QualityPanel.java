@@ -108,7 +108,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         VBox box = new VBox(5);
 
         Label passLabel = new Label("Render Pass:");
-        passLabel.setStyle("-fx-font-weight: bold;");
+        passLabel.getStyleClass().add("bold-label");
 
         passCombo = new ComboBox<>();
         passCombo.getItems().addAll(
@@ -148,7 +148,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         VBox box = new VBox(5);
 
         Label projLabel = new Label("Camera Projection:");
-        projLabel.setStyle("-fx-font-weight: bold;");
+        projLabel.getStyleClass().add("bold-label");
 
         projectionCombo = new ComboBox<>();
         projectionCombo.getItems().addAll(
@@ -166,7 +166,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         });
 
         Label infoLabel = new Label("360° mode creates a spherical map.\nUse 2:1 aspect ratio for best results.");
-        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        infoLabel.getStyleClass().add("hint-label");
 
         box.getChildren().addAll(projLabel, projectionCombo, infoLabel);
         return box;
@@ -187,7 +187,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         });
 
         Label infoLabel = new Label("Higher = more detail when close to surface.\nWarning: >2x is slow!");
-        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        infoLabel.getStyleClass().add("hint-label");
 
         box.getChildren().addAll(qualitySlider, infoLabel);
 
@@ -305,7 +305,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         });
 
         Label dofInfoLabel = new Label("Middle-click or Ctrl+click to pick\nfocal distance from the image.");
-        dofInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        dofInfoLabel.getStyleClass().add("hint-label");
 
         box.getChildren().addAll(dofEnabledCheck, focalDistSlider,
                 apertureSlider, dofSamplesSlider, dofInfoLabel);
@@ -387,10 +387,10 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         });
 
         Label indirectInfo = new Label("0% = Hard shadows (direct only)\n100% = Soft shadows (full GI)");
-        indirectInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        indirectInfo.getStyleClass().add("hint-label");
 
         Label pathTracingInfo = new Label("Preview Samples = iterations for\nAuto Full Quality preview render.");
-        pathTracingInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        pathTracingInfo.getStyleClass().add("hint-label");
 
         box.getChildren().addAll(pathTracingCheck, neeEnabledCheck, renderSamplesSlider, bouncesSlider,
                 skyIntensitySlider, indirectSlider,

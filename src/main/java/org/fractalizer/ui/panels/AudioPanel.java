@@ -117,24 +117,32 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         setFitToWidth(true);
         setHbarPolicy(ScrollBarPolicy.NEVER);
 
-        VBox content = new VBox(12);
+        VBox content = new VBox(5);
         content.setPadding(new Insets(10));
 
-        content.getChildren().addAll(
-                createFileSection(),
-                new Separator(),
-                createTransportSection(),
-                new Separator(),
-                createVisualizerSection(),
-                new Separator(),
-                createMappingsSection(),
-                new Separator(),
-                createSensitivitySection(),
-                new Separator(),
-                createPresetsSection(),
-                new Separator(),
-                createExportSection()
-        );
+        TitledPane filePane = new TitledPane("Audio File", createFileSection());
+        filePane.setExpanded(true);
+
+        TitledPane transportPane = new TitledPane("Transport (Preview)", createTransportSection());
+        transportPane.setExpanded(true);
+
+        TitledPane vizPane = new TitledPane("Spectrum", createVisualizerSection());
+        vizPane.setExpanded(true);
+
+        TitledPane mappingsPane = new TitledPane("Audio Mappings", createMappingsSection());
+        mappingsPane.setExpanded(false);
+
+        TitledPane sensitivityPane = new TitledPane("Sensitivity", createSensitivitySection());
+        sensitivityPane.setExpanded(false);
+
+        TitledPane presetsPane = new TitledPane("Presets", createPresetsSection());
+        presetsPane.setExpanded(false);
+
+        TitledPane exportPane = new TitledPane("Offline Video Export", createExportSection());
+        exportPane.setExpanded(false);
+
+        content.getChildren().addAll(filePane, transportPane, vizPane,
+                mappingsPane, sensitivityPane, presetsPane, exportPane);
 
         setContent(content);
         startVisualizerTimer();
@@ -146,17 +154,15 @@ public class AudioPanel extends ScrollPane implements Refreshable {
 
     private VBox createFileSection() {
         VBox section = new VBox(6);
-        Label header = new Label("Audio File");
-        header.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
         loadButton = new Button("Load Audio File...");
         loadButton.setMaxWidth(Double.MAX_VALUE);
         loadButton.setOnAction(e -> loadAudioFile());
 
         fileLabel = new Label("No file loaded");
-        fileLabel.setStyle("-fx-text-fill: #888;");
+        fileLabel.getStyleClass().add("muted-label");
 
-        section.getChildren().addAll(header, loadButton, fileLabel);
+        section.getChildren().addAll(loadButton, fileLabel);
         return section;
     }
 
@@ -166,8 +172,6 @@ public class AudioPanel extends ScrollPane implements Refreshable {
 
     private VBox createTransportSection() {
         VBox section = new VBox(6);
-        Label header = new Label("Transport (Preview)");
-        header.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
         HBox buttons = new HBox(8);
         buttons.setAlignment(Pos.CENTER_LEFT);
@@ -181,7 +185,7 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         stopButton.setOnAction(e -> stopPlayback());
 
         timeLabel = new Label("0:00 / 0:00");
-        timeLabel.setStyle("-fx-font-family: monospace;");
+        timeLabel.getStyleClass().add("mono-label");
 
         buttons.getChildren().addAll(playPauseButton, stopButton, timeLabel);
 
@@ -196,7 +200,7 @@ public class AudioPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        section.getChildren().addAll(header, buttons, progressSlider);
+        section.getChildren().addAll(buttons, progressSlider);
         return section;
     }
 
@@ -206,13 +210,11 @@ public class AudioPanel extends ScrollPane implements Refreshable {
 
     private VBox createVisualizerSection() {
         VBox section = new VBox(6);
-        Label header = new Label("Spectrum");
-        header.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
         spectrumCanvas = new Canvas(300, 80);
         drawEmptySpectrum();
 
-        section.getChildren().addAll(header, spectrumCanvas);
+        section.getChildren().addAll(spectrumCanvas);
         return section;
     }
 
@@ -222,8 +224,6 @@ public class AudioPanel extends ScrollPane implements Refreshable {
 
     private VBox createMappingsSection() {
         VBox section = new VBox(8);
-        Label header = new Label("Audio Mappings");
-        header.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
         bassMorph = new EnhancedSlider("Bass \u2192 Fractal Morph", 0, 1, 0.5, false);
         midToColor = new EnhancedSlider("Mid \u2192 Color Shift", 0, 1, 0.5, false);
@@ -232,7 +232,7 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         onsetPulse = new EnhancedSlider("Onset \u2192 Emissive Pulse", 0, 1, 0.4, false);
         levelToFog = new EnhancedSlider("Level \u2192 Fog/AO", 0, 1, 0.2, false);
 
-        section.getChildren().addAll(header, bassMorph, midToColor, trebleToGlow, beatToFOV, onsetPulse, levelToFog);
+        section.getChildren().addAll(bassMorph, midToColor, trebleToGlow, beatToFOV, onsetPulse, levelToFog);
         return section;
     }
 
@@ -242,8 +242,6 @@ public class AudioPanel extends ScrollPane implements Refreshable {
 
     private VBox createSensitivitySection() {
         VBox section = new VBox(8);
-        Label header = new Label("Sensitivity");
-        header.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
         smoothingSlider = new EnhancedSlider("Smoothing", 0, 0.99, 0.7, false);
         smoothingSlider.getSlider().valueProperty().addListener((obs, old, val) ->
@@ -253,7 +251,7 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         sensitivitySlider.getSlider().valueProperty().addListener((obs, old, val) ->
                 audioEngine.setSensitivity(val.floatValue()));
 
-        section.getChildren().addAll(header, smoothingSlider, sensitivitySlider);
+        section.getChildren().addAll(smoothingSlider, sensitivitySlider);
         return section;
     }
 
@@ -264,9 +262,6 @@ public class AudioPanel extends ScrollPane implements Refreshable {
     private HBox createPresetsSection() {
         HBox section = new HBox(6);
         section.setAlignment(Pos.CENTER_LEFT);
-
-        Label header = new Label("Presets:");
-        header.setStyle("-fx-font-weight: bold;");
 
         Button subtle = new Button("Subtle");
         subtle.setOnAction(e -> applyPreset(0.2, 0.2, 0.1, 0.1, 0.2, 0.1));
@@ -280,7 +275,7 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         Button psychedelic = new Button("Psychedelic");
         psychedelic.setOnAction(e -> applyPreset(1.0, 1.0, 1.0, 0.8, 1.0, 0.6));
 
-        section.getChildren().addAll(header, subtle, medium, intense, psychedelic);
+        section.getChildren().addAll(subtle, medium, intense, psychedelic);
         return section;
     }
 
@@ -299,11 +294,9 @@ public class AudioPanel extends ScrollPane implements Refreshable {
 
     private VBox createExportSection() {
         VBox section = new VBox(8);
-        Label header = new Label("Offline Video Export");
-        header.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
         Label info = new Label("Pre-analyzes audio, then renders each frame\nat full quality (path tracer, N samples).");
-        info.setStyle("-fx-font-size: 11px; -fx-text-fill: #888;");
+        info.getStyleClass().add("info-label");
         info.setWrapText(true);
 
         // Resolution
@@ -348,13 +341,13 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         exportDurationSpinner.setEditable(true);
         exportDurationSpinner.setTooltip(new Tooltip("Max seconds (0 = full track)"));
         Label secLabel = new Label("sec (0=full)");
-        secLabel.setStyle("-fx-font-size: 11px;");
+        secLabel.getStyleClass().add("small-label");
         durationBox.getChildren().addAll(exportDurationSpinner, secLabel);
 
         // Export button
         exportVideoButton = new Button("Export Audio-Reactive Video...");
         exportVideoButton.setMaxWidth(Double.MAX_VALUE);
-        exportVideoButton.setStyle("-fx-font-weight: bold;");
+        exportVideoButton.getStyleClass().add("bold-label");
         exportVideoButton.setDisable(true);
         exportVideoButton.setOnAction(e -> startOfflineExport());
 
@@ -362,13 +355,13 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         Label ffmpegLabel = new Label();
         if (FFmpegExporter.isFFmpegAvailable()) {
             ffmpegLabel.setText("FFmpeg: " + FFmpegExporter.getFFmpegVersion());
-            ffmpegLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+            ffmpegLabel.getStyleClass().add("status-ok");
         } else {
             ffmpegLabel.setText("FFmpeg not found (required for export)");
-            ffmpegLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+            ffmpegLabel.getStyleClass().add("status-error");
         }
 
-        section.getChildren().addAll(header, info,
+        section.getChildren().addAll(info,
                 resBox, samplesBox, fpsBox, durationBox,
                 exportVideoButton, ffmpegLabel);
         return section;

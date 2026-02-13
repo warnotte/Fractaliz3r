@@ -61,10 +61,6 @@ public class LightingPanel extends ScrollPane implements Refreshable {
         VBox panel = new VBox(8);
         panel.setPadding(new Insets(10));
 
-        // === Light Direction ===
-        Label dirLabel = new Label("Light Direction:");
-        dirLabel.setStyle("-fx-font-weight: bold;");
-
         lightXSlider = new EnhancedSlider("X", -5, 5, 2, false);
         lightXSlider.setPrecision(1);
         lightXSlider.setOnAction(v -> {
@@ -92,10 +88,6 @@ public class LightingPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        // === Light Color ===
-        Label lightColLabel = new Label("Light Color:");
-        lightColLabel.setStyle("-fx-font-weight: bold;");
-
         lightColorPicker = new ColorPicker(Color.rgb(255, 242, 230));
         lightColorPicker.setMaxWidth(Double.MAX_VALUE);
         lightColorPicker.setOnAction(e -> {
@@ -112,10 +104,6 @@ public class LightingPanel extends ScrollPane implements Refreshable {
                 renderCallback.requestRender();
             }
         });
-
-        // === Ambient ===
-        Label ambientLabel = new Label("Ambient Color:");
-        ambientLabel.setStyle("-fx-font-weight: bold;");
 
         ambientColorPicker = new ColorPicker(Color.rgb(26, 38, 64));
         ambientColorPicker.setMaxWidth(Double.MAX_VALUE);
@@ -134,11 +122,8 @@ public class LightingPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        // === Additional Light ===
-        Label extraLightLabel = new Label("Additional Light:");
-        extraLightLabel.setStyle("-fx-font-weight: bold;");
         Label extraLightInfo = new Label("Used in Path Tracing mode.\nPosition/Direction are camera-relative.");
-        extraLightInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        extraLightInfo.getStyleClass().add("hint-label");
 
         extraLightTypeCombo = new ComboBox<>();
         extraLightTypeCombo.getItems().addAll("Off", "Point (Omni)", "Spot");
@@ -261,34 +246,28 @@ public class LightingPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        panel.getChildren().addAll(
-            dirLabel,
-            lightXSlider,
-            lightYSlider,
-            lightZSlider,
-            new Separator(),
-            lightColLabel, lightColorPicker,
-            lightIntensitySlider,
-            new Separator(),
-            ambientLabel, ambientColorPicker,
-            ambientIntensitySlider,
-            new Separator(),
-            extraLightLabel,
-            extraLightInfo,
-            extraLightTypeCombo,
-            extraLightPosXSlider,
-            extraLightPosYSlider,
-            extraLightPosZSlider,
-            extraLightDirXSlider,
-            extraLightDirYSlider,
-            extraLightDirZSlider,
-            extraLightColorPicker,
-            extraLightIntensitySlider,
-            extraLightRangeSlider,
-            extraLightAreaRadiusSlider,
-            extraLightConeAngleSlider,
-            extraLightConeSoftnessSlider
-        );
+        // Collapsible sections
+        VBox dirBox = new VBox(5, lightXSlider, lightYSlider, lightZSlider);
+        TitledPane dirPane = new TitledPane("Light Direction", dirBox);
+        dirPane.setExpanded(true);
+
+        VBox colBox = new VBox(5, lightColorPicker, lightIntensitySlider);
+        TitledPane colPane = new TitledPane("Light Color & Intensity", colBox);
+        colPane.setExpanded(true);
+
+        VBox ambBox = new VBox(5, ambientColorPicker, ambientIntensitySlider);
+        TitledPane ambPane = new TitledPane("Ambient", ambBox);
+        ambPane.setExpanded(false);
+
+        VBox extraBox = new VBox(5, extraLightInfo, extraLightTypeCombo,
+            extraLightPosXSlider, extraLightPosYSlider, extraLightPosZSlider,
+            extraLightDirXSlider, extraLightDirYSlider, extraLightDirZSlider,
+            extraLightColorPicker, extraLightIntensitySlider, extraLightRangeSlider,
+            extraLightAreaRadiusSlider, extraLightConeAngleSlider, extraLightConeSoftnessSlider);
+        TitledPane extraPane = new TitledPane("Additional Light", extraBox);
+        extraPane.setExpanded(false);
+
+        panel.getChildren().addAll(dirPane, colPane, ambPane, extraPane);
 
         updateAdditionalLightControlState();
         return panel;

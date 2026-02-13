@@ -70,52 +70,44 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
     }
 
     private VBox createContent() {
-        VBox panel = new VBox(10);
+        VBox panel = new VBox(5);
         panel.setPadding(new Insets(10));
 
-        // Presets
-        panel.getChildren().add(createPresetsSection());
-        panel.getChildren().add(new Separator());
+        TitledPane presetsPane = new TitledPane("Presets", createPresetsSection());
+        presetsPane.setExpanded(true);
 
-        // Tone Mapping
-        panel.getChildren().add(createToneMappingSection());
-        panel.getChildren().add(new Separator());
-        
-        // Color Grading
-        panel.getChildren().add(createColorGradingSection());
-        panel.getChildren().add(new Separator());
+        TitledPane tonePane = new TitledPane("Tone Mapping & Color", createToneMappingSection());
+        tonePane.setExpanded(true);
 
-        // Bloom
-        panel.getChildren().add(createBloomSection());
-        panel.getChildren().add(new Separator());
+        TitledPane gradingPane = new TitledPane("Color Grading", createColorGradingSection());
+        gradingPane.setExpanded(false);
 
-        // Lens Effects
-        panel.getChildren().add(createLensEffectsSection());
-        panel.getChildren().add(new Separator());
+        TitledPane bloomPane = new TitledPane("Bloom", createBloomSection());
+        bloomPane.setExpanded(false);
 
-        // Chromatic Aberration
-        panel.getChildren().add(createChromaticAberrationSection());
-        panel.getChildren().add(new Separator());
+        TitledPane lensPane = new TitledPane("Lens Effects", createLensEffectsSection());
+        lensPane.setExpanded(false);
 
-        // Vignette
-        panel.getChildren().add(createVignetteSection());
-        panel.getChildren().add(new Separator());
+        TitledPane chromaticPane = new TitledPane("Chromatic Aberration", createChromaticAberrationSection());
+        chromaticPane.setExpanded(false);
 
-        // Film Grain
-        panel.getChildren().add(createFilmGrainSection());
-        panel.getChildren().add(new Separator());
+        TitledPane vignettePane = new TitledPane("Vignette", createVignetteSection());
+        vignettePane.setExpanded(false);
 
-        // Sharpening
-        panel.getChildren().add(createSharpeningSection());
+        TitledPane grainPane = new TitledPane("Film Grain", createFilmGrainSection());
+        grainPane.setExpanded(false);
+
+        TitledPane sharpenPane = new TitledPane("Sharpening", createSharpeningSection());
+        sharpenPane.setExpanded(false);
+
+        panel.getChildren().addAll(presetsPane, tonePane, gradingPane, bloomPane,
+            lensPane, chromaticPane, vignettePane, grainPane, sharpenPane);
 
         return panel;
     }
 
     private VBox createPresetsSection() {
         VBox section = new VBox(5);
-
-        Label titleLabel = new Label("Presets");
-        titleLabel.setStyle("-fx-font-weight: bold;");
 
         HBox presetButtons = new HBox(5);
         Button cinematicBtn = new Button("Cinematic");
@@ -182,15 +174,12 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
 
         presetButtons.getChildren().addAll(cinematicBtn, cleanBtn, vibrantBtn, resetBtn);
 
-        section.getChildren().addAll(titleLabel, presetButtons);
+        section.getChildren().addAll(presetButtons);
         return section;
     }
 
     private VBox createToneMappingSection() {
         VBox section = new VBox(5);
-
-        Label titleLabel = new Label("Tone Mapping & Color");
-        titleLabel.setStyle("-fx-font-weight: bold;");
 
         // Tone map mode
         HBox toneMapBox = new HBox(10);
@@ -214,15 +203,12 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
         saturationSlider.setPrecision(2);
         saturationSlider.setOnAction(v -> { params.saturation = v.floatValue(); onUpdate.run(); });
 
-        section.getChildren().addAll(titleLabel, toneMapBox, exposureSlider, saturationSlider);
+        section.getChildren().addAll(toneMapBox, exposureSlider, saturationSlider);
         return section;
     }
 
     private VBox createColorGradingSection() {
         VBox section = new VBox(5);
-
-        Label titleLabel = new Label("Color Grading (LUT Styles)");
-        titleLabel.setStyle("-fx-font-weight: bold;");
 
         // Grading Style
         HBox styleBox = new HBox(10);
@@ -241,7 +227,7 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
         gradingIntensitySlider.setPrecision(2);
         gradingIntensitySlider.setOnAction(v -> { params.colorGradingIntensity = v.floatValue(); onUpdate.run(); });
 
-        section.getChildren().addAll(titleLabel, styleBox, gradingIntensitySlider);
+        section.getChildren().addAll(styleBox, gradingIntensitySlider);
         return section;
     }
 
@@ -250,7 +236,6 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
 
         bloomCheck = new CheckBox("Bloom");
         bloomCheck.setSelected(params.bloomEnabled);
-        bloomCheck.setStyle("-fx-font-weight: bold;");
         bloomCheck.setOnAction(e -> {
             params.bloomEnabled = bloomCheck.isSelected();
             onUpdate.run();
@@ -278,7 +263,6 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
 
         lensEffectsCheck = new CheckBox("Lens Effects (JJ Abrams Style)");
         lensEffectsCheck.setSelected(params.lensEffectsEnabled);
-        lensEffectsCheck.setStyle("-fx-font-weight: bold;");
         lensEffectsCheck.setOnAction(e -> {
             params.lensEffectsEnabled = lensEffectsCheck.isSelected();
             AbstractFractalParams afp = fractalParamsSupplier.get();
@@ -313,7 +297,6 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
 
         chromaticCheck = new CheckBox("Chromatic Aberration");
         chromaticCheck.setSelected(params.chromaticAberrationEnabled);
-        chromaticCheck.setStyle("-fx-font-weight: bold;");
         chromaticCheck.setOnAction(e -> {
             params.chromaticAberrationEnabled = chromaticCheck.isSelected();
             onUpdate.run();
@@ -332,7 +315,6 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
 
         vignetteCheck = new CheckBox("Vignette");
         vignetteCheck.setSelected(params.vignetteEnabled);
-        vignetteCheck.setStyle("-fx-font-weight: bold;");
         vignetteCheck.setOnAction(e -> {
             params.vignetteEnabled = vignetteCheck.isSelected();
             onUpdate.run();
@@ -355,7 +337,6 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
 
         filmGrainCheck = new CheckBox("Film Grain");
         filmGrainCheck.setSelected(params.filmGrainEnabled);
-        filmGrainCheck.setStyle("-fx-font-weight: bold;");
         filmGrainCheck.setOnAction(e -> {
             params.filmGrainEnabled = filmGrainCheck.isSelected();
             onUpdate.run();
@@ -374,7 +355,6 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
 
         sharpenCheck = new CheckBox("Sharpening");
         sharpenCheck.setSelected(params.sharpenEnabled);
-        sharpenCheck.setStyle("-fx-font-weight: bold;");
         sharpenCheck.setOnAction(e -> {
             params.sharpenEnabled = sharpenCheck.isSelected();
             onUpdate.run();

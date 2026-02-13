@@ -55,7 +55,6 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
 
         setContent(createContent());
         setFitToWidth(true);
-        setPadding(new Insets(10));
     }
 
     /**
@@ -67,10 +66,9 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
 
     private VBox createContent() {
         VBox root = new VBox(10);
+        root.setPadding(new Insets(10));
 
         // === GRADIENT PALETTE SECTION ===
-        Label paletteLabel = new Label("Color Palette");
-        paletteLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
 
         // Gradient Editor (always visible)
         gradientEditor = new GradientEditor(getParams().getCustomGradient());
@@ -105,8 +103,6 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         VBox presetsBox = createPresetsBox();
 
         // === PHYSICAL MATERIAL SECTION ===
-        Label physLabel = new Label("Physical Material");
-        physLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
 
         // Material Type
         HBox typeBox = new HBox(10);
@@ -151,8 +147,6 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         });
 
         // === SPECULAR SECTION ===
-        Label specLabel = new Label("Specular Highlights");
-        specLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
 
         specularIntensitySlider = new EnhancedSlider("Intensity", 0, 2, 0.5, false);
         specularIntensitySlider.setOnAction(v -> {
@@ -171,8 +165,6 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         });
 
         // === ADVANCED EFFECTS SECTION ===
-        Label advLabel = new Label("Advanced Effects");
-        advLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #aaa;");
 
         reflectionIntensitySlider = new EnhancedSlider("Reflections", 0, 1, 0, false);
         reflectionIntensitySlider.setOnAction(v -> {
@@ -207,31 +199,25 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        root.getChildren().addAll(
-            paletteLabel,
-            gradientEditor,
-            colorStrengthSlider,
-            paletteOffsetSlider,
-            new Separator(),
-            new Label("Material Presets:"),
-            presetsBox,
-            new Separator(),
-            physLabel,
-            typeBox,
-            roughnessSlider,
-            metalnessSlider,
-            iorSlider,
-            new Separator(),
-            specLabel,
-            specularIntensitySlider,
-            specularPowerSlider,
-            new Separator(),
-            advLabel,
-            reflectionIntensitySlider,
-            emissiveIntensitySlider,
-            sssIntensitySlider,
-            sssRadiusSlider
-        );
+        VBox paletteBox = new VBox(5, gradientEditor, colorStrengthSlider, paletteOffsetSlider,
+            new Label("Material Presets:"), presetsBox);
+        TitledPane palettePane = new TitledPane("Color Palette", paletteBox);
+        palettePane.setExpanded(true);
+
+        VBox physBox = new VBox(5, typeBox, roughnessSlider, metalnessSlider, iorSlider);
+        TitledPane physPane = new TitledPane("Physical Material", physBox);
+        physPane.setExpanded(true);
+
+        VBox specBox = new VBox(5, specularIntensitySlider, specularPowerSlider);
+        TitledPane specPane = new TitledPane("Specular Highlights", specBox);
+        specPane.setExpanded(false);
+
+        VBox advBox = new VBox(5, reflectionIntensitySlider, emissiveIntensitySlider,
+            sssIntensitySlider, sssRadiusSlider);
+        TitledPane advPane = new TitledPane("Advanced Effects", advBox);
+        advPane.setExpanded(false);
+
+        root.getChildren().addAll(palettePane, physPane, specPane, advPane);
 
         return root;
     }

@@ -26,7 +26,7 @@ public class GLSLDevicePanel extends ScrollPane {
         box.setPadding(new Insets(10));
 
         Label header = new Label("Rendu GLSL/OpenGL");
-        header.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+        header.getStyleClass().add("title-label");
 
         Label rendererLabel = new Label("GPU: " + controller.getDeviceName());
         rendererLabel.setWrapText(true);
@@ -45,7 +45,7 @@ public class GLSLDevicePanel extends ScrollPane {
             "- Idéal pour le path tracing"
         );
         infoLabel.setWrapText(true);
-        infoLabel.setStyle("-fx-font-size: 11px;");
+        infoLabel.getStyleClass().add("small-label");
 
         Label tip = new Label(
             "Conseil :\n" +
@@ -53,7 +53,7 @@ public class GLSLDevicePanel extends ScrollPane {
             "l'onglet Quality pour une meilleure qualité."
         );
         tip.setWrapText(true);
-        tip.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+        tip.getStyleClass().add("info-label");
 
         box.getChildren().addAll(
             header,

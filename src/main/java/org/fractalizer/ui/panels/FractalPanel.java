@@ -162,11 +162,11 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         // Position display
         positionLabel = new Label("Pos: (0.00, 0.00, -3.00)");
-        positionLabel.setStyle("-fx-font-family: monospace;");
+        positionLabel.getStyleClass().add("mono-label");
 
         // Navigation help
         Label navLabel = new Label("Navigation:");
-        navLabel.setStyle("-fx-font-weight: bold;");
+        navLabel.getStyleClass().add("bold-label");
         Label helpLabel = new Label(
             "Drag: Look around\n" +
             "Arrows: Move\n" +
@@ -176,7 +176,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             "Space: Render full\n" +
             "Scroll: Adjust speed"
         );
-        helpLabel.setStyle("-fx-font-size: 11px;");
+        helpLabel.getStyleClass().add("small-label");
 
         // Reset button
         Button resetBtn = new Button("Reset Camera (R)");
@@ -187,9 +187,11 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         });
         resetBtn.setMaxWidth(Double.MAX_VALUE);
 
-        panel.getChildren().addAll(
-            typeLabel, typeCombo,
-            new Separator(),
+        // Fractal type selector (always visible at top)
+        VBox typeBox = new VBox(5, typeLabel, typeCombo);
+
+        // Fractal-specific parameters (dynamic visibility)
+        VBox fractalParamsBox = new VBox(8,
             mandelbulbControls,
             mandelboxControls,
             mengerControls,
@@ -201,16 +203,17 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             apollonianControls,
             bristorbrotControls,
             testSceneControls,
-            cornellBoxControls,
-            new Separator(),
-            speedSlider,
-            new Separator(),
-            positionLabel,
-            new Separator(),
-            navLabel, helpLabel,
-            new Separator(),
-            resetBtn
+            cornellBoxControls
         );
+        TitledPane paramsPane = new TitledPane("Fractal Parameters", fractalParamsBox);
+        paramsPane.setExpanded(true);
+
+        // Navigation & camera
+        VBox navBox = new VBox(5, speedSlider, positionLabel, navLabel, helpLabel, resetBtn);
+        TitledPane navPane = new TitledPane("Navigation", navBox);
+        navPane.setExpanded(true);
+
+        panel.getChildren().addAll(typeBox, paramsPane, navPane);
 
         return panel;
     }
@@ -270,7 +273,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         // Presets
         Label presetLabel = new Label("Presets:");
-        presetLabel.setStyle("-fx-font-weight: bold;");
+        presetLabel.getStyleClass().add("bold-label");
 
         Button octaClassicBtn = new Button("Octa Classic");
         octaClassicBtn.setOnAction(e -> applyPolyPreset(
@@ -353,10 +356,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         julia3dControls = new VBox(8);
 
         Label titleLabel = new Label("Julia 3D (Quaternion)");
-        titleLabel.setStyle("-fx-font-weight: bold;");
+        titleLabel.getStyleClass().add("bold-label");
 
         Label infoLabel = new Label("q' = q² + c (quaternion iteration)");
-        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        infoLabel.getStyleClass().add("hint-label");
 
         // Iterations
         j3dIterSlider = new EnhancedSlider("Iterations", 4, 20, 12, true);
@@ -366,7 +369,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         // Julia constant C components
         Label cLabel = new Label("Julia Constant (c):");
-        cLabel.setStyle("-fx-font-weight: bold;");
+        cLabel.getStyleClass().add("bold-label");
 
         j3dCxSlider = new EnhancedSlider("cx", -1.0, 1.0, -0.2, false);
         j3dCxSlider.setOnAction(v -> { if(!suppressRender && params instanceof Julia3DParams p) { p.setJuliaCx(v.floatValue()); renderCallback.requestRender(); } });
@@ -382,7 +385,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         // Preset buttons
         Label presetLabel = new Label("Presets:");
-        presetLabel.setStyle("-fx-font-weight: bold;");
+        presetLabel.getStyleClass().add("bold-label");
 
         Button classicBtn = new Button("Classic");
         classicBtn.setOnAction(e -> {
@@ -437,7 +440,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         // Info label about parameter relationships
         Label infoLabel = new Label("Classic Sierpinski: Scale=2, Offset=3");
-        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        infoLabel.getStyleClass().add("hint-label");
 
         kIterSlider = new EnhancedSlider("Iterations", 4, 25, 15, true);
         kIterSlider.showTickMarks(true);
@@ -466,7 +469,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         // Preset buttons for common configurations
         Label presetLabel = new Label("Presets:");
-        presetLabel.setStyle("-fx-font-weight: bold;");
+        presetLabel.getStyleClass().add("bold-label");
 
         Button sierpinskiBtn = new Button("Sierpinski");
         sierpinskiBtn.setOnAction(e -> {
@@ -632,7 +635,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         pkDEOffsetSlider.setOnAction(v -> { if (!suppressRender && params instanceof PseudoKleinianParams p) { p.setDEOffset(v.floatValue()); renderCallback.requestRender(); } });
 
         Label foldLabel = new Label("Fold C (Julia constant):");
-        foldLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        foldLabel.getStyleClass().add("hint-label");
 
         pkFoldCxSlider = new EnhancedSlider("Fold Cx", -2.0, 2.0, -0.62, false);
         pkFoldCxSlider.setOnAction(v -> { if (!suppressRender && params instanceof PseudoKleinianParams p) { p.setFoldCx(v.floatValue()); renderCallback.requestRender(); } });
@@ -684,7 +687,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         brBailoutSlider.setOnAction(v -> { if (!suppressRender && params instanceof BristorbrotParams p) { p.setBailout(v.floatValue()); renderCallback.requestRender(); } });
 
         Label juliaLabel = new Label("Julia C (0 = Mandelbrot mode):");
-        juliaLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        juliaLabel.getStyleClass().add("hint-label");
 
         brJuliaCxSlider = new EnhancedSlider("Julia Cx", -2.0, 2.0, 0.0, false);
         brJuliaCxSlider.setOnAction(v -> { if (!suppressRender && params instanceof BristorbrotParams p) { p.setJuliaCx(v.floatValue()); renderCallback.requestRender(); } });
@@ -705,10 +708,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         testSceneControls = new VBox(8);
 
         Label titleLabel = new Label("SDF Primitives Showcase");
-        titleLabel.setStyle("-fx-font-weight: bold;");
+        titleLabel.getStyleClass().add("bold-label");
 
         Label infoLabel = new Label("Non-fractal scene for testing effects");
-        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        infoLabel.getStyleClass().add("hint-label");
 
         tsScaleSlider = new EnhancedSlider("Scene Scale", 0.5, 3.0, 1.0, false);
         tsScaleSlider.setOnAction(v -> {
@@ -727,10 +730,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         cornellBoxControls = new VBox(8);
 
         Label titleLabel = new Label("Cornell Box");
-        titleLabel.setStyle("-fx-font-weight: bold;");
+        titleLabel.getStyleClass().add("bold-label");
 
         Label infoLabel = new Label("Enable Path Tracing for caustics");
-        infoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        infoLabel.getStyleClass().add("hint-label");
 
         cbScaleSlider = new EnhancedSlider("Scene Scale", 0.5, 3.0, 1.0, false);
         cbScaleSlider.setOnAction(v -> {
@@ -742,7 +745,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         // --- Glass Sphere ---
         Label glassLabel = new Label("Glass Sphere");
-        glassLabel.setStyle("-fx-font-weight: bold;");
+        glassLabel.getStyleClass().add("bold-label");
 
         cbGlassXSlider = new EnhancedSlider("X", -0.9, 0.9, -0.35, false);
         cbGlassXSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setGlassSphereX(v.floatValue()); renderCallback.requestRender(); } });
@@ -758,7 +761,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         // --- Metal Sphere ---
         Label metalLabel = new Label("Metal Sphere");
-        metalLabel.setStyle("-fx-font-weight: bold;");
+        metalLabel.getStyleClass().add("bold-label");
 
         cbMetalXSlider = new EnhancedSlider("X", -0.9, 0.9, 0.35, false);
         cbMetalXSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setMetalSphereX(v.floatValue()); renderCallback.requestRender(); } });
@@ -774,7 +777,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         // --- Light Panel ---
         Label lightLabel = new Label("Light Panel");
-        lightLabel.setStyle("-fx-font-weight: bold;");
+        lightLabel.getStyleClass().add("bold-label");
 
         cbLightXSlider = new EnhancedSlider("X", -0.8, 0.8, 0.0, false);
         cbLightXSlider.setOnAction(v -> { if (!suppressRender && params instanceof CornellBoxParams cb) { cb.setLightPanelX(v.floatValue()); renderCallback.requestRender(); } });

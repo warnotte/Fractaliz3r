@@ -168,3 +168,92 @@
 .menu-item:focused {
     -fx-background-color: #0078d7;
 }
+
+/* TitledPane (Collapsible Sections) */
+.titled-pane {
+    -fx-text-fill: #e0e0e0;
+}
+
+.titled-pane > .title {
+    -fx-background-color: #2d2d36;
+    -fx-background-radius: 4 4 0 0;
+    -fx-padding: 6 8 6 8;
+}
+
+.titled-pane:collapsed > .title {
+    -fx-background-radius: 4;
+}
+
+.titled-pane > .title:hover {
+    -fx-background-color: #3a3a45;
+}
+
+.titled-pane > .title > .arrow-button .arrow {
+    -fx-background-color: #aaaaaa;
+}
+
+.titled-pane > .title > .arrow-button:hover .arrow {
+    -fx-background-color: #ffffff;
+}
+
+.titled-pane > .content {
+    -fx-background-color: #1e1e24;
+    -fx-border-color: #2d2d36;
+    -fx-border-width: 0 1 1 1;
+    -fx-border-radius: 0 0 4 4;
+    -fx-padding: 8;
+}
+
+/* Spinner */
+.spinner {
+    -fx-background-color: #303038;
+    -fx-border-color: #404048;
+    -fx-border-radius: 4;
+}
+
+.spinner .increment-arrow-button,
+.spinner .decrement-arrow-button {
+    -fx-background-color: #3a3a45;
+}
+
+.spinner .increment-arrow-button:hover,
+.spinner .decrement-arrow-button:hover {
+    -fx-background-color: #4a4a55;
+}
+
+/* Utility Classes */
+.bold-label {
+    -fx-font-weight: bold;
+}
+
+.hint-label {
+    -fx-font-size: 10px;
+    -fx-text-fill: gray;
+}
+
+.info-label {
+    -fx-font-size: 11px;
+    -fx-text-fill: #888888;
+}
+
+.small-label {
+    -fx-font-size: 11px;
+}
+
+.mono-label {
+    -fx-font-family: monospace;
+}
+
+.muted-label {
+    -fx-text-fill: #888888;
+}
+
+.status-ok {
+    -fx-font-size: 10px;
+    -fx-text-fill: #00cc66;
+}
+
+.status-error {
+    -fx-font-size: 10px;
+    -fx-text-fill: #ff4444;
+}

@@ -26,7 +26,7 @@ public class EnhancedSlider extends VBox {
         this.isInteger = isInteger;
 
         this.label = new Label();
-        this.label.setStyle("-fx-font-weight: bold;");
+        this.label.getStyleClass().add("bold-label");
         
         this.slider = new Slider(min, max, initial);
         this.slider.setFocusTraversable(false);
