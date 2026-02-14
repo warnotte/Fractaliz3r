@@ -1,6 +1,9 @@
 package org.fractalizer;
 
 import javafx.animation.AnimationTimer;
+import javafx.animation.FadeTransition;
+import javafx.animation.ParallelTransition;
+import javafx.animation.ScaleTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -13,7 +16,11 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
+import javafx.scene.shape.StrokeType;
 import javafx.geometry.Orientation;
+import javafx.util.Duration;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.concurrent.Task;
@@ -46,6 +53,7 @@ public class GLSLFractalizerApp extends Application {
 
     // UI components
     private ImageView imageView;
+    private Circle focusRing;
     private ProgressBar progressBar;
     private Label statusLabel;
     private Label sampleLabel;
@@ -161,6 +169,17 @@ public class GLSLFractalizerApp extends Application {
         imageContainer = new StackPane(imageView);
         imageContainer.setStyle("-fx-background-color: black;");
         imageContainer.setMinSize(0, 0); // Allow SplitPane to resize freely
+
+        // Initialize Focus Ring (Cyber Overlay)
+        focusRing = new Circle(30);
+        focusRing.setFill(Color.TRANSPARENT);
+        focusRing.setStroke(Color.CYAN);
+        focusRing.setStrokeWidth(2);
+        focusRing.setStrokeType(StrokeType.INSIDE);
+        focusRing.setOpacity(0);
+        focusRing.setMouseTransparent(true); // Don't block clicks
+        focusRing.setManaged(false); // Manually positioned
+        imageContainer.getChildren().add(focusRing);
 
         // Left: Controls
         TabPane controlTabs = createControlTabs(initialParams);
@@ -340,16 +359,38 @@ public class GLSLFractalizerApp extends Application {
 
                 if (distance > 0) {
                     statusLabel.setText(String.format("Focal distance set: %.3f", distance));
-                    // Update quality panel if it has a focal distance control
                     qualityPanel.updateFocalDistanceDisplay(distance);
+                    playFocusAnimation(x, y, true);
                     requestRender();
                 } else {
                     statusLabel.setText("No surface at click position");
+                    playFocusAnimation(x, y, false);
                 }
 
                 event.consume();
             }
         });
+    }
+
+    private void playFocusAnimation(double x, double y, boolean success) {
+        focusRing.setCenterX(x);
+        focusRing.setCenterY(y);
+        focusRing.setStroke(success ? Color.CYAN : Color.RED);
+        
+        // Reset state
+        focusRing.setOpacity(1.0);
+        focusRing.setScaleX(1.5);
+        focusRing.setScaleY(1.5);
+
+        ScaleTransition st = new ScaleTransition(Duration.millis(300), focusRing);
+        st.setToX(0.2);
+        st.setToY(0.2);
+
+        FadeTransition ft = new FadeTransition(Duration.millis(400), focusRing);
+        ft.setToValue(0);
+
+        ParallelTransition pt = new ParallelTransition(st, ft);
+        pt.play();
     }
 
     private TabPane createControlTabs(AbstractFractalParams initialParams) {

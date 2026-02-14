@@ -67,22 +67,42 @@
     -fx-border-color: #005a9e;
 }
 
-/* Sliders */
+/* Sliders (Neon Cyber-Engine Style) */
 .slider .track {
-    -fx-background-color: #303038;
+    -fx-background-color: #0a0a15;
     -fx-background-radius: 2;
+    -fx-border-color: rgba(0, 255, 255, 0.1);
+    -fx-border-width: 1px;
+    -fx-border-radius: 2;
+    -fx-pref-height: 6px;
+}
+
+/* Style for the 'filled' part of the slider */
+.slider .bar {
+    -fx-background-color: linear-gradient(to right, #004a7c, #00ccff);
+    -fx-background-radius: 2;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 204, 255, 0.4), 5, 0, 0, 0);
 }
 
 .slider .thumb {
-    -fx-background-color: #0078d7;
-    -fx-background-radius: 10;
-    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 3, 0, 0, 1);
+    -fx-background-color: #1e1e28;
+    -fx-background-radius: 2;
+    -fx-border-color: #00ccff;
+    -fx-border-width: 1.5px;
+    -fx-border-radius: 2;
+    -fx-pref-width: 12px;
+    -fx-pref-height: 18px;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 204, 255, 0.6), 8, 0, 0, 0);
 }
 
 .slider .thumb:hover {
-    -fx-background-color: #1e8feb;
-    -fx-scale-x: 1.1;
-    -fx-scale-y: 1.1;
+    -fx-background-color: #2d2d3a;
+    -fx-border-color: #00ffff;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 255, 255, 0.8), 12, 0, 0, 0);
+}
+
+.slider:focused .thumb {
+    -fx-border-color: white;
 }
 
 /* ComboBox & ColorPicker */
