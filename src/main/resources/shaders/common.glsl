@@ -230,12 +230,57 @@ vec3 getPresetPalette(float t) {
     return texture(paletteTexture, vec2(fract(t), 0.5)).rgb;
 }
 
+vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 rgb2hsv(vec3 c) {
+    vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
 vec3 applyMaterial(vec3 factors) {
     float structural = factors.x;
     float flow = factors.y;
     float depth = factors.z;
 
-    float t; // palette lookup coordinate
+    // Modes 6-8 bypass the palette entirely
+    if (coloringMode == 6) {
+        // HSV Direct: 3 factors independently control Hue/Saturation/Value
+        float h = fract(flow * colorStrength + paletteOffset);
+        float s = mix(0.4, 1.0, structural);
+        float v = mix(0.3, 1.0, 1.0 - depth * 0.7);
+        return hsv2rgb(vec3(h, s, v));
+    }
+    if (coloringMode == 7) {
+        // Dual Palette: two independent palette lookups blended by depth
+        float t1 = structural * colorStrength + paletteOffset;
+        float t2 = flow * colorStrength * 1.5 + paletteOffset + 0.5;
+        vec3 c1 = getPresetPalette(t1);
+        vec3 c2 = getPresetPalette(t2);
+        vec3 color = mix(c1, c2, depth);
+        color *= 1.0 - depth * 0.3;
+        return color;
+    }
+    if (coloringMode == 8) {
+        // Neon: HSV with high saturation, sharp hue bands from all 3 factors
+        float h = fract(floor((structural + flow) * colorStrength * 8.0) / 8.0 + paletteOffset);
+        float s = 0.9;
+        float v = mix(0.5, 1.0, 1.0 - depth * 0.5);
+        vec3 color = hsv2rgb(vec3(h, s, v));
+        // Add glow on structural edges
+        color += hsv2rgb(vec3(h, 0.5, 1.0)) * smoothstep(0.3, 0.7, structural) * 0.3;
+        return color;
+    }
+
+    // Modes 0-5: palette-based coloring
+    float t;
 
     if (coloringMode == 1) {
         // Iteration Bands: sharp discrete color bands by depth
@@ -261,7 +306,7 @@ vec3 applyMaterial(vec3 factors) {
 
     vec3 color = getPresetPalette(t);
 
-    // Structural highlights (shared across all modes)
+    // Structural highlights (shared across palette modes)
     vec3 highlight = mix(vec3(1.0), color * 1.5, 0.5);
     color = mix(color, highlight, clamp(structural * 0.9, 0.0, 1.0));
 
@@ -650,21 +695,6 @@ Ray getCameraRayDOF(vec2 screenUV, inout uint seed) {
     ray.origin = camPos + right * diskSample.x + up * diskSample.y;
     ray.direction = normalize(focalPoint - ray.origin);
     return ray;
-}
-
-vec3 hsv2rgb(vec3 c) {
-    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-
-vec3 rgb2hsv(vec3 c) {
-    vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0);
-    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-    float d = q.x - min(q.w, q.y);
-    float e = 1.0e-10;
-    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
 }
 
 float fresnel(vec3 viewDir, vec3 normal, float power) { return pow(1.0 - max(dot(viewDir, normal), 0.0), power); }

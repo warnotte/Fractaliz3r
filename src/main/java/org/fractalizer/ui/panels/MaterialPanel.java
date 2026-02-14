@@ -89,7 +89,10 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             "Distance",        // 2: structural/proximity based
             "Angular",         // 3: atan2 spiral patterns
             "Blend",           // 4: equal mix of all 3 factors
-            "Contour"          // 5: high-frequency stripes (topographic)
+            "Contour",         // 5: high-frequency stripes (topographic)
+            "HSV Direct",      // 6: factors → H/S/V independently (no palette)
+            "Dual Palette",    // 7: two palette lookups blended by depth
+            "Neon"             // 8: sharp hue bands, high saturation glow
         );
         coloringModeCombo.getSelectionModel().select(0);
         coloringModeCombo.setMaxWidth(Double.MAX_VALUE);
