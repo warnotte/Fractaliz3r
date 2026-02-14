@@ -121,6 +121,13 @@ A parameter randomization system with undo/redo history:
 - **Lock integration**: Locked sliders (🔒) are preserved during randomization.
 - **Snapshots**: Captured via `IdentityHashMap<Object, Object>` before each roll; restored by setting slider/combo values directly (no suppressRender, so param callbacks fire correctly).
 
+### Morph Crossfade (FractalPanel)
+Smooth interpolation between two parameter snapshots:
+- **Set A / Set B**: Capture current fractal params as morph endpoints.
+- **Morph Slider** (0→1): Linearly interpolates all slider values between A and B. ComboBoxes snap at 0.5.
+- **Type safety**: Morph is disabled (slider grayed out) if A and B are different fractal types, with a warning label.
+- Uses the same recursive `IdentityHashMap` snapshot mechanism as the dice history.
+
 ### Parameter Persistence
 The `GLSLFractalizerController` maintains a cache of fractal parameters. Switching between fractal types preserves your specific settings for each fractal, while common settings (Path Tracing, Palette, Lighting) are synchronized across all types.
 
