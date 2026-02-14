@@ -122,6 +122,11 @@ public class AudioPanel extends ScrollPane implements Refreshable {
     private final float[] levelHistory = new float[150];
     private int levelHistoryIndex = 0;
 
+    // Spectrogram waterfall history (ring buffer, ~3s at 30fps)
+    private static final int SPECTRO_HISTORY = 90;
+    private final float[][] spectroHistory = new float[SPECTRO_HISTORY][8];
+    private int spectroIndex = 0;
+
     // Solo mode: -1 = all bands, 0-7 = solo one band
     private int soloBand = -1;
 
@@ -1010,6 +1015,9 @@ public class AudioPanel extends ScrollPane implements Refreshable {
 
         drawPerspectiveGrid(gc, w, 100, data.level(), data.beat());
 
+        // Layer 0.5: Spectrogram Waterfall (behind bars)
+        drawSpectrogram(gc, data, w);
+
         // Layer 1: Heartbeat Rings
         if (data.beat() > 0.45) beatRingSize = 1.0;
         if (data.onset() > 0.45) onsetRingSize = 1.0;
@@ -1226,6 +1234,48 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         gc.fillText("PWR", 30, hudY + 64);
         gc.setTextAlign(javafx.scene.text.TextAlignment.RIGHT);
         gc.fillText("44.1k", w - 15, hudY + 64);
+    }
+
+    /**
+     * Draw spectrogram waterfall behind the bars.
+     * Each row = one time frame, scrolling upward. Newest at bottom.
+     * Each column = one frequency band, colored by intensity.
+     */
+    private void drawSpectrogram(GraphicsContext gc, AudioData data, double canvasW) {
+        float[] bands = data.bands();
+
+        // Store current frame in history
+        System.arraycopy(bands, 0, spectroHistory[spectroIndex % SPECTRO_HISTORY], 0, 8);
+        spectroIndex++;
+
+        double barAreaW = canvasW - 60;
+        double barW = barAreaW / 8.0;
+        double gap = 6;
+        double bottomY = 100;
+        double rowH = bottomY / SPECTRO_HISTORY;
+
+        for (int row = 0; row < SPECTRO_HISTORY; row++) {
+            // Oldest at top, newest at bottom
+            int histIdx = (spectroIndex - SPECTRO_HISTORY + row + SPECTRO_HISTORY * 2) % SPECTRO_HISTORY;
+            float[] histBands = spectroHistory[histIdx];
+
+            // Fade older rows
+            double ageFactor = (double) row / SPECTRO_HISTORY; // 0=oldest, 1=newest
+            double y = bottomY - (row + 1) * rowH;
+
+            for (int b = 0; b < 8; b++) {
+                if (soloBand != -1 && soloBand != b) continue;
+
+                float val = histBands[b];
+                if (val < 0.01f) continue;
+
+                double x = 30 + b * barW + gap / 2;
+                double alpha = val * ageFactor * 0.35;
+                Color c = BAND_COLORS[b];
+                gc.setFill(Color.color(c.getRed(), c.getGreen(), c.getBlue(), Math.min(alpha, 0.5)));
+                gc.fillRect(x, y, barW - gap, rowH + 0.5);
+            }
+        }
     }
 
     // ========================================================================
