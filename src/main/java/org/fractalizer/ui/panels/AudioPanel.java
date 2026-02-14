@@ -8,7 +8,9 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
@@ -377,10 +379,14 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         info.getStyleClass().add("info-label");
         info.setWrapText(true);
 
-        // Resolution
-        HBox resBox = new HBox(6);
-        resBox.setAlignment(Pos.CENTER_LEFT);
-        resBox.getChildren().add(new Label("Resolution:"));
+        // Grid for aligned labels + controls
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(6);
+
+        // Resolution (row 0)
+        Label resLabel = new Label("Resolution:");
+        resLabel.setMinWidth(100);
         exportResolutionCombo = new ComboBox<>();
         exportResolutionCombo.getItems().addAll(
                 "1280x720 (HD)",
@@ -389,38 +395,36 @@ public class AudioPanel extends ScrollPane implements Refreshable {
                 "3840x2160 (4K)"
         );
         exportResolutionCombo.setValue("1920x1080 (Full HD)");
-        resBox.getChildren().add(exportResolutionCombo);
+        exportResolutionCombo.setMaxWidth(Double.MAX_VALUE);
+        GridPane.setHgrow(exportResolutionCombo, Priority.ALWAYS);
+        grid.add(resLabel, 0, 0);
+        grid.add(exportResolutionCombo, 1, 0, 2, 1);
 
-        // Samples per frame
-        HBox samplesBox = new HBox(6);
-        samplesBox.setAlignment(Pos.CENTER_LEFT);
-        samplesBox.getChildren().add(new Label("Samples/frame:"));
+        // Samples/frame (row 1)
         exportSamplesSpinner = new Spinner<>(1, 256, 16, 4);
-        exportSamplesSpinner.setPrefWidth(70);
+        exportSamplesSpinner.setPrefWidth(80);
         exportSamplesSpinner.setEditable(true);
         exportSamplesSpinner.setTooltip(new Tooltip("More samples = better quality, slower render"));
-        samplesBox.getChildren().add(exportSamplesSpinner);
+        grid.add(new Label("Samples/frame:"), 0, 1);
+        grid.add(exportSamplesSpinner, 1, 1);
 
-        // FPS
-        HBox fpsBox = new HBox(6);
-        fpsBox.setAlignment(Pos.CENTER_LEFT);
-        fpsBox.getChildren().add(new Label("FPS:"));
+        // FPS (row 2)
         exportFpsSpinner = new Spinner<>(10, 60, 30, 5);
-        exportFpsSpinner.setPrefWidth(70);
+        exportFpsSpinner.setPrefWidth(80);
         exportFpsSpinner.setEditable(true);
-        fpsBox.getChildren().add(exportFpsSpinner);
+        grid.add(new Label("FPS:"), 0, 2);
+        grid.add(exportFpsSpinner, 1, 2);
 
-        // Duration
-        HBox durationBox = new HBox(6);
-        durationBox.setAlignment(Pos.CENTER_LEFT);
-        durationBox.getChildren().add(new Label("Duration:"));
+        // Duration (row 3)
         exportDurationSpinner = new Spinner<>(0, 600, 30, 5);
-        exportDurationSpinner.setPrefWidth(70);
+        exportDurationSpinner.setPrefWidth(80);
         exportDurationSpinner.setEditable(true);
         exportDurationSpinner.setTooltip(new Tooltip("Max seconds (0 = full track)"));
         Label secLabel = new Label("sec (0=full)");
         secLabel.getStyleClass().add("small-label");
-        durationBox.getChildren().addAll(exportDurationSpinner, secLabel);
+        grid.add(new Label("Duration:"), 0, 3);
+        grid.add(exportDurationSpinner, 1, 3);
+        grid.add(secLabel, 2, 3);
 
         // Export button
         exportVideoButton = new Button("Export Audio-Reactive Video...");
@@ -439,9 +443,7 @@ public class AudioPanel extends ScrollPane implements Refreshable {
             ffmpegLabel.getStyleClass().add("status-error");
         }
 
-        section.getChildren().addAll(info,
-                resBox, samplesBox, fpsBox, durationBox,
-                exportVideoButton, ffmpegLabel);
+        section.getChildren().addAll(info, grid, exportVideoButton, ffmpegLabel);
         return section;
     }
 
