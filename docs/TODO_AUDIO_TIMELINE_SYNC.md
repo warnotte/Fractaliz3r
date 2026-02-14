@@ -46,4 +46,4 @@ Pour chaque frame i:
 - [x] Ajouter `timelineSupplier` + `prepareFrameCallback` a AudioPanel
 - [x] Modifier la boucle d'export pour appliquer la timeline par frame
 - [x] Wirer dans GLSLFractalizerApp
-- [ ] Tester : animation camera + audio-reactive dans le meme export
+- [x] Tester : animation camera + audio-reactive dans le meme export
