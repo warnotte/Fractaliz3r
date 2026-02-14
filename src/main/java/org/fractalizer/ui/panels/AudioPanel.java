@@ -23,6 +23,8 @@ import org.fractalizer.render.FFmpegExporter;
 import org.fractalizer.ui.ExportProgressDialog;
 import org.fractalizer.ui.components.EnhancedSlider;
 
+import org.fractalizer.animation.Timeline;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
@@ -103,6 +105,10 @@ public class AudioPanel extends ScrollPane implements Refreshable {
     private Spinner<Integer> exportSamplesSpinner;
     private Spinner<Integer> exportFpsSpinner;
     private ComboBox<String> exportResolutionCombo;
+
+    // Timeline integration for offline export (keyframe animation)
+    private Supplier<Timeline> timelineSupplier;
+    private Runnable prepareFrameCallback;
 
     // Deterministic frame counter for audio-reactive effects
     private int audioFrameCounter = 0;
@@ -550,6 +556,22 @@ public class AudioPanel extends ScrollPane implements Refreshable {
                     // Set current audio data for this frame
                     currentOfflineData = audioFrames[frame];
                     audioFrameCounter = frame;
+
+                    // Apply timeline keyframes for this frame's time
+                    double frameTime = frame / (double) fps;
+                    Timeline tl = (timelineSupplier != null) ? timelineSupplier.get() : null;
+                    if (tl != null) {
+                        CountDownLatch tlLatch = new CountDownLatch(1);
+                        Platform.runLater(() -> {
+                            try {
+                                tl.setCurrentTime(frameTime);
+                                if (prepareFrameCallback != null) prepareFrameCallback.run();
+                            } finally {
+                                tlLatch.countDown();
+                            }
+                        });
+                        tlLatch.await();
+                    }
 
                     // Prepare frame on FX thread
                     final int currentFrame = frame;
@@ -1250,6 +1272,16 @@ public class AudioPanel extends ScrollPane implements Refreshable {
      */
     public void setFrameExportCallback(FrameExportCallback callback) {
         this.frameExportCallback = callback;
+    }
+
+    /** Set timeline supplier for applying keyframes during offline export. */
+    public void setTimelineSupplier(Supplier<Timeline> supplier) {
+        this.timelineSupplier = supplier;
+    }
+
+    /** Set callback to apply timeline params (AnimationManager.applyTimelineToParams). */
+    public void setPrepareFrameCallback(Runnable callback) {
+        this.prepareFrameCallback = callback;
     }
 
     /** Whether an offline export is in progress. */

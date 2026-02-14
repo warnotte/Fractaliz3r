@@ -1,8 +1,8 @@
 # Audio-Reactive Fractals — Documentation technique
 
-> **TODO ouvert :** L'export audio-reactive n'applique pas les keyframes de la timeline
-> (camera fixe pendant l'export). Voir [TODO_AUDIO_TIMELINE_SYNC.md](TODO_AUDIO_TIMELINE_SYNC.md)
-> pour l'analyse et le plan de solution.
+> **DONE :** L'export audio-reactive applique maintenant les keyframes de la timeline
+> (animation camera + effets audio additifs). Voir [TODO_AUDIO_TIMELINE_SYNC.md](TODO_AUDIO_TIMELINE_SYNC.md)
+> pour les details d'implementation.
 
 ## Vue d'ensemble
 
@@ -195,13 +195,17 @@ Le canvas du panneau Spectrum est découpé en 6 zones :
 - **Fichier** : Chargement MP3/WAV/AAC (FileChooser)
 - **Transport** : Play/Pause/Stop, barre de progression, temps
 - **Visualiseur** : Canvas 300×160, 8 barres colorées, labels fréquences, seuil beat, historique level, VU meter, LEDs beat/onset, mode solo par bande
-- **Mappings réactifs** (6 EnhancedSliders) :
+- **Mappings réactifs** (10 EnhancedSliders) :
   - Bass → Fractal Morph (0-1, défaut 0.5)
   - Mid → Color Shift (0-1, défaut 0.5)
   - Treble → Glow (0-1, défaut 0.3)
   - Beat → FOV Pulse (0-1, défaut 0.3)
   - Onset → Emissive Pulse (0-1, défaut 0.4)
   - Level → Fog/AO (0-1, défaut 0.2)
+  - Beat → Camera Shake (0-1, défaut 0) — micro-secousse sur les beats via noise(audioFrameIndex)
+  - Beat → Post-Process Pump (0-1, défaut 0) — exposure/vignette/CA/saturation pulsent
+  - Onset → Palette Jump (0-1, défaut 0) — saut de couleur stroboscopique via hash
+  - Bass → Space Warp (0-1, défaut 0) — distorsion des rayons par les basses
 - **Sensibilité** : Attack (0-0.99), Release (0-0.99), Beat Sensitivity (0-1), + presets réactivité (Smooth/Default/Punchy/Instant)
 - **Presets mappings** : Subtle, Medium, Intense, Psychedelic
 - **Export vidéo offline** : Résolution, Samples/frame, FPS, Durée, bouton Export
@@ -222,7 +226,14 @@ float getReactGlow()
 float getReactFOV()
 float getReactOnset()
 float getReactFog()
+float getReactShake()          // camera shake intensity
+float getReactPump()           // post-process pump intensity
+float getReactPaletteJump()    // palette jump intensity
+float getReactWarp()           // space warp intensity
+int getAudioFrameIndex()       // deterministic frame counter
 void setFrameExportCallback()  // callback pour le rendu offline
+void setTimelineSupplier()     // timeline pour keyframes pendant export
+void setPrepareFrameCallback() // callback pour appliquer les keyframes
 void dispose()                 // nettoyage MediaPlayer + timers
 ```
 

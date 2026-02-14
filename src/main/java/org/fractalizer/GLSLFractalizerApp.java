@@ -285,6 +285,10 @@ public class GLSLFractalizerApp extends Application {
             }
         });
 
+        // Wire audio panel to timeline for offline export (keyframe animation)
+        audioPanel.setTimelineSupplier(() -> animationManager.getTimeline());
+        audioPanel.setPrepareFrameCallback(() -> animationManager.applyTimelineToParams());
+
         // Listen for viewport size changes
         setupViewportSizeListener();
 
@@ -466,6 +470,7 @@ public class GLSLFractalizerApp extends Application {
         controller.setAudioPanel(audioPanel);
         audioPanel.setFrameExportCallback((file, width, height, samples, progress, cancel) ->
                 controller.exportAnimationFrame(file, width, height, samples, progress, cancel));
+        // Note: timeline supplier and prepare callback are wired after animationManager is created
         Tab audioTab = new Tab("Audio", audioPanel);
 
         tabPane.getTabs().addAll(fractalTab, lightingTab, materialTab, qualityTab, postProcessTab, environmentTab, audioTab, exportTab, deviceTab);
