@@ -1,12 +1,18 @@
 package org.fractalizer.ui.panels;
 
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.fractalizer.engine.Camera;
 import org.fractalizer.fractals.*;
 import org.fractalizer.ui.RenderController;
 import org.fractalizer.ui.components.EnhancedSlider;
+
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Panel for fractal type selection and fractal-specific parameters.
@@ -43,6 +49,9 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private VBox bristorbrotControls;
     private VBox testSceneControls;
     private VBox cornellBoxControls;
+
+    // Container for all fractal-specific controls (used by dice randomizer)
+    private VBox fractalParamsBox;
 
     // Common controls
     private EnhancedSlider speedSlider;
@@ -187,11 +196,20 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         });
         resetBtn.setMaxWidth(Double.MAX_VALUE);
 
+        // Dice randomizer button
+        Button diceBtn = new Button("\uD83C\uDFB2");  // dice emoji
+        diceBtn.setTooltip(new Tooltip("Randomize fractal parameters"));
+        diceBtn.setOnAction(e -> randomizeCurrentFractal());
+
         // Fractal type selector (always visible at top)
-        VBox typeBox = new VBox(5, typeLabel, typeCombo);
+        HBox typeRow = new HBox(6, typeCombo, diceBtn);
+        typeRow.setAlignment(Pos.CENTER_LEFT);
+        typeCombo.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(typeCombo, javafx.scene.layout.Priority.ALWAYS);
+        VBox typeBox = new VBox(5, typeLabel, typeRow);
 
         // Fractal-specific parameters (dynamic visibility)
-        VBox fractalParamsBox = new VBox(8,
+        fractalParamsBox = new VBox(8,
             mandelbulbControls,
             mandelboxControls,
             mengerControls,
@@ -1081,6 +1099,38 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         } finally {
             suppressRender = false;
+        }
+    }
+
+    /**
+     * Randomize the fractal-specific parameters of the current fractal type.
+     * Recursively walks the visible fractal controls and randomizes all
+     * EnhancedSliders (using their own min/max) and ComboBoxes found within.
+     * Adding new sliders or fractal types requires zero changes here.
+     */
+    private void randomizeCurrentFractal() {
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
+        randomizeAllIn(fractalParamsBox, rng);
+        renderCallback.requestRender();
+    }
+
+    private void randomizeAllIn(Node node, ThreadLocalRandom rng) {
+        if (!node.isVisible()) return;
+
+        if (node instanceof EnhancedSlider slider) {
+            double min = slider.getSlider().getMin();
+            double max = slider.getSlider().getMax();
+            double value = min + rng.nextDouble() * (max - min);
+            if (slider.isInteger()) {
+                value = Math.round(value);
+            }
+            slider.setValue(value);
+        } else if (node instanceof ComboBox<?> combo && !combo.getItems().isEmpty()) {
+            combo.getSelectionModel().select(rng.nextInt(combo.getItems().size()));
+        } else if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                randomizeAllIn(child, rng);
+            }
         }
     }
 

@@ -89,9 +89,11 @@ public class EnhancedSlider extends VBox {
     // --- Configuration API ---
 
     public Slider getSlider() { return slider; }
-    
+
+    public boolean isInteger() { return isInteger; }
+
     public double getValue() { return slider.getValue(); }
-    
+
     public void setValue(double value) { slider.setValue(value); }
 
     public void setPrecision(int decimals) {
