@@ -28,6 +28,7 @@ Step inside the fractal with full panoramic support.
 *   **Visual Gradient Editor**: A professional GPU-based coloring system with draggable stops and presets.
 *   **Procedural Environments**: Dynamic sky types (Clouds, Space, Ocean, Studio) with spatial parallax.
 *   **Physical Materials**: Support for Lambertian, Metallic, and Glass materials with real-time path tracing.
+*   **Dice Randomizer**: One-click parameter randomization with undo/redo history and per-slider lock protection.
 
 ---
 

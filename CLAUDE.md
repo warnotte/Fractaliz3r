@@ -110,7 +110,16 @@ A standard component used for **all** numeric parameters across the application:
   - `SHIFT + Scroll`: Fine/Precision control (10x slower).
   - `CTRL + Scroll`: Fast movement (10x faster).
 - **Automatic Labels**: Displays title and value with configurable precision.
+- **Lock Button**: Each slider has a lock toggle (🔓/🔒) that protects it from the dice randomizer.
 - **Tooltip Help**: Explains shortcuts when hovering.
+
+### Dice Randomizer (FractalPanel)
+A parameter randomization system with undo/redo history:
+- **🎲 Button**: Randomizes all unlocked fractal-specific sliders and ComboBoxes using their own min/max ranges.
+- **◀ / ▶ Buttons**: Navigate through dice history (up to 50 snapshots).
+- **Auto-discovery**: Uses recursive tree traversal of the visible fractal controls VBox — adding a new slider or fractal type requires zero changes to the randomizer.
+- **Lock integration**: Locked sliders (🔒) are preserved during randomization.
+- **Snapshots**: Captured via `IdentityHashMap<Object, Object>` before each roll; restored by setting slider/combo values directly (no suppressRender, so param callbacks fire correctly).
 
 ### Parameter Persistence
 The `GLSLFractalizerController` maintains a cache of fractal parameters. Switching between fractal types preserves your specific settings for each fractal, while common settings (Path Tracing, Palette, Lighting) are synchronized across all types.
