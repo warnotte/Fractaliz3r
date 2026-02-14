@@ -63,6 +63,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
     // Morph crossfade (A ↔ B)
     private Map<Object, Object> morphA, morphB;
+    private FractalType morphTypeA, morphTypeB;
     private Slider morphSlider;
     private Label morphLabel;
 
@@ -258,6 +259,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         setABtn.setTooltip(new Tooltip("Capture current params as morph start"));
         setABtn.setOnAction(e -> {
             morphA = captureSnapshot();
+            morphTypeA = params.getType();
             updateMorphLabel();
         });
 
@@ -265,6 +267,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         setBBtn.setTooltip(new Tooltip("Capture current params as morph end"));
         setBBtn.setOnAction(e -> {
             morphB = captureSnapshot();
+            morphTypeB = params.getType();
             updateMorphLabel();
         });
 
@@ -1265,12 +1268,17 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
     private void updateMorphLabel() {
         if (morphA != null && morphB != null) {
-            morphSlider.setDisable(false);
-            morphLabel.setText("Morph: A \u2194 B ready");
+            if (morphTypeA != morphTypeB) {
+                morphSlider.setDisable(true);
+                morphLabel.setText("Morph: A=" + morphTypeA + " \u2260 B=" + morphTypeB);
+            } else {
+                morphSlider.setDisable(false);
+                morphLabel.setText("Morph: A \u2194 B ready (" + morphTypeA + ")");
+            }
         } else if (morphA != null) {
-            morphLabel.setText("Morph: A set, need B");
+            morphLabel.setText("Morph: A set (" + morphTypeA + "), need B");
         } else if (morphB != null) {
-            morphLabel.setText("Morph: need A, B set");
+            morphLabel.setText("Morph: need A, B set (" + morphTypeB + ")");
         }
     }
 
