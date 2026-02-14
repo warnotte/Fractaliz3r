@@ -57,6 +57,17 @@ public class AudioPanel extends ScrollPane implements Refreshable {
 
     // Spectrum visualizer
     private Canvas spectrumCanvas;
+    private final float[] peaks = new float[8];
+    private final long[] peakTimes = new long[8];
+    private double beatRingSize = 0;
+    private double onsetRingSize = 0;
+
+    // Visual constants (Cyber-Engine Theme)
+    private static final Color COLOR_BG = Color.rgb(10, 10, 21);
+    private static final Color COLOR_GRID = Color.rgb(40, 40, 60, 0.3);
+    private static final Color COLOR_TEXT = Color.rgb(150, 150, 170);
+    private static final Color COLOR_BEAT = Color.rgb(255, 40, 80);
+    private static final Color COLOR_ONSET = Color.rgb(40, 180, 255);
 
     // Mapping sliders
     private EnhancedSlider bassMorph;
@@ -114,13 +125,13 @@ public class AudioPanel extends ScrollPane implements Refreshable {
     // Band colors for visualizer
     private static final Color[] BAND_COLORS = {
             Color.web("#ff0040"), // Sub-bass - red
-            Color.web("#ff4400"), // Bass - orange
-            Color.web("#ff8800"), // Low-mid - amber
-            Color.web("#ffcc00"), // Mid - yellow
-            Color.web("#88ff00"), // Upper-mid - lime
-            Color.web("#00ff88"), // Presence - cyan
-            Color.web("#0088ff"), // Brilliance - blue
-            Color.web("#8800ff"), // Air - purple
+            Color.web("#ff6a00"), // Bass - orange
+            Color.web("#ffd800"), // Low-mid - amber
+            Color.web("#bfff00"), // Mid - lime
+            Color.web("#00ff90"), // Upper-mid - emerald
+            Color.web("#00ffff"), // Presence - cyan
+            Color.web("#0094ff"), // Brilliance - blue
+            Color.web("#8b00ff"), // Air - violet
     };
 
     /**
@@ -231,14 +242,14 @@ public class AudioPanel extends ScrollPane implements Refreshable {
     private VBox createVisualizerSection() {
         VBox section = new VBox(6);
 
-        spectrumCanvas = new Canvas(300, 160);
+        spectrumCanvas = new Canvas(450, 220);
         drawEmptySpectrum();
 
-        // Click handler for solo mode (only in spectrum bar zone, y < 80)
+        // Click handler for solo mode
         spectrumCanvas.setOnMouseClicked(e -> {
-            if (e.getY() > 80) return;
-            double barWidth = (spectrumCanvas.getWidth() - 20) / 8.0;
-            int clickedBand = (int) ((e.getX() - 10) / barWidth);
+            if (e.getY() > 100) return;
+            double barWidth = (spectrumCanvas.getWidth() - 40) / 8.0;
+            int clickedBand = (int) ((e.getX() - 20) / barWidth);
             if (clickedBand < 0 || clickedBand > 7) return;
             soloBand = (clickedBand == soloBand) ? -1 : clickedBand;
         });
@@ -923,205 +934,274 @@ public class AudioPanel extends ScrollPane implements Refreshable {
         double w = spectrumCanvas.getWidth();
         double h = spectrumCanvas.getHeight();
 
-        gc.setFill(Color.web("#1a1a2e"));
+        gc.setFill(COLOR_BG);
         gc.fillRect(0, 0, w, h);
 
-        // Grid lines in spectrum zone (0-80)
-        gc.setStroke(Color.web("#333"));
-        gc.setLineWidth(0.5);
-        for (int i = 0; i < 4; i++) {
-            double y = 80.0 * (i + 1) / 5.0;
+        drawPerspectiveGrid(gc, w, h, 0);
+
+        gc.setFill(COLOR_TEXT);
+        gc.setFont(javafx.scene.text.Font.font("monospace", 10));
+        gc.setTextAlign(javafx.scene.text.TextAlignment.CENTER);
+        gc.fillText("AWAITING SIGNAL...", w / 2, 40);
+    }
+
+    private void drawPerspectiveGrid(GraphicsContext gc, double w, double h, double pulse) {
+        gc.setStroke(COLOR_GRID.deriveColor(0, 1, 1, 0.4 + pulse * 0.4));
+        gc.setLineWidth(1.0);
+
+        // Horizontal lines (perspective)
+        for (int i = 0; i < 6; i++) {
+            double y = 80.0 * Math.pow(i / 5.0, 1.4);
             gc.strokeLine(0, y, w, y);
         }
 
-        // Band labels
-        gc.setFill(Color.web("#555"));
-        gc.setFont(javafx.scene.text.Font.font("monospace", 8));
-        double barWidth = (w - 20) / 8.0;
-        for (int i = 0; i < 8; i++) {
-            double x = 10 + i * barWidth + barWidth / 2 - 8;
-            gc.fillText(BAND_LABELS[i], x, 90);
+        // Vertical lines (converging)
+        for (int i = 0; i < 9; i++) {
+            double x = w * i / 8.0;
+            gc.strokeLine(x, 0, x, 80);
         }
-
-        gc.setFont(javafx.scene.text.Font.font("monospace", 10));
-        gc.fillText("No audio", w / 2 - 25, 40);
     }
 
     private void drawSpectrum() {
-        AudioData data = audioEngine.getLatestData();
+        AudioData data = getAudioData();
         GraphicsContext gc = spectrumCanvas.getGraphicsContext2D();
         double w = spectrumCanvas.getWidth();
+        double h = spectrumCanvas.getHeight();
 
         // Update level history ring buffer
         levelHistory[levelHistoryIndex % levelHistory.length] = data.level();
         levelHistoryIndex++;
 
-        // Clear entire canvas
-        gc.setFill(Color.web("#1a1a2e"));
-        gc.fillRect(0, 0, w, 160);
+        // Layer 0: Background, Grid & Vignette
+        gc.setFill(COLOR_BG);
+        gc.fillRect(0, 0, w, h);
+        
+        javafx.scene.paint.RadialGradient vignette = new javafx.scene.paint.RadialGradient(
+            0, 0, w/2, h/2, w*0.8, false, javafx.scene.paint.CycleMethod.NO_CYCLE,
+            new javafx.scene.paint.Stop(0, Color.TRANSPARENT),
+            new javafx.scene.paint.Stop(1, Color.rgb(0, 0, 0, 0.5))
+        );
+        gc.setFill(vignette);
+        gc.fillRect(0, 0, w, h);
 
-        // Beat flash overlay
-        if (data.beat() > 0.3) {
-            beatFlash = Math.max(beatFlash, data.beat());
-        }
-        if (beatFlash > 0.01) {
-            gc.setFill(Color.rgb(255, 255, 255, beatFlash * 0.15));
-            gc.fillRect(0, 0, w, 80);
-            beatFlash *= 0.85;
+        drawPerspectiveGrid(gc, w, 100, data.level(), data.beat());
+
+        // Layer 1: Heartbeat Rings
+        if (data.beat() > 0.45) beatRingSize = 1.0;
+        if (data.onset() > 0.45) onsetRingSize = 1.0;
+
+        double centerX = w / 2;
+        double centerY = 50;
+
+        if (beatRingSize > 0.01) {
+            double r = (1.0 - beatRingSize) * w * 0.7;
+            gc.setStroke(COLOR_BEAT.deriveColor(0, 1, 1, beatRingSize * 0.6));
+            gc.setLineWidth(4.0 * beatRingSize);
+            gc.strokeOval(centerX - r / 2, centerY - r / 2, r, r);
+            beatRingSize *= 0.85;
         }
 
-        // ---- Zone 1: Spectrum bars (0-80px) ----
-        gc.setStroke(Color.web("#333"));
-        gc.setLineWidth(0.5);
-        for (int i = 0; i < 4; i++) {
-            double y = 80.0 * (i + 1) / 5.0;
+        if (onsetRingSize > 0.01) {
+            double r = (1.0 - onsetRingSize) * w * 1.1;
+            gc.setStroke(COLOR_ONSET.deriveColor(0, 1, 1, onsetRingSize * 0.5));
+            gc.setLineWidth(2.0 * onsetRingSize);
+            gc.strokeOval(centerX - r / 2, centerY - r / 2, r, r);
+            onsetRingSize *= 0.90;
+        }
+
+        // Layer 2: Neon Pistons & Peaks
+        float[] bands = data.bands();
+        double barAreaW = w - 60;
+        double barW = barAreaW / 8.0;
+        double gap = 6;
+        double bottomY = 100;
+
+        gc.setFont(javafx.scene.text.Font.font("monospace", 9));
+
+        for (int i = 0; i < 8; i++) {
+            if (soloBand != -1 && soloBand != i) continue;
+
+            double val = bands[i];
+            double barH = Math.min(val * 90, 95);
+            double x = 30 + i * barW + gap / 2;
+            double y = bottomY - barH;
+
+            // Neon Bar
+            javafx.scene.paint.LinearGradient grad = new javafx.scene.paint.LinearGradient(
+                0, y, 0, bottomY, false, javafx.scene.paint.CycleMethod.NO_CYCLE,
+                new javafx.scene.paint.Stop(0, BAND_COLORS[i].brighter()),
+                new javafx.scene.paint.Stop(0.3, BAND_COLORS[i]),
+                new javafx.scene.paint.Stop(1, BAND_COLORS[i].deriveColor(0, 1, 0.3, 0.05))
+            );
+            gc.setFill(grad);
+            gc.fillRect(x, y, barW - gap, barH);
+
+            gc.setFill(BAND_COLORS[i].brighter());
+            gc.fillRect(x, y, barW - gap, 2);
+
+            // Peak logic
+            if (val > peaks[i]) {
+                peaks[i] = (float) val;
+                peakTimes[i] = System.currentTimeMillis();
+            } else {
+                long elapsed = System.currentTimeMillis() - peakTimes[i];
+                if (elapsed > 400) {
+                    float fallSpeed = (float) (elapsed - 400) / 1000.0f;
+                    peaks[i] -= fallSpeed * 0.06f;
+                    if (peaks[i] < val) peaks[i] = (float) val;
+                }
+            }
+
+            double peakY = bottomY - Math.min(peaks[i] * 90, 95);
+            gc.setFill(Color.WHITE.deriveColor(0, 1, 1, 0.9));
+            gc.fillRect(x, peakY, barW - gap, 1);
+
+            // Labels
+            gc.setFill((soloBand == i) ? Color.WHITE : COLOR_TEXT);
+            gc.setTextAlign(javafx.scene.text.TextAlignment.CENTER);
+            gc.fillText(BAND_LABELS[i], x + (barW - gap) / 2, bottomY + 15);
+
+            // Flow lines (Layer 3)
+            drawFlowMapping(gc, x + (barW - gap) / 2, bottomY + 20, i, val);
+        }
+
+        // Beat Threshold
+        float threshold = audioEngine.getLastBeatThreshold();
+        if (threshold > 0.001f) {
+            double thresholdY = 100 - Math.min(threshold * 45, 95);
+            gc.setStroke(COLOR_BEAT.deriveColor(0, 1, 1, 0.7));
+            gc.setLineWidth(1);
+            gc.setLineDashes(3, 5);
+            gc.strokeLine(20, thresholdY, 30 + 2 * barW, thresholdY);
+            gc.setLineDashes(null);
+        }
+
+        // HUD & Scanlines
+        drawHUD(gc, w, h, data);
+        drawScanlines(gc, w, h);
+    }
+
+    private void drawPerspectiveGrid(GraphicsContext gc, double w, double h, double pulse, double beat) {
+        // Grid warps slightly on beat
+        double warp = beat * 8.0;
+        gc.setStroke(COLOR_GRID.deriveColor(0, 1, 1, 0.3 + pulse * 0.5));
+        gc.setLineWidth(1.0);
+
+        // Horizontal lines (Perspective)
+        for (int i = 0; i < 7; i++) {
+            double y = h * Math.pow(i / 6.0, 1.4 + beat * 0.2);
             gc.strokeLine(0, y, w, y);
         }
 
-        float[] bands = data.bands();
-        double barWidth = (w - 20) / 8.0;
-        double gap = 2;
+        // Vertical lines
+        for (int i = 0; i < 11; i++) {
+            double x = w * i / 10.0;
+            double xOffset = (i - 5) * warp;
+            gc.strokeLine(x + xOffset, 0, x, h);
+        }
+    }
 
-        for (int i = 0; i < 8; i++) {
-            double barH = Math.min(bands[i] * 80 * 2.5, 76);
-            double x = 10 + i * barWidth + gap / 2;
-            double y = 80 - barH - 2;
+    private void drawScanlines(GraphicsContext gc, double w, double h) {
+        gc.setStroke(Color.rgb(0, 0, 0, 0.15));
+        gc.setLineWidth(1.0);
+        for (int y = 0; y < h; y += 3) {
+            gc.strokeLine(0, y, w, y);
+        }
+    }
 
-            Color color = BAND_COLORS[i];
-            if (soloBand >= 0 && i != soloBand) {
-                // Non-solo'd bands: dim grey
-                gc.setFill(color.deriveColor(0, 0.2, 0.3, 0.3));
-                gc.fillRect(x, y, barWidth - gap, barH);
-            } else {
-                gc.setFill(color.deriveColor(0, 1, 0.8, 0.9));
-                gc.fillRect(x, y, barWidth - gap, barH);
-                gc.setFill(color);
-                gc.fillRect(x, y, barWidth - gap, Math.min(3, barH));
-                if (soloBand == i) {
-                    // Highlight border for solo'd band
-                    gc.setStroke(Color.WHITE);
-                    gc.setLineWidth(1);
-                    gc.strokeRect(x - 1, y - 1, barWidth - gap + 2, barH + 2);
-                }
-            }
+    private void drawFlowMapping(GraphicsContext gc, double x, double y, int band, double val) {
+        double active = 0;
+        if (band == 0) active = bassMorph.getValue() + bassToWarp.getValue();
+        else if (band == 3) active = midToColor.getValue();
+        else if (band == 6) active = trebleToGlow.getValue();
+        
+        if (active < 0.05) return;
+
+        double opacity = active * 0.5 * (0.3 + val * 0.7);
+        gc.setStroke(BAND_COLORS[band].deriveColor(0, 1, 1, opacity));
+        gc.setLineWidth(1.2);
+        gc.beginPath();
+        gc.moveTo(x, y);
+        gc.bezierCurveTo(x, y + 20, x, y + 35, x, y + 50);
+        gc.stroke();
+        
+        if (val > 0.25) {
+            double pY = y + ((System.currentTimeMillis() % 700) / 700.0) * 50;
+            gc.setFill(Color.WHITE.deriveColor(0, 1, 1, val * active * 0.8));
+            gc.fillOval(x - 1.5, pY, 3, 3);
+        }
+    }
+
+    private void drawHUD(GraphicsContext gc, double w, double h, AudioData data) {
+        double hudY = 145;
+        double hudH = 70;
+        
+        // Background
+        gc.setFill(Color.rgb(10, 10, 25, 0.95));
+        gc.fillRect(10, hudY, w - 20, hudH);
+        gc.setStroke(COLOR_GRID.deriveColor(0, 1, 1, 1.2));
+        gc.setLineWidth(1.0);
+        gc.strokeRect(10, hudY, w - 20, hudH);
+
+        // Zone 1: Status & Telemetry (Top)
+        gc.setFill(COLOR_TEXT.deriveColor(0, 1, 1, 0.4));
+        gc.setFont(javafx.scene.text.Font.font("monospace", 7));
+        gc.setTextAlign(javafx.scene.text.TextAlignment.LEFT);
+        gc.fillText("FFT_RES: 1024", 15, hudY + 10);
+        gc.setTextAlign(javafx.scene.text.TextAlignment.RIGHT);
+        gc.fillText("REACT_V3", w - 15, hudY + 10);
+
+        gc.setFont(javafx.scene.text.Font.font("monospace", 9));
+        gc.setTextAlign(javafx.scene.text.TextAlignment.LEFT);
+        gc.setFill(COLOR_TEXT);
+        gc.fillText("MONITORING", 20, hudY + 22);
+        
+        gc.setTextAlign(javafx.scene.text.TextAlignment.RIGHT);
+        if (data.beat() > 0.1) {
+            gc.setFill(COLOR_BEAT);
+            gc.fillText("\u25C9 BEAT_SYNC", w - 20, hudY + 22);
+        } else {
+            gc.setFill(COLOR_TEXT.deriveColor(0, 1, 1, 0.3));
+            gc.fillText("\u25CB SCANNING", w - 20, hudY + 22);
         }
 
-        // ---- Zone 2: Threshold line (superimposed on sub-bass/bass bars) ----
-        float threshold = audioEngine.getLastBeatThreshold();
-        if (threshold > 0.001f) {
-            // Scale threshold to bar height (sub-bass + bass zone, using same scale as bars)
-            double thresholdY = 80 - Math.min(threshold * 80 * 2.5 / 2.0, 76) - 2;
-            gc.setStroke(Color.rgb(255, 60, 60, 0.8));
-            gc.setLineWidth(1);
-            gc.setLineDashes(4, 3);
-            gc.strokeLine(10, thresholdY, 10 + 2 * barWidth, thresholdY);
-            gc.setLineDashes(null);
-            gc.setFill(Color.rgb(255, 60, 60, 0.7));
-            gc.setFont(javafx.scene.text.Font.font("monospace", 7));
-            gc.fillText("Thr", 10 + 2 * barWidth + 2, thresholdY + 3);
-        }
-
-        // ---- Zone 3: Band labels (80-92px) ----
-        gc.setFont(javafx.scene.text.Font.font("monospace", 8));
-        for (int i = 0; i < 8; i++) {
-            double x = 10 + i * barWidth + barWidth / 2 - 8;
-            gc.setFill((soloBand == i) ? Color.WHITE : Color.web("#888"));
-            gc.fillText(BAND_LABELS[i], x, 90);
-        }
-
-        // ---- Zone 4: Level history rolling waveform (94-120px) ----
-        double histY = 94;
-        double histH = 26;
-        // Dark background for history zone
-        gc.setFill(Color.web("#111122"));
-        gc.fillRect(0, histY, w, histH);
-
-        // Grid lines at 0.25, 0.5, 0.75
-        gc.setStroke(Color.web("#222244"));
-        gc.setLineWidth(0.5);
-        for (int g = 1; g <= 3; g++) {
-            double gy = histY + histH * (1.0 - g * 0.25);
-            gc.strokeLine(0, gy, w, gy);
-        }
-
-        // Draw level history polyline
-        gc.setStroke(Color.web("#00ff88"));
-        gc.setLineWidth(1);
+        // Zone 2: Waveform (Middle - Compacted)
+        gc.setStroke(Color.web("#00ffcc", 0.7));
+        gc.setLineWidth(1.2);
         gc.beginPath();
         int histLen = levelHistory.length;
         for (int i = 0; i < histLen; i++) {
             int idx = (levelHistoryIndex - histLen + i + histLen * 2) % histLen;
-            float val = Math.min(levelHistory[idx] * 3f, 1f);
-            double hx = (double) i / (histLen - 1) * w;
-            double hy = histY + histH * (1.0 - val);
+            float val = Math.min(levelHistory[idx] * 2.2f, 1.0f);
+            double hx = 25 + (double) i / (histLen - 1) * (w - 50);
+            double hy = hudY + 42 + 12 * (0.5 - val); 
             if (i == 0) gc.moveTo(hx, hy);
             else gc.lineTo(hx, hy);
         }
         gc.stroke();
 
-        // ---- Zone 5: VU meter bar (122-130px) ----
-        double vuY = 122;
-        double vuH = 6;
-        gc.setFill(Color.web("#111122"));
-        gc.fillRect(10, vuY, w - 20, vuH);
+        // Zone 3: VU Meter (Bottom)
+        gc.setStroke(COLOR_GRID.deriveColor(0, 1, 1, 0.4));
+        gc.strokeLine(15, hudY + 54, w - 15, hudY + 54);
 
-        double vuLevel = Math.min(data.level() * 3.0, 1.0);
-        double vuWidth = (w - 20) * vuLevel;
-        if (vuWidth > 0) {
-            // Green zone (0-60%)
-            double greenEnd = Math.min(vuWidth, (w - 20) * 0.6);
-            if (greenEnd > 0) {
-                gc.setFill(Color.web("#00cc44"));
-                gc.fillRect(10, vuY, greenEnd, vuH);
-            }
-            // Yellow zone (60-85%)
-            if (vuLevel > 0.6) {
-                double yellowStart = (w - 20) * 0.6;
-                double yellowEnd = Math.min(vuWidth, (w - 20) * 0.85);
-                gc.setFill(Color.web("#ffcc00"));
-                gc.fillRect(10 + yellowStart, vuY, yellowEnd - yellowStart, vuH);
-            }
-            // Red zone (85-100%)
-            if (vuLevel > 0.85) {
-                double redStart = (w - 20) * 0.85;
-                gc.setFill(Color.web("#ff3333"));
-                gc.fillRect(10 + redStart, vuY, vuWidth - redStart, vuH);
-            }
-        }
-        // VU meter border
-        gc.setStroke(Color.web("#444"));
-        gc.setLineWidth(0.5);
-        gc.strokeRect(10, vuY, w - 20, vuH);
+        double vuLevel = Math.min(data.level() * 3.5, 1.0);
+        double vuW = (w - 100) * vuLevel;
+        gc.setFill(Color.rgb(20, 20, 40));
+        gc.fillRect(50, hudY + 60, w - 100, 4);
+        
+        javafx.scene.paint.LinearGradient vuGrad = new javafx.scene.paint.LinearGradient(0, 0, w, 0, false, javafx.scene.paint.CycleMethod.NO_CYCLE,
+            new javafx.scene.paint.Stop(0, Color.web("#00ff88")),
+            new javafx.scene.paint.Stop(0.6, Color.web("#ffd800")),
+            new javafx.scene.paint.Stop(1, Color.web("#ff3300")));
+        gc.setFill(vuGrad);
+        gc.fillRect(50, hudY + 60, vuW, 4);
 
-        // ---- Zone 6: Beat/onset indicators (132-150px) ----
-        double indicatorY = 136;
-
-        // Beat LED
-        if (data.beat() > 0.1) {
-            gc.setFill(Color.rgb(255, 50, 50, Math.min(data.beat(), 1.0)));
-        } else {
-            gc.setFill(Color.web("#331111"));
-        }
-        gc.fillOval(10, indicatorY, 10, 10);
-        gc.setFill(Color.web("#888"));
-        gc.setFont(javafx.scene.text.Font.font("monospace", 8));
-        gc.fillText("Beat", 23, indicatorY + 9);
-
-        // Onset LED
-        if (data.onset() > 0.1) {
-            gc.setFill(Color.rgb(50, 200, 255, Math.min(data.onset(), 1.0)));
-        } else {
-            gc.setFill(Color.web("#111133"));
-        }
-        gc.fillOval(60, indicatorY, 10, 10);
-        gc.setFill(Color.web("#888"));
-        gc.fillText("Onset", 73, indicatorY + 9);
-
-        // Solo indicator
-        if (soloBand >= 0) {
-            gc.setFill(Color.web("#ffcc00"));
-            gc.fillText("Solo: " + BAND_LABELS[soloBand], 120, indicatorY + 9);
-        }
+        gc.setFill(COLOR_TEXT.deriveColor(0, 1, 1, 0.4));
+        gc.setFont(javafx.scene.text.Font.font("monospace", 7));
+        gc.setTextAlign(javafx.scene.text.TextAlignment.LEFT);
+        gc.fillText("PWR", 30, hudY + 64);
+        gc.setTextAlign(javafx.scene.text.TextAlignment.RIGHT);
+        gc.fillText("44.1k", w - 15, hudY + 64);
     }
 
     // ========================================================================
