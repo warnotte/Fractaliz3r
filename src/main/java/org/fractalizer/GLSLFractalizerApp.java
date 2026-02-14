@@ -32,6 +32,7 @@ import org.fractalizer.ui.AnimationManager;
 import org.fractalizer.ui.GLSLFractalizerController;
 import org.fractalizer.ui.NavigationController;
 import org.fractalizer.ui.SplashScreen;
+import org.fractalizer.ui.ViewportHUD;
 import org.fractalizer.ui.panels.*;
 import org.fractalizer.ui.timeline.TimelineWidget;
 
@@ -49,6 +50,7 @@ public class GLSLFractalizerApp extends Application {
     // Core components
     private GLSLFractalizerController controller;
     private NavigationController navigation;
+    private ViewportHUD viewportHUD;
     private Stage primaryStage;
 
     // UI components
@@ -179,7 +181,11 @@ public class GLSLFractalizerApp extends Application {
         focusRing.setOpacity(0);
         focusRing.setMouseTransparent(true); // Don't block clicks
         focusRing.setManaged(false); // Manually positioned
-        imageContainer.getChildren().add(focusRing);
+        
+        // Initialize Viewport HUD (Orientation Cube + Speed Meter)
+        viewportHUD = new ViewportHUD(960, 540);
+        
+        imageContainer.getChildren().addAll(focusRing, viewportHUD.getCanvas());
 
         // Left: Controls
         TabPane controlTabs = createControlTabs(initialParams);
@@ -247,7 +253,10 @@ public class GLSLFractalizerApp extends Application {
             this::requestRender,
             this::renderFull,
             this::resetCamera,
-            newSpeed -> fractalPanel.setSpeedSliderValue(newSpeed)
+            newSpeed -> {
+                fractalPanel.setSpeedSliderValue(newSpeed);
+                if (viewportHUD != null) viewportHUD.updateSpeed(newSpeed);
+            }
         );
 
         // Setup click-to-focus handler (middle click or Ctrl+click)
@@ -341,6 +350,11 @@ public class GLSLFractalizerApp extends Application {
             // Scale ImageView to fill container (no binding to avoid circular layout)
             imageView.setFitWidth(width);
             imageView.setFitHeight(height);
+            
+            if (viewportHUD != null) {
+                viewportHUD.resize(width, height);
+            }
+            
             exportPanel.updateViewportInfo();
         }
     }
@@ -618,6 +632,12 @@ public class GLSLFractalizerApp extends Application {
                 // Animation playback
                 if (animationManager != null && animationManager.updatePlayback(now)) {
                     requestRender();
+                }
+
+                // Update Viewport HUD
+                if (viewportHUD != null && fractalPanel != null) {
+                    float currentFov = (float) Math.toDegrees(fractalPanel.getParams().getFov());
+                    viewportHUD.draw(fractalPanel.getCamera(), currentFov);
                 }
 
                 // 1. Preview Render (Interactive) — skip during any export to avoid engine resize races

@@ -62,6 +62,7 @@ org.fractalizer
 │   └── Keyframe.java                # Single keyframe (time, value, easing)
 └── ui/
     ├── GLSLFractalizerController.java  # Bridges UI with GLSL engine (includes parameter caching)
+    ├── ViewportHUD.java                # 3D Compass, Speed Meter and Telemetry overlay
     ├── AnimationManager.java           # Manages timeline and keyframe editing
     ├── components/
     │   ├── EnhancedSlider.java         # Professional UI slider with mouse wheel & precision control
@@ -330,3 +331,10 @@ Système optionnel de fractales audio-réactives. Documentation complète : **[d
 - **JavaFX Media** - Audio playback and spectrum analysis (audio-reactive feature)
 - **Java 21+** required
 - **FFmpeg** (optional) - For MP4 video export and audio pre-analysis (must be in system PATH)
+
+## Viewport HUD & Feedback
+
+- **3D Orientation Compass**: Real-time 3D axes (X, Y, Z) in the top-right corner, showing camera world orientation via quaternion math.
+- **Dynamic Speed Meter**: A segmented thrust indicator on the right edge that appears when adjusting movement speed, then fades out.
+- **Telemetry Overlay**: Professional technical readout (FOV, Speed) in the bottom-left for monitoring.
+- **Focus Ring**: Visual circular feedback (Cyan/Red) at the click position when setting Depth of Field focal distance.
