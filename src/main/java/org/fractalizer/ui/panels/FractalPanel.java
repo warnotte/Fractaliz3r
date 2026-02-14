@@ -12,6 +12,7 @@ import org.fractalizer.fractals.*;
 import org.fractalizer.ui.RenderController;
 import org.fractalizer.ui.components.EnhancedSlider;
 
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -52,6 +53,12 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
     // Container for all fractal-specific controls (used by dice randomizer)
     private VBox fractalParamsBox;
+
+    // Dice history (undo/redo for randomization)
+    private static final int MAX_HISTORY = 50;
+    private final List<Map<Object, Object>> diceHistory = new ArrayList<>();
+    private int historyIndex = -1;
+    private Button prevBtn, nextBtn;
 
     // Common controls
     private EnhancedSlider speedSlider;
@@ -196,13 +203,26 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         });
         resetBtn.setMaxWidth(Double.MAX_VALUE);
 
-        // Dice randomizer button
+        // Dice randomizer with history navigation
+        prevBtn = new Button("\u25C0");  // ◀
+        prevBtn.setTooltip(new Tooltip("Previous dice result"));
+        prevBtn.setOnAction(e -> navigateHistory(-1));
+        prevBtn.setDisable(true);
+
         Button diceBtn = new Button("\uD83C\uDFB2");  // dice emoji
-        diceBtn.setTooltip(new Tooltip("Randomize fractal parameters"));
+        diceBtn.setTooltip(new Tooltip("Randomize fractal parameters (locked sliders are preserved)"));
         diceBtn.setOnAction(e -> randomizeCurrentFractal());
 
+        nextBtn = new Button("\u25B6");  // ▶
+        nextBtn.setTooltip(new Tooltip("Next dice result"));
+        nextBtn.setOnAction(e -> navigateHistory(+1));
+        nextBtn.setDisable(true);
+
+        HBox diceRow = new HBox(2, prevBtn, diceBtn, nextBtn);
+        diceRow.setAlignment(Pos.CENTER);
+
         // Fractal type selector (always visible at top)
-        HBox typeRow = new HBox(6, typeCombo, diceBtn);
+        HBox typeRow = new HBox(6, typeCombo, diceRow);
         typeRow.setAlignment(Pos.CENTER_LEFT);
         typeCombo.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(typeCombo, javafx.scene.layout.Priority.ALWAYS);
@@ -1104,20 +1124,81 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
     /**
      * Randomize the fractal-specific parameters of the current fractal type.
-     * Recursively walks the visible fractal controls and randomizes all
-     * EnhancedSliders (using their own min/max) and ComboBoxes found within.
-     * Adding new sliders or fractal types requires zero changes here.
+     * Saves current state to history before randomizing.
+     * Locked sliders and their ComboBoxes are preserved.
      */
     private void randomizeCurrentFractal() {
+        // Snapshot current state before randomizing
+        Map<Object, Object> snapshot = captureSnapshot();
+
+        // Trim any forward history (new roll = new branch)
+        while (diceHistory.size() > historyIndex + 1) {
+            diceHistory.removeLast();
+        }
+        diceHistory.add(snapshot);
+        if (diceHistory.size() > MAX_HISTORY) {
+            diceHistory.removeFirst();
+        }
+        historyIndex = diceHistory.size() - 1;
+
+        // Randomize
         ThreadLocalRandom rng = ThreadLocalRandom.current();
         randomizeAllIn(fractalParamsBox, rng);
         renderCallback.requestRender();
+        updateHistoryButtons();
+    }
+
+    private void navigateHistory(int direction) {
+        int target = historyIndex + direction;
+        if (target < 0 || target >= diceHistory.size()) return;
+        historyIndex = target;
+        restoreSnapshot(diceHistory.get(historyIndex));
+        renderCallback.requestRender();
+        updateHistoryButtons();
+    }
+
+    private void updateHistoryButtons() {
+        prevBtn.setDisable(historyIndex <= 0);
+        nextBtn.setDisable(historyIndex >= diceHistory.size() - 1);
+    }
+
+    /** Capture all visible slider values and combo selections into a map. */
+    private Map<Object, Object> captureSnapshot() {
+        Map<Object, Object> snapshot = new IdentityHashMap<>();
+        captureAllIn(fractalParamsBox, snapshot);
+        return snapshot;
+    }
+
+    private void captureAllIn(Node node, Map<Object, Object> snapshot) {
+        if (!node.isVisible()) return;
+        if (node instanceof EnhancedSlider slider) {
+            snapshot.put(slider, slider.getValue());
+        } else if (node instanceof ComboBox<?> combo) {
+            snapshot.put(combo, combo.getSelectionModel().getSelectedIndex());
+        } else if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                captureAllIn(child, snapshot);
+            }
+        }
+    }
+
+    /** Restore slider values and combo selections from a snapshot. */
+    private void restoreSnapshot(Map<Object, Object> snapshot) {
+        // Don't suppress: slider callbacks must update the fractal params
+        for (var entry : snapshot.entrySet()) {
+            if (entry.getKey() instanceof EnhancedSlider slider) {
+                slider.setValue((Double) entry.getValue());
+            } else if (entry.getKey() instanceof ComboBox<?> combo) {
+                combo.getSelectionModel().select((Integer) entry.getValue());
+            }
+        }
     }
 
     private void randomizeAllIn(Node node, ThreadLocalRandom rng) {
         if (!node.isVisible()) return;
 
         if (node instanceof EnhancedSlider slider) {
+            if (slider.isLocked()) return;
             double min = slider.getSlider().getMin();
             double max = slider.getSlider().getMax();
             double value = min + rng.nextDouble() * (max - min);

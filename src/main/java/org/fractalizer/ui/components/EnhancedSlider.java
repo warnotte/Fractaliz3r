@@ -3,7 +3,10 @@ package org.fractalizer.ui.components;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
@@ -18,6 +21,7 @@ public class EnhancedSlider extends VBox {
     private final Slider slider;
     private final String title;
     private final boolean isInteger;
+    private final ToggleButton lockBtn;
     private int precision = 3;
 
     public EnhancedSlider(String title, double min, double max, double initial, boolean isInteger) {
@@ -27,7 +31,18 @@ public class EnhancedSlider extends VBox {
 
         this.label = new Label();
         this.label.getStyleClass().add("bold-label");
-        
+
+        this.lockBtn = new ToggleButton("\uD83D\uDD13"); // unlocked icon
+        lockBtn.getStyleClass().add("lock-btn");
+        lockBtn.setTooltip(new Tooltip("Lock: protect from dice randomizer"));
+        lockBtn.setFocusTraversable(false);
+        lockBtn.selectedProperty().addListener((obs, old, locked) ->
+                lockBtn.setText(locked ? "\uD83D\uDD12" : "\uD83D\uDD13"));
+
+        HBox labelRow = new HBox(4, label, lockBtn);
+        labelRow.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(label, Priority.ALWAYS);
+
         this.slider = new Slider(min, max, initial);
         this.slider.setFocusTraversable(false);
 
@@ -49,7 +64,7 @@ public class EnhancedSlider extends VBox {
         this.setOnScroll(e -> {
             double scrollDelta = e.getDeltaY();
             if (scrollDelta == 0) scrollDelta = e.getDeltaX(); // Handle SHIFT remapping
-            
+
             // CRITICAL: If no modifier is pressed, do NOT consume the event.
             // This allows the parent ScrollPane to scroll normally.
             boolean hasModifier = e.isShiftDown() || e.isControlDown() || e.isAltDown();
@@ -69,12 +84,12 @@ public class EnhancedSlider extends VBox {
 
             double newValue = slider.getValue() + (scrollDelta > 0 ? step : -step);
             slider.setValue(newValue);
-            
+
             // Consume the event ONLY when we are actually adjusting the value
             e.consume();
         });
 
-        this.getChildren().addAll(label, slider);
+        this.getChildren().addAll(labelRow, slider);
     }
 
     private void updateLabel(double value) {
@@ -91,6 +106,8 @@ public class EnhancedSlider extends VBox {
     public Slider getSlider() { return slider; }
 
     public boolean isInteger() { return isInteger; }
+
+    public boolean isLocked() { return lockBtn.isSelected(); }
 
     public double getValue() { return slider.getValue(); }
 

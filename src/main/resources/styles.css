@@ -246,6 +246,19 @@
     -fx-font-weight: bold;
 }
 
+.lock-btn {
+    -fx-font-size: 10px;
+    -fx-padding: 0 3 0 3;
+    -fx-min-width: 20px;
+    -fx-max-height: 18px;
+    -fx-background-radius: 3;
+    -fx-opacity: 0.4;
+}
+.lock-btn:selected {
+    -fx-opacity: 1.0;
+    -fx-background-color: #e8a030;
+}
+
 .hint-label {
     -fx-font-size: 10px;
     -fx-text-fill: gray;
