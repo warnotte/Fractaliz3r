@@ -60,6 +60,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private final List<Map<Object, Object>> diceHistory = new ArrayList<>();
     private int historyIndex = -1;
     private Button prevBtn, nextBtn;
+    private Slider mutationStrengthSlider;
 
     // Morph crossfade (A ↔ B)
     private Map<Object, Object> morphA, morphB;
@@ -218,23 +219,41 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         prevBtn.setDisable(true);
 
         Button diceBtn = new Button("\uD83C\uDFB2");  // dice emoji
-        diceBtn.setTooltip(new Tooltip("Randomize fractal parameters (locked sliders are preserved)"));
+        diceBtn.setTooltip(new Tooltip("Full randomize (locked sliders preserved)"));
         diceBtn.setOnAction(e -> randomizeCurrentFractal());
+
+        Button mutateBtn = new Button("\uD83E\uDDEC");  // 🧬 DNA emoji
+        mutateBtn.setTooltip(new Tooltip("Soft mutation: nudge parameters around current values"));
+        mutateBtn.setOnAction(e -> mutateCurrentFractal());
 
         nextBtn = new Button("\u25B6");  // ▶
         nextBtn.setTooltip(new Tooltip("Next dice result"));
         nextBtn.setOnAction(e -> navigateHistory(+1));
         nextBtn.setDisable(true);
 
-        HBox diceRow = new HBox(2, prevBtn, diceBtn, nextBtn);
+        HBox diceRow = new HBox(2, prevBtn, diceBtn, mutateBtn, nextBtn);
         diceRow.setAlignment(Pos.CENTER);
+
+        // Mutation strength slider (5% to 100%)
+        mutationStrengthSlider = new Slider(0.05, 1.0, 0.15);
+        mutationStrengthSlider.setTooltip(new Tooltip("Mutation strength: how far values move from current"));
+        mutationStrengthSlider.setPrefWidth(80);
+
+        Label mutLabel = new Label("15%");
+        mutLabel.getStyleClass().add("small-label");
+        mutLabel.setPrefWidth(30);
+        mutationStrengthSlider.valueProperty().addListener((obs, old, val) ->
+            mutLabel.setText((int)(val.doubleValue() * 100) + "%"));
+
+        HBox mutRow = new HBox(4, new Label("\uD83E\uDDEC"), mutationStrengthSlider, mutLabel);
+        mutRow.setAlignment(Pos.CENTER_LEFT);
 
         // Fractal type selector (always visible at top)
         HBox typeRow = new HBox(6, typeCombo, diceRow);
         typeRow.setAlignment(Pos.CENTER_LEFT);
         typeCombo.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(typeCombo, javafx.scene.layout.Priority.ALWAYS);
-        VBox typeBox = new VBox(5, typeLabel, typeRow);
+        VBox typeBox = new VBox(5, typeLabel, typeRow, mutRow);
 
         // Fractal-specific parameters (dynamic visibility)
         fractalParamsBox = new VBox(8,
@@ -1237,6 +1256,52 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 slider.setValue((Double) entry.getValue());
             } else if (entry.getKey() instanceof ComboBox<?> combo) {
                 combo.getSelectionModel().select((Integer) entry.getValue());
+            }
+        }
+    }
+
+    /**
+     * Soft mutation: nudge parameters around their current values.
+     * Uses the same history system as the dice randomizer.
+     */
+    private void mutateCurrentFractal() {
+        Map<Object, Object> snapshot = captureSnapshot();
+
+        while (diceHistory.size() > historyIndex + 1) {
+            diceHistory.removeLast();
+        }
+        diceHistory.add(snapshot);
+        if (diceHistory.size() > MAX_HISTORY) {
+            diceHistory.removeFirst();
+        }
+        historyIndex = diceHistory.size() - 1;
+
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
+        double strength = mutationStrengthSlider.getValue();
+        mutateAllIn(fractalParamsBox, rng, strength);
+        renderCallback.requestRender();
+        updateHistoryButtons();
+    }
+
+    private void mutateAllIn(Node node, ThreadLocalRandom rng, double strength) {
+        if (!node.isVisible()) return;
+
+        if (node instanceof EnhancedSlider slider) {
+            if (slider.isLocked()) return;
+            double current = slider.getValue();
+            double min = slider.getSlider().getMin();
+            double max = slider.getSlider().getMax();
+            double range = max - min;
+            // Gaussian-ish nudge: centered on current, strength controls spread
+            double delta = (rng.nextDouble() - 0.5) * 2.0 * range * strength;
+            double value = Math.max(min, Math.min(max, current + delta));
+            if (slider.isInteger()) value = Math.round(value);
+            slider.setValue(value);
+        }
+        // Don't mutate ComboBoxes (don't change fractal sub-type randomly)
+        else if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                mutateAllIn(child, rng, strength);
             }
         }
     }

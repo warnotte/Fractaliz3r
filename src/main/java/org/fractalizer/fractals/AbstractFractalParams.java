@@ -85,6 +85,7 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected int paletteIndex;
     protected float colorStrength;
     protected float paletteOffset;
+    protected int coloringMode;  // 0=Standard, 1=Bands, 2=Distance, 3=Angle, 4=Blend, 5=Contour
 
     // Rendering quality
     protected float shadowSoftness;
@@ -220,6 +221,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.paletteIndex = 0;
         this.colorStrength = 1.0f;
         this.paletteOffset = 0.0f;
+        this.coloringMode = 0;
 
         // Enhanced rendering defaults
         this.shadowSoftness = 16f;
@@ -326,6 +328,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.paletteIndex = this.paletteIndex;
         target.colorStrength = this.colorStrength;
         target.paletteOffset = this.paletteOffset;
+        target.coloringMode = this.coloringMode;
 
         // Copy specular
         target.specularIntensity = this.specularIntensity;
@@ -608,6 +611,8 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setColorStrength(float strength) { this.colorStrength = strength; }
     public float getPaletteOffset() { return paletteOffset; }
     public void setPaletteOffset(float offset) { this.paletteOffset = offset; }
+    public int getColoringMode() { return coloringMode; }
+    public void setColoringMode(int mode) { this.coloringMode = mode; }
 
     // Shadows
     public float getShadowSoftness() { return shadowSoftness; }

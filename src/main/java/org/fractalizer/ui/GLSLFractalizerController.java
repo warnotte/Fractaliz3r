@@ -838,6 +838,7 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("paletteIndex", params.getPaletteIndex());
             uniforms.put("colorStrength", params.getColorStrength());
             uniforms.put("paletteOffset", params.getPaletteOffset());
+            uniforms.put("coloringMode", params.getColoringMode());
 
             // Effects
             uniforms.put("shadowSoftness", params.getShadowSoftness());

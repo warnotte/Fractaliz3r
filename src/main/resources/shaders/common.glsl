@@ -70,6 +70,7 @@ uniform vec3 baseHue;
 uniform int paletteIndex;
 uniform float colorStrength;
 uniform float paletteOffset;
+uniform int coloringMode;
 
 uniform float qualityMultiplier;
 uniform int maxRaySteps;
@@ -233,10 +234,40 @@ vec3 applyMaterial(vec3 factors) {
     float structural = factors.x;
     float flow = factors.y;
     float depth = factors.z;
-    vec3 color = getPresetPalette(flow * colorStrength + paletteOffset + depth * 0.1);
+
+    float t; // palette lookup coordinate
+
+    if (coloringMode == 1) {
+        // Iteration Bands: sharp discrete color bands by depth
+        t = floor(depth * 12.0) / 12.0 * colorStrength + paletteOffset;
+    } else if (coloringMode == 2) {
+        // Distance: proximity/structural based coloring
+        t = structural * colorStrength + paletteOffset;
+    } else if (coloringMode == 3) {
+        // Angular: atan2-based spiral patterns from flow vs structural
+        t = atan(flow - 0.5, structural - 0.5) / 6.2832 + 0.5;
+        t = t * colorStrength + paletteOffset;
+    } else if (coloringMode == 4) {
+        // Blend: equal weight mix of all three factors
+        t = (structural + flow + depth) * 0.333 * colorStrength + paletteOffset;
+    } else if (coloringMode == 5) {
+        // Contour: high-frequency sine stripes (topographic map effect)
+        float combined = flow * 3.0 + structural * 2.0 + depth;
+        t = sin(combined * colorStrength * 20.0) * 0.5 + 0.5 + paletteOffset;
+    } else {
+        // Standard (mode 0): original flow + depth coloring
+        t = flow * colorStrength + paletteOffset + depth * 0.1;
+    }
+
+    vec3 color = getPresetPalette(t);
+
+    // Structural highlights (shared across all modes)
     vec3 highlight = mix(vec3(1.0), color * 1.5, 0.5);
     color = mix(color, highlight, clamp(structural * 0.9, 0.0, 1.0));
+
+    // Depth darkening
     color *= 1.0 - depth * 0.4;
+
     return color;
 }
 

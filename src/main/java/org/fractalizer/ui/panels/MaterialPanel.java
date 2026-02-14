@@ -28,6 +28,7 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
     // Gradient
     private GradientEditor gradientEditor;
     private Consumer<GradientPalette> onGradientChanged;
+    private ComboBox<String> coloringModeCombo;
     private EnhancedSlider colorStrengthSlider;
     private EnhancedSlider paletteOffsetSlider;
 
@@ -79,6 +80,29 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
                 renderCallback.requestRender();
             }
         });
+
+        // Coloring Mode
+        coloringModeCombo = new ComboBox<>();
+        coloringModeCombo.getItems().addAll(
+            "Standard",       // 0: flow + depth (current default)
+            "Iteration Bands", // 1: sharp color bands by iteration
+            "Distance",        // 2: structural/proximity based
+            "Angular",         // 3: atan2 spiral patterns
+            "Blend",           // 4: equal mix of all 3 factors
+            "Contour"          // 5: high-frequency stripes (topographic)
+        );
+        coloringModeCombo.getSelectionModel().select(0);
+        coloringModeCombo.setMaxWidth(Double.MAX_VALUE);
+        coloringModeCombo.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setColoringMode(coloringModeCombo.getSelectionModel().getSelectedIndex());
+                renderCallback.requestRender();
+            }
+        });
+
+        HBox modeBox = new HBox(8, new Label("Coloring:"), coloringModeCombo);
+        modeBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        javafx.scene.layout.HBox.setHgrow(coloringModeCombo, javafx.scene.layout.Priority.ALWAYS);
 
         // Color Strength
         colorStrengthSlider = new EnhancedSlider("Color Strength", 0.1, 5.0, 1.0, false);
@@ -199,7 +223,7 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        VBox paletteBox = new VBox(5, gradientEditor, colorStrengthSlider, paletteOffsetSlider,
+        VBox paletteBox = new VBox(5, gradientEditor, modeBox, colorStrengthSlider, paletteOffsetSlider,
             new Label("Material Presets:"), presetsBox);
         TitledPane palettePane = new TitledPane("Color Palette", paletteBox);
         palettePane.setExpanded(true);
@@ -299,6 +323,7 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
 
             // Gradient
             gradientEditor.setPalette(p.getCustomGradient());
+            coloringModeCombo.getSelectionModel().select(p.getColoringMode());
             colorStrengthSlider.setValue(p.getColorStrength());
             paletteOffsetSlider.setValue(p.getPaletteOffset());
 
