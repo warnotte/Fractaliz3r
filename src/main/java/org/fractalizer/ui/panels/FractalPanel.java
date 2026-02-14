@@ -6,6 +6,7 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import org.fractalizer.engine.Camera;
 import org.fractalizer.fractals.*;
@@ -59,6 +60,12 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private final List<Map<Object, Object>> diceHistory = new ArrayList<>();
     private int historyIndex = -1;
     private Button prevBtn, nextBtn;
+
+    // Morph crossfade (A ↔ B)
+    private Map<Object, Object> morphA, morphB;
+    private Slider morphSlider;
+    private Label morphLabel;
+
 
     // Common controls
     private EnhancedSlider speedSlider;
@@ -246,12 +253,49 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         TitledPane paramsPane = new TitledPane("Fractal Parameters", fractalParamsBox);
         paramsPane.setExpanded(true);
 
+        // --- Morph Crossfade ---
+        Button setABtn = new Button("Set A");
+        setABtn.setTooltip(new Tooltip("Capture current params as morph start"));
+        setABtn.setOnAction(e -> {
+            morphA = captureSnapshot();
+            updateMorphLabel();
+        });
+
+        Button setBBtn = new Button("Set B");
+        setBBtn.setTooltip(new Tooltip("Capture current params as morph end"));
+        setBBtn.setOnAction(e -> {
+            morphB = captureSnapshot();
+            updateMorphLabel();
+        });
+
+        morphSlider = new Slider(0, 1, 0);
+        morphSlider.setDisable(true);
+        HBox.setHgrow(morphSlider, javafx.scene.layout.Priority.ALWAYS);
+        morphSlider.valueProperty().addListener((obs, old, val) -> {
+            if (morphA != null && morphB != null) {
+                applyMorph(val.doubleValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        morphLabel = new Label("Morph: set A and B first");
+        morphLabel.getStyleClass().add("small-label");
+
+        HBox morphRow = new HBox(6, setABtn, morphSlider, setBBtn);
+        morphRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox morphBox = new VBox(4, morphLabel, morphRow);
+
+        // Tools pane (collapsed by default)
+        TitledPane toolsPane = new TitledPane("Morph A \u2194 B", morphBox);
+        toolsPane.setExpanded(false);
+
         // Navigation & camera
         VBox navBox = new VBox(5, speedSlider, positionLabel, navLabel, helpLabel, resetBtn);
         TitledPane navPane = new TitledPane("Navigation", navBox);
         navPane.setExpanded(true);
 
-        panel.getChildren().addAll(typeBox, paramsPane, navPane);
+        panel.getChildren().addAll(typeBox, paramsPane, toolsPane, navPane);
 
         return panel;
     }
@@ -1211,6 +1255,41 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         } else if (node instanceof Parent parent) {
             for (Node child : parent.getChildrenUnmodifiable()) {
                 randomizeAllIn(child, rng);
+            }
+        }
+    }
+
+    // ========================================================================
+    // Morph Crossfade
+    // ========================================================================
+
+    private void updateMorphLabel() {
+        if (morphA != null && morphB != null) {
+            morphSlider.setDisable(false);
+            morphLabel.setText("Morph: A \u2194 B ready");
+        } else if (morphA != null) {
+            morphLabel.setText("Morph: A set, need B");
+        } else if (morphB != null) {
+            morphLabel.setText("Morph: need A, B set");
+        }
+    }
+
+    private void applyMorph(double t) {
+        if (morphA == null || morphB == null) return;
+        for (var entry : morphA.entrySet()) {
+            Object key = entry.getKey();
+            Object valB = morphB.get(key);
+            if (valB == null) continue;
+
+            if (key instanceof EnhancedSlider slider) {
+                double a = (Double) entry.getValue();
+                double b = (Double) valB;
+                double lerped = a + (b - a) * t;
+                if (slider.isInteger()) lerped = Math.round(lerped);
+                slider.setValue(lerped);
+            } else if (key instanceof ComboBox<?> combo) {
+                // Snap: use A when t < 0.5, B otherwise
+                combo.getSelectionModel().select((Integer) (t < 0.5 ? entry.getValue() : valB));
             }
         }
     }
