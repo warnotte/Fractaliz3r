@@ -43,12 +43,12 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private VBox mandelboxControls;
     private VBox mengerControls;
     private VBox kaleidoscopicControls;
-    private VBox julia3dControls;
     private VBox polyhedralControls;
     private VBox sierpinskiControls;
     private VBox pseudoKleinianControls;
     private VBox apollonianControls;
     private VBox bristorbrotControls;
+    private VBox quaternionJulia4DControls;
     private VBox testSceneControls;
     private VBox cornellBoxControls;
 
@@ -96,13 +96,6 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider kFoldXSlider;
     private EnhancedSlider kFoldYSlider;
 
-    // Julia3D sliders
-    private EnhancedSlider j3dIterSlider;
-    private EnhancedSlider j3dCxSlider;
-    private EnhancedSlider j3dCySlider;
-    private EnhancedSlider j3dCzSlider;
-    private EnhancedSlider j3dCwSlider;
-
     // Polyhedral sliders
     private ComboBox<PolyhedralIFSParams.PolyType> polyTypeCombo;
     private EnhancedSlider polyIterSlider;
@@ -142,6 +135,13 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider brJuliaCySlider;
     private EnhancedSlider brJuliaCzSlider;
 
+    // Quaternion Julia 4D sliders
+    private EnhancedSlider qjIterSlider;
+    private EnhancedSlider qjBailoutSlider;
+    private EnhancedSlider qjCxSlider, qjCySlider, qjCzSlider, qjCwSlider;
+    private EnhancedSlider qjSliceWSlider;
+    private EnhancedSlider qjRotXWSlider, qjRotYWSlider, qjRotZWSlider;
+
     // Cornell Box sliders
     private EnhancedSlider cbScaleSlider;
     private EnhancedSlider cbGlassXSlider, cbGlassYSlider, cbGlassZSlider, cbGlassRadiusSlider;
@@ -172,12 +172,12 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         createMandelboxControls();
         createMengerControls();
         createKaleidoscopicControls();
-        createJulia3dControls();
         createPolyhedralControls();
         createSierpinskiControls();
         createPseudoKleinianControls();
         createApollonianControls();
         createBristorbrotControls();
+        createQuaternionJulia4DControls();
         createTestSceneControls();
         createCornellBoxControls();
 
@@ -261,12 +261,12 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             mandelboxControls,
             mengerControls,
             kaleidoscopicControls,
-            julia3dControls,
             polyhedralControls,
             sierpinskiControls,
             pseudoKleinianControls,
             apollonianControls,
             bristorbrotControls,
+            quaternionJulia4DControls,
             testSceneControls,
             cornellBoxControls
         );
@@ -454,89 +454,6 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         polyRot2XSlider.setValue(r2x);
         polyRot2YSlider.setValue(r2y);
         polyRot2ZSlider.setValue(r2z);
-    }
-
-    private void createJulia3dControls() {
-        julia3dControls = new VBox(8);
-
-        Label titleLabel = new Label("Julia 3D (Quaternion)");
-        titleLabel.getStyleClass().add("bold-label");
-
-        Label infoLabel = new Label("q' = q² + c (quaternion iteration)");
-        infoLabel.getStyleClass().add("hint-label");
-
-        // Iterations
-        j3dIterSlider = new EnhancedSlider("Iterations", 4, 20, 12, true);
-        j3dIterSlider.showTickMarks(true);
-        j3dIterSlider.setMajorTickUnit(4.0);
-        j3dIterSlider.setOnAction(v -> { if(!suppressRender && params instanceof Julia3DParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
-
-        // Julia constant C components
-        Label cLabel = new Label("Julia Constant (c):");
-        cLabel.getStyleClass().add("bold-label");
-
-        j3dCxSlider = new EnhancedSlider("cx", -1.0, 1.0, -0.2, false);
-        j3dCxSlider.setOnAction(v -> { if(!suppressRender && params instanceof Julia3DParams p) { p.setJuliaCx(v.floatValue()); renderCallback.requestRender(); } });
-
-        j3dCySlider = new EnhancedSlider("cy", -1.0, 1.0, 0.8, false);
-        j3dCySlider.setOnAction(v -> { if(!suppressRender && params instanceof Julia3DParams p) { p.setJuliaCy(v.floatValue()); renderCallback.requestRender(); } });
-
-        j3dCzSlider = new EnhancedSlider("cz", -1.0, 1.0, 0.0, false);
-        j3dCzSlider.setOnAction(v -> { if(!suppressRender && params instanceof Julia3DParams p) { p.setJuliaCz(v.floatValue()); renderCallback.requestRender(); } });
-
-        j3dCwSlider = new EnhancedSlider("cw", -1.0, 1.0, 0.0, false);
-        j3dCwSlider.setOnAction(v -> { if(!suppressRender && params instanceof Julia3DParams p) { p.setJuliaCw(v.floatValue()); renderCallback.requestRender(); } });
-
-        // Preset buttons
-        Label presetLabel = new Label("Presets:");
-        presetLabel.getStyleClass().add("bold-label");
-
-        Button classicBtn = new Button("Classic");
-        classicBtn.setOnAction(e -> {
-            j3dCxSlider.setValue(-0.2);
-            j3dCySlider.setValue(0.8);
-            j3dCzSlider.setValue(0.0);
-            j3dCwSlider.setValue(0.0);
-        });
-
-        Button organicBtn = new Button("Organic");
-        organicBtn.setOnAction(e -> {
-            j3dCxSlider.setValue(-0.291);
-            j3dCySlider.setValue(-0.399);
-            j3dCzSlider.setValue(0.339);
-            j3dCwSlider.setValue(0.437);
-        });
-
-        Button spikyBtn = new Button("Spiky");
-        spikyBtn.setOnAction(e -> {
-            j3dCxSlider.setValue(-0.125);
-            j3dCySlider.setValue(-0.256);
-            j3dCzSlider.setValue(0.847);
-            j3dCwSlider.setValue(0.0895);
-        });
-
-        Button spiralBtn = new Button("Spiral");
-        spiralBtn.setOnAction(e -> {
-            j3dCxSlider.setValue(-0.4);
-            j3dCySlider.setValue(0.6);
-            j3dCzSlider.setValue(0.2);
-            j3dCwSlider.setValue(-0.1);
-        });
-
-        javafx.scene.layout.HBox presetBox = new javafx.scene.layout.HBox(5);
-        presetBox.getChildren().addAll(classicBtn, organicBtn, spikyBtn, spiralBtn);
-
-        julia3dControls.getChildren().addAll(
-            titleLabel, infoLabel,
-            j3dIterSlider,
-            new Separator(),
-            cLabel,
-            j3dCxSlider, j3dCySlider, j3dCzSlider, j3dCwSlider,
-            new Separator(),
-            presetLabel, presetBox
-        );
-        julia3dControls.setVisible(false);
-        julia3dControls.setManaged(false);
     }
 
     private void createKaleidoscopicControls() {
@@ -808,6 +725,100 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         bristorbrotControls.setManaged(false);
     }
 
+    private void createQuaternionJulia4DControls() {
+        quaternionJulia4DControls = new VBox(8);
+
+        qjIterSlider = new EnhancedSlider("Iterations", 4, 20, 12, true);
+        qjIterSlider.showTickMarks(true);
+        qjIterSlider.setMajorTickUnit(4.0);
+        qjIterSlider.setOnAction(v -> { if (!suppressRender && params instanceof QuaternionJulia4DParams p) { p.setMaxIterations(v.intValue()); renderCallback.requestRender(); } });
+
+        qjBailoutSlider = new EnhancedSlider("Bailout", 1, 10, 4.0, false);
+        qjBailoutSlider.setPrecision(1);
+        qjBailoutSlider.setOnAction(v -> { if (!suppressRender && params instanceof QuaternionJulia4DParams p) { p.setBailout(v.floatValue()); renderCallback.requestRender(); } });
+
+        Label juliaLabel = new Label("Julia Constant:");
+        juliaLabel.getStyleClass().add("hint-label");
+
+        qjCxSlider = new EnhancedSlider("Cx", -2.0, 2.0, -0.2, false);
+        qjCxSlider.setOnAction(v -> { if (!suppressRender && params instanceof QuaternionJulia4DParams p) { p.setJuliaCx(v.floatValue()); renderCallback.requestRender(); } });
+
+        qjCySlider = new EnhancedSlider("Cy", -2.0, 2.0, 0.8, false);
+        qjCySlider.setOnAction(v -> { if (!suppressRender && params instanceof QuaternionJulia4DParams p) { p.setJuliaCy(v.floatValue()); renderCallback.requestRender(); } });
+
+        qjCzSlider = new EnhancedSlider("Cz", -2.0, 2.0, 0.0, false);
+        qjCzSlider.setOnAction(v -> { if (!suppressRender && params instanceof QuaternionJulia4DParams p) { p.setJuliaCz(v.floatValue()); renderCallback.requestRender(); } });
+
+        qjCwSlider = new EnhancedSlider("Cw", -2.0, 2.0, 0.0, false);
+        qjCwSlider.setOnAction(v -> { if (!suppressRender && params instanceof QuaternionJulia4DParams p) { p.setJuliaCw(v.floatValue()); renderCallback.requestRender(); } });
+
+        Label sliceLabel = new Label("4D Hyperplane Slice:");
+        sliceLabel.getStyleClass().add("hint-label");
+
+        qjSliceWSlider = new EnhancedSlider("Slice W", -2.0, 2.0, 0.0, false);
+        qjSliceWSlider.setOnAction(v -> { if (!suppressRender && params instanceof QuaternionJulia4DParams p) { p.setSliceW(v.floatValue()); renderCallback.requestRender(); } });
+
+        Label rotLabel = new Label("4D Rotations:");
+        rotLabel.getStyleClass().add("hint-label");
+
+        qjRotXWSlider = new EnhancedSlider("Rot XW", -180, 180, 0.0, false);
+        qjRotXWSlider.setPrecision(1);
+        qjRotXWSlider.setOnAction(v -> { if (!suppressRender && params instanceof QuaternionJulia4DParams p) { p.setRotXW(v.floatValue()); renderCallback.requestRender(); } });
+
+        qjRotYWSlider = new EnhancedSlider("Rot YW", -180, 180, 0.0, false);
+        qjRotYWSlider.setPrecision(1);
+        qjRotYWSlider.setOnAction(v -> { if (!suppressRender && params instanceof QuaternionJulia4DParams p) { p.setRotYW(v.floatValue()); renderCallback.requestRender(); } });
+
+        qjRotZWSlider = new EnhancedSlider("Rot ZW", -180, 180, 0.0, false);
+        qjRotZWSlider.setPrecision(1);
+        qjRotZWSlider.setOnAction(v -> { if (!suppressRender && params instanceof QuaternionJulia4DParams p) { p.setRotZW(v.floatValue()); renderCallback.requestRender(); } });
+
+        // Presets
+        Label presetLabel = new Label("Presets:");
+        presetLabel.getStyleClass().add("hint-label");
+
+        Button classicBtn = new Button("Classic");
+        classicBtn.setOnAction(e -> applyQJ4DPreset(QuaternionJulia4DParams.classicPreset()));
+        Button flowerBtn = new Button("4D Flower");
+        flowerBtn.setOnAction(e -> applyQJ4DPreset(QuaternionJulia4DParams.flowerPreset()));
+        Button wormholeBtn = new Button("Wormhole");
+        wormholeBtn.setOnAction(e -> applyQJ4DPreset(QuaternionJulia4DParams.wormholePreset()));
+        Button crystalBtn = new Button("Crystal");
+        crystalBtn.setOnAction(e -> applyQJ4DPreset(QuaternionJulia4DParams.crystalPreset()));
+        Button hypersphereBtn = new Button("Hypersphere");
+        hypersphereBtn.setOnAction(e -> applyQJ4DPreset(QuaternionJulia4DParams.hyperspherePreset()));
+
+        HBox presetRow1 = new HBox(4, classicBtn, flowerBtn, wormholeBtn);
+        HBox presetRow2 = new HBox(4, crystalBtn, hypersphereBtn);
+
+        quaternionJulia4DControls.getChildren().addAll(
+            qjIterSlider, qjBailoutSlider,
+            new Separator(), juliaLabel, qjCxSlider, qjCySlider, qjCzSlider, qjCwSlider,
+            new Separator(), sliceLabel, qjSliceWSlider,
+            new Separator(), rotLabel, qjRotXWSlider, qjRotYWSlider, qjRotZWSlider,
+            new Separator(), presetLabel, presetRow1, presetRow2
+        );
+        quaternionJulia4DControls.setVisible(false);
+        quaternionJulia4DControls.setManaged(false);
+    }
+
+    private void applyQJ4DPreset(QuaternionJulia4DParams preset) {
+        if (params instanceof QuaternionJulia4DParams p) {
+            p.setMaxIterations(preset.getMaxIterations());
+            p.setBailout(preset.getBailout());
+            p.setJuliaCx(preset.getJuliaCx());
+            p.setJuliaCy(preset.getJuliaCy());
+            p.setJuliaCz(preset.getJuliaCz());
+            p.setJuliaCw(preset.getJuliaCw());
+            p.setSliceW(preset.getSliceW());
+            p.setRotXW(preset.getRotXW());
+            p.setRotYW(preset.getRotYW());
+            p.setRotZW(preset.getRotZW());
+            refreshFromParams(true);
+            renderCallback.requestRender();
+        }
+    }
+
     private void createTestSceneControls() {
         testSceneControls = new VBox(8);
 
@@ -950,8 +961,6 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             mengerControls.setManaged(false);
             kaleidoscopicControls.setVisible(false);
             kaleidoscopicControls.setManaged(false);
-            julia3dControls.setVisible(false);
-            julia3dControls.setManaged(false);
             polyhedralControls.setVisible(false);
             polyhedralControls.setManaged(false);
             sierpinskiControls.setVisible(false);
@@ -962,6 +971,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             apollonianControls.setManaged(false);
             bristorbrotControls.setVisible(false);
             bristorbrotControls.setManaged(false);
+            quaternionJulia4DControls.setVisible(false);
+            quaternionJulia4DControls.setManaged(false);
             testSceneControls.setVisible(false);
             testSceneControls.setManaged(false);
             cornellBoxControls.setVisible(false);
@@ -985,10 +996,6 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                     kaleidoscopicControls.setVisible(true);
                     kaleidoscopicControls.setManaged(true);
                 }
-                case JULIA_3D -> {
-                    julia3dControls.setVisible(true);
-                    julia3dControls.setManaged(true);
-                }
                 case POLYHEDRAL_IFS -> {
                     polyhedralControls.setVisible(true);
                     polyhedralControls.setManaged(true);
@@ -1008,6 +1015,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 case BRISTORBROT -> {
                     bristorbrotControls.setVisible(true);
                     bristorbrotControls.setManaged(true);
+                }
+                case QUATERNION_JULIA_4D -> {
+                    quaternionJulia4DControls.setVisible(true);
+                    quaternionJulia4DControls.setManaged(true);
                 }
                 case TEST_SCENE -> {
                     testSceneControls.setVisible(true);
@@ -1054,8 +1065,6 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             mengerControls.setManaged(false);
             kaleidoscopicControls.setVisible(false);
             kaleidoscopicControls.setManaged(false);
-            julia3dControls.setVisible(false);
-            julia3dControls.setManaged(false);
             polyhedralControls.setVisible(false);
             polyhedralControls.setManaged(false);
             sierpinskiControls.setVisible(false);
@@ -1066,6 +1075,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             apollonianControls.setManaged(false);
             bristorbrotControls.setVisible(false);
             bristorbrotControls.setManaged(false);
+            quaternionJulia4DControls.setVisible(false);
+            quaternionJulia4DControls.setManaged(false);
             testSceneControls.setVisible(false);
             testSceneControls.setManaged(false);
             cornellBoxControls.setVisible(false);
@@ -1099,14 +1110,6 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 kOffsetSlider.setValue(k.getOffsetX());
                 kFoldXSlider.setValue(k.getFoldAngleX());
                 kFoldYSlider.setValue(k.getFoldAngleY());
-            } else if (params instanceof Julia3DParams j) {
-                julia3dControls.setVisible(true);
-                julia3dControls.setManaged(true);
-                j3dIterSlider.setValue(j.getMaxIterations());
-                j3dCxSlider.setValue(j.getJuliaCx());
-                j3dCySlider.setValue(j.getJuliaCy());
-                j3dCzSlider.setValue(j.getJuliaCz());
-                j3dCwSlider.setValue(j.getJuliaCw());
             } else if (params instanceof PolyhedralIFSParams p) {
                 polyhedralControls.setVisible(true);
                 polyhedralControls.setManaged(true);
@@ -1156,6 +1159,19 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 brJuliaCxSlider.setValue(br.getJuliaCx());
                 brJuliaCySlider.setValue(br.getJuliaCy());
                 brJuliaCzSlider.setValue(br.getJuliaCz());
+            } else if (params instanceof QuaternionJulia4DParams qj) {
+                quaternionJulia4DControls.setVisible(true);
+                quaternionJulia4DControls.setManaged(true);
+                qjIterSlider.setValue(qj.getMaxIterations());
+                qjBailoutSlider.setValue(qj.getBailout());
+                qjCxSlider.setValue(qj.getJuliaCx());
+                qjCySlider.setValue(qj.getJuliaCy());
+                qjCzSlider.setValue(qj.getJuliaCz());
+                qjCwSlider.setValue(qj.getJuliaCw());
+                qjSliceWSlider.setValue(qj.getSliceW());
+                qjRotXWSlider.setValue(qj.getRotXW());
+                qjRotYWSlider.setValue(qj.getRotYW());
+                qjRotZWSlider.setValue(qj.getRotZW());
             } else if (params instanceof TestSceneParams ts) {
                 testSceneControls.setVisible(true);
                 testSceneControls.setManaged(true);

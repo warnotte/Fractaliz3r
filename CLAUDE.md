@@ -43,7 +43,7 @@ org.fractalizer
 │   ├── MandelboxParams.java         # Mandelbox: scale, minRadius, fixedRadius, foldingLimit
 │   ├── MengerSpongeParams.java      # Menger Sponge: iterations, scale, offset
 │   ├── KaleidoscopicIFSParams.java  # KIFS: scale, offset, fold angles
-│   ├── Julia3DParams.java           # 3D Julia: quaternion c parameter
+│   ├── QuaternionJulia4DParams.java  # Quaternion Julia 4D: juliaC, sliceW, 4D rotations (XW/YW/ZW)
 │   ├── PolyhedralIFSParams.java     # Polyhedral IFS: symmetry type, scale, rotations, offsets
 │   ├── SierpinskiParams.java        # Sierpinski Tetrahedron: iterations, scale
 │   ├── PseudoKleinianParams.java    # Pseudo-Kleinian: iterations, CSize vec3, Size, DEoffset
@@ -91,7 +91,7 @@ shaders/
     ├── mandelbox.glsl
     ├── menger.glsl
     ├── kaleidoscopic.glsl
-    ├── julia3d.glsl
+    ├── quaternionjulia4d.glsl # Quaternion Julia 4D (4D slice + XW/YW/ZW rotations)
     ├── polyhedral.glsl    # Polyhedral IFS with Octa/Dodeca/Icosa/Tetra symmetries
     ├── sierpinski.glsl    # Sierpinski Tetrahedron (tetrahedral fold IFS)
     ├── pseudokleinian.glsl # Pseudo-Kleinian (box fold + sphere fold, tubular caves)

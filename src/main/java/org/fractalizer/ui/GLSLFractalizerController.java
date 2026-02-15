@@ -116,12 +116,12 @@ public class GLSLFractalizerController implements RenderController {
                 case MANDELBOX -> this.currentParams = new MandelboxParams();
                 case MENGER_SPONGE -> this.currentParams = new MengerSpongeParams();
                 case KALEIDOSCOPIC_IFS -> this.currentParams = new KaleidoscopicIFSParams();
-                case JULIA_3D -> this.currentParams = new Julia3DParams();
                 case POLYHEDRAL_IFS -> this.currentParams = new PolyhedralIFSParams();
                 case SIERPINSKI -> this.currentParams = new SierpinskiParams();
                 case PSEUDO_KLEINIAN -> this.currentParams = new PseudoKleinianParams();
                 case APOLLONIAN -> this.currentParams = new ApollonianParams();
                 case BRISTORBROT -> this.currentParams = new BristorbrotParams();
+                case QUATERNION_JULIA_4D -> this.currentParams = new QuaternionJulia4DParams();
                 case TEST_SCENE -> this.currentParams = new TestSceneParams();
                 case CORNELL_BOX -> this.currentParams = new CornellBoxParams();
             }
@@ -934,14 +934,6 @@ public class GLSLFractalizerController implements RenderController {
                 // ifsOffset is a scalar in the shader (classic KIFS uses offsetX only)
                 uniforms.put("ifsOffset", p.getOffsetX());
             }
-            case JULIA_3D -> {
-                Julia3DParams p = (Julia3DParams) currentParams;
-                uniforms.put("maxIterations", p.getMaxIterations());
-                uniforms.put("bailout", p.getBailout());
-                uniforms.put("juliaC", new float[]{
-                    p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz(), p.getJuliaCw()
-                });
-            }
             case POLYHEDRAL_IFS -> {
                 PolyhedralIFSParams p = (PolyhedralIFSParams) currentParams;
                 uniforms.put("polyType", p.getPolyType().ordinal());
@@ -978,6 +970,16 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("maxIterations", p.getMaxIterations());
                 uniforms.put("bailout", p.getBailout());
                 uniforms.put("juliaC", new float[]{p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz()});
+            }
+            case QUATERNION_JULIA_4D -> {
+                QuaternionJulia4DParams p = (QuaternionJulia4DParams) currentParams;
+                uniforms.put("maxIterations", p.getMaxIterations());
+                uniforms.put("bailout", p.getBailout());
+                uniforms.put("juliaC", new float[]{p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz(), p.getJuliaCw()});
+                uniforms.put("sliceW", p.getSliceW());
+                uniforms.put("rotXW", (float) Math.toRadians(p.getRotXW()));
+                uniforms.put("rotYW", (float) Math.toRadians(p.getRotYW()));
+                uniforms.put("rotZW", (float) Math.toRadians(p.getRotZW()));
             }
             case TEST_SCENE -> {
                 TestSceneParams p = (TestSceneParams) currentParams;
@@ -1182,20 +1184,6 @@ public class GLSLFractalizerController implements RenderController {
                 // Offset modulation
                 uniforms.put("ifsOffset", p.getOffsetX() + mid * morph * 0.5f);
             }
-            case JULIA_3D -> {
-                Julia3DParams p = (Julia3DParams) currentParams;
-                // Julia constant orbits with audio — creates morphing shapes
-                float cx = bass * morph * 0.5f;
-                float cy = mid * morph * 0.4f;
-                float cz = beat * morph * 0.3f;
-                float cw = mid * morph * 0.2f;
-                uniforms.put("juliaC", new float[]{
-                    p.getJuliaCx() + cx,
-                    p.getJuliaCy() + cy,
-                    p.getJuliaCz() + cz,
-                    p.getJuliaCw() + cw
-                });
-            }
             case POLYHEDRAL_IFS -> {
                 PolyhedralIFSParams p = (PolyhedralIFSParams) currentParams;
 
@@ -1268,6 +1256,21 @@ public class GLSLFractalizerController implements RenderController {
                     p.getJuliaCy() + cy,
                     p.getJuliaCz()
                 });
+            }
+            case QUATERNION_JULIA_4D -> {
+                QuaternionJulia4DParams p = (QuaternionJulia4DParams) currentParams;
+                float cxMod = bass * morph * 0.2f;
+                float cyMod = mid * morph * 0.15f;
+                uniforms.put("juliaC", new float[]{
+                    p.getJuliaCx() + cxMod,
+                    p.getJuliaCy() + cyMod,
+                    p.getJuliaCz(),
+                    p.getJuliaCw()
+                });
+                uniforms.put("sliceW", p.getSliceW() + mid * morph * 0.3f);
+                uniforms.put("rotXW", (float) Math.toRadians(p.getRotXW() + beat * morph * 15.0f));
+                uniforms.put("rotYW", (float) Math.toRadians(p.getRotYW() + bass * morph * 10.0f));
+                uniforms.put("rotZW", (float) Math.toRadians(p.getRotZW() + mid * morph * 8.0f));
             }
             default -> {
                 // TEST_SCENE, CORNELL_BOX: no morphing

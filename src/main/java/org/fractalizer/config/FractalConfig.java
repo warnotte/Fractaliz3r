@@ -480,13 +480,6 @@ public class FractalConfig {
             map.put("offsetX", k.getOffsetX());
             map.put("offsetY", k.getOffsetY());
             map.put("offsetZ", k.getOffsetZ());
-        } else if (params instanceof Julia3DParams j) {
-            map.put("maxIterations", j.getMaxIterations());
-            map.put("bailout", j.getBailout());
-            map.put("juliaCx", j.getJuliaCx());
-            map.put("juliaCy", j.getJuliaCy());
-            map.put("juliaCz", j.getJuliaCz());
-            map.put("juliaCw", j.getJuliaCw());
         } else if (params instanceof PolyhedralIFSParams p) {
             map.put("polyType", p.getPolyType().name());
             map.put("maxIterations", p.getMaxIterations());
@@ -526,6 +519,17 @@ public class FractalConfig {
             map.put("juliaCx", br.getJuliaCx());
             map.put("juliaCy", br.getJuliaCy());
             map.put("juliaCz", br.getJuliaCz());
+        } else if (params instanceof QuaternionJulia4DParams qj) {
+            map.put("maxIterations", qj.getMaxIterations());
+            map.put("bailout", qj.getBailout());
+            map.put("juliaCx", qj.getJuliaCx());
+            map.put("juliaCy", qj.getJuliaCy());
+            map.put("juliaCz", qj.getJuliaCz());
+            map.put("juliaCw", qj.getJuliaCw());
+            map.put("sliceW", qj.getSliceW());
+            map.put("rotXW", qj.getRotXW());
+            map.put("rotYW", qj.getRotYW());
+            map.put("rotZW", qj.getRotZW());
         } else if (params instanceof TestSceneParams ts) {
             map.put("sceneScale", ts.getSceneScale());
         } else if (params instanceof CornellBoxParams cb) {
@@ -571,13 +575,6 @@ public class FractalConfig {
             if (map.containsKey("offsetX")) k.setOffset(getFloat(map, "offsetX"),
                                                         getFloat(map, "offsetY"),
                                                         getFloat(map, "offsetZ"));
-        } else if (params instanceof Julia3DParams j) {
-            if (map.containsKey("maxIterations")) j.setMaxIterations(getInt(map, "maxIterations"));
-            if (map.containsKey("bailout")) j.setBailout(getFloat(map, "bailout"));
-            if (map.containsKey("juliaCx")) j.setJuliaCx(getFloat(map, "juliaCx"));
-            if (map.containsKey("juliaCy")) j.setJuliaCy(getFloat(map, "juliaCy"));
-            if (map.containsKey("juliaCz")) j.setJuliaCz(getFloat(map, "juliaCz"));
-            if (map.containsKey("juliaCw")) j.setJuliaCw(getFloat(map, "juliaCw"));
         } else if (params instanceof PolyhedralIFSParams p) {
             if (map.containsKey("polyType")) p.setPolyType(PolyhedralIFSParams.PolyType.valueOf((String)map.get("polyType")));
             if (map.containsKey("maxIterations")) p.setMaxIterations(getInt(map, "maxIterations"));
@@ -617,6 +614,17 @@ public class FractalConfig {
             if (map.containsKey("juliaCx")) br.setJuliaCx(getFloat(map, "juliaCx"));
             if (map.containsKey("juliaCy")) br.setJuliaCy(getFloat(map, "juliaCy"));
             if (map.containsKey("juliaCz")) br.setJuliaCz(getFloat(map, "juliaCz"));
+        } else if (params instanceof QuaternionJulia4DParams qj) {
+            if (map.containsKey("maxIterations")) qj.setMaxIterations(getInt(map, "maxIterations"));
+            if (map.containsKey("bailout")) qj.setBailout(getFloat(map, "bailout"));
+            if (map.containsKey("juliaCx")) qj.setJuliaCx(getFloat(map, "juliaCx"));
+            if (map.containsKey("juliaCy")) qj.setJuliaCy(getFloat(map, "juliaCy"));
+            if (map.containsKey("juliaCz")) qj.setJuliaCz(getFloat(map, "juliaCz"));
+            if (map.containsKey("juliaCw")) qj.setJuliaCw(getFloat(map, "juliaCw"));
+            if (map.containsKey("sliceW")) qj.setSliceW(getFloat(map, "sliceW"));
+            if (map.containsKey("rotXW")) qj.setRotXW(getFloat(map, "rotXW"));
+            if (map.containsKey("rotYW")) qj.setRotYW(getFloat(map, "rotYW"));
+            if (map.containsKey("rotZW")) qj.setRotZW(getFloat(map, "rotZW"));
         } else if (params instanceof TestSceneParams ts) {
             if (map.containsKey("sceneScale")) ts.setSceneScale(getFloat(map, "sceneScale"));
         } else if (params instanceof CornellBoxParams cb) {

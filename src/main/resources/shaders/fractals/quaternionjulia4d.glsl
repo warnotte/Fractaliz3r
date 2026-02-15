@@ -1,8 +1,9 @@
 /**
- * Quaternion Julia Set Distance Estimator
+ * Quaternion Julia 4D Distance Estimator
  *
- * The 3D Julia set using quaternion mathematics.
- * Formula: q' = q² + c (quaternion multiplication)
+ * Full 4D quaternion Julia set with hyperplane slicing and 4D rotations.
+ * Extends julia3d.glsl with sliceW parameter and XW/YW/ZW rotation planes
+ * to explore cross-sections of the 4D structure.
  *
  * Reference: https://www.iquilezles.org/www/articles/distancefractals/distancefractals.htm
  */
@@ -13,8 +14,13 @@
 
 uniform int maxIterations;
 uniform float bailout;
-// Julia constant (quaternion c = cx + cy*i + cz*j + cw*k)
 uniform vec4 juliaC;
+
+// 4D exploration
+uniform float sliceW;
+uniform float rotXW;
+uniform float rotYW;
+uniform float rotZW;
 
 // ============================================================================
 // Orbit Trap Structure
@@ -31,7 +37,6 @@ struct OrbitTrap {
 // Quaternion Operations
 // ============================================================================
 
-// Quaternion multiplication: q1 * q2
 vec4 qmul(vec4 a, vec4 b) {
     return vec4(
         a.x * b.x - a.y * b.y - a.z * b.z - a.w * b.w,
@@ -41,7 +46,6 @@ vec4 qmul(vec4 a, vec4 b) {
     );
 }
 
-// Quaternion square: q²
 vec4 qsqr(vec4 q) {
     return vec4(
         q.x * q.x - q.y * q.y - q.z * q.z - q.w * q.w,
@@ -52,13 +56,46 @@ vec4 qsqr(vec4 q) {
 }
 
 // ============================================================================
-// Julia 3D Distance Estimator (full version with orbit traps)
+// 4D Rotation (XW, YW, ZW planes)
+// ============================================================================
+
+vec4 apply4DRotation(vec4 q) {
+    float c, s, tmp;
+
+    // XW rotation
+    if (abs(rotXW) > 0.0001) {
+        c = cos(rotXW); s = sin(rotXW);
+        tmp = c * q.x - s * q.w;
+        q.w = s * q.x + c * q.w;
+        q.x = tmp;
+    }
+
+    // YW rotation
+    if (abs(rotYW) > 0.0001) {
+        c = cos(rotYW); s = sin(rotYW);
+        tmp = c * q.y - s * q.w;
+        q.w = s * q.y + c * q.w;
+        q.y = tmp;
+    }
+
+    // ZW rotation
+    if (abs(rotZW) > 0.0001) {
+        c = cos(rotZW); s = sin(rotZW);
+        tmp = c * q.z - s * q.w;
+        q.w = s * q.z + c * q.w;
+        q.z = tmp;
+    }
+
+    return q;
+}
+
+// ============================================================================
+// Quaternion Julia 4D Distance Estimator (full version with orbit traps)
 // ============================================================================
 
 float DE(vec3 pos, out OrbitTrap trap) {
-    // Initialize quaternion from 3D position (w=0 for pure imaginary)
-    vec4 q = vec4(pos, 0.0);
-    vec4 dq = vec4(1.0, 0.0, 0.0, 0.0);  // Derivative
+    vec4 q = apply4DRotation(vec4(pos, sliceW));
+    vec4 dq = vec4(1.0, 0.0, 0.0, 0.0);
 
     trap.minDist = 1e10;
     trap.avgDist = 0.0;
@@ -70,15 +107,11 @@ float DE(vec3 pos, out OrbitTrap trap) {
     for (int i = 0; i < maxIterations; i++) {
         if (r2 > bailout) break;
 
-        // Derivative: dq' = 2 * q * dq
         dq = 2.0 * qmul(q, dq);
-
-        // Iteration: q' = q² + c
         q = qsqr(q) + juliaC;
 
         r2 = dot(q, q);
 
-        // Track orbit traps for coloring
         float dist = sqrt(r2);
         trap.minDist = min(trap.minDist, dist);
         trap.avgDist += dist;
@@ -88,7 +121,6 @@ float DE(vec3 pos, out OrbitTrap trap) {
 
     trap.avgDist /= float(max(trap.iterations, 1));
 
-    // Distance estimation formula
     float r = sqrt(r2);
     float dr = length(dq);
     return 0.5 * r * log(r) / dr;
@@ -99,7 +131,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
 // ============================================================================
 
 float DE_simple(vec3 pos) {
-    vec4 q = vec4(pos, 0.0);
+    vec4 q = apply4DRotation(vec4(pos, sliceW));
     vec4 dq = vec4(1.0, 0.0, 0.0, 0.0);
 
     float r2 = dot(q, q);
@@ -122,16 +154,8 @@ float DE_simple(vec3 pos) {
 // ============================================================================
 
 vec3 getFactors(OrbitTrap trap) {
-    // X: Structure (Divergence / Last distance)
-    // High values mean the point is escaping fast
     float structural = clamp(trap.lastDist * 0.2, 0.0, 1.0);
-
-    // Y: Flow (Stability / Average distance)
-    // Low values mean the orbit stayed close to origin
     float flow = smoothstep(0.0, 2.0, trap.avgDist);
-
-    // Z: Detail (Iterations)
     float detail = float(trap.iterations) / float(max(maxIterations, 1));
-
     return vec3(structural, flow, detail);
 }

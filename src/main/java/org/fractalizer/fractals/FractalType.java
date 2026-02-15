@@ -8,12 +8,12 @@ public enum FractalType {
     MANDELBOX("Mandelbox", "mandelbox"),
     MENGER_SPONGE("Menger Sponge", "menger"),
     KALEIDOSCOPIC_IFS("Kaleidoscopic IFS", "kaleidoscopic"),
-    JULIA_3D("Julia 3D", "julia3d"),
     POLYHEDRAL_IFS("Polyhedral IFS", "polyhedral"),
     SIERPINSKI("Sierpinski Tetrahedron", "sierpinski"),
     PSEUDO_KLEINIAN("Pseudo-Kleinian", "pseudokleinian"),
     APOLLONIAN("Apollonian Gasket", "apollonian"),
     BRISTORBROT("Bristorbrot", "bristorbrot"),
+    QUATERNION_JULIA_4D("Quaternion Julia 4D", "quaternionjulia4d"),
     TEST_SCENE("Test Scene", "testscene"),
     CORNELL_BOX("Cornell Box", "cornellbox");
 

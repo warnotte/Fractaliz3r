@@ -59,12 +59,12 @@ public class FractalEvaluator {
             case MANDELBOX -> mandelboxDE(x, y, z, (MandelboxParams) params);
             case MENGER_SPONGE -> mengerDE(x, y, z, (MengerSpongeParams) params);
             case KALEIDOSCOPIC_IFS -> kaleidoscopicDE(x, y, z, (KaleidoscopicIFSParams) params);
-            case JULIA_3D -> julia3dDE(x, y, z, (Julia3DParams) params);
             case POLYHEDRAL_IFS -> polyhedralDE(x, y, z, (PolyhedralIFSParams) params);
             case SIERPINSKI -> sierpinskiDE(x, y, z, (SierpinskiParams) params);
             case PSEUDO_KLEINIAN -> pseudoKleinianDE(x, y, z, (PseudoKleinianParams) params);
             case APOLLONIAN -> apollonianDE(x, y, z, (ApollonianParams) params);
             case BRISTORBROT -> bristorbrotDE(x, y, z, (BristorbrotParams) params);
+            case QUATERNION_JULIA_4D -> quaternionJulia4dDE(x, y, z, (QuaternionJulia4DParams) params);
             default -> 1e10f;
         });
     }
@@ -76,12 +76,12 @@ public class FractalEvaluator {
             case MANDELBOX -> mandelboxDEFull(x, y, z, (MandelboxParams) params, trap);
             case MENGER_SPONGE -> mengerDEFull(x, y, z, (MengerSpongeParams) params, trap);
             case KALEIDOSCOPIC_IFS -> kaleidoscopicDEFull(x, y, z, (KaleidoscopicIFSParams) params, trap);
-            case JULIA_3D -> julia3dDEFull(x, y, z, (Julia3DParams) params, trap);
             case POLYHEDRAL_IFS -> polyhedralDEFull(x, y, z, (PolyhedralIFSParams) params, trap);
             case SIERPINSKI -> sierpinskiDEFull(x, y, z, (SierpinskiParams) params, trap);
             case PSEUDO_KLEINIAN -> pseudoKleinianDEFull(x, y, z, (PseudoKleinianParams) params, trap);
             case APOLLONIAN -> apollonianDEFull(x, y, z, (ApollonianParams) params, trap);
             case BRISTORBROT -> bristorbrotDEFull(x, y, z, (BristorbrotParams) params, trap);
+            case QUATERNION_JULIA_4D -> quaternionJulia4dDEFull(x, y, z, (QuaternionJulia4DParams) params, trap);
             default -> 1e10f;
         });
     }
@@ -188,12 +188,12 @@ public class FractalEvaluator {
             case MANDELBOX -> mandelboxFactors(trap, ((MandelboxParams) params).getMaxIterations());
             case MENGER_SPONGE -> mengerFactors(trap, ((MengerSpongeParams) params).getMaxIterations());
             case KALEIDOSCOPIC_IFS -> kaleidoscopicFactors(trap, ((KaleidoscopicIFSParams) params).getMaxIterations());
-            case JULIA_3D -> julia3dFactors(trap, ((Julia3DParams) params).getMaxIterations());
             case POLYHEDRAL_IFS -> polyhedralFactors(trap, ((PolyhedralIFSParams) params).getMaxIterations());
             case SIERPINSKI -> mandelbulbFactors(trap, ((SierpinskiParams) params).getMaxIterations()); // Same pattern
             case PSEUDO_KLEINIAN -> pseudoKleinianFactors(trap, ((PseudoKleinianParams) params).getMaxIterations());
             case APOLLONIAN -> mandelbulbFactors(trap, ((ApollonianParams) params).getMaxIterations()); // Same pattern
             case BRISTORBROT -> mandelbulbFactors(trap, ((BristorbrotParams) params).getMaxIterations()); // Same pattern
+            case QUATERNION_JULIA_4D -> quaternionJuliaFactors(trap, ((QuaternionJulia4DParams) params).getMaxIterations());
             default -> new float[]{0.5f, 0.5f, 0.5f};
         };
     }
@@ -257,7 +257,7 @@ public class FractalEvaluator {
         return new float[]{structural, flow, detail};
     }
 
-    private static float[] julia3dFactors(OrbitTrap trap, int maxIter) {
+    private static float[] quaternionJuliaFactors(OrbitTrap trap, int maxIter) {
         float structural = clamp(trap.lastDist * 0.2f, 0, 1);
         float flow = smoothstep(0f, 2f, trap.avgDist);
         float detail = (float) trap.iterations / Math.max(maxIter, 1);
@@ -523,71 +523,6 @@ public class FractalEvaluator {
         trap.iterations = n;
         trap.avgFold = foldSum / n;
         return length3(zx, zy, zz) * (float) Math.pow(scale, -n);
-    }
-
-    // ========================================================================
-    // Julia 3D (Quaternion)
-    // ========================================================================
-
-    private static float julia3dDE(float px, float py, float pz, Julia3DParams p) {
-        float qx = px, qy = py, qz = pz, qw = 0;
-        float dqx = 1, dqy = 0, dqz = 0, dqw = 0;
-        float cx = p.getJuliaCx(), cy = p.getJuliaCy(), cz = p.getJuliaCz(), cw = p.getJuliaCw();
-        int maxIter = p.getMaxIterations(); float bailout = p.getBailout();
-        float r2 = qx*qx + qy*qy + qz*qz + qw*qw;
-
-        for (int i = 0; i < maxIter; i++) {
-            if (r2 > bailout) break;
-            // dq = 2 * q * dq
-            float tdx = 2*(qx*dqx - qy*dqy - qz*dqz - qw*dqw);
-            float tdy = 2*(qx*dqy + qy*dqx + qz*dqw - qw*dqz);
-            float tdz = 2*(qx*dqz - qy*dqw + qz*dqx + qw*dqy);
-            float tdw = 2*(qx*dqw + qy*dqz - qz*dqy + qw*dqx);
-            dqx = tdx; dqy = tdy; dqz = tdz; dqw = tdw;
-            // q = q^2 + c
-            float nx = qx*qx - qy*qy - qz*qz - qw*qw + cx;
-            float ny = 2*qx*qy + cy;
-            float nz = 2*qx*qz + cz;
-            float nw = 2*qx*qw + cw;
-            qx = nx; qy = ny; qz = nz; qw = nw;
-            r2 = qx*qx + qy*qy + qz*qz + qw*qw;
-        }
-        float r = (float) Math.sqrt(r2);
-        float dr = (float) Math.sqrt(dqx*dqx + dqy*dqy + dqz*dqz + dqw*dqw);
-        if (r < 1e-21f || dr < 1e-21f) return 0f;
-        return 0.5f * r * (float) Math.log(r) / dr;
-    }
-
-    private static float julia3dDEFull(float px, float py, float pz, Julia3DParams p, OrbitTrap trap) {
-        float qx = px, qy = py, qz = pz, qw = 0;
-        float dqx = 1, dqy = 0, dqz = 0, dqw = 0;
-        float cx = p.getJuliaCx(), cy = p.getJuliaCy(), cz = p.getJuliaCz(), cw = p.getJuliaCw();
-        int maxIter = p.getMaxIterations(); float bailout = p.getBailout();
-        trap.minDist = 1e10f; trap.avgDist = 0; trap.lastDist = 0; trap.iterations = 0;
-        float r2 = qx*qx + qy*qy + qz*qz + qw*qw;
-
-        for (int i = 0; i < maxIter; i++) {
-            if (r2 > bailout) break;
-            float tdx = 2*(qx*dqx - qy*dqy - qz*dqz - qw*dqw);
-            float tdy = 2*(qx*dqy + qy*dqx + qz*dqw - qw*dqz);
-            float tdz = 2*(qx*dqz - qy*dqw + qz*dqx + qw*dqy);
-            float tdw = 2*(qx*dqw + qy*dqz - qz*dqy + qw*dqx);
-            dqx = tdx; dqy = tdy; dqz = tdz; dqw = tdw;
-            float nx = qx*qx - qy*qy - qz*qz - qw*qw + cx;
-            float ny = 2*qx*qy + cy; float nz = 2*qx*qz + cz; float nw = 2*qx*qw + cw;
-            qx = nx; qy = ny; qz = nz; qw = nw;
-            r2 = qx*qx + qy*qy + qz*qz + qw*qw;
-            float dist = (float) Math.sqrt(r2);
-            trap.minDist = Math.min(trap.minDist, dist);
-            trap.avgDist += dist;
-            trap.lastDist = dist;
-            trap.iterations = i + 1;
-        }
-        trap.avgDist /= Math.max(trap.iterations, 1);
-        float r = (float) Math.sqrt(r2);
-        float dr = (float) Math.sqrt(dqx*dqx + dqy*dqy + dqz*dqz + dqw*dqw);
-        if (r < 1e-21f || dr < 1e-21f) return 0f;
-        return 0.5f * r * (float) Math.log(r) / dr;
     }
 
     // ========================================================================
@@ -897,5 +832,94 @@ public class FractalEvaluator {
         }
         if (r < 1e-21f || dr < 1e-21f) return 0f;
         return 0.5f * (float) Math.log(r) * r / dr;
+    }
+
+    // ========================================================================
+    // Quaternion Julia 4D
+    // ========================================================================
+
+    private static float[] apply4DRotation(float qx, float qy, float qz, float qw,
+                                           float rotXW, float rotYW, float rotZW) {
+        float c, s, tmp;
+        if (Math.abs(rotXW) > 0.0001f) {
+            c = (float) Math.cos(rotXW); s = (float) Math.sin(rotXW);
+            tmp = c * qx - s * qw; qw = s * qx + c * qw; qx = tmp;
+        }
+        if (Math.abs(rotYW) > 0.0001f) {
+            c = (float) Math.cos(rotYW); s = (float) Math.sin(rotYW);
+            tmp = c * qy - s * qw; qw = s * qy + c * qw; qy = tmp;
+        }
+        if (Math.abs(rotZW) > 0.0001f) {
+            c = (float) Math.cos(rotZW); s = (float) Math.sin(rotZW);
+            tmp = c * qz - s * qw; qw = s * qz + c * qw; qz = tmp;
+        }
+        return new float[]{qx, qy, qz, qw};
+    }
+
+    private static float quaternionJulia4dDE(float px, float py, float pz, QuaternionJulia4DParams p) {
+        float rxw = (float) Math.toRadians(p.getRotXW());
+        float ryw = (float) Math.toRadians(p.getRotYW());
+        float rzw = (float) Math.toRadians(p.getRotZW());
+        float[] q0 = apply4DRotation(px, py, pz, p.getSliceW(), rxw, ryw, rzw);
+        float qx = q0[0], qy = q0[1], qz = q0[2], qw = q0[3];
+        float dqx = 1, dqy = 0, dqz = 0, dqw = 0;
+        float cx = p.getJuliaCx(), cy = p.getJuliaCy(), cz = p.getJuliaCz(), cw = p.getJuliaCw();
+        int maxIter = p.getMaxIterations(); float bailout = p.getBailout();
+        float r2 = qx*qx + qy*qy + qz*qz + qw*qw;
+
+        for (int i = 0; i < maxIter; i++) {
+            if (r2 > bailout) break;
+            float tdx = 2*(qx*dqx - qy*dqy - qz*dqz - qw*dqw);
+            float tdy = 2*(qx*dqy + qy*dqx + qz*dqw - qw*dqz);
+            float tdz = 2*(qx*dqz - qy*dqw + qz*dqx + qw*dqy);
+            float tdw = 2*(qx*dqw + qy*dqz - qz*dqy + qw*dqx);
+            dqx = tdx; dqy = tdy; dqz = tdz; dqw = tdw;
+            float nx = qx*qx - qy*qy - qz*qz - qw*qw + cx;
+            float ny = 2*qx*qy + cy;
+            float nz = 2*qx*qz + cz;
+            float nw = 2*qx*qw + cw;
+            qx = nx; qy = ny; qz = nz; qw = nw;
+            r2 = qx*qx + qy*qy + qz*qz + qw*qw;
+        }
+        float r = (float) Math.sqrt(r2);
+        float dr = (float) Math.sqrt(dqx*dqx + dqy*dqy + dqz*dqz + dqw*dqw);
+        if (r < 1e-21f || dr < 1e-21f) return 0f;
+        return 0.5f * r * (float) Math.log(r) / dr;
+    }
+
+    private static float quaternionJulia4dDEFull(float px, float py, float pz, QuaternionJulia4DParams p, OrbitTrap trap) {
+        float rxw = (float) Math.toRadians(p.getRotXW());
+        float ryw = (float) Math.toRadians(p.getRotYW());
+        float rzw = (float) Math.toRadians(p.getRotZW());
+        float[] q0 = apply4DRotation(px, py, pz, p.getSliceW(), rxw, ryw, rzw);
+        float qx = q0[0], qy = q0[1], qz = q0[2], qw = q0[3];
+        float dqx = 1, dqy = 0, dqz = 0, dqw = 0;
+        float cx = p.getJuliaCx(), cy = p.getJuliaCy(), cz = p.getJuliaCz(), cw = p.getJuliaCw();
+        int maxIter = p.getMaxIterations(); float bailout = p.getBailout();
+        trap.minDist = 1e10f; trap.avgDist = 0; trap.lastDist = 0; trap.iterations = 0;
+        float r2 = qx*qx + qy*qy + qz*qz + qw*qw;
+
+        for (int i = 0; i < maxIter; i++) {
+            if (r2 > bailout) break;
+            float tdx = 2*(qx*dqx - qy*dqy - qz*dqz - qw*dqw);
+            float tdy = 2*(qx*dqy + qy*dqx + qz*dqw - qw*dqz);
+            float tdz = 2*(qx*dqz - qy*dqw + qz*dqx + qw*dqy);
+            float tdw = 2*(qx*dqw + qy*dqz - qz*dqy + qw*dqx);
+            dqx = tdx; dqy = tdy; dqz = tdz; dqw = tdw;
+            float nx = qx*qx - qy*qy - qz*qz - qw*qw + cx;
+            float ny = 2*qx*qy + cy; float nz = 2*qx*qz + cz; float nw = 2*qx*qw + cw;
+            qx = nx; qy = ny; qz = nz; qw = nw;
+            r2 = qx*qx + qy*qy + qz*qz + qw*qw;
+            float dist = (float) Math.sqrt(r2);
+            trap.minDist = Math.min(trap.minDist, dist);
+            trap.avgDist += dist;
+            trap.lastDist = dist;
+            trap.iterations = i + 1;
+        }
+        trap.avgDist /= Math.max(trap.iterations, 1);
+        float r = (float) Math.sqrt(r2);
+        float dr = (float) Math.sqrt(dqx*dqx + dqy*dqy + dqz*dqz + dqw*dqw);
+        if (r < 1e-21f || dr < 1e-21f) return 0f;
+        return 0.5f * r * (float) Math.log(r) / dr;
     }
 }
