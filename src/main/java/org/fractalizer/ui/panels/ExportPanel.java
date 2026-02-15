@@ -10,9 +10,15 @@ import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import org.fractalizer.animation.Timeline;
+import org.fractalizer.export.GlbExporter;
+import org.fractalizer.export.MarchingCubes;
+import org.fractalizer.export.ObjExporter;
+import org.fractalizer.fractals.AbstractFractalParams;
+import org.fractalizer.fractals.FractalType;
 import org.fractalizer.render.FFmpegExporter;
 import org.fractalizer.ui.ExportProgressDialog;
 import org.fractalizer.ui.RenderController;
+import org.fractalizer.ui.components.EnhancedSlider;
 
 import java.awt.Desktop;
 import java.io.File;
@@ -78,6 +84,13 @@ public class ExportPanel extends ScrollPane {
     private volatile boolean exportCancelled;
     private volatile boolean exportPaused;
     private volatile boolean exporting;
+
+    // Mesh export UI
+    private ComboBox<String> meshFormatCombo;
+    private EnhancedSlider meshResolutionSlider;
+    private EnhancedSlider meshBoundsSlider;
+    private Button exportMeshBtn;
+    private volatile boolean meshExportCancelled;
 
     public ExportPanel(RenderController controller,
                        Runnable renderFullCallback,
@@ -150,6 +163,9 @@ public class ExportPanel extends ScrollPane {
 
         // === Animation Export Section ===
         panel.getChildren().add(createAnimationExportSection());
+
+        // === 3D Mesh Export Section ===
+        panel.getChildren().add(createMeshExportSection());
 
         return panel;
     }
@@ -791,6 +807,153 @@ public class ExportPanel extends ScrollPane {
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
+    }
+
+    // ========================================================================
+    // 3D Mesh Export
+    // ========================================================================
+
+    private TitledPane createMeshExportSection() {
+        VBox box = new VBox(8);
+
+        // Format selector
+        HBox formatBox = new HBox(5);
+        formatBox.setAlignment(Pos.CENTER_LEFT);
+        formatBox.getChildren().add(new Label("Format:"));
+        meshFormatCombo = new ComboBox<>();
+        meshFormatCombo.getItems().addAll("glTF Binary (.glb)", "Wavefront OBJ (.obj)");
+        meshFormatCombo.setValue("glTF Binary (.glb)");
+        meshFormatCombo.setMaxWidth(Double.MAX_VALUE);
+        formatBox.getChildren().add(meshFormatCombo);
+
+        // Resolution slider
+        meshResolutionSlider = new EnhancedSlider("Resolution", 32, 512, 128, true);
+
+        // Bounds slider
+        meshBoundsSlider = new EnhancedSlider("Bounds", 1.0, 5.0, 2.5, false);
+
+        // Export button
+        exportMeshBtn = new Button("Export 3D Mesh...");
+        exportMeshBtn.setOnAction(e -> exportMesh());
+        exportMeshBtn.setMaxWidth(Double.MAX_VALUE);
+
+        // Info label
+        Label infoLabel = new Label(
+            "Extracts fractal geometry as a 3D mesh\n" +
+            "using Marching Cubes. Includes vertex\n" +
+            "colors from the current palette."
+        );
+        infoLabel.getStyleClass().add("small-label");
+        infoLabel.setWrapText(true);
+
+        box.getChildren().addAll(formatBox, meshResolutionSlider, meshBoundsSlider, exportMeshBtn, infoLabel);
+
+        TitledPane pane = new TitledPane("3D Mesh", box);
+        pane.setExpanded(false);
+        return pane;
+    }
+
+    private void exportMesh() {
+        // Reject non-fractal types
+        AbstractFractalParams params = null;
+        if (controller.getParams() instanceof AbstractFractalParams afp) {
+            params = afp;
+        }
+        if (params == null) {
+            showError("Unsupported", "3D mesh export is not available for this scene type.");
+            return;
+        }
+        FractalType type = params.getType();
+        if (type == FractalType.TEST_SCENE || type == FractalType.CORNELL_BOX) {
+            showError("Unsupported", "3D mesh export is only available for fractal types, not " + type.getDisplayName() + ".");
+            return;
+        }
+
+        boolean isGlb = meshFormatCombo.getValue().contains("glb");
+        String ext = isGlb ? "*.glb" : "*.obj";
+        String desc = isGlb ? "glTF Binary" : "Wavefront OBJ";
+        String defaultName = isGlb ? "fractal.glb" : "fractal.obj";
+
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Export 3D Mesh");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(desc, ext));
+        fileChooser.setInitialFileName(defaultName);
+
+        File file = fileChooser.showSaveDialog(getScene().getWindow());
+        if (file == null) return;
+
+        int resolution = (int) meshResolutionSlider.getValue();
+        float boundsHalf = (float) meshBoundsSlider.getValue();
+
+        meshExportCancelled = false;
+        exportMeshBtn.setDisable(true);
+
+        ExportProgressDialog dialog = new ExportProgressDialog(getScene().getWindow(), "3D Mesh Export");
+        dialog.setAnimationMode(false);
+        dialog.setOnCancelRequested(() -> meshExportCancelled = true);
+
+        long startTime = System.currentTimeMillis();
+        final AbstractFractalParams finalParams = params;
+
+        Thread meshThread = new Thread(() -> {
+            try {
+                MarchingCubes.Mesh mesh = MarchingCubes.extract(
+                        finalParams, resolution, boundsHalf,
+                        progress -> Platform.runLater(() -> {
+                            int zSlice = (int) (progress * resolution);
+                            long elapsed = System.currentTimeMillis() - startTime;
+                            String eta = progress > 0.01 && progress < 1.0
+                                    ? "~" + formatDuration((long)(elapsed / progress) - elapsed) + " remaining"
+                                    : progress >= 1.0 ? "finishing..." : "calculating...";
+                            dialog.updateFrameProgress(progress,
+                                    String.format("Z-slice %d / %d", zSlice, resolution));
+                            dialog.updateStatus(formatDuration(elapsed) + " elapsed \u2014 " + eta);
+                        }),
+                        () -> meshExportCancelled
+                );
+
+                if (meshExportCancelled || mesh == null) {
+                    Platform.runLater(() -> {
+                        dialog.showCancelled("Export cancelled");
+                        statusCallback.accept("Mesh export cancelled");
+                        exportMeshBtn.setDisable(false);
+                    });
+                    return;
+                }
+
+                // Write file
+                if (isGlb) {
+                    GlbExporter.export(file, mesh);
+                } else {
+                    ObjExporter.export(file, mesh);
+                }
+
+                long totalElapsed = System.currentTimeMillis() - startTime;
+                final int verts = mesh.vertexCount();
+                final int tris = mesh.triangleCount();
+
+                Platform.runLater(() -> {
+                    dialog.showSuccess(String.format("%,d vertices, %,d triangles in %s\n%s",
+                            verts, tris, formatDuration(totalElapsed), file.getName()));
+                    statusCallback.accept("Exported: " + file.getName());
+                    exportMeshBtn.setDisable(false);
+                    openFile(file);
+                });
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                Platform.runLater(() -> {
+                    dialog.showCancelled("Export failed: " + e.getMessage());
+                    statusCallback.accept("Mesh export failed");
+                    exportMeshBtn.setDisable(false);
+                });
+            }
+        });
+
+        meshThread.setDaemon(true);
+        meshThread.start();
+
+        dialog.show();
     }
 
     // ========================================================================
