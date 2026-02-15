@@ -530,6 +530,15 @@ public class FractalConfig {
             map.put("rotXW", qj.getRotXW());
             map.put("rotYW", qj.getRotYW());
             map.put("rotZW", qj.getRotZW());
+        } else if (params instanceof FractalTerrainParams ft) {
+            map.put("terrainHeight", ft.getTerrainHeight());
+            map.put("terrainFrequency", ft.getTerrainFrequency());
+            map.put("octaves", ft.getOctaves());
+            map.put("lacunarity", ft.getLacunarity());
+            map.put("roughness", ft.getRoughness());
+            map.put("warpStrength", ft.getWarpStrength());
+            map.put("ridgeSharpness", ft.getRidgeSharpness());
+            map.put("terrainOffset", ft.getTerrainOffset());
         } else if (params instanceof TestSceneParams ts) {
             map.put("sceneScale", ts.getSceneScale());
         } else if (params instanceof CornellBoxParams cb) {
@@ -625,6 +634,15 @@ public class FractalConfig {
             if (map.containsKey("rotXW")) qj.setRotXW(getFloat(map, "rotXW"));
             if (map.containsKey("rotYW")) qj.setRotYW(getFloat(map, "rotYW"));
             if (map.containsKey("rotZW")) qj.setRotZW(getFloat(map, "rotZW"));
+        } else if (params instanceof FractalTerrainParams ft) {
+            if (map.containsKey("terrainHeight")) ft.setTerrainHeight(getFloat(map, "terrainHeight"));
+            if (map.containsKey("terrainFrequency")) ft.setTerrainFrequency(getFloat(map, "terrainFrequency"));
+            if (map.containsKey("octaves")) ft.setOctaves(getInt(map, "octaves"));
+            if (map.containsKey("lacunarity")) ft.setLacunarity(getFloat(map, "lacunarity"));
+            if (map.containsKey("roughness")) ft.setRoughness(getFloat(map, "roughness"));
+            if (map.containsKey("warpStrength")) ft.setWarpStrength(getFloat(map, "warpStrength"));
+            if (map.containsKey("ridgeSharpness")) ft.setRidgeSharpness(getFloat(map, "ridgeSharpness"));
+            if (map.containsKey("terrainOffset")) ft.setTerrainOffset(getFloat(map, "terrainOffset"));
         } else if (params instanceof TestSceneParams ts) {
             if (map.containsKey("sceneScale")) ts.setSceneScale(getFloat(map, "sceneScale"));
         } else if (params instanceof CornellBoxParams cb) {

@@ -142,6 +142,17 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider qjSliceWSlider;
     private EnhancedSlider qjRotXWSlider, qjRotYWSlider, qjRotZWSlider;
 
+    // Fractal Terrain controls
+    private VBox fractalTerrainControls;
+    private EnhancedSlider ftHeightSlider;
+    private EnhancedSlider ftFrequencySlider;
+    private EnhancedSlider ftOctavesSlider;
+    private EnhancedSlider ftLacunaritySlider;
+    private EnhancedSlider ftRoughnessSlider;
+    private EnhancedSlider ftWarpSlider;
+    private EnhancedSlider ftRidgeSlider;
+    private EnhancedSlider ftOffsetSlider;
+
     // Cornell Box sliders
     private EnhancedSlider cbScaleSlider;
     private EnhancedSlider cbGlassXSlider, cbGlassYSlider, cbGlassZSlider, cbGlassRadiusSlider;
@@ -178,6 +189,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         createApollonianControls();
         createBristorbrotControls();
         createQuaternionJulia4DControls();
+        createFractalTerrainControls();
         createTestSceneControls();
         createCornellBoxControls();
 
@@ -267,6 +279,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             apollonianControls,
             bristorbrotControls,
             quaternionJulia4DControls,
+            fractalTerrainControls,
             testSceneControls,
             cornellBoxControls
         );
@@ -819,6 +832,130 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         }
     }
 
+    private void createFractalTerrainControls() {
+        fractalTerrainControls = new VBox(8);
+
+        Label titleLabel = new Label("Fractal Terrain");
+        titleLabel.getStyleClass().add("bold-label");
+
+        // Terrain Shape
+        Label shapeLabel = new Label("Terrain Shape");
+        shapeLabel.getStyleClass().add("bold-label");
+
+        ftHeightSlider = new EnhancedSlider("Height", 0.1, 10.0, 2.0, false);
+        ftHeightSlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof FractalTerrainParams ft) {
+                ft.setTerrainHeight(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        ftFrequencySlider = new EnhancedSlider("Frequency", 0.05, 5.0, 0.5, false);
+        ftFrequencySlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof FractalTerrainParams ft) {
+                ft.setTerrainFrequency(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        ftOffsetSlider = new EnhancedSlider("Vertical Offset", -5.0, 5.0, 0.0, false);
+        ftOffsetSlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof FractalTerrainParams ft) {
+                ft.setTerrainOffset(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        // Noise Detail
+        Label detailLabel = new Label("Noise Detail");
+        detailLabel.getStyleClass().add("bold-label");
+
+        ftOctavesSlider = new EnhancedSlider("Octaves", 1, 12, 8, true);
+        ftOctavesSlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof FractalTerrainParams ft) {
+                ft.setOctaves(v.intValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        ftLacunaritySlider = new EnhancedSlider("Lacunarity", 1.5, 4.0, 2.0, false);
+        ftLacunaritySlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof FractalTerrainParams ft) {
+                ft.setLacunarity(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        ftRoughnessSlider = new EnhancedSlider("Roughness", 0.1, 0.9, 0.5, false);
+        ftRoughnessSlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof FractalTerrainParams ft) {
+                ft.setRoughness(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        // Effects
+        Label effectsLabel = new Label("Effects");
+        effectsLabel.getStyleClass().add("bold-label");
+
+        ftWarpSlider = new EnhancedSlider("Domain Warp", 0.0, 2.0, 0.0, false);
+        ftWarpSlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof FractalTerrainParams ft) {
+                ft.setWarpStrength(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        ftRidgeSlider = new EnhancedSlider("Ridge Sharpness", 0.0, 1.0, 0.0, false);
+        ftRidgeSlider.setOnAction(v -> {
+            if (!suppressRender && params instanceof FractalTerrainParams ft) {
+                ft.setRidgeSharpness(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        // Presets
+        Label presetLabel = new Label("Presets");
+        presetLabel.getStyleClass().add("bold-label");
+
+        Button hillsBtn = new Button("Rolling Hills");
+        hillsBtn.setOnAction(e -> applyTerrainPreset(FractalTerrainParams.rollingHillsPreset()));
+        Button mtnsBtn = new Button("Mountains");
+        mtnsBtn.setOnAction(e -> applyTerrainPreset(FractalTerrainParams.mountainsPreset()));
+        Button canyonsBtn = new Button("Canyons");
+        canyonsBtn.setOnAction(e -> applyTerrainPreset(FractalTerrainParams.canyonsPreset()));
+        Button alienBtn = new Button("Alien");
+        alienBtn.setOnAction(e -> applyTerrainPreset(FractalTerrainParams.alienPreset()));
+
+        HBox presetRow1 = new HBox(4, hillsBtn, mtnsBtn);
+        HBox presetRow2 = new HBox(4, canyonsBtn, alienBtn);
+
+        fractalTerrainControls.getChildren().addAll(
+            titleLabel,
+            shapeLabel, ftHeightSlider, ftFrequencySlider, ftOffsetSlider,
+            new Separator(), detailLabel, ftOctavesSlider, ftLacunaritySlider, ftRoughnessSlider,
+            new Separator(), effectsLabel, ftWarpSlider, ftRidgeSlider,
+            new Separator(), presetLabel, presetRow1, presetRow2
+        );
+        fractalTerrainControls.setVisible(false);
+        fractalTerrainControls.setManaged(false);
+    }
+
+    private void applyTerrainPreset(FractalTerrainParams preset) {
+        if (params instanceof FractalTerrainParams p) {
+            p.setTerrainHeight(preset.getTerrainHeight());
+            p.setTerrainFrequency(preset.getTerrainFrequency());
+            p.setOctaves(preset.getOctaves());
+            p.setLacunarity(preset.getLacunarity());
+            p.setRoughness(preset.getRoughness());
+            p.setWarpStrength(preset.getWarpStrength());
+            p.setRidgeSharpness(preset.getRidgeSharpness());
+            p.setTerrainOffset(preset.getTerrainOffset());
+            refreshFromParams(true);
+            renderCallback.requestRender();
+        }
+    }
+
     private void createTestSceneControls() {
         testSceneControls = new VBox(8);
 
@@ -973,6 +1110,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             bristorbrotControls.setManaged(false);
             quaternionJulia4DControls.setVisible(false);
             quaternionJulia4DControls.setManaged(false);
+            fractalTerrainControls.setVisible(false);
+            fractalTerrainControls.setManaged(false);
             testSceneControls.setVisible(false);
             testSceneControls.setManaged(false);
             cornellBoxControls.setVisible(false);
@@ -1019,6 +1158,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 case QUATERNION_JULIA_4D -> {
                     quaternionJulia4DControls.setVisible(true);
                     quaternionJulia4DControls.setManaged(true);
+                }
+                case FRACTAL_TERRAIN -> {
+                    fractalTerrainControls.setVisible(true);
+                    fractalTerrainControls.setManaged(true);
                 }
                 case TEST_SCENE -> {
                     testSceneControls.setVisible(true);
@@ -1077,6 +1220,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             bristorbrotControls.setManaged(false);
             quaternionJulia4DControls.setVisible(false);
             quaternionJulia4DControls.setManaged(false);
+            fractalTerrainControls.setVisible(false);
+            fractalTerrainControls.setManaged(false);
             testSceneControls.setVisible(false);
             testSceneControls.setManaged(false);
             cornellBoxControls.setVisible(false);
@@ -1172,6 +1317,17 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 qjRotXWSlider.setValue(qj.getRotXW());
                 qjRotYWSlider.setValue(qj.getRotYW());
                 qjRotZWSlider.setValue(qj.getRotZW());
+            } else if (params instanceof FractalTerrainParams ft) {
+                fractalTerrainControls.setVisible(true);
+                fractalTerrainControls.setManaged(true);
+                ftHeightSlider.setValue(ft.getTerrainHeight());
+                ftFrequencySlider.setValue(ft.getTerrainFrequency());
+                ftOctavesSlider.setValue(ft.getOctaves());
+                ftLacunaritySlider.setValue(ft.getLacunarity());
+                ftRoughnessSlider.setValue(ft.getRoughness());
+                ftWarpSlider.setValue(ft.getWarpStrength());
+                ftRidgeSlider.setValue(ft.getRidgeSharpness());
+                ftOffsetSlider.setValue(ft.getTerrainOffset());
             } else if (params instanceof TestSceneParams ts) {
                 testSceneControls.setVisible(true);
                 testSceneControls.setManaged(true);

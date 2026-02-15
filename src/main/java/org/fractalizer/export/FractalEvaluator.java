@@ -65,6 +65,7 @@ public class FractalEvaluator {
             case APOLLONIAN -> apollonianDE(x, y, z, (ApollonianParams) params);
             case BRISTORBROT -> bristorbrotDE(x, y, z, (BristorbrotParams) params);
             case QUATERNION_JULIA_4D -> quaternionJulia4dDE(x, y, z, (QuaternionJulia4DParams) params);
+            case FRACTAL_TERRAIN -> fractalTerrainDE(x, y, z, (FractalTerrainParams) params);
             default -> 1e10f;
         });
     }
@@ -82,6 +83,7 @@ public class FractalEvaluator {
             case APOLLONIAN -> apollonianDEFull(x, y, z, (ApollonianParams) params, trap);
             case BRISTORBROT -> bristorbrotDEFull(x, y, z, (BristorbrotParams) params, trap);
             case QUATERNION_JULIA_4D -> quaternionJulia4dDEFull(x, y, z, (QuaternionJulia4DParams) params, trap);
+            case FRACTAL_TERRAIN -> fractalTerrainDEFull(x, y, z, (FractalTerrainParams) params, trap);
             default -> 1e10f;
         });
     }
@@ -194,6 +196,7 @@ public class FractalEvaluator {
             case APOLLONIAN -> mandelbulbFactors(trap, ((ApollonianParams) params).getMaxIterations()); // Same pattern
             case BRISTORBROT -> mandelbulbFactors(trap, ((BristorbrotParams) params).getMaxIterations()); // Same pattern
             case QUATERNION_JULIA_4D -> quaternionJuliaFactors(trap, ((QuaternionJulia4DParams) params).getMaxIterations());
+            case FRACTAL_TERRAIN -> fractalTerrainFactors(trap, (FractalTerrainParams) params);
             default -> new float[]{0.5f, 0.5f, 0.5f};
         };
     }
@@ -921,5 +924,92 @@ public class FractalEvaluator {
         float dr = (float) Math.sqrt(dqx*dqx + dqy*dqy + dqz*dqz + dqw*dqw);
         if (r < 1e-21f || dr < 1e-21f) return 0f;
         return 0.5f * r * (float) Math.log(r) / dr;
+    }
+
+    // ========================================================================
+    // Fractal Terrain
+    // ========================================================================
+
+    private static float terrainHash(float px, float py) {
+        float p3x = fract(px * 0.1031f);
+        float p3y = fract(py * 0.1031f);
+        float p3z = fract(px * 0.1031f);  // xyx pattern
+        float d = p3x * (p3y + 33.33f) + p3y * (p3z + 33.33f) + p3z * (p3x + 33.33f);
+        p3x += d; p3y += d; p3z += d;
+        return fract((p3x + p3y) * p3z);
+    }
+
+    private static float terrainNoise(float px, float py) {
+        float ix = (float) Math.floor(px);
+        float iy = (float) Math.floor(py);
+        float fx = px - ix;
+        float fy = py - iy;
+
+        float ux = fx * fx * (3f - 2f * fx);
+        float uy = fy * fy * (3f - 2f * fy);
+
+        float a = terrainHash(ix, iy);
+        float b = terrainHash(ix + 1, iy);
+        float c = terrainHash(ix, iy + 1);
+        float d = terrainHash(ix + 1, iy + 1);
+
+        return mix(mix(a, b, ux), mix(c, d, ux), uy);
+    }
+
+    private static float terrainFbm(float px, float pz, FractalTerrainParams p) {
+        float x = px * p.getTerrainFrequency();
+        float z = pz * p.getTerrainFrequency();
+
+        if (p.getWarpStrength() > 0.001f) {
+            float wx = terrainNoise(x + 5.2f, z + 1.3f) * 2f - 1f;
+            float wz = terrainNoise(x + 1.7f, z + 9.2f) * 2f - 1f;
+            x += p.getWarpStrength() * wx;
+            z += p.getWarpStrength() * wz;
+        }
+
+        float value = 0f;
+        float amplitude = 1f;
+        float frequency = 1f;
+        float totalAmplitude = 0f;
+
+        for (int i = 0; i < p.getOctaves(); i++) {
+            float n = terrainNoise(x * frequency, z * frequency);
+            float smooth = n;
+            float ridge = 1f - Math.abs(n * 2f - 1f);
+            ridge = ridge * ridge;
+            n = mix(smooth, ridge, p.getRidgeSharpness());
+
+            value += n * amplitude;
+            totalAmplitude += amplitude;
+            frequency *= p.getLacunarity();
+            amplitude *= p.getRoughness();
+        }
+
+        return value / totalAmplitude;
+    }
+
+    private static float fractalTerrainDE(float px, float py, float pz, FractalTerrainParams p) {
+        float h = terrainFbm(px, pz, p) * p.getTerrainHeight() + p.getTerrainOffset();
+        return (py - h) * 0.4f;
+    }
+
+    private static float fractalTerrainDEFull(float px, float py, float pz, FractalTerrainParams p, OrbitTrap trap) {
+        float h = terrainFbm(px, pz, p) * p.getTerrainHeight() + p.getTerrainOffset();
+        float d = py - h;
+
+        trap.planeX = Math.abs(fract(px * 0.1f) - 0.5f);
+        trap.planeY = clamp(h / Math.max(p.getTerrainHeight(), 0.01f), 0f, 1f);
+        trap.planeZ = Math.abs(fract(pz * 0.1f) - 0.5f);
+        trap.minDist = Math.abs(d);
+        trap.iterations = p.getOctaves();
+
+        return d * 0.4f;
+    }
+
+    private static float[] fractalTerrainFactors(OrbitTrap trap, FractalTerrainParams p) {
+        float structural = trap.planeY;
+        float flow = (trap.planeX + trap.planeZ) * 0.5f + trap.planeY * 0.3f;
+        float iterNorm = clamp(1f - trap.minDist * 0.5f, 0f, 1f);
+        return new float[]{structural, flow, iterNorm};
     }
 }

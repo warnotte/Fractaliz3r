@@ -14,6 +14,7 @@ public enum FractalType {
     APOLLONIAN("Apollonian Gasket", "apollonian"),
     BRISTORBROT("Bristorbrot", "bristorbrot"),
     QUATERNION_JULIA_4D("Quaternion Julia 4D", "quaternionjulia4d"),
+    FRACTAL_TERRAIN("Fractal Terrain", "fractalterrain"),
     TEST_SCENE("Test Scene", "testscene"),
     CORNELL_BOX("Cornell Box", "cornellbox");
 
