@@ -106,6 +106,14 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float focalDistance;
     protected float aperture;
     protected int dofSamples;
+    protected float anamorphicRatio = 1.0f;
+    protected int bokehBlades = 0;
+    protected float bokehRotation = 0.0f;
+    protected float opticalVignettingStrength = 0.0f;
+    protected boolean tiltShiftEnabled = false;
+    protected float tiltAngleX = 0.0f;
+    protected float tiltAngleY = 0.0f;
+    protected float dofChromaticStrength = 0.0f;
 
     // Path Tracing
     protected boolean pathTracingEnabled;
@@ -349,6 +357,14 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.focalDistance = this.focalDistance;
         target.aperture = this.aperture;
         target.dofSamples = this.dofSamples;
+        target.anamorphicRatio = this.anamorphicRatio;
+        target.bokehBlades = this.bokehBlades;
+        target.bokehRotation = this.bokehRotation;
+        target.opticalVignettingStrength = this.opticalVignettingStrength;
+        target.tiltShiftEnabled = this.tiltShiftEnabled;
+        target.tiltAngleX = this.tiltAngleX;
+        target.tiltAngleY = this.tiltAngleY;
+        target.dofChromaticStrength = this.dofChromaticStrength;
 
         // Copy path tracing
         target.pathTracingEnabled = this.pathTracingEnabled;
@@ -649,6 +665,24 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setAperture(float aperture) { this.aperture = aperture; }
     public int getDofSamples() { return dofSamples; }
     public void setDofSamples(int samples) { this.dofSamples = samples; }
+
+    // Enhanced DoF
+    public float getAnamorphicRatio() { return anamorphicRatio; }
+    public void setAnamorphicRatio(float ratio) { this.anamorphicRatio = Math.max(0.3f, Math.min(1.0f, ratio)); }
+    public int getBokehBlades() { return bokehBlades; }
+    public void setBokehBlades(int blades) { this.bokehBlades = blades; }
+    public float getBokehRotation() { return bokehRotation; }
+    public void setBokehRotation(float radians) { this.bokehRotation = radians; }
+    public float getOpticalVignettingStrength() { return opticalVignettingStrength; }
+    public void setOpticalVignettingStrength(float strength) { this.opticalVignettingStrength = Math.max(0.0f, Math.min(1.0f, strength)); }
+    public boolean isTiltShiftEnabled() { return tiltShiftEnabled; }
+    public void setTiltShiftEnabled(boolean enabled) { this.tiltShiftEnabled = enabled; }
+    public float getTiltAngleX() { return tiltAngleX; }
+    public void setTiltAngleX(float radians) { this.tiltAngleX = radians; }
+    public float getTiltAngleY() { return tiltAngleY; }
+    public void setTiltAngleY(float radians) { this.tiltAngleY = radians; }
+    public float getDofChromaticStrength() { return dofChromaticStrength; }
+    public void setDofChromaticStrength(float strength) { this.dofChromaticStrength = Math.max(0.0f, Math.min(0.1f, strength)); }
 
     // Path Tracing
     public boolean isPathTracingEnabled() { return pathTracingEnabled; }

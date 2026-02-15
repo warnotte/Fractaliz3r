@@ -52,6 +52,14 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider focalDistSlider;
     private EnhancedSlider apertureSlider;
     private EnhancedSlider dofSamplesSlider;
+    private EnhancedSlider anamorphicSlider;
+    private ComboBox<String> bokehShapeCombo;
+    private EnhancedSlider bokehRotationSlider;
+    private EnhancedSlider opticalVignettingSlider;
+    private CheckBox tiltShiftCheck;
+    private EnhancedSlider tiltAngleXSlider;
+    private EnhancedSlider tiltAngleYSlider;
+    private EnhancedSlider dofChromaticSlider;
 
     // Path tracing
     private CheckBox pathTracingCheck;
@@ -307,12 +315,153 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         Label dofInfoLabel = new Label("Middle-click or Ctrl+click to pick\nfocal distance from the image.");
         dofInfoLabel.getStyleClass().add("hint-label");
 
+        // --- Cinematic Lens Simulation ---
+        Label lensLabel = new Label("Cinematic Lens");
+        lensLabel.getStyleClass().add("bold-label");
+
+        anamorphicSlider = new EnhancedSlider("Anamorphic Ratio", 0.3, 1.0, 1.0, false);
+        anamorphicSlider.setPrecision(2);
+        anamorphicSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setAnamorphicRatio(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        Label bokehShapeLabel = new Label("Bokeh Shape:");
+        bokehShapeCombo = new ComboBox<>();
+        bokehShapeCombo.getItems().addAll(
+            "Circle", "Triangle (3)", "Square (4)", "Pentagon (5)",
+            "Hexagon (6)", "Heptagon (7)", "Octagon (8)"
+        );
+        bokehShapeCombo.getSelectionModel().select(0);
+        bokehShapeCombo.setMaxWidth(Double.MAX_VALUE);
+        bokehShapeCombo.setOnAction(e -> {
+            if (!suppressRender) {
+                int idx = bokehShapeCombo.getSelectionModel().getSelectedIndex();
+                int blades = (idx == 0) ? 0 : idx + 2; // 0->0, 1->3, 2->4, ..., 6->8
+                getParams().setBokehBlades(blades);
+                renderCallback.requestRender();
+            }
+        });
+
+        bokehRotationSlider = new EnhancedSlider("Bokeh Rotation", 0, 360, 0, true);
+        bokehRotationSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setBokehRotation((float) Math.toRadians(v.doubleValue()));
+                renderCallback.requestRender();
+            }
+        });
+
+        opticalVignettingSlider = new EnhancedSlider("Optical Vignetting", 0, 1, 0, false);
+        opticalVignettingSlider.setPrecision(2);
+        opticalVignettingSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setOpticalVignettingStrength(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        tiltShiftCheck = new CheckBox("Tilt-Shift");
+        tiltShiftCheck.setSelected(false);
+        tiltShiftCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setTiltShiftEnabled(tiltShiftCheck.isSelected());
+                renderCallback.requestRender();
+            }
+        });
+
+        tiltAngleXSlider = new EnhancedSlider("Tilt Angle X", -45, 45, 0, false);
+        tiltAngleXSlider.setPrecision(1);
+        tiltAngleXSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setTiltAngleX((float) Math.toRadians(v.doubleValue()));
+                renderCallback.requestRender();
+            }
+        });
+
+        tiltAngleYSlider = new EnhancedSlider("Tilt Angle Y", -45, 45, 0, false);
+        tiltAngleYSlider.setPrecision(1);
+        tiltAngleYSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setTiltAngleY((float) Math.toRadians(v.doubleValue()));
+                renderCallback.requestRender();
+            }
+        });
+
+        dofChromaticSlider = new EnhancedSlider("Longitudinal CA", 0, 0.1, 0, false);
+        dofChromaticSlider.setPrecision(3);
+        dofChromaticSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setDofChromaticStrength(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        // --- Lens Presets ---
+        Label presetsLabel = new Label("Lens Presets:");
+        presetsLabel.getStyleClass().add("bold-label");
+
+        HBox presetRow1 = new HBox(4);
+        HBox presetRow2 = new HBox(4);
+
+        Button stdBtn = new Button("Standard");
+        stdBtn.setOnAction(e -> applyLensPreset(1.0f, 0, 0, 0.0f, false, 0, 0, 0.0f));
+
+        Button cinemaBtn = new Button("Cinema");
+        cinemaBtn.setOnAction(e -> applyLensPreset(1.0f, 6, 0, 0.2f, false, 0, 0, 0.01f));
+
+        Button anamBtn = new Button("Anamorphic");
+        anamBtn.setOnAction(e -> applyLensPreset(0.5f, 0, 0, 0.3f, false, 0, 0, 0.02f));
+
+        Button vintageBtn = new Button("Vintage");
+        vintageBtn.setOnAction(e -> applyLensPreset(1.0f, 8, 15, 0.6f, false, 0, 0, 0.04f));
+
+        Button petzvalBtn = new Button("Petzval");
+        petzvalBtn.setOnAction(e -> applyLensPreset(1.0f, 0, 0, 0.85f, false, 0, 0, 0.025f));
+
+        Button miniBtn = new Button("Miniature");
+        miniBtn.setOnAction(e -> applyLensPreset(1.0f, 0, 0, 0.0f, true, 15, 0, 0.0f));
+
+        Button dreamBtn = new Button("Dream");
+        dreamBtn.setOnAction(e -> applyLensPreset(0.6f, 0, 0, 0.4f, false, 0, 0, 0.06f));
+
+        Button nightBtn = new Button("Night");
+        nightBtn.setOnAction(e -> applyLensPreset(1.0f, 5, 18, 0.15f, false, 0, 0, 0.008f));
+
+        Button prismBtn = new Button("Prism");
+        prismBtn.setOnAction(e -> applyLensPreset(1.0f, 3, 30, 0.0f, false, 0, 0, 0.0f));
+
+        presetRow1.getChildren().addAll(stdBtn, cinemaBtn, anamBtn, vintageBtn, petzvalBtn);
+        presetRow2.getChildren().addAll(miniBtn, dreamBtn, nightBtn, prismBtn);
+
         box.getChildren().addAll(dofEnabledCheck, focalDistSlider,
-                apertureSlider, dofSamplesSlider, dofInfoLabel);
+                apertureSlider, dofSamplesSlider, dofInfoLabel,
+                lensLabel, anamorphicSlider,
+                bokehShapeLabel, bokehShapeCombo, bokehRotationSlider,
+                opticalVignettingSlider,
+                tiltShiftCheck, tiltAngleXSlider, tiltAngleYSlider,
+                dofChromaticSlider,
+                presetsLabel, presetRow1, presetRow2);
 
         TitledPane pane = new TitledPane("Depth of Field", box);
         pane.setExpanded(false);
         return pane;
+    }
+
+    private void applyLensPreset(float anamorphic, int blades, float rotDeg, float vignetting,
+                                  boolean tiltShift, float tiltXDeg, float tiltYDeg, float chromatic) {
+        AbstractFractalParams p = getParams();
+        p.setAnamorphicRatio(anamorphic);
+        p.setBokehBlades(blades);
+        p.setBokehRotation((float) Math.toRadians(rotDeg));
+        p.setOpticalVignettingStrength(vignetting);
+        p.setTiltShiftEnabled(tiltShift);
+        p.setTiltAngleX((float) Math.toRadians(tiltXDeg));
+        p.setTiltAngleY((float) Math.toRadians(tiltYDeg));
+        p.setDofChromaticStrength(chromatic);
+        refreshFromParams(true);
+        renderCallback.requestRender();
     }
 
     /**
@@ -477,6 +626,16 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             focalDistSlider.setValue(p.getFocalDistance());
             apertureSlider.setValue(p.getAperture());
             dofSamplesSlider.setValue(p.getDofSamples());
+            anamorphicSlider.setValue(p.getAnamorphicRatio());
+            // Map blades to combo index: 0->0, 3->1, 4->2, 5->3, 6->4, 7->5, 8->6
+            int blades = p.getBokehBlades();
+            bokehShapeCombo.getSelectionModel().select(blades < 3 ? 0 : blades - 2);
+            bokehRotationSlider.setValue(Math.toDegrees(p.getBokehRotation()));
+            opticalVignettingSlider.setValue(p.getOpticalVignettingStrength());
+            tiltShiftCheck.setSelected(p.isTiltShiftEnabled());
+            tiltAngleXSlider.setValue(Math.toDegrees(p.getTiltAngleX()));
+            tiltAngleYSlider.setValue(Math.toDegrees(p.getTiltAngleY()));
+            dofChromaticSlider.setValue(p.getDofChromaticStrength());
 
             // Path tracing
             pathTracingCheck.setSelected(p.isPathTracingEnabled());

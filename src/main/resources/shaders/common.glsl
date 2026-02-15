@@ -88,6 +88,14 @@ uniform int dofEnabled;
 uniform float focalDistance;
 uniform float aperture;
 uniform int dofSamples;
+uniform float anamorphicRatio;
+uniform int bokehBlades;
+uniform float bokehRotation;
+uniform float opticalVignettingStrength;
+uniform int tiltShiftEnabled;
+uniform float tiltAngleX;
+uniform float tiltAngleY;
+uniform float dofChromaticStrength;
 
 uniform int renderMode;
 
@@ -467,9 +475,28 @@ vec3 getAmbientLighting(vec3 normal) {
 // Optics & Physics
 // ============================================================================
 
+vec3 dofColorWeight = vec3(1.0);
+
 vec2 randomDisk(inout uint seed) {
     float r = sqrt(random(seed));
     float theta = random(seed) * TAU;
+    return r * vec2(cos(theta), sin(theta));
+}
+
+vec2 sampleAperture(inout uint seed) {
+    vec2 disk = randomDisk(seed);
+    if (bokehBlades < 3) return disk;
+
+    float r = length(disk);
+    if (r < 0.0001) return disk;
+    float theta = atan(disk.y, disk.x) + bokehRotation;
+
+    float n = float(bokehBlades);
+    float halfSector = PI / n;
+    float sectorTheta = mod(theta + halfSector, TAU / n) - halfSector;
+    float polyRadius = cos(PI / n) / cos(sectorTheta);
+    r *= polyRadius;
+
     return r * vec2(cos(theta), sin(theta));
 }
 
@@ -685,12 +712,60 @@ Ray getCameraRay(vec2 screenUV) {
 }
 
 Ray getCameraRayDOF(vec2 screenUV, inout uint seed) {
+    dofColorWeight = vec3(1.0);
     if (dofEnabled == 0 || aperture < 0.0001) return getCameraRay(screenUV);
+
     Ray centerRay = getCameraRay(screenUV);
-    vec3 focalPoint = centerRay.origin + centerRay.direction * focalDistance;
-    vec2 diskSample = randomDisk(seed) * aperture;
-    vec3 right = rotateByQuaternion(vec3(1, 0, 0), camQuat);
-    vec3 up = rotateByQuaternion(vec3(0, 1, 0), camQuat);
+    vec3 forward = rotateByQuaternion(vec3(0,0,1), camQuat);
+    vec3 right   = rotateByQuaternion(vec3(1,0,0), camQuat);
+    vec3 up      = rotateByQuaternion(vec3(0,1,0), camQuat);
+
+    // --- Longitudinal CA ---
+    float effectiveFocalDist = focalDistance;
+    if (dofChromaticStrength > 0.0001) {
+        float ch = random(seed);
+        if (ch < 0.333)      { effectiveFocalDist *= (1.0 - dofChromaticStrength); dofColorWeight = vec3(3,0,0); }
+        else if (ch < 0.666) { dofColorWeight = vec3(0,3,0); }
+        else                 { effectiveFocalDist *= (1.0 + dofChromaticStrength); dofColorWeight = vec3(0,0,3); }
+    }
+
+    // --- Focal point (with optional tilt-shift) ---
+    vec3 focalPoint;
+    if (tiltShiftEnabled != 0 && (abs(tiltAngleX) > 0.001 || abs(tiltAngleY) > 0.001)) {
+        vec3 planeCenter = camPos + forward * effectiveFocalDist;
+        vec3 pn = forward;
+        float cx = cos(tiltAngleX), sx = sin(tiltAngleX);
+        pn = pn * cx + cross(right, pn) * sx + right * dot(right, pn) * (1.0 - cx);
+        float cy = cos(tiltAngleY), sy = sin(tiltAngleY);
+        pn = pn * cy + cross(up, pn) * sy + up * dot(up, pn) * (1.0 - cy);
+        pn = normalize(pn);
+        float denom = dot(centerRay.direction, pn);
+        if (abs(denom) > 0.0001) {
+            float t = dot(planeCenter - centerRay.origin, pn) / denom;
+            focalPoint = centerRay.origin + centerRay.direction * max(t, 0.01);
+        } else {
+            focalPoint = centerRay.origin + centerRay.direction * effectiveFocalDist;
+        }
+    } else {
+        focalPoint = centerRay.origin + centerRay.direction * effectiveFocalDist;
+    }
+
+    // --- Aperture sampling (polygon or circle) ---
+    vec2 diskSample = sampleAperture(seed) * aperture;
+
+    // --- Anamorphic stretch ---
+    diskSample.y *= anamorphicRatio;
+
+    // --- Optical vignetting (cat's eye) ---
+    if (opticalVignettingStrength > 0.001) {
+        float screenDist = length(screenUV);
+        float vScale = max(1.0 - opticalVignettingStrength * screenDist * screenDist, 0.1);
+        vec2 radDir = screenDist > 0.001 ? normalize(screenUV) : vec2(1,0);
+        vec2 tanDir = vec2(-radDir.y, radDir.x);
+        diskSample = radDir * dot(diskSample, radDir) * vScale + tanDir * dot(diskSample, tanDir);
+    }
+
+    // --- Construct ray ---
     Ray ray;
     ray.origin = camPos + right * diskSample.x + up * diskSample.y;
     ray.direction = normalize(focalPoint - ray.origin);

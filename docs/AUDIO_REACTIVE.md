@@ -35,7 +35,7 @@ Fichier MP3/WAV ──► JavaFX MediaPlayer                     │
                         │                                  │
                         ▼                                  │
                    GLSLFractalizerController.buildUniforms()│
-                   ├─ 12 uniforms GLSL (audioEnabled,      │
+                   ├─ 15 uniforms GLSL (audioEnabled,      │
                    │   audioBands[8], audioBeat, etc.)      │
                    ├─ applyAudioMorphing() (Java-side:     │
                    │   power, scale, rotations, etc.)      │
@@ -276,6 +276,10 @@ uniform float audioReactGlow;
 uniform float audioReactFOV;
 uniform float audioReactOnset;
 uniform float audioReactFog;
+uniform float audioReactShake;
+uniform float audioReactWarp;
+uniform float audioReactPaletteJump;
+uniform int audioFrameIndex;
 ```
 
 Ajout de la fonction `rgb2hsv()` (symétrique de `hsv2rgb()` existante).
@@ -294,7 +298,7 @@ Modulations audio dans la fonction `shade()` (protégées par `if (audioEnabled 
 ### 9. `src/main/java/org/fractalizer/ui/GLSLFractalizerController.java`
 
 - Champ `AudioPanel audioPanel` + `setAudioPanel()`
-- Dans `buildUniforms()` : 12 uniforms audio + appel à `applyAudioMorphing()`
+- Dans `buildUniforms()` : 15 uniforms audio + appel à `applyAudioMorphing()`
 - `applyAudioMorphing()` : modulation Java-side des paramètres fractals par type :
 
 | Type de fractal     | Paramètres modulés                                          |
@@ -346,7 +350,7 @@ docs/AUDIO_REACTIVE.md
 
 3. **`GLSLEngine.java`** : Dans `setUniformValue()`, remettre le `throw` dans le `default` du switch sur `arr.length`. Supprimer `setUniform1fv()` de ShaderProgram. (Optionnel — le support float[] générique ne nuit pas.)
 
-4. **`common.glsl`** : Supprimer les 11 lignes `uniform ... audio*;`. Supprimer `rgb2hsv()`. Retirer le bloc audio dans `getCameraRay()`.
+4. **`common.glsl`** : Supprimer les 15 lignes `uniform ... audio*;`. Supprimer `rgb2hsv()`. Retirer le bloc audio dans `getCameraRay()`.
 
 5. **`raytracer.glsl`** : Supprimer les blocs `if (audioEnabled != 0) { ... }` dans `shade()`.
 

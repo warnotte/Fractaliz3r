@@ -1270,6 +1270,9 @@ void main() {
         }
     }
 
+    // Apply DOF chromatic aberration weight
+    color *= dofColorWeight;
+
     // Output: RGB = color (accumulated), A = depth (for focus picking)
     // Depth is stored in alpha - will be averaged with colors, but that's fine for focus picking
     FragColor = vec4(color, depth);

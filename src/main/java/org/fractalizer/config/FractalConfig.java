@@ -138,6 +138,14 @@ public class FractalConfig {
         public float focalDistance = 2.5f;
         public float aperture = 0.02f;
         public int dofSamples = 16;
+        public float anamorphicRatio = 1.0f;
+        public int bokehBlades = 0;
+        public float bokehRotation = 0.0f;
+        public float opticalVignettingStrength = 0.0f;
+        public boolean tiltShiftEnabled = false;
+        public float tiltAngleX = 0.0f;
+        public float tiltAngleY = 0.0f;
+        public float dofChromaticStrength = 0.0f;
 
         // Path Tracing
         public boolean pathTracingEnabled = false;
@@ -276,6 +284,14 @@ public class FractalConfig {
         config.effects.focalDistance = params.getFocalDistance();
         config.effects.aperture = params.getAperture();
         config.effects.dofSamples = params.getDofSamples();
+        config.effects.anamorphicRatio = params.getAnamorphicRatio();
+        config.effects.bokehBlades = params.getBokehBlades();
+        config.effects.bokehRotation = params.getBokehRotation();
+        config.effects.opticalVignettingStrength = params.getOpticalVignettingStrength();
+        config.effects.tiltShiftEnabled = params.isTiltShiftEnabled();
+        config.effects.tiltAngleX = params.getTiltAngleX();
+        config.effects.tiltAngleY = params.getTiltAngleY();
+        config.effects.dofChromaticStrength = params.getDofChromaticStrength();
         config.effects.pathTracingEnabled = params.isPathTracingEnabled();
         config.effects.maxBounces = params.getMaxBounces();
         config.effects.roughness = params.getRoughness();
@@ -388,6 +404,14 @@ public class FractalConfig {
         params.setFocalDistance(effects.focalDistance);
         params.setAperture(effects.aperture);
         params.setDofSamples(effects.dofSamples);
+        params.setAnamorphicRatio(effects.anamorphicRatio);
+        params.setBokehBlades(effects.bokehBlades);
+        params.setBokehRotation(effects.bokehRotation);
+        params.setOpticalVignettingStrength(effects.opticalVignettingStrength);
+        params.setTiltShiftEnabled(effects.tiltShiftEnabled);
+        params.setTiltAngleX(effects.tiltAngleX);
+        params.setTiltAngleY(effects.tiltAngleY);
+        params.setDofChromaticStrength(effects.dofChromaticStrength);
         params.setPathTracingEnabled(effects.pathTracingEnabled);
         params.setMaxBounces(effects.maxBounces);
         params.setRoughness(effects.roughness);

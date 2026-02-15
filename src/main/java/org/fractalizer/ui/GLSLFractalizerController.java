@@ -854,6 +854,14 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("focalDistance", params.getFocalDistance());
             uniforms.put("aperture", params.getAperture());
             uniforms.put("dofSamples", params.getDofSamples());
+            uniforms.put("anamorphicRatio", params.getAnamorphicRatio());
+            uniforms.put("bokehBlades", params.getBokehBlades());
+            uniforms.put("bokehRotation", params.getBokehRotation());
+            uniforms.put("opticalVignettingStrength", params.getOpticalVignettingStrength());
+            uniforms.put("tiltShiftEnabled", params.isTiltShiftEnabled() ? 1 : 0);
+            uniforms.put("tiltAngleX", params.getTiltAngleX());
+            uniforms.put("tiltAngleY", params.getTiltAngleY());
+            uniforms.put("dofChromaticStrength", params.getDofChromaticStrength());
 
             // Path Tracing
             uniforms.put("pathTracingEnabled", params.isPathTracingEnabled() ? 1 : 0);
