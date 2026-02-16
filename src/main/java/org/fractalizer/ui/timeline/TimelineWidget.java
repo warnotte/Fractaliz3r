@@ -21,6 +21,7 @@ import org.fractalizer.animation.Timeline;
 
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * Professional visual timeline widget with:
@@ -90,6 +91,10 @@ public class TimelineWidget extends VBox {
     private boolean isDragging = false;
     private double dragStartX;
     private double dragStartTime;
+
+    // Track selection (for targeted keyframe operations)
+    private final LinkedHashSet<String> selectedTrackNames = new LinkedHashSet<>();
+    private String lastClickedTrackName = null;  // For Shift range selection
 
     // Colors
     private static final Color BG_COLOR = Color.rgb(30, 30, 40);
@@ -563,13 +568,18 @@ public class TimelineWidget extends VBox {
                 gc.strokeLine(TRACK_LABEL_WIDTH, y + rh - 0.5, width, y + rh - 0.5);
             } else {
                 AnimationTrack<?> track = timeline.getTrack(info.trackName);
+                boolean isTrackSelected = info.trackName != null && selectedTrackNames.contains(info.trackName);
 
-                // Track background (alternating)
-                gc.setFill(trackIndex % 2 == 0 ? TRACK_COLOR_1 : TRACK_COLOR_2);
+                // Track background (alternating, brighter if selected)
+                if (isTrackSelected) {
+                    gc.setFill(Color.rgb(50, 55, 75));
+                } else {
+                    gc.setFill(trackIndex % 2 == 0 ? TRACK_COLOR_1 : TRACK_COLOR_2);
+                }
                 gc.fillRect(0, y, width, rh);
 
-                // Track label background
-                gc.setFill(Color.rgb(50, 50, 60));
+                // Track label background (highlighted if selected)
+                gc.setFill(isTrackSelected ? Color.rgb(60, 65, 85) : Color.rgb(50, 50, 60));
                 gc.fillRect(0, y, TRACK_LABEL_WIDTH, rh);
 
                 // Track label (indented for grouped feel)
@@ -721,7 +731,11 @@ public class TimelineWidget extends VBox {
                         if (onRenderRequest != null) onRenderRequest.run();
                     }
                 }
-            } else if (y < RULER_HEIGHT || x < TRACK_LABEL_WIDTH) {
+            } else if (x < TRACK_LABEL_WIDTH - 16 && y >= RULER_HEIGHT) {
+                // Click on track label area — track selection
+                handleTrackLabelClick(y, e.isControlDown(), e.isShiftDown());
+                redraw();
+            } else if (y < RULER_HEIGHT) {
                 // Click on ruler - seek to time
                 if (x >= TRACK_LABEL_WIDTH) {
                     double time = (x - TRACK_LABEL_WIDTH + scrollOffsetX) / pixelsPerSecond;
@@ -730,7 +744,7 @@ public class TimelineWidget extends VBox {
                     updateAndRender();
                 }
             } else {
-                // Click on empty track area - seek and deselect
+                // Click on empty track area - seek and deselect keyframe (keep track selection)
                 selectedKeyframe = null;
                 double time = (x - TRACK_LABEL_WIDTH + scrollOffsetX) / pixelsPerSecond;
                 time = Math.max(0, Math.min(timeline.getDuration(), time));
@@ -805,7 +819,8 @@ public class TimelineWidget extends VBox {
 
         // Cursor
         boolean inSplineZone = e.getX() >= TRACK_LABEL_WIDTH - 16 && e.getX() < TRACK_LABEL_WIDTH && e.getY() >= RULER_HEIGHT;
-        if (newHover != null || e.getY() < RULER_HEIGHT || inSplineZone) {
+        boolean inLabelArea = e.getX() < TRACK_LABEL_WIDTH - 16 && e.getY() >= RULER_HEIGHT;
+        if (newHover != null || e.getY() < RULER_HEIGHT || inSplineZone || inLabelArea) {
             canvas.setCursor(javafx.scene.Cursor.HAND);
         } else {
             canvas.setCursor(javafx.scene.Cursor.DEFAULT);
@@ -822,6 +837,99 @@ public class TimelineWidget extends VBox {
             y += rh;
         }
         return null;
+    }
+
+    private int findTrackIndexAt(double mouseY) {
+        double y = RULER_HEIGHT - scrollOffsetY;
+        for (int i = 0; i < visibleTracks.size(); i++) {
+            double rh = rowHeight(visibleTracks.get(i));
+            if (mouseY >= y && mouseY < y + rh && mouseY >= RULER_HEIGHT) {
+                return i;
+            }
+            y += rh;
+        }
+        return -1;
+    }
+
+    private void handleTrackLabelClick(double mouseY, boolean ctrlDown, boolean shiftDown) {
+        TrackInfo clicked = findTrackInfoAt(mouseY);
+        if (clicked == null) return;
+
+        if (clicked.isGroupHeader) {
+            // Select all tracks in this group
+            List<String> groupTracks = getGroupTrackNames(clicked);
+            if (ctrlDown) {
+                // Toggle: if all are selected, deselect them; otherwise select all
+                boolean allSelected = selectedTrackNames.containsAll(groupTracks);
+                if (allSelected) {
+                    selectedTrackNames.removeAll(groupTracks);
+                } else {
+                    selectedTrackNames.addAll(groupTracks);
+                }
+            } else {
+                selectedTrackNames.clear();
+                selectedTrackNames.addAll(groupTracks);
+            }
+            if (!groupTracks.isEmpty()) lastClickedTrackName = groupTracks.get(0);
+            return;
+        }
+
+        String trackName = clicked.trackName;
+
+        if (shiftDown && lastClickedTrackName != null) {
+            // Shift+click: range select
+            int clickedIdx = findTrackIndexAt(mouseY);
+            int lastIdx = -1;
+            for (int i = 0; i < visibleTracks.size(); i++) {
+                TrackInfo ti = visibleTracks.get(i);
+                if (!ti.isGroupHeader && ti.trackName.equals(lastClickedTrackName)) {
+                    lastIdx = i;
+                    break;
+                }
+            }
+            if (lastIdx >= 0 && clickedIdx >= 0) {
+                int from = Math.min(lastIdx, clickedIdx);
+                int to = Math.max(lastIdx, clickedIdx);
+                if (!ctrlDown) selectedTrackNames.clear();
+                for (int i = from; i <= to; i++) {
+                    TrackInfo ti = visibleTracks.get(i);
+                    if (!ti.isGroupHeader && ti.trackName != null) {
+                        selectedTrackNames.add(ti.trackName);
+                    }
+                }
+            }
+        } else if (ctrlDown) {
+            // Ctrl+click: toggle individual track
+            if (selectedTrackNames.contains(trackName)) {
+                selectedTrackNames.remove(trackName);
+            } else {
+                selectedTrackNames.add(trackName);
+            }
+        } else {
+            // Plain click: select only this track
+            selectedTrackNames.clear();
+            selectedTrackNames.add(trackName);
+        }
+        lastClickedTrackName = trackName;
+    }
+
+    /**
+     * Get all non-header track names belonging to a group (from header to next header).
+     */
+    private List<String> getGroupTrackNames(TrackInfo groupHeader) {
+        List<String> result = new ArrayList<>();
+        boolean inGroup = false;
+        for (TrackInfo info : visibleTracks) {
+            if (info == groupHeader) {
+                inGroup = true;
+                continue;
+            }
+            if (inGroup) {
+                if (info.isGroupHeader) break;  // Next group
+                if (info.trackName != null) result.add(info.trackName);
+            }
+        }
+        return result;
     }
 
     private KeyframeHandle findKeyframeAt(double mouseX, double mouseY) {
@@ -1008,10 +1116,21 @@ public class TimelineWidget extends VBox {
     }
 
     /**
-     * Get the currently selected track name, or null if no keyframe is selected.
+     * Get a single selected track name.
+     * Returns the first track from label selection, or the keyframe's track, or null.
      */
     public String getSelectedTrackName() {
+        if (!selectedTrackNames.isEmpty()) {
+            return selectedTrackNames.iterator().next();
+        }
         return selectedKeyframe != null ? selectedKeyframe.trackName : null;
+    }
+
+    /**
+     * Get all selected track names (from label selection).
+     */
+    public Set<String> getSelectedTrackNames() {
+        return Collections.unmodifiableSet(selectedTrackNames);
     }
 
     /**

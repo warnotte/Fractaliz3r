@@ -138,16 +138,17 @@ public class AnimationManager {
 
     /**
      * Add a keyframe at the current time.
-     * If a track is selected, only add for that track.
+     * If tracks are selected (via label clicks), only add for those tracks.
      * Otherwise, add for all tracks.
      */
     public void addKeyframeAtCurrentTime() {
-        String selectedTrack = timelineWidget.getSelectedTrackName();
-        if (selectedTrack != null) {
-            // Add only for selected track
-            addKeyframeForSelectedTrack();
+        java.util.Set<String> selected = timelineWidget.getSelectedTrackNames();
+        if (!selected.isEmpty()) {
+            addKeyframeForSelectedTracks(selected);
+        } else if (timelineWidget.getSelectedTrackName() != null) {
+            // Single keyframe diamond selected — update just that track
+            addKeyframeForSelectedTracks(java.util.Set.of(timelineWidget.getSelectedTrackName()));
         } else {
-            // Add for all tracks
             addKeyframeForAllTracks();
         }
     }
@@ -183,38 +184,41 @@ public class AnimationManager {
     }
 
     /**
-     * Update only the selected track's keyframe at the current time.
-     * If no track is selected, adds for all tracks.
+     * Update only the selected tracks' keyframes at the current time.
+     * If no tracks are selected, adds for all tracks.
      */
     public void updateSelectedKeyframe() {
-        String selectedTrack = timelineWidget.getSelectedTrackName();
-        if (selectedTrack == null) {
-            // No keyframe selected, add all
+        java.util.Set<String> selected = timelineWidget.getSelectedTrackNames();
+        if (!selected.isEmpty()) {
+            addKeyframeForSelectedTracks(selected);
+        } else if (timelineWidget.getSelectedTrackName() != null) {
+            addKeyframeForSelectedTracks(java.util.Set.of(timelineWidget.getSelectedTrackName()));
+        } else {
             addKeyframeForAllTracks();
-            return;
         }
-        addKeyframeForSelectedTrack();
     }
 
     /**
-     * Add/update keyframe only for the selected track.
+     * Add/update keyframes for the given set of tracks.
      */
-    private void addKeyframeForSelectedTrack() {
-        String selectedTrack = timelineWidget.getSelectedTrackName();
-        if (selectedTrack == null) return;
-
+    private void addKeyframeForSelectedTracks(java.util.Set<String> trackNames) {
         AbstractFractalParams params = paramsSupplier.get();
         if (params == null) return;
 
         double time = timeline.getCurrentTime();
         Easing easing = timelineWidget.getSelectedEasing();
 
-        // Update only the selected track
-        addKeyframeForTrack(selectedTrack, time, easing, params);
+        for (String trackName : trackNames) {
+            addKeyframeForTrack(trackName, time, easing, params);
+        }
 
         timelineWidget.refresh();
         if (statusUpdater != null) {
-            statusUpdater.accept(String.format("Updated %s at %.2fs", selectedTrack, time));
+            if (trackNames.size() == 1) {
+                statusUpdater.accept(String.format("Updated %s at %.2fs", trackNames.iterator().next(), time));
+            } else {
+                statusUpdater.accept(String.format("Updated %d tracks at %.2fs", trackNames.size(), time));
+            }
         }
     }
 
