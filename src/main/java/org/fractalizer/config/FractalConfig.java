@@ -192,6 +192,7 @@ public class FractalConfig {
         public String name;
         public String valueType;  // "Float", "Double", "Integer", "float[]"
         public Object defaultValue;
+        public boolean splineInterpolation = false;
         public List<KeyframeConfig> keyframes = new ArrayList<>();
     }
 

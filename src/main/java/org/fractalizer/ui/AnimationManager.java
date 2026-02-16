@@ -68,7 +68,9 @@ public class AnimationManager {
     private void initializeTimelineTracks() {
         // Camera tracks
         timeline.createTrack("camPos", float[].class, new float[]{0, 0, -3});
+        timeline.setTrackSplineInterpolation("camPos", true);
         timeline.createTrack("camQuat", float[].class, new float[]{0, 0, 0, 1});
+        timeline.setTrackSplineInterpolation("camQuat", true);
 
         // Common params
         timeline.createTrack("fov", Float.class, 60.0f);
@@ -467,6 +469,7 @@ public class AnimationManager {
             trackConfig.name = track.getName();
             trackConfig.valueType = track.getValueType().getSimpleName();
             trackConfig.defaultValue = convertValueForJson(track.getDefaultValue());
+            trackConfig.splineInterpolation = track.isSplineInterpolation();
 
             for (var keyframe : track.getKeyframes()) {
                 FractalConfig.KeyframeConfig kfConfig = new FractalConfig.KeyframeConfig();
@@ -518,6 +521,9 @@ public class AnimationManager {
                 Object value = convertValueFromJson(kfConfig.value, track.getValueType());
                 setKeyframeTyped(track, kfConfig.time, value, easing);
             }
+
+            // Restore spline interpolation flag
+            track.setSplineInterpolation(trackConfig.splineInterpolation);
         }
 
         // Re-sync the fractal tracks display after import

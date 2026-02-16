@@ -85,6 +85,10 @@ public class ExportPanel extends ScrollPane {
     private volatile boolean exportPaused;
     private volatile boolean exporting;
 
+    // AOV export
+    private CheckBox exportDepthCheck;
+    private CheckBox exportNormalCheck;
+
     // Mesh export UI
     private ComboBox<String> meshFormatCombo;
     private EnhancedSlider meshResolutionSlider;
@@ -267,6 +271,14 @@ public class ExportPanel extends ScrollPane {
         exportImageBtn.setOnAction(e -> exportImage());
         exportImageBtn.setMaxWidth(Double.MAX_VALUE);
 
+        // AOV Passes
+        exportDepthCheck = new CheckBox("Depth Map");
+        exportDepthCheck.setTooltip(new Tooltip("Export 16-bit depth pass alongside the beauty image"));
+        exportNormalCheck = new CheckBox("Normal Map");
+        exportNormalCheck.setTooltip(new Tooltip("Export world-space normal pass alongside the beauty image"));
+        HBox aovBox = new HBox(8, new Label("AOV:"), exportDepthCheck, exportNormalCheck);
+        aovBox.setAlignment(Pos.CENTER_LEFT);
+
         // Info
         Label infoLabel = new Label(
             "Tips:\n" +
@@ -277,7 +289,7 @@ public class ExportPanel extends ScrollPane {
         infoLabel.getStyleClass().add("small-label");
         infoLabel.setWrapText(true);
 
-        box.getChildren().addAll(imageSamplesBox, renderBtn, exportImageBtn, infoLabel);
+        box.getChildren().addAll(imageSamplesBox, renderBtn, exportImageBtn, aovBox, infoLabel);
 
         TitledPane pane = new TitledPane("Image", box);
         pane.setExpanded(true);
@@ -440,13 +452,30 @@ public class ExportPanel extends ScrollPane {
             };
 
             controller.exportToPNG(file, samples, enrichedProgress, () -> imageExportCancelled)
+                .thenRun(() -> {
+                    // Export AOV passes (fast, 1 sample each)
+                    if (!imageExportCancelled) {
+                        String baseName = file.getName().replaceFirst("\\.[^.]+$", "");
+                        String dir = file.getParent();
+                        if (exportDepthCheck.isSelected()) {
+                            controller.exportAOV(new File(dir, baseName + "_depth.png"), 2);
+                        }
+                        if (exportNormalCheck.isSelected()) {
+                            controller.exportAOV(new File(dir, baseName + "_normal.png"), 1);
+                        }
+                    }
+                })
                 .thenRun(() -> Platform.runLater(() -> {
                     if (imageExportCancelled) {
                         dialog.showCancelled("Export cancelled");
                         statusCallback.accept("Export cancelled");
                     } else {
                         long totalElapsed = System.currentTimeMillis() - startTime;
-                        dialog.showSuccess("Exported to: " + file.getName() + " in " + formatDuration(totalElapsed));
+                        String aovInfo = "";
+                        if (exportDepthCheck.isSelected() || exportNormalCheck.isSelected()) {
+                            aovInfo = " + AOV passes";
+                        }
+                        dialog.showSuccess("Exported to: " + file.getName() + aovInfo + " in " + formatDuration(totalElapsed));
                         statusCallback.accept("Exported: " + file.getName());
                         openFile(file);
                     }
@@ -609,6 +638,18 @@ public class ExportPanel extends ScrollPane {
                     } else {
                         frameImage = animationExportCallback.exportFrame(frameFile, exportWidth, exportHeight, exportSamples,
                             sampleProgress, cancelSupplier);
+                    }
+
+                    // Export AOV passes for this frame (fast, 1 sample each)
+                    if (!exportCancelled) {
+                        if (exportDepthCheck.isSelected()) {
+                            File depthFile = new File(exportDir, String.format("frame_%05d_depth.png", currentFrame));
+                            controller.exportAOV(depthFile, 2);
+                        }
+                        if (exportNormalCheck.isSelected()) {
+                            File normalFile = new File(exportDir, String.format("frame_%05d_normal.png", currentFrame));
+                            controller.exportAOV(normalFile, 1);
+                        }
                     }
 
                     // Update preview in dialog

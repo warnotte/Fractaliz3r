@@ -58,7 +58,7 @@ org.fractalizer
 │   └── FFmpegExporter.java          # MP4 video export via FFmpeg
 ├── animation/
 │   ├── Timeline.java                # Animation timeline with tracks
-│   ├── Track.java                   # Keyframe track for a parameter
+│   ├── AnimationTrack.java          # Keyframe track with optional Catmull-Rom spline interpolation
 │   └── Keyframe.java                # Single keyframe (time, value, easing)
 └── ui/
     ├── GLSLFractalizerController.java  # Bridges UI with GLSL engine (includes parameter caching)
@@ -163,6 +163,30 @@ Fractaliz3r features a full cinematic rendering pipeline:
 2. **Procedural Environments**: Dynamic sky types (Clouds, Space, Ocean, Studio) with spatial parallax based on camera movement.
 3. **Optics (Lens Effects)**: Realistic camera imperfections including Lens Dirt (dust/spots) and JJ Abrams style anamorphic horizontal flares.
 4. **Color Grading**: Procedural LUT styles (Cinema, Vintage, Matrix, Neon, Noir) for instant professional looks.
+
+## Spline Camera Paths (Catmull-Rom)
+
+AnimationTrack supports an opt-in `splineInterpolation` mode. When enabled, `getValue()` uses Catmull-Rom interpolation (4 control points) instead of linear (2 points), producing smooth curved trajectories through keyframes.
+
+- **Enabled by default** on `camPos` and `camQuat` tracks (camera position and rotation).
+- **Formula**: Standard Catmull-Rom: `q(t) = 0.5 * ((2*P1) + (-P0+P2)*t + (2*P0-5*P1+4*P2-P3)*t^2 + (-P0+3*P1-3*P2+P3)*t^3)`
+- **Easing + Spline**: Easing modulates `t` before spline evaluation. LINEAR = constant speed along curve, EASE_IN_OUT = decelerate at keyframes.
+- **Boundary clamping**: P0 = P1 when no prior keyframe, P3 = P2 when no next keyframe.
+- **Quaternion normalization**: float[] of length 4 are auto-normalized after spline to prevent drift.
+- **Serialization**: `splineInterpolation` boolean in `TrackConfig` (default false = backward compatible).
+- **UI**: Green "S" indicator on each track in TimelineWidget. Click to toggle. Dim gray when off.
+
+## Depth/Normal AOV Export
+
+Export auxiliary render passes (AOVs) for compositing in After Effects, Nuke, etc.
+
+- **Render modes** already exist in shader: `RENDER_MODE_NORMALS` (1) and `RENDER_MODE_DEPTH` (2).
+- **postprocess.glsl**: Early return for `renderMode != 0` — raw data passes through without any post-processing.
+- **Export**: `RenderController.exportAOV(File, int renderMode)` — 1 sample only (deterministic), supports tiled rendering.
+  - Depth (mode 2): 16-bit grayscale PNG (`TYPE_USHORT_GRAY`)
+  - Normals (mode 1): 8-bit RGB PNG
+- **UI**: "Depth Map" and "Normal Map" checkboxes in ExportPanel. Files saved as `{name}_depth.png` / `{name}_normal.png`.
+- **Animation**: Per-frame AOV passes exported alongside beauty frames (`frame_00000_depth.png`, etc.).
 
 ## VR & Export Features
 

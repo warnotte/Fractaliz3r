@@ -43,6 +43,13 @@ public interface RenderController {
     CompletableFuture<Void> exportToPNG(File file, int samples, Consumer<Double> onProgress);
     CompletableFuture<Void> exportToPNG(File file, int samples, Consumer<Double> onProgress, Supplier<Boolean> cancelCheck);
 
+    /**
+     * Export an AOV pass (depth or normals) to a PNG file.
+     * @param file       Output PNG file
+     * @param renderMode 1 = Normals, 2 = Depth
+     */
+    void exportAOV(File file, int renderMode);
+
     void cancelRender();
     boolean isRendering();
 

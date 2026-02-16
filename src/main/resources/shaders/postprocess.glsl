@@ -264,6 +264,14 @@ vec3 sharpen(sampler2D tex, vec2 texCoord, vec2 texelSize, float intensity) {
 void main() {
     vec2 texelSize = 1.0 / resolution;
 
+    // AOV modes: pass through raw data without post-processing
+    if (renderMode != 0) {
+        vec3 color = texture(accumTexture, uv).rgb;
+        color /= float(max(sampleCount, 1));
+        FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+        return;
+    }
+
     // Read accumulated color
     vec3 color;
 

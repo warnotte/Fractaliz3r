@@ -760,6 +760,139 @@ public class GLSLFractalizerController implements RenderController {
         }
     }
 
+    // ========================================================================
+    // AOV Export (Depth / Normal passes)
+    // ========================================================================
+
+    /**
+     * Export an AOV pass (depth or normals) to a PNG file.
+     * AOV data is deterministic — only 1 sample is needed.
+     *
+     * @param file       Output PNG file
+     * @param renderMode 1 = Normals (RGB), 2 = Depth (16-bit grayscale)
+     */
+    public void exportAOV(File file, int renderMode) {
+        if (exportWidth > MAX_TILE_SIZE || exportHeight > MAX_TILE_SIZE) {
+            exportTiledAOV(file, renderMode);
+        } else {
+            exportSingleAOV(file, renderMode);
+        }
+    }
+
+    private void exportSingleAOV(File file, int renderMode) {
+        try {
+            engine.resize(exportWidth, exportHeight);
+            engine.setActiveProgram(currentFractalType.getKernelName());
+            engine.resetAccumulation();
+
+            Map<String, Object> uniforms = buildUniforms();
+            uniforms.put("renderMode", renderMode);
+
+            // 1 sample is sufficient — AOV data is deterministic
+            engine.renderSample(uniforms);
+            engine.glSync();
+
+            float[] pixels = engine.readImage();
+
+            if (renderMode == 2) {
+                // Depth: 16-bit grayscale
+                BufferedImage image = new BufferedImage(exportWidth, exportHeight, BufferedImage.TYPE_USHORT_GRAY);
+                short[] raster = ((java.awt.image.DataBufferUShort) image.getRaster().getDataBuffer()).getData();
+                for (int y = 0; y < exportHeight; y++) {
+                    for (int x = 0; x < exportWidth; x++) {
+                        int idx = (y * exportWidth + x) * 4;
+                        float lum = pixels[idx]; // Depth is in R channel
+                        raster[y * exportWidth + x] = (short) Math.max(0, Math.min(65535, (int) (lum * 65535)));
+                    }
+                }
+                ImageIO.write(image, "png", file);
+            } else {
+                // Normals: 8-bit RGB
+                BufferedImage image = new BufferedImage(exportWidth, exportHeight, BufferedImage.TYPE_INT_RGB);
+                for (int y = 0; y < exportHeight; y++) {
+                    for (int x = 0; x < exportWidth; x++) {
+                        int idx = (y * exportWidth + x) * 4;
+                        int r = Math.max(0, Math.min(255, (int) (pixels[idx] * 255)));
+                        int g = Math.max(0, Math.min(255, (int) (pixels[idx + 1] * 255)));
+                        int b = Math.max(0, Math.min(255, (int) (pixels[idx + 2] * 255)));
+                        image.setRGB(x, y, (r << 16) | (g << 8) | b);
+                    }
+                }
+                ImageIO.write(image, "png", file);
+            }
+        } catch (Exception e) {
+            System.err.println("AOV export failed: " + e.getMessage());
+        } finally {
+            engine.resize(viewportWidth, viewportHeight);
+        }
+    }
+
+    private void exportTiledAOV(File file, int renderMode) {
+        try {
+            int fullW = exportWidth;
+            int fullH = exportHeight;
+            float fullWf = (float) fullW;
+            float fullHf = (float) fullH;
+
+            int tilesX = (fullW + MAX_TILE_SIZE - 1) / MAX_TILE_SIZE;
+            int tilesY = (fullH + MAX_TILE_SIZE - 1) / MAX_TILE_SIZE;
+
+            BufferedImage fullImage;
+            short[] depthRaster = null;
+            if (renderMode == 2) {
+                fullImage = new BufferedImage(fullW, fullH, BufferedImage.TYPE_USHORT_GRAY);
+                depthRaster = ((java.awt.image.DataBufferUShort) fullImage.getRaster().getDataBuffer()).getData();
+            } else {
+                fullImage = new BufferedImage(fullW, fullH, BufferedImage.TYPE_INT_RGB);
+            }
+
+            for (int ty = 0; ty < tilesY; ty++) {
+                for (int tx = 0; tx < tilesX; tx++) {
+                    int tileX = tx * MAX_TILE_SIZE;
+                    int tileY = ty * MAX_TILE_SIZE;
+                    int tileW = Math.min(MAX_TILE_SIZE, fullW - tileX);
+                    int tileH = Math.min(MAX_TILE_SIZE, fullH - tileY);
+
+                    engine.resize(tileW, tileH);
+                    engine.setActiveProgram(currentFractalType.getKernelName());
+                    engine.resetAccumulation();
+
+                    Map<String, Object> uniforms = buildUniforms();
+                    uniforms.put("renderMode", renderMode);
+                    uniforms.put("tileOffset", new float[]{tileX / fullWf, (fullH - tileY - tileH) / fullHf});
+                    uniforms.put("tileScale", new float[]{tileW / fullWf, tileH / fullHf});
+                    uniforms.put("fullResolution", new float[]{fullWf, fullHf});
+
+                    engine.renderSample(uniforms);
+                    engine.glSync();
+
+                    float[] pixels = engine.readImage();
+                    for (int py = 0; py < tileH; py++) {
+                        for (int px = 0; px < tileW; px++) {
+                            int idx = (py * tileW + px) * 4;
+                            if (renderMode == 2) {
+                                float lum = pixels[idx];
+                                depthRaster[(tileY + py) * fullW + (tileX + px)] =
+                                    (short) Math.max(0, Math.min(65535, (int) (lum * 65535)));
+                            } else {
+                                int r = Math.max(0, Math.min(255, (int) (pixels[idx] * 255)));
+                                int g = Math.max(0, Math.min(255, (int) (pixels[idx + 1] * 255)));
+                                int b = Math.max(0, Math.min(255, (int) (pixels[idx + 2] * 255)));
+                                fullImage.setRGB(tileX + px, tileY + py, (r << 16) | (g << 8) | b);
+                            }
+                        }
+                    }
+                }
+            }
+
+            ImageIO.write(fullImage, "png", file);
+        } catch (Exception e) {
+            System.err.println("AOV tiled export failed: " + e.getMessage());
+        } finally {
+            engine.resize(viewportWidth, viewportHeight);
+        }
+    }
+
     /**
      * Cancel current rendering.
      */

@@ -14,6 +14,7 @@ public class AnimationTrack<T> {
     private final Class<T> valueType;
     private final TreeMap<Double, Keyframe<T>> keyframes;
     private T defaultValue;
+    private boolean splineInterpolation = false;
 
     public AnimationTrack(String name, Class<T> valueType, T defaultValue) {
         this.name = name;
@@ -36,6 +37,14 @@ public class AnimationTrack<T> {
 
     public void setDefaultValue(T defaultValue) {
         this.defaultValue = defaultValue;
+    }
+
+    public boolean isSplineInterpolation() {
+        return splineInterpolation;
+    }
+
+    public void setSplineInterpolation(boolean splineInterpolation) {
+        this.splineInterpolation = splineInterpolation;
     }
 
     /**
@@ -155,6 +164,11 @@ public class AnimationTrack<T> {
         // Use the easing of the target keyframe
         Easing easing = k2.getEasing();
 
+        // Spline interpolation for supported types
+        if (splineInterpolation && (valueType == Float.class || valueType == Double.class || valueType == float[].class)) {
+            return interpolateSpline(time, floorEntry, ceilEntry);
+        }
+
         return interpolate(k1.getValue(), k2.getValue(), normalizedTime, easing);
     }
 
@@ -182,6 +196,79 @@ public class AnimationTrack<T> {
         }
     }
 
+    // ========================================================================
+    // Catmull-Rom Spline Interpolation
+    // ========================================================================
+
+    @SuppressWarnings("unchecked")
+    private T interpolateSpline(double time, Map.Entry<Double, Keyframe<T>> floorEntry, Map.Entry<Double, Keyframe<T>> ceilEntry) {
+        Double floorKey = floorEntry.getKey();
+        Double ceilKey = ceilEntry.getKey();
+
+        // P1 = floor, P2 = ceil
+        T p1 = floorEntry.getValue().getValue();
+        T p2 = ceilEntry.getValue().getValue();
+
+        // P0 = keyframe before floor (or clamp to P1)
+        Map.Entry<Double, Keyframe<T>> prevEntry = keyframes.lowerEntry(floorKey);
+        T p0 = prevEntry != null ? prevEntry.getValue().getValue() : p1;
+
+        // P3 = keyframe after ceil (or clamp to P2)
+        Map.Entry<Double, Keyframe<T>> nextEntry = keyframes.higherEntry(ceilKey);
+        T p3 = nextEntry != null ? nextEntry.getValue().getValue() : p2;
+
+        double t1 = floorEntry.getValue().getTime();
+        double t2 = ceilEntry.getValue().getTime();
+        double normalizedTime = (time - t1) / (t2 - t1);
+
+        // Apply easing from target keyframe
+        Easing easing = ceilEntry.getValue().getEasing();
+        double t = easing.apply(normalizedTime);
+
+        if (valueType == Float.class) {
+            float result = catmullRomScalar(
+                (Float) p0, (Float) p1, (Float) p2, (Float) p3, (float) t);
+            return (T) Float.valueOf(result);
+        } else if (valueType == Double.class) {
+            double result = catmullRomDouble(
+                (Double) p0, (Double) p1, (Double) p2, (Double) p3, t);
+            return (T) Double.valueOf(result);
+        } else if (valueType == float[].class) {
+            float[] a0 = (float[]) p0, a1 = (float[]) p1, a2 = (float[]) p2, a3 = (float[]) p3;
+            float[] result = new float[a1.length];
+            for (int i = 0; i < a1.length; i++) {
+                result[i] = catmullRomScalar(a0[i], a1[i], a2[i], a3[i], (float) t);
+            }
+            // Normalize quaternions (length 4)
+            if (result.length == 4) {
+                float len = 0;
+                for (float v : result) len += v * v;
+                len = (float) Math.sqrt(len);
+                if (len > 0.0001f) {
+                    for (int i = 0; i < 4; i++) result[i] /= len;
+                }
+            }
+            return (T) result;
+        }
+
+        // Fallback: linear
+        return interpolate(p1, p2, normalizedTime, easing);
+    }
+
+    private static float catmullRomScalar(float p0, float p1, float p2, float p3, float t) {
+        return 0.5f * ((2 * p1)
+            + (-p0 + p2) * t
+            + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
+            + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+    }
+
+    private static double catmullRomDouble(double p0, double p1, double p2, double p3, double t) {
+        return 0.5 * ((2 * p1)
+            + (-p0 + p2) * t
+            + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
+            + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+    }
+
     /**
      * Clear all keyframes.
      */
@@ -194,6 +281,7 @@ public class AnimationTrack<T> {
      */
     public AnimationTrack<T> copy() {
         AnimationTrack<T> copy = new AnimationTrack<>(name, valueType, defaultValue);
+        copy.splineInterpolation = this.splineInterpolation;
         for (Keyframe<T> kf : keyframes.values()) {
             copy.keyframes.put(kf.getTime(), kf.copy());
         }

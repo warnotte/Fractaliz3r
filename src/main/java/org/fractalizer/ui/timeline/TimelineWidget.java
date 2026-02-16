@@ -12,6 +12,7 @@ import javafx.scene.layout.*;
 import javafx.scene.layout.GridPane;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 import javafx.scene.text.TextAlignment;
 import org.fractalizer.animation.AnimationTrack;
 import org.fractalizer.animation.Easing;
@@ -75,7 +76,7 @@ public class TimelineWidget extends VBox {
     // Layout constants
     private static final double RULER_HEIGHT = 25;
     private static final double TRACK_HEIGHT = 24;
-    private static final double TRACK_LABEL_WIDTH = 80;
+    private static final double TRACK_LABEL_WIDTH = 110;
     private static final double KEYFRAME_SIZE = 10;
     private static final double MIN_PIXELS_PER_SECOND = 30;
     private static final double MAX_PIXELS_PER_SECOND = 200;
@@ -561,6 +562,16 @@ public class TimelineWidget extends VBox {
                 gc.setFont(Font.font("System", 11));
                 gc.fillText(info.displayName, 10, y + rh - 7);
 
+                // Spline toggle "S" on the right side of the label area (always visible)
+                if (track != null) {
+                    boolean splineOn = track.isSplineInterpolation();
+                    gc.setFill(splineOn ? Color.rgb(100, 255, 150) : Color.rgb(70, 70, 85));
+                    gc.setFont(Font.font("Monospace", FontWeight.BOLD, 9));
+                    gc.setTextAlign(TextAlignment.RIGHT);
+                    gc.fillText("S", TRACK_LABEL_WIDTH - 4, y + rh - 7);
+                    gc.setTextAlign(TextAlignment.LEFT);
+                }
+
                 // Draw keyframes
                 if (track != null) {
                     drawKeyframes(gc, track, info, y, width);
@@ -610,6 +621,10 @@ public class TimelineWidget extends VBox {
         if (keyframes.size() > 1) {
             gc.setStroke(info.color.deriveColor(0, 1, 1, 0.4));
             gc.setLineWidth(1);
+            if (track.isSplineInterpolation()) {
+                // Draw curved spline hint (subtle S-curve between keyframes)
+                gc.setLineDashes(3, 3);
+            }
             for (int i = 0; i < keyframes.size() - 1; i++) {
                 double x1 = TRACK_LABEL_WIDTH + (keyframes.get(i).getTime() * pixelsPerSecond) - scrollOffsetX;
                 double x2 = TRACK_LABEL_WIDTH + (keyframes.get(i + 1).getTime() * pixelsPerSecond) - scrollOffsetX;
@@ -617,6 +632,7 @@ public class TimelineWidget extends VBox {
                     gc.strokeLine(Math.max(x1, TRACK_LABEL_WIDTH), centerY, Math.min(x2, width), centerY);
                 }
             }
+            gc.setLineDashes(null);
         }
     }
 
@@ -678,6 +694,17 @@ public class TimelineWidget extends VBox {
                 dragStartTime = handle.time;
                 updateEasingComboFromSelection();
                 redraw();
+            } else if (x >= TRACK_LABEL_WIDTH - 16 && x < TRACK_LABEL_WIDTH && y >= RULER_HEIGHT) {
+                // Click on the spline toggle zone (right edge of label area)
+                TrackInfo clickedTrack = findTrackInfoAt(y);
+                if (clickedTrack != null && !clickedTrack.isGroupHeader) {
+                    AnimationTrack<?> track = timeline.getTrack(clickedTrack.trackName);
+                    if (track != null) {
+                        track.setSplineInterpolation(!track.isSplineInterpolation());
+                        redraw();
+                        if (onRenderRequest != null) onRenderRequest.run();
+                    }
+                }
             } else if (y < RULER_HEIGHT || x < TRACK_LABEL_WIDTH) {
                 // Click on ruler - seek to time
                 if (x >= TRACK_LABEL_WIDTH) {
@@ -760,12 +787,25 @@ public class TimelineWidget extends VBox {
             redraw();
         }
 
-        // Update cursor
-        if (newHover != null || e.getY() < RULER_HEIGHT) {
+        // Cursor
+        boolean inSplineZone = e.getX() >= TRACK_LABEL_WIDTH - 16 && e.getX() < TRACK_LABEL_WIDTH && e.getY() >= RULER_HEIGHT;
+        if (newHover != null || e.getY() < RULER_HEIGHT || inSplineZone) {
             canvas.setCursor(javafx.scene.Cursor.HAND);
         } else {
             canvas.setCursor(javafx.scene.Cursor.DEFAULT);
         }
+    }
+
+    private TrackInfo findTrackInfoAt(double mouseY) {
+        double y = RULER_HEIGHT - scrollOffsetY;
+        for (TrackInfo info : visibleTracks) {
+            double rh = rowHeight(info);
+            if (mouseY >= y && mouseY < y + rh && mouseY >= RULER_HEIGHT) {
+                return info;
+            }
+            y += rh;
+        }
+        return null;
     }
 
     private KeyframeHandle findKeyframeAt(double mouseX, double mouseY) {

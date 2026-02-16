@@ -80,6 +80,16 @@ public class Timeline {
         return Collections.unmodifiableCollection(tracks.values());
     }
 
+    /**
+     * Set spline interpolation mode for a track.
+     */
+    public void setTrackSplineInterpolation(String trackName, boolean enabled) {
+        AnimationTrack<?> track = tracks.get(trackName);
+        if (track != null) {
+            track.setSplineInterpolation(enabled);
+        }
+    }
+
     // ========================================================================
     // Value Access
     // ========================================================================
