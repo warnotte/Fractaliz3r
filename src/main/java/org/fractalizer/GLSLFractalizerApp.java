@@ -59,6 +59,7 @@ public class GLSLFractalizerApp extends Application {
     private ProgressBar progressBar;
     private Label statusLabel;
     private Label sampleLabel;
+    private long renderStartTime;
     private StackPane imageContainer;
     private SplitPane verticalSplit;
     private SplitPane horizontalSplit;
@@ -685,11 +686,19 @@ public class GLSLFractalizerApp extends Application {
 
     private void renderFull() {
         primaryStage.getScene().setCursor(javafx.scene.Cursor.WAIT);
+        renderStartTime = System.nanoTime();
         controller.renderFull(this::updateImage, progress -> {
             progressBar.setProgress(progress);
-            statusLabel.setText("Rendering high quality...");
             if (progress >= 1.0) {
                 primaryStage.getScene().setCursor(null);
+                long elapsedMs = (System.nanoTime() - renderStartTime) / 1_000_000;
+                String timeStr = elapsedMs < 1000
+                    ? elapsedMs + "ms"
+                    : String.format("%.1fs", elapsedMs / 1000.0);
+                statusLabel.setText("Rendered " + controller.getEngine().getSampleCount()
+                    + " samples in " + timeStr);
+            } else {
+                statusLabel.setText("Rendering high quality...");
             }
         }, null);
     }
@@ -703,9 +712,6 @@ public class GLSLFractalizerApp extends Application {
     private void updateImage(javafx.scene.image.Image image) {
         imageView.setImage(image);
         sampleLabel.setText("Samples: " + controller.getEngine().getSampleCount());
-        if (controller.getEngine().getSampleCount() >= 1) {
-            statusLabel.setText("Rendered: " + controller.getEngine().getSampleCount() + " samples");
-        }
     }
 
     private void showError(String title, String message) {

@@ -69,6 +69,11 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider skyIntensitySlider;
     private EnhancedSlider indirectSlider;
 
+    // Adaptive sampling
+    private CheckBox adaptiveSamplingCheck;
+    private EnhancedSlider varianceThresholdSlider;
+    private EnhancedSlider minAdaptiveSamplesSlider;
+
     public QualityPanel(Supplier<AbstractFractalParams> paramsSupplier,
                         RenderCallback renderCallback,
                         Consumer<Boolean> autoFullQualityCallback) {
@@ -103,6 +108,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         panel.getChildren().add(createGlowPane());
         panel.getChildren().add(createDoFPane());
         panel.getChildren().add(createPathTracingPane());
+        panel.getChildren().add(createAdaptiveSamplingPane());
         panel.getChildren().add(createPresetsPane());
 
         return panel;
@@ -550,6 +556,40 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         return pane;
     }
 
+    private TitledPane createAdaptiveSamplingPane() {
+        VBox box = new VBox(5);
+
+        adaptiveSamplingCheck = new CheckBox("Enable Adaptive Sampling");
+        adaptiveSamplingCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setAdaptiveSampling(adaptiveSamplingCheck.isSelected());
+                renderCallback.requestRender();
+            }
+        });
+
+        varianceThresholdSlider = new EnhancedSlider("Threshold", 0.00001, 0.005, 0.0005, false);
+        varianceThresholdSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setVarianceThreshold(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        minAdaptiveSamplesSlider = new EnhancedSlider("Min Samples", 4, 64, 16, true);
+        minAdaptiveSamplesSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setMinAdaptiveSamples(v.intValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        box.getChildren().addAll(adaptiveSamplingCheck, varianceThresholdSlider, minAdaptiveSamplesSlider);
+
+        TitledPane pane = new TitledPane("Adaptive Sampling", box);
+        pane.setExpanded(false);
+        return pane;
+    }
+
     private TitledPane createPresetsPane() {
         VBox box = new VBox(5);
 
@@ -646,6 +686,11 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             bouncesSlider.setValue(p.getMaxBounces());
             skyIntensitySlider.setValue(p.getSkyIntensity());
             indirectSlider.setValue(p.getIndirectMultiplier() * 100.0);
+
+            // Adaptive sampling
+            adaptiveSamplingCheck.setSelected(p.isAdaptiveSampling());
+            varianceThresholdSlider.setValue(p.getVarianceThreshold());
+            minAdaptiveSamplesSlider.setValue(p.getMinAdaptiveSamples());
 
         } finally {
             suppressRender = false;

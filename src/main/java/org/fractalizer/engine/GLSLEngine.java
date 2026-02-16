@@ -49,6 +49,11 @@ public class GLSLEngine implements AutoCloseable {
     // Custom palette texture (256x1, RGB32F)
     private int paletteTexture;
 
+    // Adaptive sampling variance texture (RGBA32F: R=sumLum, G=sumSqLum, B=count)
+    private int varianceTexture;
+    private int varianceFBO;
+    private boolean adaptiveSamplingEnabled = false;
+
     // Environment map
     private int envMapTexture;
     private boolean envMapLoaded = false;
@@ -300,6 +305,11 @@ public class GLSLEngine implements AutoCloseable {
                 program.setUniform("envTotalLuminance", 0.0f);
             }
 
+            // Bind variance image for adaptive sampling (image unit 5, read/write)
+            if (adaptiveSamplingEnabled) {
+                glBindImageTexture(5, varianceTexture, 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+            }
+
             // Set user uniforms
             for (Map.Entry<String, Object> entry : uniforms.entrySet()) {
                 setUniformValue(program, entry.getKey(), entry.getValue());
@@ -308,6 +318,11 @@ public class GLSLEngine implements AutoCloseable {
             // Render fullscreen quad
             glBindVertexArray(quadVAO);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+            // Ensure image stores are visible for next sample's image loads
+            if (adaptiveSamplingEnabled) {
+                glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+            }
 
             glDisable(GL_BLEND);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -355,6 +370,11 @@ public class GLSLEngine implements AutoCloseable {
         float[] result = new float[currentWidth * currentHeight * 4];
 
         runOnGLThread(() -> {
+            // Ensure variance image stores are visible as texture fetches
+            if (adaptiveSamplingEnabled) {
+                glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+            }
+
             // Step 1: Render bloom (if enabled)
             renderBloom();
 
@@ -377,6 +397,12 @@ public class GLSLEngine implements AutoCloseable {
             glActiveTexture(GL_TEXTURE2);
             glBindTexture(GL_TEXTURE_2D, lensDirtTexture);
             postProcessProgram.setUniform("lensDirtTexture", 2);
+
+            // Variance texture for adaptive sampling
+            glActiveTexture(GL_TEXTURE5);
+            glBindTexture(GL_TEXTURE_2D, varianceTexture);
+            postProcessProgram.setUniform("varianceTex", 5);
+            postProcessProgram.setUniform("adaptiveSampling", adaptiveSamplingEnabled ? 1 : 0);
 
             // Set uniforms
             postProcessProgram.setUniform("sampleCount", Math.max(1, sampleCount));
@@ -592,6 +618,19 @@ public class GLSLEngine implements AutoCloseable {
             throw new RuntimeException("Display framebuffer not complete!");
         }
 
+        // Variance texture for adaptive sampling (RGBA32F: R=sumLum, G=sumSqLum, B=count)
+        varianceTexture = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, varianceTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, (ByteBuffer) null);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        varianceFBO = glGenFramebuffers();
+        glBindFramebuffer(GL_FRAMEBUFFER, varianceFBO);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, varianceTexture, 0);
+
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
@@ -600,6 +639,8 @@ public class GLSLEngine implements AutoCloseable {
         glDeleteFramebuffers(accumFBO);
         glDeleteTextures(displayTexture);
         glDeleteFramebuffers(displayFBO);
+        glDeleteTextures(varianceTexture);
+        glDeleteFramebuffers(varianceFBO);
         createFramebuffer(currentWidth, currentHeight);
 
         // Also recreate bloom buffers
@@ -614,6 +655,10 @@ public class GLSLEngine implements AutoCloseable {
 
     private void clearAccumulation() {
         glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
+        glClearColor(0, 0, 0, 0);
+        glClear(GL_COLOR_BUFFER_BIT);
+        // Clear variance texture for adaptive sampling
+        glBindFramebuffer(GL_FRAMEBUFFER, varianceFBO);
         glClearColor(0, 0, 0, 0);
         glClear(GL_COLOR_BUFFER_BIT);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -738,6 +783,12 @@ public class GLSLEngine implements AutoCloseable {
         bloomExtractProgram.setUniform("threshold", postProcessParams.bloomThreshold);
         bloomExtractProgram.setUniform("softThreshold", 0.5f);
 
+        // Variance texture for adaptive sampling
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, varianceTexture);
+        bloomExtractProgram.setUniform("varianceTex", 1);
+        bloomExtractProgram.setUniform("adaptiveSampling", adaptiveSamplingEnabled ? 1 : 0);
+
         glBindVertexArray(quadVAO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
@@ -782,6 +833,10 @@ public class GLSLEngine implements AutoCloseable {
      */
     public PostProcessParams getPostProcessParams() {
         return postProcessParams;
+    }
+
+    public void setAdaptiveSamplingEnabled(boolean enabled) {
+        this.adaptiveSamplingEnabled = enabled;
     }
 
     // ========================================================================
@@ -1312,6 +1367,8 @@ public class GLSLEngine implements AutoCloseable {
             glDeleteTextures(accumTexture);
             glDeleteFramebuffers(displayFBO);
             glDeleteTextures(displayTexture);
+            glDeleteFramebuffers(varianceFBO);
+            glDeleteTextures(varianceTexture);
             glDeleteFramebuffers(bloomFBO1);
             glDeleteFramebuffers(bloomFBO2);
             glDeleteTextures(bloomTexture1);

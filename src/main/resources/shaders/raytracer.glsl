@@ -15,6 +15,9 @@ in vec2 uv;
 
 out vec4 FragColor;
 
+// Adaptive Sampling variance image (R=sumLum, G=sumSqLum, B=count)
+layout(rgba32f, binding = 5) uniform image2D varianceImage;
+
 // ============================================================================
 // Ray Hit Result
 // ============================================================================
@@ -1210,6 +1213,24 @@ vec3 renderByMode(RayHit hit, Ray ray, vec3 normal, float shadow, float ao) {
 void main() {
     // Initialize random for this pixel/sample
     uint seed = initRandom(gl_FragCoord.xy, sampleIndex);
+    ivec2 pixel = ivec2(gl_FragCoord.xy);
+
+    // Adaptive sampling: skip converged pixels
+    // Uses variance-of-mean (popVariance / count) to measure actual noise in the average.
+    // A pixel is converged when adding more samples won't visibly change the result.
+    if (adaptiveSampling != 0) {
+        vec4 varData = imageLoad(varianceImage, pixel);
+        float count = varData.b;
+        if (count >= float(minAdaptiveSamples)) {
+            float meanLum = varData.r / count;
+            float popVariance = max(0.0, (varData.g / count) - meanLum * meanLum);
+            float varianceOfMean = popVariance / count;
+            if (varianceOfMean < varianceThreshold) {
+                FragColor = vec4(0.0);
+                return;
+            }
+        }
+    }
 
     // Anti-aliasing jitter (scaled to full image resolution for consistent AA across tiles)
     vec2 jitter = (random2(seed) - 0.5) / fullResolution;
@@ -1272,6 +1293,14 @@ void main() {
 
     // Apply DOF chromatic aberration weight
     color *= dofColorWeight;
+
+    // Adaptive sampling: update variance statistics
+    if (adaptiveSampling != 0) {
+        float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        vec4 varData = imageLoad(varianceImage, pixel);
+        imageStore(varianceImage, pixel,
+            vec4(varData.r + lum, varData.g + lum * lum, varData.b + 1.0, 0.0));
+    }
 
     // Output: RGB = color (accumulated), A = depth (for focus picking)
     // Depth is stored in alpha - will be averaged with colors, but that's fine for focus picking

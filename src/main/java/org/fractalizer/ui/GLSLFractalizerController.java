@@ -1143,6 +1143,15 @@ public class GLSLFractalizerController implements RenderController {
         uniforms.put("fullResolution", new float[]{
             (float) engine.getWidth(), (float) engine.getHeight()});
 
+        // Adaptive sampling
+        if (currentParams instanceof AbstractFractalParams afp) {
+            boolean adaptive = afp.isAdaptiveSampling();
+            uniforms.put("adaptiveSampling", adaptive ? 1 : 0);
+            uniforms.put("varianceThreshold", afp.getVarianceThreshold());
+            uniforms.put("minAdaptiveSamples", afp.getMinAdaptiveSamples());
+            engine.setAdaptiveSamplingEnabled(adaptive);
+        }
+
         // Audio-reactive uniforms + fractal parameter modulation
         if (audioPanel != null && audioPanel.isAudioPlaying()) {
             var data = audioPanel.getAudioData();

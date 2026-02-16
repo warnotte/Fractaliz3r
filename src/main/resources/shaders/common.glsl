@@ -154,6 +154,11 @@ uniform float audioReactWarp;        // Space warp intensity
 uniform float audioReactPaletteJump; // Palette jump intensity
 uniform int audioFrameIndex;         // Deterministic per-frame counter
 
+// Adaptive Sampling
+uniform int adaptiveSampling;        // 0 = off, 1 = on
+uniform float varianceThreshold;     // Convergence threshold (default 0.005)
+uniform int minAdaptiveSamples;      // Min samples before convergence check (default 8)
+
 // ============================================================================
 // Math & Random Helpers
 // ============================================================================

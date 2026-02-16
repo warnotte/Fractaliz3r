@@ -13,11 +13,18 @@ uniform int sampleCount;
 uniform float threshold;      // Brightness threshold (default 1.0)
 uniform float softThreshold;  // Soft knee (default 0.5)
 
+// Adaptive Sampling
+uniform sampler2D varianceTex;
+uniform int adaptiveSampling;
+
 void main() {
     vec3 color = texture(accumTexture, uv).rgb;
 
-    // Normalize by sample count
-    color /= float(max(sampleCount, 1));
+    // Normalize by sample count (per-pixel when adaptive sampling is on)
+    float sampleDivisor = (adaptiveSampling != 0)
+        ? max(texture(varianceTex, uv).b, 1.0)
+        : float(max(sampleCount, 1));
+    color /= sampleDivisor;
 
     // Calculate brightness (perceived luminance)
     float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));

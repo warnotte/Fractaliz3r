@@ -53,6 +53,10 @@ uniform float sharpenIntensity;    // 0.0 - 1.0
 
 uniform float saturation;          // 0.0 - 2.0 (default 1.0)
 
+// Adaptive Sampling
+uniform sampler2D varianceTex;     // R=sumLum, G=sumSqLum, B=count
+uniform int adaptiveSampling;
+
 // Lens Effects
 uniform sampler2D lensDirtTexture;
 uniform int lensEffectsEnabled;
@@ -281,8 +285,11 @@ void main() {
         color = texture(accumTexture, uv).rgb;
     }
 
-    // Normalize by sample count
-    color /= float(max(sampleCount, 1));
+    // Normalize by sample count (per-pixel when adaptive sampling is on)
+    float sampleDivisor = (adaptiveSampling != 0)
+        ? max(texture(varianceTex, uv).b, 1.0)
+        : float(max(sampleCount, 1));
+    color /= sampleDivisor;
 
     // Apply exposure
     color *= exposure;
@@ -302,7 +309,7 @@ void main() {
     // Sharpening (before tone mapping)
     if (sharpenEnabled != 0 && sharpenIntensity > 0.0001) {
         vec3 sharpened = sharpen(accumTexture, uv, texelSize, sharpenIntensity);
-        sharpened /= float(max(sampleCount, 1));
+        sharpened /= sampleDivisor;
         sharpened *= exposure;
         color = mix(color, sharpened, 0.5);
     }

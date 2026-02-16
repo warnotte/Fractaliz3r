@@ -188,6 +188,24 @@ Export auxiliary render passes (AOVs) for compositing in After Effects, Nuke, et
 - **UI**: "Depth Map" and "Normal Map" checkboxes in ExportPanel. Files saved as `{name}_depth.png` / `{name}_normal.png`.
 - **Animation**: Per-frame AOV passes exported alongside beauty frames (`frame_00000_depth.png`, etc.).
 
+## Adaptive Sampling
+
+Variance-based convergence detection that skips already-converged pixels during progressive rendering. Concentrates GPU effort on noisy regions (fractal detail, path-traced reflections) while skipping smooth areas (background, sky, flat surfaces). Best gains on fractal scenes with visible sky/background (~30-50% speedup). Minimal gain on closed scenes like Cornell Box.
+
+- **Variance texture**: RGBA32F (`image2D`, binding 5). Per-pixel: R=sumLum, G=sumSqLum, B=count.
+- **Convergence criterion**: Variance-of-mean (`popVariance / count < threshold`). This measures actual noise in the pixel average, not raw sample dispersion.
+- **raytracer.glsl**: Early exit at top of `main()` if converged → `FragColor = vec4(0)` (additive blend adds nothing). Variance stats updated via `imageStore` after shading.
+- **postprocess/bloom_extract/display**: Per-pixel sample count division (`texture(varianceTex, uv).b`) instead of global `sampleCount` when adaptive is on.
+- **GLSLEngine**: Variance texture + FBO lifecycle, `glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT)` between samples, `GL_TEXTURE_FETCH_BARRIER_BIT` before postprocess read.
+- **Zero overhead when OFF**: No imageLoad/imageStore, no memory barriers.
+- **Parameters** (in `AbstractFractalParams`, serialized in `EffectsConfig`):
+  - `adaptiveSampling` (bool, default false)
+  - `varianceThreshold` (float, default 0.0005 — stddev ~2.2% noise)
+  - `minAdaptiveSamples` (int, default 16 — minimum passes before convergence check)
+- **UI**: QualityPanel "Adaptive Sampling" TitledPane (checkbox + Threshold slider + Min Samples slider).
+- **Interaction with sample counts**: Min Adaptive Samples is a floor before checking, Preview/Export Samples is the ceiling. A pixel renders between `minAdaptiveSamples` and `maxSamples` passes.
+- **Render timer**: Status bar shows elapsed time after full quality render completes (e.g., "Rendered 64 samples in 3.2s").
+
 ## VR & Export Features
 
 - **360\u00B0 Equirectangular Projection**: Render full spherical panoramas compatible with VR headsets.

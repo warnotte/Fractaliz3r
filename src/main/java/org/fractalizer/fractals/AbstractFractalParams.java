@@ -171,6 +171,11 @@ public abstract class AbstractFractalParams implements FractalParams {
     // NEE + MIS (environment importance sampling)
     protected boolean neeEnabled = true;
 
+    // Adaptive Sampling
+    protected boolean adaptiveSampling = false;
+    protected float varianceThreshold = 0.0005f;
+    protected int minAdaptiveSamples = 16;
+
     // Custom gradient palette (used when paletteIndex == 6)
     protected GradientPalette customGradient;
 
@@ -404,6 +409,11 @@ public abstract class AbstractFractalParams implements FractalParams {
 
         // Copy NEE + MIS
         target.neeEnabled = this.neeEnabled;
+
+        // Copy Adaptive Sampling
+        target.adaptiveSampling = this.adaptiveSampling;
+        target.varianceThreshold = this.varianceThreshold;
+        target.minAdaptiveSamples = this.minAdaptiveSamples;
 
         // Copy custom gradient
         target.customGradient = this.customGradient.copy();
@@ -763,6 +773,14 @@ public abstract class AbstractFractalParams implements FractalParams {
     // NEE + MIS
     public boolean isNeeEnabled() { return neeEnabled; }
     public void setNeeEnabled(boolean enabled) { this.neeEnabled = enabled; }
+
+    // Adaptive Sampling
+    public boolean isAdaptiveSampling() { return adaptiveSampling; }
+    public void setAdaptiveSampling(boolean enabled) { this.adaptiveSampling = enabled; }
+    public float getVarianceThreshold() { return varianceThreshold; }
+    public void setVarianceThreshold(float threshold) { this.varianceThreshold = threshold; }
+    public int getMinAdaptiveSamples() { return minAdaptiveSamples; }
+    public void setMinAdaptiveSamples(int min) { this.minAdaptiveSamples = min; }
 
     // Custom Gradient
     public GradientPalette getCustomGradient() { return customGradient; }

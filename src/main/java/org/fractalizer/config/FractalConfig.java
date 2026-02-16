@@ -179,6 +179,11 @@ public class FractalConfig {
 
         // NEE + MIS
         public boolean neeEnabled = true;
+
+        // Adaptive Sampling
+        public boolean adaptiveSampling = false;
+        public float varianceThreshold = 0.0005f;
+        public int minAdaptiveSamples = 16;
     }
 
     public static class AnimationConfig {
@@ -314,6 +319,9 @@ public class FractalConfig {
         config.effects.fogSteps = params.getFogSteps();
         config.effects.shutterAngle = params.getShutterAngle();
         config.effects.neeEnabled = params.isNeeEnabled();
+        config.effects.adaptiveSampling = params.isAdaptiveSampling();
+        config.effects.varianceThreshold = params.getVarianceThreshold();
+        config.effects.minAdaptiveSamples = params.getMinAdaptiveSamples();
 
         // Fractal-specific parameters
         extractFractalParams(params, config.fractalParams);
@@ -436,6 +444,9 @@ public class FractalConfig {
         params.setFogSteps(effects.fogSteps);
         params.setShutterAngle(effects.shutterAngle);
         params.setNeeEnabled(effects.neeEnabled);
+        params.setAdaptiveSampling(effects.adaptiveSampling);
+        params.setVarianceThreshold(effects.varianceThreshold);
+        params.setMinAdaptiveSamples(effects.minAdaptiveSamples);
 
         // Fractal-specific parameters
         applyFractalParams(params, fractalParams);

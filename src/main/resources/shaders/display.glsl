@@ -12,6 +12,10 @@ uniform sampler2D accumTexture;
 uniform int sampleCount;
 uniform int renderMode;  // 0 = Final, other = debug modes
 
+// Adaptive Sampling
+uniform sampler2D varianceTex;
+uniform int adaptiveSampling;
+
 // ACES filmic tone mapping
 vec3 toneMapACES(vec3 x) {
     const float a = 2.51;
@@ -26,8 +30,11 @@ void main() {
     // Read accumulated color
     vec3 accumulated = texture(accumTexture, uv).rgb;
 
-    // Average by sample count
-    vec3 color = accumulated / float(max(sampleCount, 1));
+    // Average by sample count (per-pixel when adaptive sampling is on)
+    float sampleDivisor = (adaptiveSampling != 0)
+        ? max(texture(varianceTex, uv).b, 1.0)
+        : float(max(sampleCount, 1));
+    vec3 color = accumulated / sampleDivisor;
 
     // Only apply tone mapping and gamma for final render mode
     if (renderMode == 0) {
