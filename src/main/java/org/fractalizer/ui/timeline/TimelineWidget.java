@@ -78,7 +78,7 @@ public class TimelineWidget extends VBox {
     private static final double TRACK_HEIGHT = 24;
     private static final double TRACK_LABEL_WIDTH = 110;
     private static final double KEYFRAME_SIZE = 10;
-    private static final double MIN_PIXELS_PER_SECOND = 30;
+    private static final double MIN_PIXELS_PER_SECOND = 2;
     private static final double MAX_PIXELS_PER_SECOND = 200;
 
     // Visual state
@@ -123,10 +123,14 @@ public class TimelineWidget extends VBox {
         canvas.setOnMouseMoved(this::handleMouseMoved);
         canvas.setOnScroll(e -> {
             if (e.isControlDown()) {
-                // Zoom
-                double factor = e.getDeltaY() > 0 ? 1.1 : 0.9;
+                // Zoom anchored on mouse position
+                double mouseX = e.getX();
+                double timeAtMouse = (mouseX - TRACK_LABEL_WIDTH + scrollOffsetX) / pixelsPerSecond;
+                double factor = e.getDeltaY() > 0 ? 1.15 : 1.0 / 1.15;
                 pixelsPerSecond = Math.max(MIN_PIXELS_PER_SECOND,
                     Math.min(MAX_PIXELS_PER_SECOND, pixelsPerSecond * factor));
+                // Adjust scroll so the time under cursor stays in place
+                scrollOffsetX = Math.max(0, timeAtMouse * pixelsPerSecond - (mouseX - TRACK_LABEL_WIDTH));
                 updateScrollBars();
                 redraw();
             } else if (e.isShiftDown()) {
@@ -214,13 +218,25 @@ public class TimelineWidget extends VBox {
         });
 
         // Duration spinner
-        durationSpinner = new Spinner<>(1.0, 300.0, timeline.getDuration(), 1.0);
+        durationSpinner = new Spinner<>(0.1, 3600.0, timeline.getDuration(), 1.0);
         durationSpinner.setEditable(true);
         durationSpinner.setPrefWidth(70);
         durationSpinner.valueProperty().addListener((obs, old, val) -> {
             timeline.setDuration(val);
             updateScrollBars();
             redraw();
+        });
+        // Commit editable spinner value on focus loss (JavaFX doesn't do this by default)
+        durationSpinner.focusedProperty().addListener((obs, wasFocused, isFocused) -> {
+            if (!isFocused) {
+                try {
+                    String text = durationSpinner.getEditor().getText();
+                    double parsed = Double.parseDouble(text);
+                    durationSpinner.getValueFactory().setValue(parsed);
+                } catch (NumberFormatException ignored) {
+                    durationSpinner.getEditor().setText(String.valueOf(durationSpinner.getValue()));
+                }
+            }
         });
 
         // Top bar with transport and info
@@ -927,11 +943,11 @@ public class TimelineWidget extends VBox {
         double rawInterval = targetPixels / pixelsPerSecond;
 
         // Snap to nice values: 0.1, 0.25, 0.5, 1, 2, 5, 10, etc.
-        double[] niceValues = {0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60};
+        double[] niceValues = {0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600};
         for (double nice : niceValues) {
             if (rawInterval <= nice) return nice;
         }
-        return 60;
+        return 600;
     }
 
     private String formatTime(double time) {
@@ -1006,7 +1022,21 @@ public class TimelineWidget extends VBox {
     }
 
     public void refresh() {
+        syncFromTimeline();
+        updateScrollBars();
         redraw();
+    }
+
+    /**
+     * Synchronize widget UI controls with the timeline's current state.
+     * Called after external changes (e.g. loading a .frac file).
+     */
+    private void syncFromTimeline() {
+        // Sync duration spinner without triggering the listener back
+        double timelineDuration = timeline.getDuration();
+        if (Math.abs(durationSpinner.getValue() - timelineDuration) > 0.01) {
+            durationSpinner.getValueFactory().setValue(timelineDuration);
+        }
     }
 
     /**
