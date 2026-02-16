@@ -10,17 +10,18 @@
 
 ## Key Features
 
-### Fractal Library (12 Types)
+### Fractal Library (13 Types)
 - **Mandelbulb** - Power-based 3D Mandelbrot with configurable iterations/bailout
 - **Mandelbox** - Box/sphere fold hybrid with scale, radius, and folding controls
 - **Menger Sponge** - Classic IFS with scale and offset parameters
 - **Kaleidoscopic IFS** - Fold-angle based kaleidoscope with rotation
-- **3D Julia Set** - Quaternion Julia with full 4D constant control
+- **Quaternion Julia 4D** - Full 4D quaternion constant with slice and rotation controls (XW/YW/ZW planes)
 - **Polyhedral IFS** - Octahedral, Dodecahedral, Icosahedral, and Tetrahedral symmetries with dual rotation matrices
 - **Sierpinski Tetrahedron** - Tetrahedral fold IFS
 - **Pseudo-Kleinian** - Box/sphere fold with space repetition (tubular caves)
 - **Apollonian Gasket** - Tetrahedral fold + sphere inversion
 - **Bristorbrot** - Component-wise 3D Mandelbrot with Julia mode
+- **Fractal Terrain** - fBm noise heightfield with configurable octaves and lacunarity
 - **Cornell Box** - Classic rendering test scene with per-object materials (glass, metal, emissive)
 - **Test Scene** - SDF primitives for shader development
 
@@ -42,6 +43,7 @@
 - **Subsurface Scattering**: Physically-approximated SSS with configurable radius and color
 - **Ray-Marched Reflections**: Real-time reflection bounces for metallic/glass surfaces
 - **9 Coloring Modes**: Standard, Iteration Bands, Distance, Angular, Blend, Contour, HSV Direct, Dual Palette, Neon
+- **Adaptive Sampling**: Variance-based convergence detection that skips already-converged pixels, concentrating GPU effort on noisy regions (~30-50% speedup on scenes with visible background)
 
 ### Visual Gradient Editor
 GPU-based 1D texture (256x1, RGB32F) with a visual canvas editor:
@@ -59,6 +61,7 @@ GPU-based 1D texture (256x1, RGB32F) with a visual canvas editor:
 
 ### Animation System
 - Timeline with keyframe tracks and easing curves
+- **Spline Camera Paths**: Catmull-Rom interpolation for smooth curved camera trajectories (enabled by default on camera position and rotation tracks)
 - `@Animatable` annotation auto-discovers fractal parameters for animation
 - Per-fractal scoped tracks (e.g., `mandelbulb.power`, `mandelbox.scale`)
 - Motion blur export with configurable shutter angle (0-360 degrees)
@@ -71,6 +74,7 @@ GPU-based 1D texture (256x1, RGB32F) with a visual canvas editor:
 ### Export Pipeline
 - **Tiled Rendering**: Automatic tile-based rendering for exports up to 16K (15360x8640)
 - **Image Export**: PNG and JPEG (95% quality) with optional 360 metadata
+- **Depth/Normal AOV Export**: Auxiliary render passes for compositing (16-bit depth, 8-bit normals) — compatible with After Effects, Nuke, etc.
 - **Video Export**: H.265 HEVC via FFmpeg with `+faststart` for web
 - **3D Mesh Export**: Marching Cubes extraction to glTF and OBJ formats
 - **Export Progress Dialog**: Modal dialog with progress bars and animation preview

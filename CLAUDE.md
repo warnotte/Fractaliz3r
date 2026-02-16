@@ -49,6 +49,7 @@ org.fractalizer
 │   ├── PseudoKleinianParams.java    # Pseudo-Kleinian: iterations, CSize vec3, Size, DEoffset
 │   ├── ApollonianParams.java        # Apollonian Gasket: iterations, scale, foldRadius
 │   ├── BristorbrotParams.java       # Bristorbrot: iterations, bailout
+│   ├── FractalTerrainParams.java    # Fractal Terrain: fBm heightfield with octaves, lacunarity, warp, ridge
 │   └── CornellBoxParams.java        # Cornell Box: sceneScale (per-object materials in shader)
 ├── audio/
 │   ├── AudioReactiveEngine.java     # Spectrum analysis, beat/onset detection
@@ -97,6 +98,7 @@ shaders/
     ├── pseudokleinian.glsl # Pseudo-Kleinian (box fold + sphere fold, tubular caves)
     ├── apollonian.glsl    # Apollonian Gasket (tetrahedral fold + sphere inversion)
     ├── bristorbrot.glsl   # Bristorbrot (component-wise 3D Mandelbrot)
+    ├── fractalterrain.glsl # Fractal Terrain (fBm noise heightfield)
     └── cornellbox.glsl    # Cornell Box with per-object materials (#define HAS_PER_OBJECT_MATERIAL)
 ```
 
