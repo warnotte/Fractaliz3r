@@ -386,8 +386,8 @@ Système optionnel de fractales audio-réactives. Documentation complète : **[d
 
 ## Dependencies
 
-- **LWJGL 3.3.3** - OpenGL bindings for GPU rendering
-- **JavaFX 21.0.2** - UI framework
+- **LWJGL 3.4.1** - OpenGL bindings for GPU rendering
+- **JavaFX 25.0.1** - UI framework
 - **JavaFX Media** - Audio playback and spectrum analysis (audio-reactive feature)
 - **Java 21+** required
 - **FFmpeg** (optional) - For MP4 video export and audio pre-analysis (must be in system PATH)
