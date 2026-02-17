@@ -28,6 +28,11 @@ Fractal parameters evolve as a function of the ray's travel distance. The deeper
 Turing patterns (leopard spots, labyrinthine, mitosis) living on the fractal surface. The patterns evolve over time, creating organic-looking animated textures. Uses a UV-free approach: 3D reaction-diffusion computed in the distance field's neighborhood, sampled at surface hits. Purely procedural, no mesh UV needed.
 
 ## 6. Particle Rain / Snow / Fireflies
-**Status:** IDEA
+**Status:** REJECTED
 
-Emit GPU particles (rain, snow, sparks, fireflies) that interact with fractal geometry. Particles raymarched against the DE for collision. Snow accumulates on horizontal surfaces (dot(normal, up) > threshold), water runs down crevasses. Fireflies orbit around fractal features using orbit trap data. Rendered as raymarched spheres or billboards composited with the main pass.
+Attempted implementation with procedural GPU particles (spatial hashing, fullscreen quad compositing after postprocess). Result was not satisfying — rejected by user.
+
+## 7. Bilateral Denoiser
+**Status:** REJECTED
+
+Previously attempted and rejected — user considers it garbage.
