@@ -536,114 +536,243 @@ public class FractalEvaluator {
     private static final float _IKVNORM_ = 0.19098593171f;
 
     private static float[] createRotationMatrix(float rx, float ry, float rz) {
-        float cx = (float) Math.cos(rx), sx = (float) Math.sin(rx);
-        float cy = (float) Math.cos(ry), sy = (float) Math.sin(ry);
-        float cz = (float) Math.cos(rz), sz = (float) Math.sin(rz);
-        return new float[]{
-            cy*cz, sx*sy*cz - cx*sz, cx*sy*cz + sx*sz,
-            cy*sz, sx*sy*sz + cx*cz, cx*sy*sz - sx*cz,
-            -sy, sx*cy, cx*cy
+        // Must match GLSLFractalizerController.createRotationMatrix exactly
+        float cx = (float) Math.cos(rx);
+        float sx = (float) Math.sin(rx);
+        float cy = (float) Math.cos(ry);
+        float sy = (float) Math.sin(ry);
+        float cz = (float) Math.cos(rz);
+        float sz = (float) Math.sin(rz);
+
+        // Combined rotation matrix R = Rz * Ry * Rx (Column-major storage for GLSL consistency)
+        return new float[] {
+            cy*cz, sx*sy*cz + cx*sz, -cx*sy*cz + sx*sz,
+            -cy*sz, -sx*sy*sz + cx*cz, cx*sy*sz + sx*cz,
+            sy, -sx*cy, cx*cy
         };
     }
 
     private static float[] mat3Mul(float[] m, float x, float y, float z) {
+        // GLSL w *= mat3 is RowVector * Matrix:
+        // res.x = x*m[0] + y*m[3] + z*m[6]
+        // res.y = x*m[1] + y*m[4] + z*m[7]
+        // res.z = x*m[2] + y*m[5] + z*m[8]
         return new float[]{
-            m[0]*x + m[1]*y + m[2]*z,
-            m[3]*x + m[4]*y + m[5]*z,
-            m[6]*x + m[7]*y + m[8]*z
+            x * m[0] + y * m[3] + z * m[6],
+            x * m[1] + y * m[4] + z * m[7],
+            x * m[2] + y * m[5] + z * m[8]
         };
     }
 
     private static float polyhedralDE(float px, float py, float pz, PolyhedralIFSParams p) {
-        float scale = p.getScale(); int maxIter = p.getMaxIterations();
+        float scale = p.getScale();
+        int maxIter = p.getMaxIterations();
         int polyType = p.getPolyType().ordinal();
-        float[] rot1 = createRotationMatrix(p.getRot1X(), p.getRot1Y(), p.getRot1Z());
-        float[] rot2 = createRotationMatrix(p.getRot2X(), p.getRot2Y(), p.getRot2Z());
-        float sox = p.getOffsetX() * (scale - 1f), soy = p.getOffsetY() * (scale - 1f), soz = p.getOffsetZ() * (scale - 1f);
+        
+        // Pass angles in RADIANS to our local createRotationMatrix
+        float[] rot1 = createRotationMatrix((float)Math.toRadians(p.getRot1X()), (float)Math.toRadians(p.getRot1Y()), (float)Math.toRadians(p.getRot1Z()));
+        float[] rot2 = createRotationMatrix((float)Math.toRadians(p.getRot2X()), (float)Math.toRadians(p.getRot2Y()), (float)Math.toRadians(p.getRot2Z()));
+        
+        float sox = p.getOffsetX() * (scale - 1f);
+        float soy = p.getOffsetY() * (scale - 1f);
+        float soz = p.getOffsetZ() * (scale - 1f);
         float shx = p.getShiftX(), shy = p.getShiftY(), shz = p.getShiftZ();
+        
         float wx = px, wy = py, wz = pz;
 
         int i;
         for (i = 0; i < maxIter; i++) {
-            float[] r = mat3Mul(rot1, wx, wy, wz); wx = r[0]; wy = r[1]; wz = r[2];
-            applyPolyFold(polyType, shx, shy, shz);
-            polyFoldInPlace(polyType, shx, shy, shz, wx, wy, wz);
-            // Inline the fold since we need to modify wx,wy,wz
-            float[] folded = polyFold(polyType, shx, shy, shz, wx, wy, wz);
-            wx = folded[0]; wy = folded[1]; wz = folded[2];
-            r = mat3Mul(rot2, wx, wy, wz); wx = r[0]; wy = r[1]; wz = r[2];
-            wx = wx * scale - sox; wy = wy * scale - soy; wz = wz * scale - soz;
+            float[] r1 = mat3Mul(rot1, wx, wy, wz); wx = r1[0]; wy = r1[1]; wz = r1[2];
+
+            // Poly Fold logic directly from shader
+            if (polyType == 0) { // Octahedral
+                wx = Math.abs(wx + shx) - shx; wy = Math.abs(wy + shy) - shy; wz = Math.abs(wz + shz) - shz;
+                if (wx < wy) { float t = wx; wx = wy; wy = t; }
+                if (wx < wz) { float t = wx; wx = wz; wz = t; }
+                if (wy < wz) { float t = wy; wy = wz; wz = t; }
+            } else if (polyType == 1) { // Dodecahedron
+                float t;
+                t = wx * 0.5f * PHI + wy * (0.5f / PHI) - wz * 0.5f;
+                if (t < 0) { wx -= 2*t*0.5f*PHI; wy -= 2*t*(0.5f/PHI); wz += 2*t*0.5f; }
+                t = -wx * 0.5f + wy * 0.5f * PHI + wz * (0.5f / PHI);
+                if (t < 0) { wx += 2*t*0.5f; wy -= 2*t*0.5f*PHI; wz -= 2*t*(0.5f/PHI); }
+                t = wx * (0.5f / PHI) - wy * 0.5f + wz * 0.5f * PHI;
+                if (t < 0) { wx -= 2*t*(0.5f/PHI); wy += 2*t*0.5f; wz -= 2*t*0.5f*PHI; }
+                
+                float c3x = PHI * (1f + PHI) * _IKVNORM_, c3y = (PHI * PHI - 1f) * _IKVNORM_, c3z = (1f + PHI) * _IKVNORM_;
+                t = -wx * c3x + wy * c3y + wz * c3z;
+                if (t < 0) { wx += 2*t*c3x; wy -= 2*t*c3y; wz -= 2*t*c3z; }
+                t = wx * c3z - wy * c3x + wz * c3y;
+                if (t < 0) { wx -= 2*t*c3z; wy += 2*t*c3x; wz -= 2*t*c3y; }
+            } else if (polyType == 2) { // Icosahedron
+                wx = Math.abs(wx); wy = Math.abs(wy); wz = Math.abs(wz);
+                float t;
+                t = wx*-0.80901699437f + wy*0.30901699437f + wz*0.5f; if (t > 0) { wx -= 2*t*-0.80901699437f; wy -= 2*t*0.30901699437f; wz -= 2*t*0.5f; }
+                t = wx*0.30901699437f + wy*-0.5f + wz*0.80901699437f; if (t > 0) { wx -= 2*t*0.30901699437f; wy -= 2*t*-0.5f; wz -= 2*t*0.80901699437f; }
+                t = wz*-1f; if (t > 0) { wz -= 2*t*-1f; }
+                t = wx*0.30901699437f + wy*-0.5f + wz*0.80901699437f; if (t > 0) { wx -= 2*t*0.30901699437f; wy -= 2*t*-0.5f; wz -= 2*t*0.80901699437f; }
+            } else if (polyType == 3) { // Tetrahedron
+                if (wx + wy < 0) { float t = wx; wx = -wy; wy = -t; }
+                if (wx + wz < 0) { float t = wx; wx = -wz; wz = -t; }
+                if (wy + wz < 0) { float t = wy; wy = -wz; wz = -t; }
+            }
+
+            float[] r2 = mat3Mul(rot2, wx, wy, wz); wx = r2[0]; wy = r2[1]; wz = r2[2];
+            
+            wx = wx * scale - sox;
+            wy = wy * scale - soy;
+            wz = wz * scale - soz;
         }
-        return (length3(wx, wy, wz) - 2f) * (float) Math.pow(scale, -i);
+        return (length3(wx, wy, wz) - 2f) * (float) Math.pow(scale, -maxIter);
     }
 
-    private static float polyhedralDEFull(float px, float py, float pz, PolyhedralIFSParams p, OrbitTrap trap) {
-        float scale = p.getScale(); int maxIter = p.getMaxIterations();
-        int polyType = p.getPolyType().ordinal();
-        float[] rot1 = createRotationMatrix(p.getRot1X(), p.getRot1Y(), p.getRot1Z());
-        float[] rot2 = createRotationMatrix(p.getRot2X(), p.getRot2Y(), p.getRot2Z());
-        float sox = p.getOffsetX() * (scale - 1f), soy = p.getOffsetY() * (scale - 1f), soz = p.getOffsetZ() * (scale - 1f);
-        float shx = p.getShiftX(), shy = p.getShiftY(), shz = p.getShiftZ();
-        float wx = px, wy = py, wz = pz;
-        trap.minDist = 1e10f; trap.sumDist = 0; trap.planeX = 0; trap.planeY = 0; trap.planeZ = 0; trap.iterations = 0;
+        private static float polyhedralDEFull(float px, float py, float pz, PolyhedralIFSParams p, OrbitTrap trap) {
 
-        int i;
-        for (i = 0; i < maxIter; i++) {
-            float[] r = mat3Mul(rot1, wx, wy, wz); wx = r[0]; wy = r[1]; wz = r[2];
-            float[] folded = polyFold(polyType, shx, shy, shz, wx, wy, wz);
-            wx = folded[0]; wy = folded[1]; wz = folded[2];
-            r = mat3Mul(rot2, wx, wy, wz); wx = r[0]; wy = r[1]; wz = r[2];
-            float pw = (float) Math.pow(scale, i * 0.5f);
-            trap.planeX += Math.abs(wx) / pw;
-            trap.planeY += Math.abs(wy) / pw;
-            trap.planeZ += Math.abs(wz) / pw;
-            float d2 = wx*wx + wy*wy + wz*wz;
-            trap.minDist = Math.min(trap.minDist, d2);
-            trap.sumDist += d2 / pw;
-            wx = wx * scale - sox; wy = wy * scale - soy; wz = wz * scale - soz;
+            float scale = p.getScale();
+
+            int maxIter = p.getMaxIterations();
+
+            int polyType = p.getPolyType().ordinal();
+
+            
+
+            float[] rot1 = createRotationMatrix((float)Math.toRadians(p.getRot1X()), (float)Math.toRadians(p.getRot1Y()), (float)Math.toRadians(p.getRot1Z()));
+
+            float[] rot2 = createRotationMatrix((float)Math.toRadians(p.getRot2X()), (float)Math.toRadians(p.getRot2Y()), (float)Math.toRadians(p.getRot2Z()));
+
+            
+
+            float sox = p.getOffsetX() * (scale - 1f);
+
+            float soy = p.getOffsetY() * (scale - 1f);
+
+            float soz = p.getOffsetZ() * (scale - 1f);
+
+            float shx = p.getShiftX(), shy = p.getShiftY(), shz = p.getShiftZ();
+
+            
+
+            float wx = px, wy = py, wz = pz;
+
+            trap.minDist = 1e10f; trap.sumDist = 0; trap.planeX = 0; trap.planeY = 0; trap.planeZ = 0; trap.iterations = 0;
+
+    
+
+            int i;
+
+            for (i = 0; i < maxIter; i++) {
+
+                float[] r1 = mat3Mul(rot1, wx, wy, wz); wx = r1[0]; wy = r1[1]; wz = r1[2];
+
+    
+
+                // Poly Fold logic
+
+                if (polyType == 0) { // Octahedral
+
+                    wx = Math.abs(wx + shx) - shx; wy = Math.abs(wy + shy) - shy; wz = Math.abs(wz + shz) - shz;
+
+                    if (wx < wy) { float t = wx; wx = wy; wy = t; }
+
+                    if (wx < wz) { float t = wx; wx = wz; wz = t; }
+
+                    if (wy < wz) { float t = wy; wy = wz; wz = t; }
+
+                } else if (polyType == 1) { // Dodecahedron
+
+                    float t;
+
+                    t = wx * 0.5f * PHI + wy * (0.5f / PHI) - wz * 0.5f;
+
+                    if (t < 0) { wx -= 2*t*0.5f*PHI; wy -= 2*t*(0.5f/PHI); wz += 2*t*0.5f; }
+
+                    t = -wx * 0.5f + wy * 0.5f * PHI + wz * (0.5f / PHI);
+
+                    if (t < 0) { wx += 2*t*0.5f; wy -= 2*t*0.5f*PHI; wz -= 2*t*(0.5f/PHI); }
+
+                    t = wx * (0.5f / PHI) - wy * 0.5f + wz * 0.5f * PHI;
+
+                    if (t < 0) { wx -= 2*t*(0.5f/PHI); wy += 2*t*0.5f; wz -= 2*t*0.5f*PHI; }
+
+                    
+
+                    float c3x = PHI * (1f + PHI) * _IKVNORM_, c3y = (PHI * PHI - 1f) * _IKVNORM_, c3z = (1f + PHI) * _IKVNORM_;
+
+                    t = -wx * c3x + wy * c3y + wz * c3z;
+
+                    if (t < 0) { wx += 2*t*c3x; wy -= 2*t*c3y; wz -= 2*t*c3z; }
+
+                    t = wx * c3z - wy * c3x + wz * c3y;
+
+                    if (t < 0) { wx -= 2*t*c3z; wy += 2*t*c3x; wz -= 2*t*c3y; }
+
+                } else if (polyType == 2) { // Icosahedron
+
+                    wx = Math.abs(wx); wy = Math.abs(wy); wz = Math.abs(wz);
+
+                    float t;
+
+                    t = wx*-0.80901699437f + wy*0.30901699437f + wz*0.5f; if (t > 0) { wx -= 2*t*-0.80901699437f; wy -= 2*t*0.30901699437f; wz -= 2*t*0.5f; }
+
+                    t = wx*0.30901699437f + wy*-0.5f + wz*0.80901699437f; if (t > 0) { wx -= 2*t*0.30901699437f; wy -= 2*t*-0.5f; wz -= 2*t*0.80901699437f; }
+
+                    t = wz*-1f; if (t > 0) { wz -= 2*t*-1f; }
+
+                    t = wx*0.30901699437f + wy*-0.5f + wz*0.80901699437f; if (t > 0) { wx -= 2*t*0.30901699437f; wy -= 2*t*-0.5f; wz -= 2*t*0.80901699437f; }
+
+                } else if (polyType == 3) { // Tetrahedron
+
+                    if (wx + wy < 0) { float t = wx; wx = -wy; wy = -t; }
+
+                    if (wx + wz < 0) { float t = wx; wx = -wz; wz = -t; }
+
+                    if (wy + wz < 0) { float t = wy; wy = -wz; wz = -t; }
+
+                }
+
+    
+
+                float[] r2 = mat3Mul(rot2, wx, wy, wz); wx = r2[0]; wy = r2[1]; wz = r2[2];
+
+    
+
+                float pw = (float) Math.pow(scale, i * 0.5f);
+
+                trap.planeX += Math.abs(wx) / pw;
+
+                trap.planeY += Math.abs(wy) / pw;
+
+                trap.planeZ += Math.abs(wz) / pw;
+
+                float d2 = wx*wx + wy*wy + wz*wz;
+
+                trap.minDist = Math.min(trap.minDist, d2);
+
+                trap.sumDist += d2 / pw;
+
+    
+
+                wx = wx * scale - sox;
+
+                wy = wy * scale - soy;
+
+                wz = wz * scale - soz;
+
+                trap.iterations = i + 1;
+
+            }
+
+            return (length3(wx, wy, wz) - 2f) * (float) Math.pow(scale, -maxIter);
+
         }
-        trap.iterations = i;
-        return (length3(wx, wy, wz) - 2f) * (float) Math.pow(scale, -i);
-    }
+
+    
 
     private static void applyPolyFold(int polyType, float shx, float shy, float shz) { /* marker */ }
 
     private static void polyFoldInPlace(int polyType, float shx, float shy, float shz, float wx, float wy, float wz) { /* marker */ }
 
     private static float[] polyFold(int polyType, float shx, float shy, float shz, float wx, float wy, float wz) {
-        if (polyType == 0) { // Octahedral
-            wx = Math.abs(wx + shx) - shx; wy = Math.abs(wy + shy) - shy; wz = Math.abs(wz + shz) - shz;
-            if (wx < wy) { float t = wx; wx = wy; wy = t; }
-            if (wx < wz) { float t = wx; wx = wz; wz = t; }
-            if (wy < wz) { float t = wy; wy = wz; wz = t; }
-        } else if (polyType == 1) { // Dodecahedron
-            float p3x = 0.5f, p3y = 0.5f / PHI, p3z = 0.5f * PHI;
-            float c3x = PHI * (1f + PHI) * _IKVNORM_, c3y = (PHI * PHI - 1f) * _IKVNORM_, c3z = (1f + PHI) * _IKVNORM_;
-            float t;
-            t = wx * p3z + wy * p3y - wz * p3x;
-            if (t < 0) { wx -= 2*t*p3z; wy -= 2*t*p3y; wz += 2*t*p3x; }
-            t = -wx * p3x + wy * p3z + wz * p3y;
-            if (t < 0) { wx += 2*t*p3x; wy -= 2*t*p3z; wz -= 2*t*p3y; }
-            t = wx * p3y - wy * p3x + wz * p3z;
-            if (t < 0) { wx -= 2*t*p3y; wy += 2*t*p3x; wz -= 2*t*p3z; }
-            t = -wx * c3x + wy * c3y + wz * c3z;
-            if (t < 0) { wx += 2*t*c3x; wy -= 2*t*c3y; wz -= 2*t*c3z; }
-            t = wx * c3z - wy * c3x + wz * c3y;
-            if (t < 0) { wx -= 2*t*c3z; wy += 2*t*c3x; wz -= 2*t*c3y; }
-        } else if (polyType == 2) { // Icosahedron
-            wx = Math.abs(wx); wy = Math.abs(wy); wz = Math.abs(wz);
-            float n1x = -0.80901699437f, n1y = 0.30901699437f, n1z = 0.5f;
-            float n2x = 0.30901699437f, n2y = -0.5f, n2z = 0.80901699437f;
-            float n3x = 0, n3y = 0, n3z = -1f;
-            float t = wx*n1x + wy*n1y + wz*n1z; if (t > 0) { wx -= 2*t*n1x; wy -= 2*t*n1y; wz -= 2*t*n1z; }
-            t = wx*n2x + wy*n2y + wz*n2z; if (t > 0) { wx -= 2*t*n2x; wy -= 2*t*n2y; wz -= 2*t*n2z; }
-            t = wx*n3x + wy*n3y + wz*n3z; if (t > 0) { wx -= 2*t*n3x; wy -= 2*t*n3y; wz -= 2*t*n3z; }
-            t = wx*n2x + wy*n2y + wz*n2z; if (t > 0) { wx -= 2*t*n2x; wy -= 2*t*n2y; wz -= 2*t*n2z; }
-        } else { // Tetrahedron
-            if (wx + wy < 0) { float t = wx; wx = -wy; wy = -t; }
-            if (wx + wz < 0) { float t = wx; wx = -wz; wz = -t; }
-            if (wy + wz < 0) { float t = wy; wy = -wz; wz = -t; }
-        }
         return new float[]{wx, wy, wz};
     }
 
