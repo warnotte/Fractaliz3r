@@ -1546,6 +1546,20 @@ public class GLSLFractalizerController implements RenderController {
     }
 
     @Override
+    public void prepareGPUEvaluator() {
+        if (currentParams instanceof AbstractFractalParams afp) {
+            String shaderPath = "/shaders/fractals/" + afp.getType().getKernelName() + ".glsl";
+            engine.loadEvaluatorShader(shaderPath);
+        }
+    }
+
+    @Override
+    public float[] evaluateGPUSlice(float zPos, float boundsHalf, int resolution) {
+        Map<String, Object> uniforms = buildUniforms();
+        return engine.evaluateSlice(uniforms, zPos, boundsHalf, resolution);
+    }
+
+    @Override
     public void close() {
         progressiveRenderer.shutdown();
         engine.close();

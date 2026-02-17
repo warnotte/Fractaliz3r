@@ -17,146 +17,62 @@ import static org.lwjgl.system.MemoryUtil.*;
 
 /**
  * GLSL-based rendering engine for Fractaliz3r.
- *
- * Features:
- * - Offscreen OpenGL context (hidden GLFW window)
- * - Progressive rendering with accumulation buffer
- * - Fragmentarium-style shader architecture
- * - No watchdog issues (each frame is fast)
- * - Easy integration with JavaFX via buffer readback
  */
 public class GLSLEngine implements AutoCloseable {
 
-    // GLFW window (hidden, used only for GL context)
     private long window;
-
-    // Framebuffers
-    private int accumFBO;
-    private int accumTexture;
-    private int displayFBO;      // Separate FBO for display output (avoids issues with hidden window)
-    private int displayTexture;
-    private int currentWidth;
-    private int currentHeight;
-
-    // Bloom framebuffers (ping-pong for blur passes)
-    private int bloomFBO1, bloomFBO2;
-    private int bloomTexture1, bloomTexture2;
-    private int bloomWidth, bloomHeight;  // Half resolution for performance
-
-    // Lens Dirt texture
-    private int lensDirtTexture;
-
-    // Custom palette texture (256x1, RGB32F)
-    private int paletteTexture;
-
-    // Adaptive sampling variance texture (RGBA32F: R=sumLum, G=sumSqLum, B=count)
-    private int varianceTexture;
-    private int varianceFBO;
+    private int accumFBO, accumTexture;
+    private int displayFBO, displayTexture;
+    private int currentWidth, currentHeight;
+    private int bloomFBO1, bloomFBO2, bloomTexture1, bloomTexture2, bloomWidth, bloomHeight;
+    private int lensDirtTexture, paletteTexture;
+    private int varianceTexture, varianceFBO;
     private boolean adaptiveSamplingEnabled = false;
-
-    // Environment map
     private int envMapTexture;
     private boolean envMapLoaded = false;
-    private float envRotation = 0.0f;
-    private float envLightingMix = 0.5f;  // 0 = directional only, 1 = full HDRI lighting
-
-    // Environment importance sampling CDF textures
-    private int envMarginalCDFTexture;
-    private int envConditionalCDFTexture;
-    private int envMapWidth;
-    private int envMapHeight;
+    private float envRotation = 0.0f, envLightingMix = 0.5f;
+    private int envMarginalCDFTexture, envConditionalCDFTexture, envMapWidth, envMapHeight;
     private float envTotalLuminance;
     private boolean envCDFReady = false;
-
-    // Fullscreen quad VAO
-    private int quadVAO;
-    private int quadVBO;
-    private int quadEBO;
-
-    // Shader programs
+    private int quadVAO, quadVBO, quadEBO;
     private final Map<String, ShaderProgram> programs = new HashMap<>();
     private String activeProgram;
-
-    // Progressive rendering state
-    private int sampleCount = 0;
-    private int maxSamples = 10000;
+    private int sampleCount = 0, maxSamples = 10000;
     private boolean needsReset = true;
-    private int currentRenderMode = 0;  // Track render mode for display shader
-
-    // Post-processing shaders
-    private ShaderProgram displayProgram;      // Legacy (kept for compatibility)
-    private ShaderProgram postProcessProgram;  // Main post-processing
-    private ShaderProgram bloomExtractProgram; // Bright pixel extraction
-    private ShaderProgram bloomBlurProgram;    // Gaussian blur
-
-    // Post-processing parameters (with defaults)
+    private int currentRenderMode = 0;
+    private ShaderProgram displayProgram, postProcessProgram, bloomExtractProgram, bloomBlurProgram, evaluatorProgram;
     private PostProcessParams postProcessParams = new PostProcessParams();
-
-    // Thread safety - GL context is single-threaded
     private final ExecutorService glThread;
     private volatile boolean initialized = false;
+    private String renderer, glVersion, glslVersion;
 
-    // Device info
-    private String renderer;
-    private String glVersion;
-    private String glslVersion;
-
-    public GLSLEngine() {
-        this(1280, 720);
-    }
+    public GLSLEngine() { this(1280, 720); }
 
     public GLSLEngine(int width, int height) {
-        this.currentWidth = width;
-        this.currentHeight = height;
+        this.currentWidth = width; this.currentHeight = height;
         this.glThread = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "GLSLEngine-Thread");
             t.setDaemon(true);
             return t;
         });
-
-        // Initialize on GL thread
-        try {
-            glThread.submit(this::initialize).get();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to initialize GLSLEngine", e);
-        }
+        try { glThread.submit(this::initialize).get(); } catch (Exception e) { throw new RuntimeException(e); }
     }
 
     private void initialize() {
-        // Initialize GLFW
         GLFWErrorCallback.createPrint(System.err).set();
-        if (!glfwInit()) {
-            throw new IllegalStateException("Unable to initialize GLFW");
-        }
-
-        // Configure GLFW for offscreen rendering
+        if (!glfwInit()) throw new IllegalStateException();
         glfwDefaultWindowHints();
-        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);  // Hidden window
+        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-        // Create hidden window for GL context
         window = glfwCreateWindow(currentWidth, currentHeight, "Fractaliz3r GL Context", NULL, NULL);
-        if (window == NULL) {
-            throw new RuntimeException("Failed to create GLFW window");
-        }
-
+        if (window == NULL) throw new RuntimeException();
         glfwMakeContextCurrent(window);
         GL.createCapabilities();
-
-        // Get device info
         renderer = glGetString(GL_RENDERER);
         glVersion = glGetString(GL_VERSION);
         glslVersion = glGetString(GL_SHADING_LANGUAGE_VERSION);
-
-        System.out.println("=== GLSL Engine Initialized ===");
-        System.out.println("Renderer: " + renderer);
-        System.out.println("OpenGL Version: " + glVersion);
-        System.out.println("GLSL Version: " + glslVersion);
-        System.out.println("===============================");
-
-        // Create resources
         createFullscreenQuad();
         createFramebuffer(currentWidth, currentHeight);
         createBloomFramebuffers(currentWidth, currentHeight);
@@ -166,1116 +82,453 @@ public class GLSLEngine implements AutoCloseable {
         createDefaultPaletteTexture();
         loadDisplayShader();
         loadPostProcessShaders();
-
         initialized = true;
     }
 
-    /**
-     * Load a fractal shader program.
-     * Combines: common.glsl + fractal.glsl + raytracer.glsl
-     */
+    private String stripVersion(String source) {
+        return source.replaceAll("#version\\s+\\d+\\s+\\w+", "").trim();
+    }
+
+    public void loadEvaluatorShader(String fractalShaderPath) {
+        runOnGLThread(() -> {
+            try {
+                String vertexSource = loadResource("/shaders/fullscreen.vert");
+                String commonSource = stripVersion(loadResource("/shaders/common.glsl"));
+                String fractalSource = stripVersion(loadResource(fractalShaderPath));
+                String evaluatorSource = stripVersion(loadResource("/shaders/evaluator.glsl"));
+                String fragmentSource = "#version 430 core\n" + commonSource + "\n" + fractalSource + "\n" + evaluatorSource;
+                if (evaluatorProgram != null) evaluatorProgram.delete();
+                evaluatorProgram = new ShaderProgram(vertexSource, fragmentSource);
+            } catch (Exception e) { throw new RuntimeException(e); }
+        });
+    }
+
+    public float[] evaluateSlice(Map<String, Object> uniforms, float zPos, float boundsHalf, int res) {
+        float[] result = new float[res * res * 4];
+        runOnGLThread(() -> {
+            if (evaluatorProgram == null) throw new IllegalStateException();
+            if (res != currentWidth || res != currentHeight) {
+                glBindTexture(GL_TEXTURE_2D, displayTexture);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, res, res, 0, GL_RGBA, GL_FLOAT, (ByteBuffer) null);
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, displayFBO);
+            glViewport(0, 0, res, res);
+            glClear(GL_COLOR_BUFFER_BIT);
+            evaluatorProgram.use();
+            evaluatorProgram.setUniform("zPos", zPos);
+            evaluatorProgram.setUniform("boundsHalf", boundsHalf);
+            for (Map.Entry<String, Object> entry : uniforms.entrySet()) { setUniformValue(evaluatorProgram, entry.getKey(), entry.getValue()); }
+            glBindVertexArray(quadVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glFinish();
+            
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            FloatBuffer buffer = MemoryUtil.memAllocFloat(result.length);
+            glReadPixels(0, 0, res, res, GL_RGBA, GL_FLOAT, buffer);
+            buffer.get(result);
+            MemoryUtil.memFree(buffer);
+            glPixelStorei(GL_PACK_ALIGNMENT, 4);
+
+            if (res != currentWidth || res != currentHeight) {
+                glBindTexture(GL_TEXTURE_2D, displayTexture);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, currentWidth, currentHeight, 0, GL_RGBA, GL_FLOAT, (ByteBuffer) null);
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        });
+        return result;
+    }
+
     public void loadFractalShader(String name, String fractalShaderPath) {
         runOnGLThread(() -> {
             try {
                 String vertexSource = loadResource("/shaders/fullscreen.vert");
-                String commonSource = loadResource("/shaders/common.glsl");
-                String fractalSource = loadResource(fractalShaderPath);
-                String raytracerSource = loadResource("/shaders/raytracer.glsl");
-
-                // Combine sources: #version + common + fractal + raytracer
-                String fragmentSource = "#version 430 core\n" +
-                    commonSource + "\n" +
-                    fractalSource + "\n" +
-                    raytracerSource;
-
+                String commonSource = stripVersion(loadResource("/shaders/common.glsl"));
+                String fractalSource = stripVersion(loadResource(fractalShaderPath));
+                String raytracerSource = stripVersion(loadResource("/shaders/raytracer.glsl"));
+                String fragmentSource = "#version 430 core\n" + commonSource + "\n" + fractalSource + "\n" + raytracerSource;
                 ShaderProgram program = new ShaderProgram(vertexSource, fragmentSource);
                 programs.put(name, program);
-
-                System.out.println("Loaded shader: " + name);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to load shader: " + name, e);
-            }
+            } catch (Exception e) { throw new RuntimeException(e); }
         });
     }
 
-    /**
-     * Set the active shader program for rendering.
-     */
     public void setActiveProgram(String name) {
-        if (!programs.containsKey(name)) {
-            throw new IllegalArgumentException("Unknown shader program: " + name);
-        }
-        if (!name.equals(activeProgram)) {
-            activeProgram = name;
-            needsReset = true;
-        }
+        if (!programs.containsKey(name)) throw new IllegalArgumentException();
+        if (!name.equals(activeProgram)) { activeProgram = name; needsReset = true; }
     }
 
-    /**
-     * Resize the render target.
-     */
     public void resize(int width, int height) {
         if (width != currentWidth || height != currentHeight) {
-            runOnGLThread(() -> {
-                currentWidth = width;
-                currentHeight = height;
-                recreateFramebuffer();
-                needsReset = true;
-            });
+            runOnGLThread(() -> { currentWidth = width; currentHeight = height; recreateFramebuffer(); needsReset = true; });
         }
     }
 
-    /**
-     * Reset accumulation (call when camera or parameters change).
-     */
-    public void resetAccumulation() {
-        needsReset = true;
-        // Note: sampleCount is reset inside clearAccumulation() on the GL thread,
-        // NOT here. Setting it here creates a race condition where readImage() sees
-        // sampleCount=0 while the accumulation FBO still has old samples, causing
-        // the post-process shader to divide by 1 → massive brightness flash.
-    }
+    public void resetAccumulation() { needsReset = true; }
 
-    /**
-     * Render one sample (progressive rendering).
-     * Call this repeatedly to accumulate samples.
-     *
-     * @param uniforms Map of uniform name -> value (Float, Integer, float[], int[])
-     */
     public void renderSample(Map<String, Object> uniforms) {
         runOnGLThread(() -> {
-            if (activeProgram == null) {
-                throw new IllegalStateException("No active shader program");
-            }
-
-            if (needsReset) {
-                clearAccumulation();
-                needsReset = false;
-            }
-
-            if (sampleCount >= maxSamples) {
-                return; // Max samples reached
-            }
-
+            if (activeProgram == null) throw new IllegalStateException();
+            if (needsReset) { clearAccumulation(); needsReset = false; }
+            if (sampleCount >= maxSamples) return;
             ShaderProgram program = programs.get(activeProgram);
-
-            // Bind FBO for accumulation
             glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
             glViewport(0, 0, currentWidth, currentHeight);
-
-            // Enable additive blending
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_ONE, GL_ONE);
-
-            // Use shader
+            glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE);
             program.use();
-
-            // Set standard uniforms
             program.setUniform("resolution", (float) currentWidth, (float) currentHeight);
             program.setUniform("sampleIndex", sampleCount);
             program.setUniform("time", (float) glfwGetTime());
-
-            // Environment map
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, envMapTexture);
-            program.setUniform("envMap", 0);
-            program.setUniform("useEnvMap", envMapLoaded ? 1 : 0);
-            program.setUniform("envRotation", envRotation);
-            program.setUniform("envLightingMix", envLightingMix);
-
-            // Custom palette texture
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, paletteTexture);
+            glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, envMapTexture);
+            program.setUniform("envMap", 0); program.setUniform("useEnvMap", envMapLoaded ? 1 : 0);
+            program.setUniform("envRotation", envRotation); program.setUniform("envLightingMix", envLightingMix);
+            glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, paletteTexture);
             program.setUniform("paletteTexture", 1);
-
-            // Environment importance sampling CDF textures
             if (envCDFReady) {
-                glActiveTexture(GL_TEXTURE3);
-                glBindTexture(GL_TEXTURE_2D, envMarginalCDFTexture);
-                program.setUniform("envMarginalCDF", 3);
-                glActiveTexture(GL_TEXTURE4);
-                glBindTexture(GL_TEXTURE_2D, envConditionalCDFTexture);
-                program.setUniform("envConditionalCDF", 4);
+                glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, envMarginalCDFTexture); program.setUniform("envMarginalCDF", 3);
+                glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, envConditionalCDFTexture); program.setUniform("envConditionalCDF", 4);
                 program.setUniform("envTotalLuminance", envTotalLuminance);
-                program.setUniform("envMapWidth", envMapWidth);
-                program.setUniform("envMapHeight", envMapHeight);
+                program.setUniform("envMapWidth", envMapWidth); program.setUniform("envMapHeight", envMapHeight);
             } else {
-                program.setUniform("envMapWidth", 0);
-                program.setUniform("envMapHeight", 0);
-                program.setUniform("envTotalLuminance", 0.0f);
+                program.setUniform("envMapWidth", 0); program.setUniform("envMapHeight", 0); program.setUniform("envTotalLuminance", 0.0f);
             }
-
-            // Bind variance image for adaptive sampling (image unit 5, read/write)
-            if (adaptiveSamplingEnabled) {
-                glBindImageTexture(5, varianceTexture, 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
-            }
-
-            // Set user uniforms
-            for (Map.Entry<String, Object> entry : uniforms.entrySet()) {
-                setUniformValue(program, entry.getKey(), entry.getValue());
-            }
-
-            // Render fullscreen quad
-            glBindVertexArray(quadVAO);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-            // Ensure image stores are visible for next sample's image loads
-            if (adaptiveSamplingEnabled) {
-                glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-            }
-
-            glDisable(GL_BLEND);
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
+            if (adaptiveSamplingEnabled) glBindImageTexture(5, varianceTexture, 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+            for (Map.Entry<String, Object> entry : uniforms.entrySet()) { setUniformValue(program, entry.getKey(), entry.getValue()); }
+            glBindVertexArray(quadVAO); glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            if (adaptiveSamplingEnabled) glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+            glDisable(GL_BLEND); glBindFramebuffer(GL_FRAMEBUFFER, 0);
             sampleCount++;
         });
     }
 
-    /**
-     * Wait for all pending GPU operations to complete.
-     * Use after renderSample() in export loops to get accurate progress.
-     */
-    public void glSync() {
-        runOnGLThread(() -> glFinish());
-    }
+    public void glSync() { runOnGLThread(GL43::glFinish); }
 
-    /**
-     * Render multiple samples at once.
-     */
-    public void renderSamples(Map<String, Object> uniforms, int count) {
-        for (int i = 0; i < count; i++) {
-            renderSample(uniforms);
-        }
-    }
+    public void renderSamples(Map<String, Object> uniforms, int count) { for (int i = 0; i < count; i++) renderSample(uniforms); }
 
-    /**
-     * Get current sample count.
-     */
-    public int getSampleCount() {
-        return sampleCount;
-    }
+    public int getSampleCount() { return sampleCount; }
+    public void setMaxSamples(int max) { this.maxSamples = max; }
 
-    /**
-     * Set maximum samples.
-     */
-    public void setMaxSamples(int max) {
-        this.maxSamples = max;
-    }
-
-    /**
-     * Read the accumulated image as RGBA float array.
-     * Applies full post-processing pipeline: bloom, tone mapping, effects.
-     */
     public float[] readImage() {
         float[] result = new float[currentWidth * currentHeight * 4];
-
         runOnGLThread(() -> {
-            // Ensure variance image stores are visible as texture fetches
-            if (adaptiveSamplingEnabled) {
-                glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
-            }
-
-            // Step 1: Render bloom (if enabled)
+            if (adaptiveSamplingEnabled) glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
             renderBloom();
-
-            // Step 2: Final composite with post-processing
-            glBindFramebuffer(GL_FRAMEBUFFER, displayFBO);
-            glViewport(0, 0, currentWidth, currentHeight);
-            glClear(GL_COLOR_BUFFER_BIT);
-
+            glBindFramebuffer(GL_FRAMEBUFFER, displayFBO); glViewport(0, 0, currentWidth, currentHeight); glClear(GL_COLOR_BUFFER_BIT);
             postProcessProgram.use();
-
-            // Bind textures
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, accumTexture);
-            postProcessProgram.setUniform("accumTexture", 0);
-
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, bloomTexture1);
-            postProcessProgram.setUniform("bloomTexture", 1);
-
-            glActiveTexture(GL_TEXTURE2);
-            glBindTexture(GL_TEXTURE_2D, lensDirtTexture);
-            postProcessProgram.setUniform("lensDirtTexture", 2);
-
-            // Variance texture for adaptive sampling
-            glActiveTexture(GL_TEXTURE5);
-            glBindTexture(GL_TEXTURE_2D, varianceTexture);
-            postProcessProgram.setUniform("varianceTex", 5);
+            glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, accumTexture); postProcessProgram.setUniform("accumTexture", 0);
+            glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, bloomTexture1); postProcessProgram.setUniform("bloomTexture", 1);
+            glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, lensDirtTexture); postProcessProgram.setUniform("lensDirtTexture", 2);
+            glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, varianceTexture); postProcessProgram.setUniform("varianceTex", 5);
             postProcessProgram.setUniform("adaptiveSampling", adaptiveSamplingEnabled ? 1 : 0);
-
-            // Set uniforms
             postProcessProgram.setUniform("sampleCount", Math.max(1, sampleCount));
             postProcessProgram.setUniform("renderMode", currentRenderMode);
             postProcessProgram.setUniform("resolution", (float) currentWidth, (float) currentHeight);
-
-            // Post-processing parameters
             PostProcessParams pp = postProcessParams;
             postProcessProgram.setUniform("toneMapMode", pp.toneMapMode);
             postProcessProgram.setUniform("exposure", pp.exposure + pp.audioDeltaExposure);
-
             postProcessProgram.setUniform("bloomEnabled", pp.bloomEnabled ? 1 : 0);
             postProcessProgram.setUniform("bloomIntensity", pp.bloomIntensity);
             postProcessProgram.setUniform("bloomThreshold", pp.bloomThreshold);
-
-            postProcessProgram.setUniform("chromaticAberrationEnabled",
-                (pp.chromaticAberrationEnabled || pp.audioForceCA) ? 1 : 0);
-            postProcessProgram.setUniform("chromaticAberrationIntensity",
-                pp.chromaticAberrationIntensity + pp.audioDeltaCA);
-
-            postProcessProgram.setUniform("vignetteEnabled",
-                (pp.vignetteEnabled || pp.audioForceVignette) ? 1 : 0);
-            postProcessProgram.setUniform("vignetteIntensity",
-                pp.vignetteIntensity + pp.audioDeltaVignette);
-            if (!pp.vignetteEnabled && pp.audioForceVignette) {
-                postProcessProgram.setUniform("vignetteSoftness", 0.6f);
-            } else {
-                postProcessProgram.setUniform("vignetteSoftness", pp.vignetteSoftness);
-            }
-
+            postProcessProgram.setUniform("chromaticAberrationEnabled", (pp.chromaticAberrationEnabled || pp.audioForceCA) ? 1 : 0);
+            postProcessProgram.setUniform("chromaticAberrationIntensity", pp.chromaticAberrationIntensity + pp.audioDeltaCA);
+            postProcessProgram.setUniform("vignetteEnabled", (pp.vignetteEnabled || pp.audioForceVignette) ? 1 : 0);
+            postProcessProgram.setUniform("vignetteIntensity", pp.vignetteIntensity + pp.audioDeltaVignette);
+            postProcessProgram.setUniform("vignetteSoftness", (pp.vignetteEnabled || !pp.audioForceVignette) ? pp.vignetteSoftness : 0.6f);
             postProcessProgram.setUniform("filmGrainEnabled", pp.filmGrainEnabled ? 1 : 0);
             postProcessProgram.setUniform("filmGrainIntensity", pp.filmGrainIntensity);
             postProcessProgram.setUniform("filmGrainTime", (float) glfwGetTime());
-
             postProcessProgram.setUniform("sharpenEnabled", pp.sharpenEnabled ? 1 : 0);
             postProcessProgram.setUniform("sharpenIntensity", pp.sharpenIntensity);
             postProcessProgram.setUniform("saturation", pp.saturation + pp.audioDeltaSaturation);
-            
             postProcessProgram.setUniform("lensEffectsEnabled", pp.lensEffectsEnabled ? 1 : 0);
             postProcessProgram.setUniform("lensDirtIntensity", pp.lensDirtIntensity);
             postProcessProgram.setUniform("starburstIntensity", pp.starburstIntensity);
-            
             postProcessProgram.setUniform("colorGradingMode", pp.colorGradingMode);
             postProcessProgram.setUniform("colorGradingIntensity", pp.colorGradingIntensity);
-
-            glBindVertexArray(quadVAO);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-            // Force GPU to complete all pending operations before reading
-            // This prevents black tiles at high resolutions where the GPU
-            // may not have finished processing all regions
+            glBindVertexArray(quadVAO); glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             glFinish();
-
-            // Read pixels from display FBO
             FloatBuffer buffer = MemoryUtil.memAllocFloat(result.length);
             glReadPixels(0, 0, currentWidth, currentHeight, GL_RGBA, GL_FLOAT, buffer);
-            buffer.get(result);
-            MemoryUtil.memFree(buffer);
-
+            buffer.get(result); MemoryUtil.memFree(buffer);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         });
-
-        // Flip Y (OpenGL has origin at bottom-left)
         flipImageY(result, currentWidth, currentHeight);
-
         return result;
     }
 
-    /**
-     * Read raw accumulated image (no tone mapping).
-     */
     public float[] readRawImage() {
         float[] result = new float[currentWidth * currentHeight * 4];
-
         runOnGLThread(() -> {
             glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
             FloatBuffer buffer = MemoryUtil.memAllocFloat(result.length);
             glReadPixels(0, 0, currentWidth, currentHeight, GL_RGBA, GL_FLOAT, buffer);
-            buffer.get(result);
-            MemoryUtil.memFree(buffer);
+            buffer.get(result); MemoryUtil.memFree(buffer);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         });
-
-        // Divide by sample count and flip Y
         int samples = Math.max(1, sampleCount);
-        for (int i = 0; i < result.length; i++) {
-            result[i] /= samples;
-        }
+        for (int i = 0; i < result.length; i++) result[i] /= samples;
         flipImageY(result, currentWidth, currentHeight);
-
         return result;
     }
 
-    /**
-     * Read the depth (from alpha channel) at a specific pixel coordinate.
-     * Used for click-to-focus feature.
-     *
-     * @param x X coordinate (0 = left)
-     * @param y Y coordinate (0 = top, will be flipped internally)
-     * @return Depth at that pixel, or -1 if out of bounds
-     */
     public float readDepthAt(int x, int y) {
-        if (x < 0 || x >= currentWidth || y < 0 || y >= currentHeight) {
-            return -1.0f;
-        }
-
-        // Flip Y coordinate (OpenGL has origin at bottom-left)
+        if (x < 0 || x >= currentWidth || y < 0 || y >= currentHeight) return -1.0f;
         int glY = currentHeight - 1 - y;
-
         float[] depth = new float[1];
-
         runOnGLThread(() -> {
             glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
-
-            // Read just the single pixel (4 floats for RGBA)
             FloatBuffer buffer = MemoryUtil.memAllocFloat(4);
             glReadPixels(x, glY, 1, 1, GL_RGBA, GL_FLOAT, buffer);
-
-            // Depth is in alpha channel (index 3)
-            // Divide by sample count since it's accumulated
-            float accumDepth = buffer.get(3);
-            int samples = Math.max(1, sampleCount);
-            depth[0] = accumDepth / samples;
-
+            depth[0] = buffer.get(3) / Math.max(1, sampleCount);
             MemoryUtil.memFree(buffer);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         });
-
         return depth[0];
     }
 
-    /**
-     * Get current dimensions.
-     */
     public int getWidth() { return currentWidth; }
     public int getHeight() { return currentHeight; }
-
-    /**
-     * Get device info.
-     */
     public String getRenderer() { return renderer; }
     public String getGLVersion() { return glVersion; }
     public String getGLSLVersion() { return glslVersion; }
 
-    // ========================================================================
-    // Private helpers
-    // ========================================================================
-
     private void createFullscreenQuad() {
-        float[] vertices = {
-            // pos      // uv
-            -1.0f, -1.0f,  0.0f, 0.0f,
-             1.0f, -1.0f,  1.0f, 0.0f,
-             1.0f,  1.0f,  1.0f, 1.0f,
-            -1.0f,  1.0f,  0.0f, 1.0f
-        };
+        float[] vertices = { -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 1.0f };
         int[] indices = {0, 1, 2, 2, 3, 0};
-
-        quadVAO = glGenVertexArrays();
-        quadVBO = glGenBuffers();
-        quadEBO = glGenBuffers();
-
+        quadVAO = glGenVertexArrays(); quadVBO = glGenBuffers(); quadEBO = glGenBuffers();
         glBindVertexArray(quadVAO);
-
-        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-        glBufferData(GL_ARRAY_BUFFER, vertices, GL_STATIC_DRAW);
-
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices, GL_STATIC_DRAW);
-
-        glVertexAttribPointer(0, 2, GL_FLOAT, false, 16, 0);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, false, 16, 8);
-        glEnableVertexAttribArray(1);
-
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO); glBufferData(GL_ARRAY_BUFFER, vertices, GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO); glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 2, GL_FLOAT, false, 16, 0); glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, false, 16, 8); glEnableVertexAttribArray(1);
         glBindVertexArray(0);
     }
 
     private void createFramebuffer(int width, int height) {
-        // Create float32 texture for accumulation
-        accumTexture = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, accumTexture);
+        accumTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, accumTexture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, (ByteBuffer) null);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        // Create accumulation FBO
-        accumFBO = glGenFramebuffers();
-        glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        accumFBO = glGenFramebuffers(); glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, accumTexture, 0);
-
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-            throw new RuntimeException("Accumulation framebuffer not complete!");
-        }
-
-        // Create display texture (for readback - avoids issues with hidden window's default framebuffer)
-        displayTexture = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, displayTexture);
+        displayTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, displayTexture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, (ByteBuffer) null);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        // Create display FBO
-        displayFBO = glGenFramebuffers();
-        glBindFramebuffer(GL_FRAMEBUFFER, displayFBO);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        displayFBO = glGenFramebuffers(); glBindFramebuffer(GL_FRAMEBUFFER, displayFBO);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, displayTexture, 0);
-
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-            throw new RuntimeException("Display framebuffer not complete!");
-        }
-
-        // Variance texture for adaptive sampling (RGBA32F: R=sumLum, G=sumSqLum, B=count)
-        varianceTexture = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, varianceTexture);
+        varianceTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, varianceTexture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, (ByteBuffer) null);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        varianceFBO = glGenFramebuffers();
-        glBindFramebuffer(GL_FRAMEBUFFER, varianceFBO);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        varianceFBO = glGenFramebuffers(); glBindFramebuffer(GL_FRAMEBUFFER, varianceFBO);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, varianceTexture, 0);
-
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
     private void recreateFramebuffer() {
-        glDeleteTextures(accumTexture);
-        glDeleteFramebuffers(accumFBO);
-        glDeleteTextures(displayTexture);
-        glDeleteFramebuffers(displayFBO);
-        glDeleteTextures(varianceTexture);
-        glDeleteFramebuffers(varianceFBO);
+        glDeleteTextures(accumTexture); glDeleteFramebuffers(accumFBO);
+        glDeleteTextures(displayTexture); glDeleteFramebuffers(displayFBO);
+        glDeleteTextures(varianceTexture); glDeleteFramebuffers(varianceFBO);
         createFramebuffer(currentWidth, currentHeight);
-
-        // Also recreate bloom buffers
-        glDeleteTextures(bloomTexture1);
-        glDeleteTextures(bloomTexture2);
-        glDeleteFramebuffers(bloomFBO1);
-        glDeleteFramebuffers(bloomFBO2);
+        glDeleteTextures(bloomTexture1); glDeleteTextures(bloomTexture2);
+        glDeleteFramebuffers(bloomFBO1); glDeleteFramebuffers(bloomFBO2);
         createBloomFramebuffers(currentWidth, currentHeight);
-
         sampleCount = 0;
     }
 
     private void clearAccumulation() {
-        glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
-        glClearColor(0, 0, 0, 0);
-        glClear(GL_COLOR_BUFFER_BIT);
-        // Clear variance texture for adaptive sampling
-        glBindFramebuffer(GL_FRAMEBUFFER, varianceFBO);
-        glClearColor(0, 0, 0, 0);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        sampleCount = 0;
+        glBindFramebuffer(GL_FRAMEBUFFER, accumFBO); glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
+        glBindFramebuffer(GL_FRAMEBUFFER, varianceFBO); glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0); sampleCount = 0;
     }
 
     private void loadDisplayShader() {
-        try {
-            String vertexSource = loadResource("/shaders/fullscreen.vert");
-            String fragmentSource = loadResource("/shaders/display.glsl");
-            displayProgram = new ShaderProgram(vertexSource, fragmentSource);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to load display shader", e);
-        }
+        try { displayProgram = new ShaderProgram(loadResource("/shaders/fullscreen.vert"), loadResource("/shaders/display.glsl")); }
+        catch (Exception e) { throw new RuntimeException(e); }
     }
 
     private void loadPostProcessShaders() {
         try {
-            String vertexSource = loadResource("/shaders/fullscreen.vert");
-
-            String postProcessSource = loadResource("/shaders/postprocess.glsl");
-            postProcessProgram = new ShaderProgram(vertexSource, postProcessSource);
-
-            String bloomExtractSource = loadResource("/shaders/bloom_extract.glsl");
-            bloomExtractProgram = new ShaderProgram(vertexSource, bloomExtractSource);
-
-            String bloomBlurSource = loadResource("/shaders/bloom_blur.glsl");
-            bloomBlurProgram = new ShaderProgram(vertexSource, bloomBlurSource);
-
-            System.out.println("Post-processing shaders loaded");
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to load post-processing shaders", e);
-        }
+            String v = loadResource("/shaders/fullscreen.vert");
+            postProcessProgram = new ShaderProgram(v, loadResource("/shaders/postprocess.glsl"));
+            bloomExtractProgram = new ShaderProgram(v, loadResource("/shaders/bloom_extract.glsl"));
+            bloomBlurProgram = new ShaderProgram(v, loadResource("/shaders/bloom_blur.glsl"));
+        } catch (Exception e) { throw new RuntimeException(e); }
     }
 
     private void createBloomFramebuffers(int width, int height) {
-        // Use half resolution for bloom (performance)
-        bloomWidth = Math.max(1, width / 2);
-        bloomHeight = Math.max(1, height / 2);
-
-        // Bloom texture 1
-        bloomTexture1 = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, bloomTexture1);
+        bloomWidth = Math.max(1, width / 2); bloomHeight = Math.max(1, height / 2);
+        bloomTexture1 = glGenTextures(); glBindTexture(GL_TEXTURE_2D, bloomTexture1);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, bloomWidth, bloomHeight, 0, GL_RGBA, GL_FLOAT, (ByteBuffer) null);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        bloomFBO1 = glGenFramebuffers();
-        glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO1);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        bloomFBO1 = glGenFramebuffers(); glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO1);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloomTexture1, 0);
-
-        // Bloom texture 2 (for ping-pong blur)
-        bloomTexture2 = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, bloomTexture2);
+        bloomTexture2 = glGenTextures(); glBindTexture(GL_TEXTURE_2D, bloomTexture2);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, bloomWidth, bloomHeight, 0, GL_RGBA, GL_FLOAT, (ByteBuffer) null);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        bloomFBO2 = glGenFramebuffers();
-        glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO2);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        bloomFBO2 = glGenFramebuffers(); glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO2);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloomTexture2, 0);
-
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
     private void createLensDirtTexture() {
-        int size = 512;
-        ByteBuffer buffer = MemoryUtil.memAlloc(size * size * 4); // RGBA = 4 bytes per pixel
-        Random rand = new Random(12345);
-
+        int size = 512; ByteBuffer buffer = MemoryUtil.memAlloc(size * size * 4); Random rand = new Random(12345);
         for (int i = 0; i < size * size; i++) {
-            float n = rand.nextFloat();
-            // Mélange de poussière fine, taches moyennes et grosses imperfections
-            float val = (float) Math.pow(n, 10.0) * 0.5f; 
-            val += (float) Math.pow(n, 30.0) * 0.5f;
-            val += (float) Math.pow(n, 2.0) * 0.1f;
-            
-            byte b = (byte) (Math.min(1.0f, val) * 255);
-            buffer.put(b).put(b).put(b).put((byte)255); // R, G, B, A
+            float n = rand.nextFloat(); float val = (float) Math.pow(n, 10.0) * 0.5f + (float) Math.pow(n, 30.0) * 0.5f + (float) Math.pow(n, 2.0) * 0.1f;
+            byte b = (byte) (Math.min(1.0f, val) * 255); buffer.put(b).put(b).put(b).put((byte)255);
         }
-        buffer.flip();
-
-        lensDirtTexture = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, lensDirtTexture);
+        buffer.flip(); lensDirtTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, lensDirtTexture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-        MemoryUtil.memFree(buffer);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        MemoryUtil.memFree(buffer); glBindTexture(GL_TEXTURE_2D, 0);
     }
 
-    /**
-     * Render bloom effect (extract bright pixels + blur).
-     */
     private void renderBloom() {
         if (!postProcessParams.bloomEnabled) {
-            // Clear bloom texture if disabled
-            glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO1);
-            glClearColor(0, 0, 0, 0);
-            glClear(GL_COLOR_BUFFER_BIT);
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            return;
+            glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO1); glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0); return;
         }
-
-        // Step 1: Extract bright pixels
-        glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO1);
-        glViewport(0, 0, bloomWidth, bloomHeight);
-        glClear(GL_COLOR_BUFFER_BIT);
-
+        glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO1); glViewport(0, 0, bloomWidth, bloomHeight); glClear(GL_COLOR_BUFFER_BIT);
         bloomExtractProgram.use();
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, accumTexture);
-        bloomExtractProgram.setUniform("accumTexture", 0);
-        bloomExtractProgram.setUniform("sampleCount", Math.max(1, sampleCount));
-        bloomExtractProgram.setUniform("threshold", postProcessParams.bloomThreshold);
-        bloomExtractProgram.setUniform("softThreshold", 0.5f);
-
-        // Variance texture for adaptive sampling
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, varianceTexture);
-        bloomExtractProgram.setUniform("varianceTex", 1);
-        bloomExtractProgram.setUniform("adaptiveSampling", adaptiveSamplingEnabled ? 1 : 0);
-
-        glBindVertexArray(quadVAO);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-        // Step 2: Blur passes (ping-pong)
-        int blurPasses = postProcessParams.bloomRadius;
-        for (int i = 0; i < blurPasses; i++) {
-            // Horizontal blur: bloomTexture1 -> bloomTexture2
-            glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO2);
-            glClear(GL_COLOR_BUFFER_BIT);
-
-            bloomBlurProgram.use();
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, bloomTexture1);
-            bloomBlurProgram.setUniform("inputTexture", 0);
-            bloomBlurProgram.setUniform("direction", 1.0f, 0.0f);
-            bloomBlurProgram.setUniform("resolution", (float) bloomWidth, (float) bloomHeight);
-
+        glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, accumTexture); bloomExtractProgram.setUniform("accumTexture", 0);
+        bloomExtractProgram.setUniform("sampleCount", Math.max(1, sampleCount)); bloomExtractProgram.setUniform("threshold", postProcessParams.bloomThreshold); bloomExtractProgram.setUniform("softThreshold", 0.5f);
+        glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, varianceTexture); bloomExtractProgram.setUniform("varianceTex", 1); bloomExtractProgram.setUniform("adaptiveSampling", adaptiveSamplingEnabled ? 1 : 0);
+        glBindVertexArray(quadVAO); glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        for (int i = 0; i < postProcessParams.bloomRadius; i++) {
+            glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO2); glClear(GL_COLOR_BUFFER_BIT);
+            bloomBlurProgram.use(); glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, bloomTexture1); bloomBlurProgram.setUniform("inputTexture", 0);
+            bloomBlurProgram.setUniform("direction", 1.0f, 0.0f); bloomBlurProgram.setUniform("resolution", (float) bloomWidth, (float) bloomHeight);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-            // Vertical blur: bloomTexture2 -> bloomTexture1
-            glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO1);
-            glClear(GL_COLOR_BUFFER_BIT);
-
-            glBindTexture(GL_TEXTURE_2D, bloomTexture2);
-            bloomBlurProgram.setUniform("direction", 0.0f, 1.0f);
-
+            glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO1); glClear(GL_COLOR_BUFFER_BIT);
+            glBindTexture(GL_TEXTURE_2D, bloomTexture2); bloomBlurProgram.setUniform("direction", 0.0f, 1.0f);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         }
-
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
-    /**
-     * Set post-processing parameters.
-     */
-    public void setPostProcessParams(PostProcessParams params) {
-        this.postProcessParams = params;
-    }
+    public void setPostProcessParams(PostProcessParams params) { this.postProcessParams = params; }
+    public PostProcessParams getPostProcessParams() { return postProcessParams; }
+    public void setAdaptiveSamplingEnabled(boolean enabled) { this.adaptiveSamplingEnabled = enabled; }
 
-    /**
-     * Get current post-processing parameters.
-     */
-    public PostProcessParams getPostProcessParams() {
-        return postProcessParams;
-    }
-
-    public void setAdaptiveSamplingEnabled(boolean enabled) {
-        this.adaptiveSamplingEnabled = enabled;
-    }
-
-    // ========================================================================
-    // Environment Map
-    // ========================================================================
-
-    /**
-     * Create a default 1x1 black environment texture.
-     */
     private void createDefaultEnvMap() {
-        envMapTexture = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, envMapTexture);
-
-        // 1x1 black pixel
-        ByteBuffer pixel = MemoryUtil.memAlloc(4);
-        pixel.put((byte) 0).put((byte) 0).put((byte) 0).put((byte) -1);
-        pixel.flip();
-
+        envMapTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, envMapTexture);
+        ByteBuffer pixel = MemoryUtil.memAlloc(4); pixel.put((byte) 0).put((byte) 0).put((byte) 0).put((byte) -1).flip();
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        MemoryUtil.memFree(pixel);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        envMapLoaded = false;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        MemoryUtil.memFree(pixel); glBindTexture(GL_TEXTURE_2D, 0); envMapLoaded = false;
     }
 
-    // ========================================================================
-    // Custom Palette Texture
-    // ========================================================================
-
-    /**
-     * Create a default 256x1 white palette texture.
-     */
     private void createDefaultPaletteTexture() {
-        paletteTexture = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, paletteTexture);
-
-        // Default: white gradient (256 pixels, RGB float)
-        FloatBuffer data = MemoryUtil.memAllocFloat(256 * 3);
-        for (int i = 0; i < 256; i++) {
-            float t = (float) i / 255.0f;
-            data.put(t).put(t).put(t); // Greyscale ramp
-        }
-        data.flip();
-
+        paletteTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, paletteTexture);
+        FloatBuffer data = MemoryUtil.memAllocFloat(256 * 3); for (int i = 0; i < 256; i++) { float t = i / 255.0f; data.put(t).put(t).put(t); } data.flip();
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, 256, 1, 0, GL_RGB, GL_FLOAT, data);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        MemoryUtil.memFree(data);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        MemoryUtil.memFree(data); glBindTexture(GL_TEXTURE_2D, 0);
     }
 
-    /**
-     * Update the palette texture with new gradient data.
-     *
-     * @param rgbData  float[resolution * 3] with RGB values in [0, 1]
-     * @param resolution Number of pixels (width of the 1D texture)
-     */
     public void updatePaletteTexture(float[] rgbData, int resolution) {
         runOnGLThread(() -> {
             glBindTexture(GL_TEXTURE_2D, paletteTexture);
-
-            FloatBuffer data = MemoryUtil.memAllocFloat(rgbData.length);
-            data.put(rgbData).flip();
-
+            FloatBuffer data = MemoryUtil.memAllocFloat(rgbData.length); data.put(rgbData).flip();
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, resolution, 1, 0, GL_RGB, GL_FLOAT, data);
-
-            MemoryUtil.memFree(data);
-            glBindTexture(GL_TEXTURE_2D, 0);
+            MemoryUtil.memFree(data); glBindTexture(GL_TEXTURE_2D, 0);
         });
     }
 
-    /**
-     * Load an environment map from file (supports PNG, JPG, HDR).
-     * Uses STB image loading via LWJGL.
-     */
     public void loadEnvironmentMap(String filePath) {
         runOnGLThread(() -> {
             try {
-                IntBuffer width = MemoryUtil.memAllocInt(1);
-                IntBuffer height = MemoryUtil.memAllocInt(1);
-                IntBuffer channels = MemoryUtil.memAllocInt(1);
-
+                IntBuffer width = MemoryUtil.memAllocInt(1), height = MemoryUtil.memAllocInt(1), channels = MemoryUtil.memAllocInt(1);
                 boolean isHDR = filePath.toLowerCase().endsWith(".hdr");
-
-                // Flip vertically so row 0 = bottom (OpenGL convention)
                 org.lwjgl.stb.STBImage.stbi_set_flip_vertically_on_load(true);
-
-                // Delete old texture and create new one
-                glDeleteTextures(envMapTexture);
-                envMapTexture = glGenTextures();
-                glBindTexture(GL_TEXTURE_2D, envMapTexture);
-
+                glDeleteTextures(envMapTexture); envMapTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, envMapTexture);
                 if (isHDR) {
-                    // Load HDR as float data
                     FloatBuffer imageData = org.lwjgl.stb.STBImage.stbi_loadf(filePath, width, height, channels, 3);
-
-                    if (imageData == null) {
-                        System.err.println("Failed to load HDR: " + filePath);
-                        System.err.println("STB Error: " + org.lwjgl.stb.STBImage.stbi_failure_reason());
-                        createDefaultEnvMap();
-                        MemoryUtil.memFree(width);
-                        MemoryUtil.memFree(height);
-                        MemoryUtil.memFree(channels);
-                        return;
-                    }
-
-                    int w = width.get(0);
-                    int h = height.get(0);
-
-                    // Use RGB16F for HDR data
-                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, w, h, 0, GL_RGB, GL_FLOAT, imageData);
-
+                    if (imageData == null) { createDefaultEnvMap(); return; }
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, width.get(0), height.get(0), 0, GL_RGB, GL_FLOAT, imageData);
                     org.lwjgl.stb.STBImage.stbi_image_free(imageData);
-
-                    System.out.println("Loaded HDR environment map: " + filePath + " (" + w + "x" + h + ")");
                 } else {
-                    // Load LDR (PNG, JPG) as byte data
                     ByteBuffer imageData = org.lwjgl.stb.STBImage.stbi_load(filePath, width, height, channels, 4);
-
-                    if (imageData == null) {
-                        System.err.println("Failed to load environment map: " + filePath);
-                        System.err.println("STB Error: " + org.lwjgl.stb.STBImage.stbi_failure_reason());
-                        createDefaultEnvMap();
-                        MemoryUtil.memFree(width);
-                        MemoryUtil.memFree(height);
-                        MemoryUtil.memFree(channels);
-                        return;
-                    }
-
-                    int w = width.get(0);
-                    int h = height.get(0);
-
-                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, imageData);
-
+                    if (imageData == null) { createDefaultEnvMap(); return; }
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width.get(0), height.get(0), 0, GL_RGBA, GL_UNSIGNED_BYTE, imageData);
                     org.lwjgl.stb.STBImage.stbi_image_free(imageData);
-
-                    System.out.println("Loaded environment map: " + filePath + " (" + w + "x" + h + ")");
                 }
-
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-                glGenerateMipmap(GL_TEXTURE_2D);
-
-                // Reset flip state for other STB loads
-                org.lwjgl.stb.STBImage.stbi_set_flip_vertically_on_load(false);
-
-                int resolvedW = width.get(0);
-                int resolvedH = height.get(0);
-
-                MemoryUtil.memFree(width);
-                MemoryUtil.memFree(height);
-                MemoryUtil.memFree(channels);
-
-                glBindTexture(GL_TEXTURE_2D, 0);
-
-                envMapLoaded = true;
-
-                // Build importance sampling CDF for NEE+MIS
-                buildEnvironmentCDF(resolvedW, resolvedH);
-
-            } catch (Exception e) {
-                System.err.println("Error loading environment map: " + e.getMessage());
-                e.printStackTrace();
-            }
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glGenerateMipmap(GL_TEXTURE_2D); org.lwjgl.stb.STBImage.stbi_set_flip_vertically_on_load(false);
+                int w = width.get(0), h = height.get(0); MemoryUtil.memFree(width); MemoryUtil.memFree(height); MemoryUtil.memFree(channels);
+                glBindTexture(GL_TEXTURE_2D, 0); envMapLoaded = true; buildEnvironmentCDF(w, h);
+            } catch (Exception e) { e.printStackTrace(); }
         });
     }
 
-    /**
-     * Load an environment map from resources.
-     */
     public void loadEnvironmentMapFromResource(String resourcePath) {
         runOnGLThread(() -> {
             try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
-                if (is == null) {
-                    System.err.println("Environment map resource not found: " + resourcePath);
-                    return;
-                }
-
-                byte[] bytes = is.readAllBytes();
-                ByteBuffer buffer = MemoryUtil.memAlloc(bytes.length);
-                buffer.put(bytes).flip();
-
-                IntBuffer width = MemoryUtil.memAllocInt(1);
-                IntBuffer height = MemoryUtil.memAllocInt(1);
-                IntBuffer channels = MemoryUtil.memAllocInt(1);
-
-                // Flip vertically so row 0 = bottom (OpenGL convention)
+                if (is == null) return;
+                byte[] bytes = is.readAllBytes(); ByteBuffer buffer = MemoryUtil.memAlloc(bytes.length); buffer.put(bytes).flip();
+                IntBuffer width = MemoryUtil.memAllocInt(1), height = MemoryUtil.memAllocInt(1), channels = MemoryUtil.memAllocInt(1);
                 org.lwjgl.stb.STBImage.stbi_set_flip_vertically_on_load(true);
-
                 ByteBuffer imageData = org.lwjgl.stb.STBImage.stbi_load_from_memory(buffer, width, height, channels, 4);
-
-                MemoryUtil.memFree(buffer);
-
-                if (imageData == null) {
-                    System.err.println("Failed to decode environment map: " + resourcePath);
-                    MemoryUtil.memFree(width);
-                    MemoryUtil.memFree(height);
-                    MemoryUtil.memFree(channels);
-                    return;
-                }
-
-                int w = width.get(0);
-                int h = height.get(0);
-
-                glDeleteTextures(envMapTexture);
-                envMapTexture = glGenTextures();
-                glBindTexture(GL_TEXTURE_2D, envMapTexture);
-
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, imageData);
-
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-                glGenerateMipmap(GL_TEXTURE_2D);
-
-                // Reset flip state for other STB loads
-                org.lwjgl.stb.STBImage.stbi_set_flip_vertically_on_load(false);
-
+                MemoryUtil.memFree(buffer); if (imageData == null) return;
+                glDeleteTextures(envMapTexture); envMapTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, envMapTexture);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width.get(0), height.get(0), 0, GL_RGBA, GL_UNSIGNED_BYTE, imageData);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glGenerateMipmap(GL_TEXTURE_2D); org.lwjgl.stb.STBImage.stbi_set_flip_vertically_on_load(false);
                 org.lwjgl.stb.STBImage.stbi_image_free(imageData);
-                MemoryUtil.memFree(width);
-                MemoryUtil.memFree(height);
-                MemoryUtil.memFree(channels);
-
-                glBindTexture(GL_TEXTURE_2D, 0);
-
-                envMapLoaded = true;
-                System.out.println("Loaded environment map: " + resourcePath + " (" + w + "x" + h + ")");
-
-                // Build importance sampling CDF for NEE+MIS
-                buildEnvironmentCDF(w, h);
-
-            } catch (Exception e) {
-                System.err.println("Error loading environment map: " + e.getMessage());
-            }
+                int w = width.get(0), h = height.get(0); MemoryUtil.memFree(width); MemoryUtil.memFree(height); MemoryUtil.memFree(channels);
+                glBindTexture(GL_TEXTURE_2D, 0); envMapLoaded = true; buildEnvironmentCDF(w, h);
+            } catch (Exception e) { e.printStackTrace(); }
         });
     }
 
-    /**
-     * Clear the environment map (use procedural sky).
-     */
     public void clearEnvironmentMap() {
         runOnGLThread(() -> {
-            glDeleteTextures(envMapTexture);
-            createDefaultEnvMap();
-            glDeleteTextures(envMarginalCDFTexture);
-            glDeleteTextures(envConditionalCDFTexture);
-            createDefaultCDFTextures();
+            glDeleteTextures(envMapTexture); createDefaultEnvMap();
+            glDeleteTextures(envMarginalCDFTexture); glDeleteTextures(envConditionalCDFTexture); createDefaultCDFTextures();
         });
     }
 
-    /**
-     * Create default 1x1 CDF textures (no importance sampling data).
-     */
     private void createDefaultCDFTextures() {
-        FloatBuffer pixel = MemoryUtil.memAllocFloat(1);
-        pixel.put(1.0f).flip();
-
-        envMarginalCDFTexture = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, envMarginalCDFTexture);
+        FloatBuffer pixel = MemoryUtil.memAllocFloat(1); pixel.put(1.0f).flip();
+        envMarginalCDFTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, envMarginalCDFTexture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 1, 1, 0, GL_RED, GL_FLOAT, pixel);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        envConditionalCDFTexture = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, envConditionalCDFTexture);
+        envConditionalCDFTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, envConditionalCDFTexture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 1, 1, 0, GL_RED, GL_FLOAT, pixel);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        MemoryUtil.memFree(pixel);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        envMapWidth = 0;
-        envMapHeight = 0;
-        envTotalLuminance = 0.0f;
-        envCDFReady = false;
+        MemoryUtil.memFree(pixel); glBindTexture(GL_TEXTURE_2D, 0); envCDFReady = false;
     }
 
-    /**
-     * Build luminance-weighted CDF textures for environment importance sampling.
-     * Called after successfully loading an environment map.
-     *
-     * @param width  env map width
-     * @param height env map height
-     */
     private void buildEnvironmentCDF(int width, int height) {
-        this.envMapWidth = width;
-        this.envMapHeight = height;
-
-        // Read back the environment map pixels
-        glBindTexture(GL_TEXTURE_2D, envMapTexture);
-        FloatBuffer pixels = MemoryUtil.memAllocFloat(width * height * 3);
-        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_FLOAT, pixels);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        // Compute luminance weighted by sin(theta) for each pixel
-        float[] rowWeights = new float[height];
-        float[] conditionalCDF = new float[width * height]; // CDF per row
-        float totalWeight = 0.0f;
-
+        this.envMapWidth = width; this.envMapHeight = height;
+        glBindTexture(GL_TEXTURE_2D, envMapTexture); FloatBuffer pixels = MemoryUtil.memAllocFloat(width * height * 3); glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_FLOAT, pixels);
+        float[] rowWeights = new float[height], conditionalCDF = new float[width * height]; float totalWeight = 0.0f;
         for (int row = 0; row < height; row++) {
-            float theta = (float) Math.PI * (row + 0.5f) / height;
-            float sinTheta = (float) Math.sin(theta);
-
-            float rowSum = 0.0f;
+            float sinTheta = (float) Math.sin(Math.PI * (row + 0.5f) / height); float rowSum = 0.0f;
             for (int col = 0; col < width; col++) {
-                int idx = (row * width + col) * 3;
-                float r = pixels.get(idx);
-                float g = pixels.get(idx + 1);
-                float b = pixels.get(idx + 2);
-                float lum = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-                float weight = lum * sinTheta;
-                rowSum += weight;
-                conditionalCDF[row * width + col] = rowSum;
+                int i = (row * width + col) * 3; float lum = 0.2126f * pixels.get(i) + 0.7152f * pixels.get(i+1) + 0.0722f * pixels.get(i+2);
+                rowSum += lum * sinTheta; conditionalCDF[row * width + col] = rowSum;
             }
-
-            // Normalize conditional CDF for this row
-            if (rowSum > 0.0f) {
-                for (int col = 0; col < width; col++) {
-                    conditionalCDF[row * width + col] /= rowSum;
-                }
-            } else {
-                // Uniform distribution for zero-luminance rows
-                for (int col = 0; col < width; col++) {
-                    conditionalCDF[row * width + col] = (float)(col + 1) / width;
-                }
-            }
-
-            rowWeights[row] = rowSum;
-            totalWeight += rowSum;
+            if (rowSum > 0.0f) for (int col = 0; col < width; col++) conditionalCDF[row * width + col] /= rowSum;
+            else for (int col = 0; col < width; col++) conditionalCDF[row * width + col] = (float)(col + 1) / width;
+            rowWeights[row] = rowSum; totalWeight += rowSum;
         }
-
-        MemoryUtil.memFree(pixels);
-
-        this.envTotalLuminance = totalWeight;
-
-        // Build marginal CDF (cumulative over rows)
-        float[] marginalCDF = new float[height];
-        float cumulative = 0.0f;
-        for (int row = 0; row < height; row++) {
-            cumulative += rowWeights[row];
-            marginalCDF[row] = (totalWeight > 0.0f) ? cumulative / totalWeight : (float)(row + 1) / height;
-        }
-
-        // Upload marginal CDF texture (1 x height)
-        glDeleteTextures(envMarginalCDFTexture);
-        envMarginalCDFTexture = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, envMarginalCDFTexture);
-        FloatBuffer marginalBuf = MemoryUtil.memAllocFloat(height);
-        marginalBuf.put(marginalCDF).flip();
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 1, height, 0, GL_RED, GL_FLOAT, marginalBuf);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        MemoryUtil.memFree(marginalBuf);
-
-        // Upload conditional CDF texture (width x height)
-        glDeleteTextures(envConditionalCDFTexture);
-        envConditionalCDFTexture = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, envConditionalCDFTexture);
-        FloatBuffer condBuf = MemoryUtil.memAllocFloat(width * height);
-        condBuf.put(conditionalCDF).flip();
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width, height, 0, GL_RED, GL_FLOAT, condBuf);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        MemoryUtil.memFree(condBuf);
-
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        envCDFReady = true;
-        System.out.println("Built env importance sampling CDF (" + width + "x" + height +
-                           ", total luminance=" + String.format("%.2f", totalWeight) + ")");
+        MemoryUtil.memFree(pixels); this.envTotalLuminance = totalWeight;
+        float[] marginalCDF = new float[height]; float cumulative = 0.0f;
+        for (int row = 0; row < height; row++) { cumulative += rowWeights[row]; marginalCDF[row] = (totalWeight > 0.0f) ? cumulative / totalWeight : (float)(row + 1) / height; }
+        glDeleteTextures(envMarginalCDFTexture); envMarginalCDFTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, envMarginalCDFTexture);
+        FloatBuffer mBuf = MemoryUtil.memAllocFloat(height); mBuf.put(marginalCDF).flip(); glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 1, height, 0, GL_RED, GL_FLOAT, mBuf); MemoryUtil.memFree(mBuf);
+        glDeleteTextures(envConditionalCDFTexture); envConditionalCDFTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, envConditionalCDFTexture);
+        FloatBuffer cBuf = MemoryUtil.memAllocFloat(width * height); cBuf.put(conditionalCDF).flip(); glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width, height, 0, GL_RED, GL_FLOAT, cBuf); MemoryUtil.memFree(cBuf);
+        glBindTexture(GL_TEXTURE_2D, 0); envCDFReady = true;
     }
 
-    /**
-     * Check if an environment map is loaded.
-     */
-    public boolean isEnvMapLoaded() {
-        return envMapLoaded;
-    }
-
-    /**
-     * Set environment rotation (in radians).
-     */
-    public void setEnvRotation(float radians) {
-        this.envRotation = radians;
-    }
-
-    /**
-     * Get environment rotation.
-     */
-    public float getEnvRotation() {
-        return envRotation;
-    }
-
-    /**
-     * Set environment lighting mix (0 = directional only, 1 = full HDRI).
-     */
-    public void setEnvLightingMix(float mix) {
-        this.envLightingMix = Math.max(0, Math.min(1, mix));
-    }
-
-    /**
-     * Get environment lighting mix.
-     */
-    public float getEnvLightingMix() {
-        return envLightingMix;
-    }
+    public boolean isEnvMapLoaded() { return envMapLoaded; }
+    public void setEnvRotation(float r) { this.envRotation = r; }
+    public float getEnvRotation() { return envRotation; }
+    public void setEnvLightingMix(float m) { this.envLightingMix = Math.max(0, Math.min(1, m)); }
+    public float getEnvLightingMix() { return envLightingMix; }
 
     private void setUniformValue(ShaderProgram program, String name, Object value) {
-        if (value instanceof Float f) {
-            program.setUniform(name, f);
-        } else if (value instanceof Integer i) {
-            program.setUniform(name, i);
-            // Track renderMode for display shader
-            if ("renderMode".equals(name)) {
-                currentRenderMode = i;
-            }
-        } else if (value instanceof float[] arr) {
+        if (value instanceof Float f) program.setUniform(name, f);
+        else if (value instanceof Integer i) { program.setUniform(name, i); if ("renderMode".equals(name)) currentRenderMode = i; }
+        else if (value instanceof float[] arr) {
             switch (arr.length) {
                 case 2 -> program.setUniform(name, arr[0], arr[1]);
                 case 3 -> program.setUniform(name, arr[0], arr[1], arr[2]);
@@ -1284,399 +537,127 @@ public class GLSLEngine implements AutoCloseable {
                 case 16 -> program.setUniformMatrix4(name, arr);
                 default -> program.setUniform1fv(name, arr);
             }
-        } else if (value instanceof int[] arr) {
-            if (arr.length == 1) {
-                program.setUniform(name, arr[0]);
-            } else {
-                throw new IllegalArgumentException("Unsupported int array length: " + arr.length);
-            }
-        } else {
-            throw new IllegalArgumentException("Unsupported uniform type: " + value.getClass());
-        }
+        } else if (value instanceof int[] arr) { if (arr.length == 1) program.setUniform(name, arr[0]); }
     }
 
     private void flipImageY(float[] image, int width, int height) {
-        int rowSize = width * 4;
-        int expectedSize = width * height * 4;
-
-        // Safety check: verify array size matches expected dimensions
-        // This prevents crashes when viewport resizes during rendering
-        if (image.length != expectedSize || width <= 0 || height <= 0) {
-            return; // Skip flip if size mismatch (viewport was resized)
-        }
-
+        int rowSize = width * 4; if (image.length != width * height * 4 || width <= 0 || height <= 0) return;
         float[] tempRow = new float[rowSize];
-
         for (int y = 0; y < height / 2; y++) {
-            int topOffset = y * rowSize;
-            int bottomOffset = (height - 1 - y) * rowSize;
-
-            // Swap rows
-            System.arraycopy(image, topOffset, tempRow, 0, rowSize);
-            System.arraycopy(image, bottomOffset, image, topOffset, rowSize);
-            System.arraycopy(tempRow, 0, image, bottomOffset, rowSize);
+            int top = y * rowSize, bot = (height - 1 - y) * rowSize;
+            System.arraycopy(image, top, tempRow, 0, rowSize); System.arraycopy(image, bot, image, top, rowSize); System.arraycopy(tempRow, 0, image, bot, rowSize);
         }
     }
 
     private String loadResource(String path) {
-        try (InputStream is = getClass().getResourceAsStream(path)) {
-            if (is == null) {
-                throw new RuntimeException("Resource not found: " + path);
-            }
-            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to load resource: " + path, e);
-        }
+        try (InputStream is = getClass().getResourceAsStream(path)) { if (is == null) throw new RuntimeException(path); return new String(is.readAllBytes(), StandardCharsets.UTF_8); }
+        catch (IOException e) { throw new RuntimeException(e); }
     }
 
     private void runOnGLThread(Runnable task) {
-        if (Thread.currentThread().getName().equals("GLSLEngine-Thread")) {
-            task.run();
-        } else {
-            try {
-                glThread.submit(() -> {
-                    glfwMakeContextCurrent(window);
-                    task.run();
-                }).get();
-            } catch (Exception e) {
-                throw new RuntimeException("GL thread execution failed", e);
-            }
-        }
+        if (Thread.currentThread().getName().equals("GLSLEngine-Thread")) task.run();
+        else { try { glThread.submit(() -> { glfwMakeContextCurrent(window); task.run(); }).get(); } catch (Exception e) { throw new RuntimeException(e); } }
     }
 
     @Override
     public void close() {
         runOnGLThread(() -> {
-            for (ShaderProgram program : programs.values()) {
-                program.delete();
-            }
-            if (displayProgram != null) {
-                displayProgram.delete();
-            }
-            if (postProcessProgram != null) {
-                postProcessProgram.delete();
-            }
-            if (bloomExtractProgram != null) {
-                bloomExtractProgram.delete();
-            }
-            if (bloomBlurProgram != null) {
-                bloomBlurProgram.delete();
-            }
-
-            glDeleteFramebuffers(accumFBO);
-            glDeleteTextures(accumTexture);
-            glDeleteFramebuffers(displayFBO);
-            glDeleteTextures(displayTexture);
-            glDeleteFramebuffers(varianceFBO);
-            glDeleteTextures(varianceTexture);
-            glDeleteFramebuffers(bloomFBO1);
-            glDeleteFramebuffers(bloomFBO2);
-            glDeleteTextures(bloomTexture1);
-            glDeleteTextures(bloomTexture2);
-            glDeleteTextures(envMapTexture);
-            glDeleteTextures(envMarginalCDFTexture);
-            glDeleteTextures(envConditionalCDFTexture);
-            glDeleteTextures(paletteTexture);
-            glDeleteVertexArrays(quadVAO);
-            glDeleteBuffers(quadVBO);
-            glDeleteBuffers(quadEBO);
-
-            glfwDestroyWindow(window);
-            glfwTerminate();
+            for (ShaderProgram p : programs.values()) p.delete();
+            if (displayProgram != null) displayProgram.delete();
+            if (postProcessProgram != null) postProcessProgram.delete();
+            if (bloomExtractProgram != null) bloomExtractProgram.delete();
+            if (bloomBlurProgram != null) bloomBlurProgram.delete();
+            if (evaluatorProgram != null) evaluatorProgram.delete();
+            glDeleteFramebuffers(accumFBO); glDeleteTextures(accumTexture);
+            glDeleteFramebuffers(displayFBO); glDeleteTextures(displayTexture);
+            glDeleteFramebuffers(varianceFBO); glDeleteTextures(varianceTexture);
+            glDeleteFramebuffers(bloomFBO1); glDeleteFramebuffers(bloomFBO2);
+            glDeleteTextures(bloomTexture1); glDeleteTextures(bloomTexture2);
+            glDeleteTextures(envMapTexture); glDeleteTextures(envMarginalCDFTexture); glDeleteTextures(envConditionalCDFTexture);
+            glDeleteTextures(paletteTexture); glDeleteVertexArrays(quadVAO); glDeleteBuffers(quadVBO); glDeleteBuffers(quadEBO);
+            glfwDestroyWindow(window); glfwTerminate();
         });
-
         glThread.shutdown();
-        try {
-            glThread.awaitTermination(5, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        try { glThread.awaitTermination(5, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
-
-    // ========================================================================
-    // Inner class: ShaderProgram
-    // ========================================================================
 
     public static class ShaderProgram {
-        private final int programId;
-        private final Map<String, Integer> uniformLocations = new HashMap<>();
-
+        private final int programId; private final Map<String, Integer> uniformLocations = new HashMap<>();
         public ShaderProgram(String vertexSource, String fragmentSource) {
-            int vertexShader = compileShader(GL_VERTEX_SHADER, vertexSource, "Vertex");
-            int fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentSource, "Fragment");
-
-            programId = glCreateProgram();
-            glAttachShader(programId, vertexShader);
-            glAttachShader(programId, fragmentShader);
-            glLinkProgram(programId);
-
-            if (glGetProgrami(programId, GL_LINK_STATUS) == GL_FALSE) {
-                String log = glGetProgramInfoLog(programId);
-                throw new RuntimeException("Shader program linking failed:\n" + log);
-            }
-
-            glDeleteShader(vertexShader);
-            glDeleteShader(fragmentShader);
+            int vs = compileShader(GL_VERTEX_SHADER, vertexSource, "Vertex");
+            int fs = compileShader(GL_FRAGMENT_SHADER, fragmentSource, "Fragment");
+            programId = glCreateProgram(); glAttachShader(programId, vs); glAttachShader(programId, fs); glLinkProgram(programId);
+            if (glGetProgrami(programId, GL_LINK_STATUS) == GL_FALSE) throw new RuntimeException(glGetProgramInfoLog(programId));
+            glDeleteShader(vs); glDeleteShader(fs);
         }
-
         private int compileShader(int type, String source, String typeName) {
-            int shader = glCreateShader(type);
-            glShaderSource(shader, source);
-            glCompileShader(shader);
-
-            if (glGetShaderi(shader, GL_COMPILE_STATUS) == GL_FALSE) {
-                String log = glGetShaderInfoLog(shader);
-                throw new RuntimeException(typeName + " shader compilation failed:\n" + log);
-            }
-
-            return shader;
+            int s = glCreateShader(type); glShaderSource(s, source); glCompileShader(s);
+            if (glGetShaderi(s, GL_COMPILE_STATUS) == GL_FALSE) throw new RuntimeException(typeName + " failed: " + glGetShaderInfoLog(s));
+            return s;
         }
-
-        public void use() {
-            glUseProgram(programId);
-        }
-
-        public int getUniformLocation(String name) {
-            return uniformLocations.computeIfAbsent(name, n -> glGetUniformLocation(programId, n));
-        }
-
-        public void setUniform(String name, int value) {
-            glUniform1i(getUniformLocation(name), value);
-        }
-
-        public void setUniform(String name, float value) {
-            glUniform1f(getUniformLocation(name), value);
-        }
-
-        public void setUniform(String name, float x, float y) {
-            glUniform2f(getUniformLocation(name), x, y);
-        }
-
-        public void setUniform(String name, float x, float y, float z) {
-            glUniform3f(getUniformLocation(name), x, y, z);
-        }
-
-        public void setUniform(String name, float x, float y, float z, float w) {
-            glUniform4f(getUniformLocation(name), x, y, z, w);
-        }
-
-        public void setUniformMatrix3(String name, float[] values) {
-            glUniformMatrix3fv(getUniformLocation(name), false, values);
-        }
-
-        public void setUniformMatrix4(String name, float[] values) {
-            glUniformMatrix4fv(getUniformLocation(name), false, values);
-        }
-
-        public void setUniform1fv(String name, float[] values) {
-            glUniform1fv(getUniformLocation(name), values);
-        }
-
-        public void delete() {
-            glDeleteProgram(programId);
-        }
+        public void use() { glUseProgram(programId); }
+        public int getUniformLocation(String name) { return uniformLocations.computeIfAbsent(name, n -> glGetUniformLocation(programId, n)); }
+        public void setUniform(String name, int v) { glUniform1i(getUniformLocation(name), v); }
+        public void setUniform(String name, float v) { glUniform1f(getUniformLocation(name), v); }
+        public void setUniform(String name, float x, float y) { glUniform2f(getUniformLocation(name), x, y); }
+        public void setUniform(String name, float x, float y, float z) { glUniform3f(getUniformLocation(name), x, y, z); }
+        public void setUniform(String name, float x, float y, float z, float w) { glUniform4f(getUniformLocation(name), x, y, z, w); }
+        public void setUniformMatrix3(String name, float[] v) { glUniformMatrix3fv(getUniformLocation(name), false, v); }
+        public void setUniformMatrix4(String name, float[] v) { glUniformMatrix4fv(getUniformLocation(name), false, v); }
+        public void setUniform1fv(String name, float[] v) { glUniform1fv(getUniformLocation(name), v); }
+        public void delete() { glDeleteProgram(programId); }
     }
 
-    // ========================================================================
-    // Inner class: PostProcessParams
-    // ========================================================================
-
-    /**
-     * Post-processing parameters.
-     * Controls all visual effects applied after rendering.
-     */
     public static class PostProcessParams {
-        // Tone mapping
-        public int toneMapMode = 0;    // 0=ACES, 1=Reinhard, 2=Filmic, 3=None
-        public float exposure = 1.0f;
-
-        // Bloom
-        public boolean bloomEnabled = false;
-        public float bloomIntensity = 0.5f;
-        public float bloomThreshold = 1.0f;
-        public int bloomRadius = 3;      // Number of blur passes
-
-        // Chromatic Aberration
-        public boolean chromaticAberrationEnabled = false;
-        public float chromaticAberrationIntensity = 0.005f;
-
-        // Vignette
-        public boolean vignetteEnabled = false;
-        public float vignetteIntensity = 0.3f;
-        public float vignetteSoftness = 0.5f;
-
-        // Film Grain
-        public boolean filmGrainEnabled = false;
-        public float filmGrainIntensity = 0.03f;
-
-        // Sharpening
-        public boolean sharpenEnabled = false;
-        public float sharpenIntensity = 0.3f;
-
-        public float saturation = 1.0f;    // 0.0 - 2.0 (default 1.0)
-        
-        // Lens Effects
-        public boolean lensEffectsEnabled = false;
-        public float lensDirtIntensity = 0.5f;
-        public float starburstIntensity = 0.3f;
-        
-        // Color Grading
-        public int colorGradingMode = 0; // 0=None, 1=Cinema, 2=Vintage, 3=Matrix, 4=Neon, 5=B&W
-        public float colorGradingIntensity = 1.0f;
-
-        // Audio-reactive post-process deltas (transient, not serialized)
-        public transient float audioDeltaExposure = 0f;
-        public transient float audioDeltaSaturation = 0f;
-        public transient float audioDeltaVignette = 0f;
-        public transient float audioDeltaCA = 0f;
-        public transient boolean audioForceVignette = false;
-        public transient boolean audioForceCA = false;
-
-        /**
-         * Create default parameters (no effects).
-         */
+        public int toneMapMode = 0; public float exposure = 1.0f;
+        public boolean bloomEnabled = false; public float bloomIntensity = 0.5f, bloomThreshold = 1.0f; public int bloomRadius = 3;
+        public boolean chromaticAberrationEnabled = false; public float chromaticAberrationIntensity = 0.005f;
+        public boolean vignetteEnabled = false; public float vignetteIntensity = 0.3f, vignetteSoftness = 0.5f;
+        public boolean filmGrainEnabled = false; public float filmGrainIntensity = 0.03f;
+        public boolean sharpenEnabled = false; public float sharpenIntensity = 0.3f;
+        public float saturation = 1.0f;
+        public boolean lensEffectsEnabled = false; public float lensDirtIntensity = 0.5f, starburstIntensity = 0.3f;
+        public int colorGradingMode = 0; public float colorGradingIntensity = 1.0f;
+        public transient float audioDeltaExposure = 0f, audioDeltaSaturation = 0f, audioDeltaVignette = 0f, audioDeltaCA = 0f;
+        public transient boolean audioForceVignette = false, audioForceCA = false;
         public PostProcessParams() {}
-
-        /**
-         * Create a copy of these parameters.
-         */
         public PostProcessParams copy() {
-            PostProcessParams copy = new PostProcessParams();
-            copy.toneMapMode = this.toneMapMode;
-            copy.exposure = this.exposure;
-            copy.bloomEnabled = this.bloomEnabled;
-            copy.bloomIntensity = this.bloomIntensity;
-            copy.bloomThreshold = this.bloomThreshold;
-            copy.bloomRadius = this.bloomRadius;
-            copy.chromaticAberrationEnabled = this.chromaticAberrationEnabled;
-            copy.chromaticAberrationIntensity = this.chromaticAberrationIntensity;
-            copy.vignetteEnabled = this.vignetteEnabled;
-            copy.vignetteIntensity = this.vignetteIntensity;
-            copy.vignetteSoftness = this.vignetteSoftness;
-            copy.filmGrainEnabled = this.filmGrainEnabled;
-            copy.filmGrainIntensity = this.filmGrainIntensity;
-            copy.sharpenEnabled = this.sharpenEnabled;
-            copy.sharpenIntensity = this.sharpenIntensity;
-            copy.saturation = this.saturation;
-            copy.lensEffectsEnabled = this.lensEffectsEnabled;
-            copy.lensDirtIntensity = this.lensDirtIntensity;
-            copy.starburstIntensity = this.starburstIntensity;
-            copy.colorGradingMode = this.colorGradingMode;
-            copy.colorGradingIntensity = this.colorGradingIntensity;
-            // Audio deltas are transient but copy them for consistency
-            copy.audioDeltaExposure = this.audioDeltaExposure;
-            copy.audioDeltaSaturation = this.audioDeltaSaturation;
-            copy.audioDeltaVignette = this.audioDeltaVignette;
-            copy.audioDeltaCA = this.audioDeltaCA;
-            copy.audioForceVignette = this.audioForceVignette;
-            copy.audioForceCA = this.audioForceCA;
-            return copy;
+            PostProcessParams c = new PostProcessParams();
+            c.toneMapMode = this.toneMapMode; c.exposure = this.exposure; c.bloomEnabled = this.bloomEnabled; c.bloomIntensity = this.bloomIntensity;
+            c.bloomThreshold = this.bloomThreshold; c.bloomRadius = this.bloomRadius; c.chromaticAberrationEnabled = this.chromaticAberrationEnabled;
+            c.chromaticAberrationIntensity = this.chromaticAberrationIntensity; c.vignetteEnabled = this.vignetteEnabled; c.vignetteIntensity = this.vignetteIntensity;
+            c.vignetteSoftness = this.vignetteSoftness; c.filmGrainEnabled = this.filmGrainEnabled; c.filmGrainIntensity = this.filmGrainIntensity;
+            c.sharpenEnabled = this.sharpenEnabled; c.sharpenIntensity = this.sharpenIntensity; c.saturation = this.saturation;
+            c.lensEffectsEnabled = this.lensEffectsEnabled; c.lensDirtIntensity = this.lensDirtIntensity; c.starburstIntensity = this.starburstIntensity;
+            c.colorGradingMode = this.colorGradingMode; c.colorGradingIntensity = this.colorGradingIntensity;
+            c.audioDeltaExposure = this.audioDeltaExposure; c.audioDeltaSaturation = this.audioDeltaSaturation;
+            c.audioDeltaVignette = this.audioDeltaVignette; c.audioDeltaCA = this.audioDeltaCA;
+            c.audioForceVignette = this.audioForceVignette; c.audioForceCA = this.audioForceCA;
+            return c;
         }
-
-        /**
-         * Apply "Cinematic" preset.
-         */
         public void applyCinematicPreset() {
-            toneMapMode = 2;  // Filmic
-            exposure = 1.1f;
-            bloomEnabled = true;
-            bloomIntensity = 0.4f;
-            bloomThreshold = 0.8f;
-            bloomRadius = 4;
-            chromaticAberrationEnabled = true;
-            chromaticAberrationIntensity = 0.003f;
-            vignetteEnabled = true;
-            vignetteIntensity = 0.4f;
-            vignetteSoftness = 0.6f;
-            filmGrainEnabled = true;
-            filmGrainIntensity = 0.02f;
-            sharpenEnabled = false;
-            saturation = 1.1f;
-            lensEffectsEnabled = true;
-            lensDirtIntensity = 0.15f;
-            starburstIntensity = 0.2f;
-            colorGradingMode = 1; // Cinema
-            colorGradingIntensity = 0.8f;
+            toneMapMode = 2; exposure = 1.1f; bloomEnabled = true; bloomIntensity = 0.4f; bloomThreshold = 0.8f; bloomRadius = 4;
+            chromaticAberrationEnabled = true; chromaticAberrationIntensity = 0.003f; vignetteEnabled = true; vignetteIntensity = 0.4f; vignetteSoftness = 0.6f;   
+            filmGrainEnabled = true; filmGrainIntensity = 0.02f; sharpenEnabled = false; saturation = 1.1f;
+            lensEffectsEnabled = true; lensDirtIntensity = 0.15f; starburstIntensity = 0.2f; colorGradingMode = 1; colorGradingIntensity = 0.8f;
         }
-
-        /**
-         * Apply "Clean" preset.
-         */
         public void applyCleanPreset() {
-            toneMapMode = 0;  // ACES
-            exposure = 1.0f;
-            bloomEnabled = true;
-            bloomIntensity = 0.2f;
-            bloomThreshold = 1.2f;
-            bloomRadius = 2;
-            chromaticAberrationEnabled = false;
-            vignetteEnabled = false;
-            filmGrainEnabled = false;
-            sharpenEnabled = true;
-            sharpenIntensity = 0.2f;
-            saturation = 1.0f;
-            lensEffectsEnabled = false;
-            lensDirtIntensity = 0.0f;
-            starburstIntensity = 0.0f;
-            colorGradingMode = 0; // None
+            toneMapMode = 0; exposure = 1.0f; bloomEnabled = true; bloomIntensity = 0.2f; bloomThreshold = 1.2f; bloomRadius = 2;
+            chromaticAberrationEnabled = false; vignetteEnabled = false; filmGrainEnabled = false; sharpenEnabled = true; sharpenIntensity = 0.2f;
+            saturation = 1.0f; lensEffectsEnabled = false; lensDirtIntensity = 0.0f; starburstIntensity = 0.0f; colorGradingMode = 0;
         }
-
-        /**
-         * Apply "Vibrant" preset.
-         */
         public void applyVibrantPreset() {
-            toneMapMode = 0;  // ACES
-            exposure = 1.2f;
-            bloomEnabled = true;
-            bloomIntensity = 0.6f;
-            bloomThreshold = 0.7f;
-            bloomRadius = 5;
-            chromaticAberrationEnabled = true;
-            chromaticAberrationIntensity = 0.008f;
-            vignetteEnabled = true;
-            vignetteIntensity = 0.2f;
-            vignetteSoftness = 0.4f;
-            filmGrainEnabled = false;
-            sharpenEnabled = false;
-            saturation = 1.4f;
-            lensEffectsEnabled = true;
-            lensDirtIntensity = 0.1f;
-            starburstIntensity = 0.4f;
-            colorGradingMode = 4; // Neon
-            colorGradingIntensity = 0.6f;
+            toneMapMode = 0; exposure = 1.2f; bloomEnabled = true; bloomIntensity = 0.6f; bloomThreshold = 0.7f; bloomRadius = 5;
+            chromaticAberrationEnabled = true; chromaticAberrationIntensity = 0.008f; vignetteEnabled = true; vignetteIntensity = 0.2f; vignetteSoftness = 0.4f;   
+            filmGrainEnabled = false; sharpenEnabled = false; saturation = 1.4f;
+            lensEffectsEnabled = true; lensDirtIntensity = 0.1f; starburstIntensity = 0.4f; colorGradingMode = 4; colorGradingIntensity = 0.6f;
         }
-
-        /**
-         * Reset to defaults (no effects).
-         */
         public void reset() {
-            toneMapMode = 0;
-            exposure = 1.0f;
-            bloomEnabled = false;
-            bloomIntensity = 0.5f;
-            bloomThreshold = 1.0f;
-            bloomRadius = 3;
-            chromaticAberrationEnabled = false;
-            chromaticAberrationIntensity = 0.005f;
-            vignetteEnabled = false;
-            vignetteIntensity = 0.3f;
-            vignetteSoftness = 0.5f;
-            filmGrainEnabled = false;
-            filmGrainIntensity = 0.03f;
-            sharpenEnabled = false;
-            sharpenIntensity = 0.3f;
-            saturation = 1.0f;
-            lensEffectsEnabled = false;
-            lensDirtIntensity = 0.0f;
-            starburstIntensity = 0.0f;
-            colorGradingMode = 0;
-            colorGradingIntensity = 1.0f;
-            audioDeltaExposure = 0f;
-            audioDeltaSaturation = 0f;
-            audioDeltaVignette = 0f;
-            audioDeltaCA = 0f;
-            audioForceVignette = false;
-            audioForceCA = false;
+            toneMapMode = 0; exposure = 1.0f; bloomEnabled = false; bloomIntensity = 0.5f; bloomThreshold = 1.0f; bloomRadius = 3;
+            chromaticAberrationEnabled = false; chromaticAberrationIntensity = 0.005f; vignetteEnabled = false; vignetteIntensity = 0.3f; vignetteSoftness = 0.5f;
+            filmGrainEnabled = false; filmGrainIntensity = 0.03f; sharpenEnabled = false; sharpenIntensity = 0.3f; saturation = 1.0f;
+            lensEffectsEnabled = false; lensDirtIntensity = 0.0f; starburstIntensity = 0.0f; colorGradingMode = 0; colorGradingIntensity = 1.0f;
+            audioDeltaExposure = 0f; audioDeltaSaturation = 0f; audioDeltaVignette = 0f; audioDeltaCA = 0f; audioForceVignette = false; audioForceCA = false;
         }
     }
 }

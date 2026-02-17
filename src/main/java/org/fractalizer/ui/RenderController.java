@@ -53,6 +53,10 @@ public interface RenderController {
     void cancelRender();
     boolean isRendering();
 
+    // GPU Evaluation for Marching Cubes / Point Cloud
+    void prepareGPUEvaluator();
+    float[] evaluateGPUSlice(float zPos, float boundsHalf, int resolution);
+
     String getDeviceName();
     String getDeviceType();
 

@@ -98,7 +98,7 @@ public class FractalEvaluator {
         return new float[]{dx / len, dy / len, dz / len};
     }
 
-    /** Compute vertex color from orbit traps, replicating applyMaterial() from common.glsl. */
+    /** Compute vertex color from factors or orbit traps. */
     public static Color computeColor(OrbitTrap trap, AbstractFractalParams params, float[] factors) {
         float structural = factors[0];
         float flow = factors[1];
@@ -191,10 +191,10 @@ public class FractalEvaluator {
             case MENGER_SPONGE -> mengerFactors(trap, ((MengerSpongeParams) params).getMaxIterations());
             case KALEIDOSCOPIC_IFS -> kaleidoscopicFactors(trap, ((KaleidoscopicIFSParams) params).getMaxIterations());
             case POLYHEDRAL_IFS -> polyhedralFactors(trap, ((PolyhedralIFSParams) params).getMaxIterations());
-            case SIERPINSKI -> mandelbulbFactors(trap, ((SierpinskiParams) params).getMaxIterations()); // Same pattern
+            case SIERPINSKI -> mandelbulbFactors(trap, ((SierpinskiParams) params).getMaxIterations());
             case PSEUDO_KLEINIAN -> pseudoKleinianFactors(trap, ((PseudoKleinianParams) params).getMaxIterations());
-            case APOLLONIAN -> mandelbulbFactors(trap, ((ApollonianParams) params).getMaxIterations()); // Same pattern
-            case BRISTORBROT -> mandelbulbFactors(trap, ((BristorbrotParams) params).getMaxIterations()); // Same pattern
+            case APOLLONIAN -> mandelbulbFactors(trap, ((ApollonianParams) params).getMaxIterations());
+            case BRISTORBROT -> mandelbulbFactors(trap, ((BristorbrotParams) params).getMaxIterations());
             case QUATERNION_JULIA_4D -> quaternionJuliaFactors(trap, ((QuaternionJulia4DParams) params).getMaxIterations());
             case FRACTAL_TERRAIN -> fractalTerrainFactors(trap, (FractalTerrainParams) params);
             default -> new float[]{0.5f, 0.5f, 0.5f};
@@ -226,7 +226,6 @@ public class FractalEvaluator {
     // getFactors implementations
     // ========================================================================
 
-    // Shared pattern: planeX/Y/Z traps with exponential falloff
     private static float[] mandelbulbFactors(OrbitTrap trap, int maxIter) {
         float trapX = (float) Math.exp(-trap.planeX * 3.0);
         float trapY = (float) Math.exp(-trap.planeY * 3.0);
@@ -358,11 +357,9 @@ public class FractalEvaluator {
         int maxIter = p.getMaxIterations();
 
         for (int i = 0; i < maxIter; i++) {
-            // Box fold
             zx = clamp(zx, -fold, fold) * 2f - zx;
             zy = clamp(zy, -fold, fold) * 2f - zy;
             zz = clamp(zz, -fold, fold) * 2f - zz;
-            // Sphere fold
             float r2 = zx * zx + zy * zy + zz * zz;
             if (r2 < minR2) {
                 float s = fixR2 / minR2; zx *= s; zy *= s; zz *= s; dz *= s;
@@ -536,15 +533,12 @@ public class FractalEvaluator {
     private static final float _IKVNORM_ = 0.19098593171f;
 
     private static float[] createRotationMatrix(float rx, float ry, float rz) {
-        // Must match GLSLFractalizerController.createRotationMatrix exactly
         float cx = (float) Math.cos(rx);
         float sx = (float) Math.sin(rx);
         float cy = (float) Math.cos(ry);
         float sy = (float) Math.sin(ry);
         float cz = (float) Math.cos(rz);
         float sz = (float) Math.sin(rz);
-
-        // Combined rotation matrix R = Rz * Ry * Rx (Column-major storage for GLSL consistency)
         return new float[] {
             cy*cz, sx*sy*cz + cx*sz, -cx*sy*cz + sx*sz,
             -cy*sz, -sx*sy*sz + cx*cz, cx*sy*sz + sx*cz,
@@ -553,10 +547,6 @@ public class FractalEvaluator {
     }
 
     private static float[] mat3Mul(float[] m, float x, float y, float z) {
-        // GLSL w *= mat3 is RowVector * Matrix:
-        // res.x = x*m[0] + y*m[3] + z*m[6]
-        // res.y = x*m[1] + y*m[4] + z*m[7]
-        // res.z = x*m[2] + y*m[5] + z*m[8]
         return new float[]{
             x * m[0] + y * m[3] + z * m[6],
             x * m[1] + y * m[4] + z * m[7],
@@ -568,23 +558,14 @@ public class FractalEvaluator {
         float scale = p.getScale();
         int maxIter = p.getMaxIterations();
         int polyType = p.getPolyType().ordinal();
-        
-        // Pass angles in RADIANS to our local createRotationMatrix
         float[] rot1 = createRotationMatrix((float)Math.toRadians(p.getRot1X()), (float)Math.toRadians(p.getRot1Y()), (float)Math.toRadians(p.getRot1Z()));
         float[] rot2 = createRotationMatrix((float)Math.toRadians(p.getRot2X()), (float)Math.toRadians(p.getRot2Y()), (float)Math.toRadians(p.getRot2Z()));
-        
-        float sox = p.getOffsetX() * (scale - 1f);
-        float soy = p.getOffsetY() * (scale - 1f);
-        float soz = p.getOffsetZ() * (scale - 1f);
+        float sox = p.getOffsetX() * (scale - 1f), soy = p.getOffsetY() * (scale - 1f), soz = p.getOffsetZ() * (scale - 1f);
         float shx = p.getShiftX(), shy = p.getShiftY(), shz = p.getShiftZ();
-        
         float wx = px, wy = py, wz = pz;
-
         int i;
         for (i = 0; i < maxIter; i++) {
             float[] r1 = mat3Mul(rot1, wx, wy, wz); wx = r1[0]; wy = r1[1]; wz = r1[2];
-
-            // Poly Fold logic directly from shader
             if (polyType == 0) { // Octahedral
                 wx = Math.abs(wx + shx) - shx; wy = Math.abs(wy + shy) - shy; wz = Math.abs(wz + shz) - shz;
                 if (wx < wy) { float t = wx; wx = wy; wy = t; }
@@ -598,7 +579,6 @@ public class FractalEvaluator {
                 if (t < 0) { wx += 2*t*0.5f; wy -= 2*t*0.5f*PHI; wz -= 2*t*(0.5f/PHI); }
                 t = wx * (0.5f / PHI) - wy * 0.5f + wz * 0.5f * PHI;
                 if (t < 0) { wx -= 2*t*(0.5f/PHI); wy += 2*t*0.5f; wz -= 2*t*0.5f*PHI; }
-                
                 float c3x = PHI * (1f + PHI) * _IKVNORM_, c3y = (PHI * PHI - 1f) * _IKVNORM_, c3z = (1f + PHI) * _IKVNORM_;
                 t = -wx * c3x + wy * c3y + wz * c3z;
                 if (t < 0) { wx += 2*t*c3x; wy -= 2*t*c3y; wz -= 2*t*c3z; }
@@ -616,165 +596,68 @@ public class FractalEvaluator {
                 if (wx + wz < 0) { float t = wx; wx = -wz; wz = -t; }
                 if (wy + wz < 0) { float t = wy; wy = -wz; wz = -t; }
             }
-
             float[] r2 = mat3Mul(rot2, wx, wy, wz); wx = r2[0]; wy = r2[1]; wz = r2[2];
-            
-            wx = wx * scale - sox;
-            wy = wy * scale - soy;
-            wz = wz * scale - soz;
+            wx = wx * scale - sox; wy = wy * scale - soy; wz = wz * scale - soz;
         }
         return (length3(wx, wy, wz) - 2f) * (float) Math.pow(scale, -maxIter);
     }
 
-        private static float polyhedralDEFull(float px, float py, float pz, PolyhedralIFSParams p, OrbitTrap trap) {
-
-            float scale = p.getScale();
-
-            int maxIter = p.getMaxIterations();
-
-            int polyType = p.getPolyType().ordinal();
-
-            
-
-            float[] rot1 = createRotationMatrix((float)Math.toRadians(p.getRot1X()), (float)Math.toRadians(p.getRot1Y()), (float)Math.toRadians(p.getRot1Z()));
-
-            float[] rot2 = createRotationMatrix((float)Math.toRadians(p.getRot2X()), (float)Math.toRadians(p.getRot2Y()), (float)Math.toRadians(p.getRot2Z()));
-
-            
-
-            float sox = p.getOffsetX() * (scale - 1f);
-
-            float soy = p.getOffsetY() * (scale - 1f);
-
-            float soz = p.getOffsetZ() * (scale - 1f);
-
-            float shx = p.getShiftX(), shy = p.getShiftY(), shz = p.getShiftZ();
-
-            
-
-            float wx = px, wy = py, wz = pz;
-
-            trap.minDist = 1e10f; trap.sumDist = 0; trap.planeX = 0; trap.planeY = 0; trap.planeZ = 0; trap.iterations = 0;
-
-    
-
-            int i;
-
-            for (i = 0; i < maxIter; i++) {
-
-                float[] r1 = mat3Mul(rot1, wx, wy, wz); wx = r1[0]; wy = r1[1]; wz = r1[2];
-
-    
-
-                // Poly Fold logic
-
-                if (polyType == 0) { // Octahedral
-
-                    wx = Math.abs(wx + shx) - shx; wy = Math.abs(wy + shy) - shy; wz = Math.abs(wz + shz) - shz;
-
-                    if (wx < wy) { float t = wx; wx = wy; wy = t; }
-
-                    if (wx < wz) { float t = wx; wx = wz; wz = t; }
-
-                    if (wy < wz) { float t = wy; wy = wz; wz = t; }
-
-                } else if (polyType == 1) { // Dodecahedron
-
-                    float t;
-
-                    t = wx * 0.5f * PHI + wy * (0.5f / PHI) - wz * 0.5f;
-
-                    if (t < 0) { wx -= 2*t*0.5f*PHI; wy -= 2*t*(0.5f/PHI); wz += 2*t*0.5f; }
-
-                    t = -wx * 0.5f + wy * 0.5f * PHI + wz * (0.5f / PHI);
-
-                    if (t < 0) { wx += 2*t*0.5f; wy -= 2*t*0.5f*PHI; wz -= 2*t*(0.5f/PHI); }
-
-                    t = wx * (0.5f / PHI) - wy * 0.5f + wz * 0.5f * PHI;
-
-                    if (t < 0) { wx -= 2*t*(0.5f/PHI); wy += 2*t*0.5f; wz -= 2*t*0.5f*PHI; }
-
-                    
-
-                    float c3x = PHI * (1f + PHI) * _IKVNORM_, c3y = (PHI * PHI - 1f) * _IKVNORM_, c3z = (1f + PHI) * _IKVNORM_;
-
-                    t = -wx * c3x + wy * c3y + wz * c3z;
-
-                    if (t < 0) { wx += 2*t*c3x; wy -= 2*t*c3y; wz -= 2*t*c3z; }
-
-                    t = wx * c3z - wy * c3x + wz * c3y;
-
-                    if (t < 0) { wx -= 2*t*c3z; wy += 2*t*c3x; wz -= 2*t*c3y; }
-
-                } else if (polyType == 2) { // Icosahedron
-
-                    wx = Math.abs(wx); wy = Math.abs(wy); wz = Math.abs(wz);
-
-                    float t;
-
-                    t = wx*-0.80901699437f + wy*0.30901699437f + wz*0.5f; if (t > 0) { wx -= 2*t*-0.80901699437f; wy -= 2*t*0.30901699437f; wz -= 2*t*0.5f; }
-
-                    t = wx*0.30901699437f + wy*-0.5f + wz*0.80901699437f; if (t > 0) { wx -= 2*t*0.30901699437f; wy -= 2*t*-0.5f; wz -= 2*t*0.80901699437f; }
-
-                    t = wz*-1f; if (t > 0) { wz -= 2*t*-1f; }
-
-                    t = wx*0.30901699437f + wy*-0.5f + wz*0.80901699437f; if (t > 0) { wx -= 2*t*0.30901699437f; wy -= 2*t*-0.5f; wz -= 2*t*0.80901699437f; }
-
-                } else if (polyType == 3) { // Tetrahedron
-
-                    if (wx + wy < 0) { float t = wx; wx = -wy; wy = -t; }
-
-                    if (wx + wz < 0) { float t = wx; wx = -wz; wz = -t; }
-
-                    if (wy + wz < 0) { float t = wy; wy = -wz; wz = -t; }
-
-                }
-
-    
-
-                float[] r2 = mat3Mul(rot2, wx, wy, wz); wx = r2[0]; wy = r2[1]; wz = r2[2];
-
-    
-
-                float pw = (float) Math.pow(scale, i * 0.5f);
-
-                trap.planeX += Math.abs(wx) / pw;
-
-                trap.planeY += Math.abs(wy) / pw;
-
-                trap.planeZ += Math.abs(wz) / pw;
-
-                float d2 = wx*wx + wy*wy + wz*wz;
-
-                trap.minDist = Math.min(trap.minDist, d2);
-
-                trap.sumDist += d2 / pw;
-
-    
-
-                wx = wx * scale - sox;
-
-                wy = wy * scale - soy;
-
-                wz = wz * scale - soz;
-
-                trap.iterations = i + 1;
-
+    private static float polyhedralDEFull(float px, float py, float pz, PolyhedralIFSParams p, OrbitTrap trap) {
+        float scale = p.getScale();
+        int maxIter = p.getMaxIterations();
+        int polyType = p.getPolyType().ordinal();
+        float[] rot1 = createRotationMatrix((float)Math.toRadians(p.getRot1X()), (float)Math.toRadians(p.getRot1Y()), (float)Math.toRadians(p.getRot1Z()));
+        float[] rot2 = createRotationMatrix((float)Math.toRadians(p.getRot2X()), (float)Math.toRadians(p.getRot2Y()), (float)Math.toRadians(p.getRot2Z()));
+        float sox = p.getOffsetX() * (scale - 1f), soy = p.getOffsetY() * (scale - 1f), soz = p.getOffsetZ() * (scale - 1f);
+        float shx = p.getShiftX(), shy = p.getShiftY(), shz = p.getShiftZ();
+        float wx = px, wy = py, wz = pz;
+        trap.minDist = 1e10f; trap.sumDist = 0; trap.planeX = 0; trap.planeY = 0; trap.planeZ = 0; trap.iterations = 0;
+        int i;
+        for (i = 0; i < maxIter; i++) {
+            float[] r1 = mat3Mul(rot1, wx, wy, wz); wx = r1[0]; wy = r1[1]; wz = r1[2];
+            if (polyType == 0) { // Octahedral
+                wx = Math.abs(wx + shx) - shx; wy = Math.abs(wy + shy) - shy; wz = Math.abs(wz + shz) - shz;
+                if (wx < wy) { float t = wx; wx = wy; wy = t; }
+                if (wx < wz) { float t = wx; wx = wz; wz = t; }
+                if (wy < wz) { float t = wy; wy = wz; wz = t; }
+            } else if (polyType == 1) { // Dodecahedron
+                float t;
+                t = wx * 0.5f * PHI + wy * (0.5f / PHI) - wz * 0.5f;
+                if (t < 0) { wx -= 2*t*0.5f*PHI; wy -= 2*t*(0.5f/PHI); wz += 2*t*0.5f; }
+                t = -wx * 0.5f + wy * 0.5f * PHI + wz * (0.5f / PHI);
+                if (t < 0) { wx += 2*t*0.5f; wy -= 2*t*0.5f*PHI; wz -= 2*t*(0.5f/PHI); }
+                t = wx * (0.5f / PHI) - wy * 0.5f + wz * 0.5f * PHI;
+                if (t < 0) { wx -= 2*t*(0.5f/PHI); wy += 2*t*0.5f; wz -= 2*t*0.5f*PHI; }
+                float c3x = PHI * (1f + PHI) * _IKVNORM_, c3y = (PHI * PHI - 1f) * _IKVNORM_, c3z = (1f + PHI) * _IKVNORM_;
+                t = -wx * c3x + wy * c3y + wz * c3z;
+                if (t < 0) { wx += 2*t*c3x; wy -= 2*t*c3y; wz -= 2*t*c3z; }
+                t = wx * c3z - wy * c3x + wz * c3y;
+                if (t < 0) { wx -= 2*t*c3z; wy += 2*t*c3x; wz -= 2*t*c3y; }
+            } else if (polyType == 2) { // Icosahedron
+                wx = Math.abs(wx); wy = Math.abs(wy); wz = Math.abs(wz);
+                float t;
+                t = wx*-0.80901699437f + wy*0.30901699437f + wz*0.5f; if (t > 0) { wx -= 2*t*-0.80901699437f; wy -= 2*t*0.30901699437f; wz -= 2*t*0.5f; }
+                t = wx*0.30901699437f + wy*-0.5f + wz*0.80901699437f; if (t > 0) { wx -= 2*t*0.30901699437f; wy -= 2*t*-0.5f; wz -= 2*t*0.80901699437f; }
+                t = wz*-1f; if (t > 0) { wz -= 2*t*-1f; }
+                t = wx*0.30901699437f + wy*-0.5f + wz*0.80901699437f; if (t > 0) { wx -= 2*t*0.30901699437f; wy -= 2*t*-0.5f; wz -= 2*t*0.80901699437f; }
+            } else if (polyType == 3) { // Tetrahedron
+                if (wx + wy < 0) { float t = wx; wx = -wy; wy = -t; }
+                if (wx + wz < 0) { float t = wx; wx = -wz; wz = -t; }
+                if (wy + wz < 0) { float t = wy; wy = -wz; wz = -t; }
             }
-
-            return (length3(wx, wy, wz) - 2f) * (float) Math.pow(scale, -maxIter);
-
+            float[] r2 = mat3Mul(rot2, wx, wy, wz); wx = r2[0]; wy = r2[1]; wz = r2[2];
+            float pw = (float) Math.pow(scale, i * 0.5f);
+            trap.planeX += Math.abs(wx) / pw; trap.planeY += Math.abs(wy) / pw; trap.planeZ += Math.abs(wz) / pw;
+            float d2 = wx*wx + wy*wy + wz*wz; trap.minDist = Math.min(trap.minDist, d2); trap.sumDist += d2 / pw;
+            wx = wx * scale - sox; wy = wy * scale - soy; wz = wz * scale - soz;
+            trap.iterations = i + 1;
         }
-
-    
+        return (length3(wx, wy, wz) - 2f) * (float) Math.pow(scale, -maxIter);
+    }
 
     private static void applyPolyFold(int polyType, float shx, float shy, float shz) { /* marker */ }
-
     private static void polyFoldInPlace(int polyType, float shx, float shy, float shz, float wx, float wy, float wz) { /* marker */ }
-
-    private static float[] polyFold(int polyType, float shx, float shy, float shz, float wx, float wy, float wz) {
-        return new float[]{wx, wy, wz};
-    }
+    private static float[] polyFold(int polyType, float shx, float shy, float shz, float wx, float wy, float wz) { return new float[]{wx, wy, wz}; }
 
     // ========================================================================
     // Sierpinski Tetrahedron
@@ -824,15 +707,11 @@ public class FractalEvaluator {
         float size = p.getSize(); float deOff = p.getDEOffset();
         float fcx = p.getFoldCx(), fcy = p.getFoldCy(), fcz = p.getFoldCz();
         int maxIter = p.getMaxIterations();
-
         for (int i = 0; i < maxIter; i++) {
             if (apx == x && apy == y && apz == z) break;
             apx = x; apy = y; apz = z;
-            x = 2f * clamp(x, -csx, csx) - x;
-            y = 2f * clamp(y, -csy, csy) - y;
-            z = 2f * clamp(z, -csz, csz) - z;
-            float r2 = x*x + y*y + z*z;
-            float k = Math.max(size / r2, 1f);
+            x = 2f * clamp(x, -csx, csx) - x; y = 2f * clamp(y, -csy, csy) - y; z = 2f * clamp(z, -csz, csz) - z;
+            float r2 = x*x + y*y + z*z; float k = Math.max(size / r2, 1f);
             x *= k; y *= k; z *= k; DEfactor *= k;
             x += fcx; y += fcy; z += fcz;
         }
@@ -850,21 +729,15 @@ public class FractalEvaluator {
         float fcx = p.getFoldCx(), fcy = p.getFoldCy(), fcz = p.getFoldCz();
         int maxIter = p.getMaxIterations();
         trap.minDist = 1e10f; trap.planeX = 1e10f; trap.planeY = 1e10f; trap.planeZ = 1e10f; trap.iterations = 0;
-
         for (int i = 0; i < maxIter; i++) {
             if (apx == x && apy == y && apz == z) break;
             apx = x; apy = y; apz = z;
-            x = 2f * clamp(x, -csx, csx) - x;
-            y = 2f * clamp(y, -csy, csy) - y;
-            z = 2f * clamp(z, -csz, csz) - z;
-            float r2 = x*x + y*y + z*z;
-            float k = Math.max(size / r2, 1f);
+            x = 2f * clamp(x, -csx, csx) - x; y = 2f * clamp(y, -csy, csy) - y; z = 2f * clamp(z, -csz, csz) - z;
+            float r2 = x*x + y*y + z*z; float k = Math.max(size / r2, 1f);
             x *= k; y *= k; z *= k; DEfactor *= k;
             x += fcx; y += fcy; z += fcz;
             trap.minDist = Math.min(trap.minDist, length3(x, y, z));
-            trap.planeX = Math.min(trap.planeX, Math.abs(x));
-            trap.planeY = Math.min(trap.planeY, Math.abs(y));
-            trap.planeZ = Math.min(trap.planeZ, Math.abs(z));
+            trap.planeX = Math.min(trap.planeX, Math.abs(x)); trap.planeY = Math.min(trap.planeY, Math.abs(y)); trap.planeZ = Math.min(trap.planeZ, Math.abs(z));
             trap.iterations = i + 1;
         }
         return Math.abs(0.5f * Math.abs(z + 0.1f) / DEfactor - deOff);
@@ -883,8 +756,7 @@ public class FractalEvaluator {
             if (zx + zz < 0) { float t = zx; zx = -zz; zz = -t; }
             if (zy + zz < 0) { float t = zy; zy = -zz; zz = -t; }
             zx = zx * scale - (scale - 1f); zy = zy * scale - (scale - 1f); zz = zz * scale - (scale - 1f);
-            s *= scale;
-            float r2 = zx*zx + zy*zy + zz*zz;
+            s *= scale; float r2 = zx*zx + zy*zy + zz*zz;
             if (r2 < fr2) { float k = fr2 / r2; zx *= k; zy *= k; zz *= k; s *= k; }
         }
         return (length3(zx, zy, zz) - 2f) / s;
@@ -900,13 +772,10 @@ public class FractalEvaluator {
             if (zx + zz < 0) { float t = zx; zx = -zz; zz = -t; }
             if (zy + zz < 0) { float t = zy; zy = -zz; zz = -t; }
             zx = zx * scale - (scale - 1f); zy = zy * scale - (scale - 1f); zz = zz * scale - (scale - 1f);
-            s *= scale;
-            float r2 = zx*zx + zy*zy + zz*zz;
+            s *= scale; float r2 = zx*zx + zy*zy + zz*zz;
             if (r2 < fr2) { float k = fr2 / r2; zx *= k; zy *= k; zz *= k; s *= k; }
             trap.minDist = Math.min(trap.minDist, length3(zx, zy, zz));
-            trap.planeX = Math.min(trap.planeX, Math.abs(zx));
-            trap.planeY = Math.min(trap.planeY, Math.abs(zy));
-            trap.planeZ = Math.min(trap.planeZ, Math.abs(zz));
+            trap.planeX = Math.min(trap.planeX, Math.abs(zx)); trap.planeY = Math.min(trap.planeY, Math.abs(zy)); trap.planeZ = Math.min(trap.planeZ, Math.abs(zz));
             trap.iterations = i + 1;
         }
         return (length3(zx, zy, zz) - 2f) / s;
@@ -918,20 +787,13 @@ public class FractalEvaluator {
 
     private static float bristorbrotDE(float px, float py, float pz, BristorbrotParams p) {
         boolean isJulia = p.getJuliaCx()*p.getJuliaCx() + p.getJuliaCy()*p.getJuliaCy() + p.getJuliaCz()*p.getJuliaCz() > 0.0001f;
-        float cx = isJulia ? p.getJuliaCx() : px;
-        float cy = isJulia ? p.getJuliaCy() : py;
-        float cz = isJulia ? p.getJuliaCz() : pz;
-        float zx = px, zy = py, zz = pz;
-        float dr = 1f, r = 0f;
+        float cx = isJulia ? p.getJuliaCx() : px, cy = isJulia ? p.getJuliaCy() : py, cz = isJulia ? p.getJuliaCz() : pz;
+        float zx = px, zy = py, zz = pz, dr = 1f, r = 0f;
         int maxIter = p.getMaxIterations(); float bailout = p.getBailout();
-
         for (int i = 0; i < maxIter; i++) {
-            r = length3(zx, zy, zz);
-            if (r > bailout) break;
+            r = length3(zx, zy, zz); if (r > bailout) break;
             dr = 2f * r * dr + 1f;
-            float nx = zx*zx - zy*zy - zz*zz + cx;
-            float ny = 2f*zx*zy + cy;
-            float nz = -2f*zx*zz + cz;
+            float nx = zx*zx - zy*zy - zz*zz + cx, ny = 2f*zx*zy + cy, nz = -2f*zx*zz + cz;
             zx = nx; zy = ny; zz = nz;
         }
         if (r < 1e-21f || dr < 1e-21f) return 0f;
@@ -940,26 +802,17 @@ public class FractalEvaluator {
 
     private static float bristorbrotDEFull(float px, float py, float pz, BristorbrotParams p, OrbitTrap trap) {
         boolean isJulia = p.getJuliaCx()*p.getJuliaCx() + p.getJuliaCy()*p.getJuliaCy() + p.getJuliaCz()*p.getJuliaCz() > 0.0001f;
-        float cx = isJulia ? p.getJuliaCx() : px;
-        float cy = isJulia ? p.getJuliaCy() : py;
-        float cz = isJulia ? p.getJuliaCz() : pz;
-        float zx = px, zy = py, zz = pz;
-        float dr = 1f, r = 0f;
+        float cx = isJulia ? p.getJuliaCx() : px, cy = isJulia ? p.getJuliaCy() : py, cz = isJulia ? p.getJuliaCz() : pz;
+        float zx = px, zy = py, zz = pz, dr = 1f, r = 0f;
         int maxIter = p.getMaxIterations(); float bailout = p.getBailout();
         trap.minDist = 1e10f; trap.planeX = 1e10f; trap.planeY = 1e10f; trap.planeZ = 1e10f; trap.iterations = 0;
-
         for (int i = 0; i < maxIter; i++) {
-            r = length3(zx, zy, zz);
-            if (r > bailout) break;
+            r = length3(zx, zy, zz); if (r > bailout) break;
             dr = 2f * r * dr + 1f;
-            float nx = zx*zx - zy*zy - zz*zz + cx;
-            float ny = 2f*zx*zy + cy;
-            float nz = -2f*zx*zz + cz;
+            float nx = zx*zx - zy*zy - zz*zz + cx, ny = 2f*zx*zy + cy, nz = -2f*zx*zz + cz;
             zx = nx; zy = ny; zz = nz;
             trap.minDist = Math.min(trap.minDist, length3(zx, zy, zz));
-            trap.planeX = Math.min(trap.planeX, Math.abs(zx));
-            trap.planeY = Math.min(trap.planeY, Math.abs(zy));
-            trap.planeZ = Math.min(trap.planeZ, Math.abs(zz));
+            trap.planeX = Math.min(trap.planeX, Math.abs(zx)); trap.planeY = Math.min(trap.planeY, Math.abs(zy)); trap.planeZ = Math.min(trap.planeZ, Math.abs(zz));
             trap.iterations = i + 1;
         }
         if (r < 1e-21f || dr < 1e-21f) return 0f;
@@ -970,87 +823,50 @@ public class FractalEvaluator {
     // Quaternion Julia 4D
     // ========================================================================
 
-    private static float[] apply4DRotation(float qx, float qy, float qz, float qw,
-                                           float rotXW, float rotYW, float rotZW) {
+    private static float[] apply4DRotation(float qx, float qy, float qz, float qw, float rotXW, float rotYW, float rotZW) {
         float c, s, tmp;
-        if (Math.abs(rotXW) > 0.0001f) {
-            c = (float) Math.cos(rotXW); s = (float) Math.sin(rotXW);
-            tmp = c * qx - s * qw; qw = s * qx + c * qw; qx = tmp;
-        }
-        if (Math.abs(rotYW) > 0.0001f) {
-            c = (float) Math.cos(rotYW); s = (float) Math.sin(rotYW);
-            tmp = c * qy - s * qw; qw = s * qy + c * qw; qy = tmp;
-        }
-        if (Math.abs(rotZW) > 0.0001f) {
-            c = (float) Math.cos(rotZW); s = (float) Math.sin(rotZW);
-            tmp = c * qz - s * qw; qw = s * qz + c * qw; qz = tmp;
-        }
+        if (Math.abs(rotXW) > 0.0001f) { c = (float) Math.cos(rotXW); s = (float) Math.sin(rotXW); tmp = c * qx - s * qw; qw = s * qx + c * qw; qx = tmp; }
+        if (Math.abs(rotYW) > 0.0001f) { c = (float) Math.cos(rotYW); s = (float) Math.sin(rotYW); tmp = c * qy - s * qw; qw = s * qy + c * qw; qy = tmp; }
+        if (Math.abs(rotZW) > 0.0001f) { c = (float) Math.cos(rotZW); s = (float) Math.sin(rotZW); tmp = c * qz - s * qw; qw = s * qz + c * qw; qz = tmp; }
         return new float[]{qx, qy, qz, qw};
     }
 
     private static float quaternionJulia4dDE(float px, float py, float pz, QuaternionJulia4DParams p) {
-        float rxw = (float) Math.toRadians(p.getRotXW());
-        float ryw = (float) Math.toRadians(p.getRotYW());
-        float rzw = (float) Math.toRadians(p.getRotZW());
-        float[] q0 = apply4DRotation(px, py, pz, p.getSliceW(), rxw, ryw, rzw);
-        float qx = q0[0], qy = q0[1], qz = q0[2], qw = q0[3];
-        float dqx = 1, dqy = 0, dqz = 0, dqw = 0;
+        float[] q0 = apply4DRotation(px, py, pz, p.getSliceW(), (float)Math.toRadians(p.getRotXW()), (float)Math.toRadians(p.getRotYW()), (float)Math.toRadians(p.getRotZW()));
+        float qx = q0[0], qy = q0[1], qz = q0[2], qw = q0[3], dqx = 1, dqy = 0, dqz = 0, dqw = 0;
         float cx = p.getJuliaCx(), cy = p.getJuliaCy(), cz = p.getJuliaCz(), cw = p.getJuliaCw();
-        int maxIter = p.getMaxIterations(); float bailout = p.getBailout();
-        float r2 = qx*qx + qy*qy + qz*qz + qw*qw;
-
+        int maxIter = p.getMaxIterations(); float bailout = p.getBailout(), r2 = qx*qx + qy*qy + qz*qz + qw*qw;
         for (int i = 0; i < maxIter; i++) {
             if (r2 > bailout) break;
-            float tdx = 2*(qx*dqx - qy*dqy - qz*dqz - qw*dqw);
-            float tdy = 2*(qx*dqy + qy*dqx + qz*dqw - qw*dqz);
-            float tdz = 2*(qx*dqz - qy*dqw + qz*dqx + qw*dqy);
-            float tdw = 2*(qx*dqw + qy*dqz - qz*dqy + qw*dqx);
+            float tdx = 2*(qx*dqx - qy*dqy - qz*dqz - qw*dqw), tdy = 2*(qx*dqy + qy*dqx + qz*dqw - qw*dqz);
+            float tdz = 2*(qx*dqz - qy*dqw + qz*dqx + qw*dqy), tdw = 2*(qx*dqw + qy*dqz - qz*dqy + qw*dqx);
             dqx = tdx; dqy = tdy; dqz = tdz; dqw = tdw;
-            float nx = qx*qx - qy*qy - qz*qz - qw*qw + cx;
-            float ny = 2*qx*qy + cy;
-            float nz = 2*qx*qz + cz;
-            float nw = 2*qx*qw + cw;
-            qx = nx; qy = ny; qz = nz; qw = nw;
-            r2 = qx*qx + qy*qy + qz*qz + qw*qw;
+            float nx = qx*qx - qy*qy - qz*qz - qw*qw + cx, ny = 2*qx*qy + cy, nz = 2*qx*qz + cz, nw = 2*qx*qw + cw;
+            qx = nx; qy = ny; qz = nz; qw = nw; r2 = qx*qx + qy*qy + qz*qz + qw*qw;
         }
-        float r = (float) Math.sqrt(r2);
-        float dr = (float) Math.sqrt(dqx*dqx + dqy*dqy + dqz*dqz + dqw*dqw);
+        float r = (float) Math.sqrt(r2), dr = (float) Math.sqrt(dqx*dqx + dqy*dqy + dqz*dqz + dqw*dqw);
         if (r < 1e-21f || dr < 1e-21f) return 0f;
         return 0.5f * r * (float) Math.log(r) / dr;
     }
 
     private static float quaternionJulia4dDEFull(float px, float py, float pz, QuaternionJulia4DParams p, OrbitTrap trap) {
-        float rxw = (float) Math.toRadians(p.getRotXW());
-        float ryw = (float) Math.toRadians(p.getRotYW());
-        float rzw = (float) Math.toRadians(p.getRotZW());
-        float[] q0 = apply4DRotation(px, py, pz, p.getSliceW(), rxw, ryw, rzw);
-        float qx = q0[0], qy = q0[1], qz = q0[2], qw = q0[3];
-        float dqx = 1, dqy = 0, dqz = 0, dqw = 0;
+        float[] q0 = apply4DRotation(px, py, pz, p.getSliceW(), (float)Math.toRadians(p.getRotXW()), (float)Math.toRadians(p.getRotYW()), (float)Math.toRadians(p.getRotZW()));
+        float qx = q0[0], qy = q0[1], qz = q0[2], qw = q0[3], dqx = 1, dqy = 0, dqz = 0, dqw = 0;
         float cx = p.getJuliaCx(), cy = p.getJuliaCy(), cz = p.getJuliaCz(), cw = p.getJuliaCw();
         int maxIter = p.getMaxIterations(); float bailout = p.getBailout();
         trap.minDist = 1e10f; trap.avgDist = 0; trap.lastDist = 0; trap.iterations = 0;
         float r2 = qx*qx + qy*qy + qz*qz + qw*qw;
-
         for (int i = 0; i < maxIter; i++) {
             if (r2 > bailout) break;
-            float tdx = 2*(qx*dqx - qy*dqy - qz*dqz - qw*dqw);
-            float tdy = 2*(qx*dqy + qy*dqx + qz*dqw - qw*dqz);
-            float tdz = 2*(qx*dqz - qy*dqw + qz*dqx + qw*dqy);
-            float tdw = 2*(qx*dqw + qy*dqz - qz*dqy + qw*dqx);
+            float tdx = 2*(qx*dqx - qy*dqy - qz*dqz - qw*dqw), tdy = 2*(qx*dqy + qy*dqx + qz*dqw - qw*dqz);
+            float tdz = 2*(qx*dqz - qy*dqw + qz*dqx + qw*dqy), tdw = 2*(qx*dqw + qy*dqz - qz*dqy + qw*dqx);
             dqx = tdx; dqy = tdy; dqz = tdz; dqw = tdw;
-            float nx = qx*qx - qy*qy - qz*qz - qw*qw + cx;
-            float ny = 2*qx*qy + cy; float nz = 2*qx*qz + cz; float nw = 2*qx*qw + cw;
-            qx = nx; qy = ny; qz = nz; qw = nw;
-            r2 = qx*qx + qy*qy + qz*qz + qw*qw;
-            float dist = (float) Math.sqrt(r2);
-            trap.minDist = Math.min(trap.minDist, dist);
-            trap.avgDist += dist;
-            trap.lastDist = dist;
-            trap.iterations = i + 1;
+            float nx = qx*qx - qy*qy - qz*qz - qw*qw + cx, ny = 2*qx*qy + cy, nz = 2*qx*qz + cz, nw = 2*qx*qw + cw;
+            qx = nx; qy = ny; qz = nz; qw = nw; r2 = qx*qx + qy*qy + qz*qz + qw*qw;
+            float dist = (float) Math.sqrt(r2); trap.minDist = Math.min(trap.minDist, dist); trap.avgDist += dist; trap.lastDist = dist; trap.iterations = i + 1;
         }
         trap.avgDist /= Math.max(trap.iterations, 1);
-        float r = (float) Math.sqrt(r2);
-        float dr = (float) Math.sqrt(dqx*dqx + dqy*dqy + dqz*dqz + dqw*dqw);
+        float r = (float) Math.sqrt(r2), dr = (float) Math.sqrt(dqx*dqx + dqy*dqy + dqz*dqz + dqw*dqw);
         if (r < 1e-21f || dr < 1e-21f) return 0f;
         return 0.5f * r * (float) Math.log(r) / dr;
     }
@@ -1060,85 +876,44 @@ public class FractalEvaluator {
     // ========================================================================
 
     private static float terrainHash(float px, float py) {
-        float p3x = fract(px * 0.1031f);
-        float p3y = fract(py * 0.1031f);
-        float p3z = fract(px * 0.1031f);  // xyx pattern
+        float p3x = fract(px * 0.1031f), p3y = fract(py * 0.1031f), p3z = fract(px * 0.1031f);
         float d = p3x * (p3y + 33.33f) + p3y * (p3z + 33.33f) + p3z * (p3x + 33.33f);
-        p3x += d; p3y += d; p3z += d;
-        return fract((p3x + p3y) * p3z);
+        p3x += d; p3y += d; p3z += d; return fract((p3x + p3y) * p3z);
     }
 
     private static float terrainNoise(float px, float py) {
-        float ix = (float) Math.floor(px);
-        float iy = (float) Math.floor(py);
-        float fx = px - ix;
-        float fy = py - iy;
-
-        float ux = fx * fx * (3f - 2f * fx);
-        float uy = fy * fy * (3f - 2f * fy);
-
-        float a = terrainHash(ix, iy);
-        float b = terrainHash(ix + 1, iy);
-        float c = terrainHash(ix, iy + 1);
-        float d = terrainHash(ix + 1, iy + 1);
-
-        return mix(mix(a, b, ux), mix(c, d, ux), uy);
+        float ix = (float) Math.floor(px), iy = (float) Math.floor(py), fx = px - ix, fy = py - iy;
+        float ux = fx * fx * (3f - 2f * fx), uy = fy * fy * (3f - 2f * fy);
+        return mix(mix(terrainHash(ix, iy), terrainHash(ix + 1, iy), ux), mix(terrainHash(ix, iy + 1), terrainHash(ix + 1, iy + 1), ux), uy);
     }
 
     private static float terrainFbm(float px, float pz, FractalTerrainParams p) {
-        float x = px * p.getTerrainFrequency();
-        float z = pz * p.getTerrainFrequency();
-
+        float x = px * p.getTerrainFrequency(), z = pz * p.getTerrainFrequency();
         if (p.getWarpStrength() > 0.001f) {
-            float wx = terrainNoise(x + 5.2f, z + 1.3f) * 2f - 1f;
-            float wz = terrainNoise(x + 1.7f, z + 9.2f) * 2f - 1f;
-            x += p.getWarpStrength() * wx;
-            z += p.getWarpStrength() * wz;
+            x += p.getWarpStrength() * (terrainNoise(x + 5.2f, z + 1.3f) * 2f - 1f);
+            z += p.getWarpStrength() * (terrainNoise(x + 1.7f, z + 9.2f) * 2f - 1f);
         }
-
-        float value = 0f;
-        float amplitude = 1f;
-        float frequency = 1f;
-        float totalAmplitude = 0f;
-
+        float value = 0f, amplitude = 1f, frequency = 1f, totalAmplitude = 0f;
         for (int i = 0; i < p.getOctaves(); i++) {
             float n = terrainNoise(x * frequency, z * frequency);
-            float smooth = n;
-            float ridge = 1f - Math.abs(n * 2f - 1f);
-            ridge = ridge * ridge;
-            n = mix(smooth, ridge, p.getRidgeSharpness());
-
-            value += n * amplitude;
-            totalAmplitude += amplitude;
-            frequency *= p.getLacunarity();
-            amplitude *= p.getRoughness();
+            value += mix(n, (1f - Math.abs(n * 2f - 1f)) * (1f - Math.abs(n * 2f - 1f)), p.getRidgeSharpness()) * amplitude;
+            totalAmplitude += amplitude; frequency *= p.getLacunarity(); amplitude *= p.getRoughness();
         }
-
         return value / totalAmplitude;
     }
 
     private static float fractalTerrainDE(float px, float py, float pz, FractalTerrainParams p) {
-        float h = terrainFbm(px, pz, p) * p.getTerrainHeight() + p.getTerrainOffset();
-        return (py - h) * 0.4f;
+        return (py - (terrainFbm(px, pz, p) * p.getTerrainHeight() + p.getTerrainOffset())) * 0.4f;
     }
 
     private static float fractalTerrainDEFull(float px, float py, float pz, FractalTerrainParams p, OrbitTrap trap) {
-        float h = terrainFbm(px, pz, p) * p.getTerrainHeight() + p.getTerrainOffset();
-        float d = py - h;
-
-        trap.planeX = Math.abs(fract(px * 0.1f) - 0.5f);
-        trap.planeY = clamp(h / Math.max(p.getTerrainHeight(), 0.01f), 0f, 1f);
-        trap.planeZ = Math.abs(fract(pz * 0.1f) - 0.5f);
-        trap.minDist = Math.abs(d);
-        trap.iterations = p.getOctaves();
-
+        float h = terrainFbm(px, pz, p) * p.getTerrainHeight() + p.getTerrainOffset(), d = py - h;
+        trap.planeX = Math.abs(fract(px * 0.1f) - 0.5f); trap.planeY = clamp(h / Math.max(p.getTerrainHeight(), 0.01f), 0f, 1f);
+        trap.planeZ = Math.abs(fract(pz * 0.1f) - 0.5f); trap.minDist = Math.abs(d); trap.iterations = p.getOctaves();
         return d * 0.4f;
     }
 
     private static float[] fractalTerrainFactors(OrbitTrap trap, FractalTerrainParams p) {
-        float structural = trap.planeY;
-        float flow = (trap.planeX + trap.planeZ) * 0.5f + trap.planeY * 0.3f;
-        float iterNorm = clamp(1f - trap.minDist * 0.5f, 0f, 1f);
-        return new float[]{structural, flow, iterNorm};
+        return new float[]{trap.planeY, (trap.planeX + trap.planeZ) * 0.5f + trap.planeY * 0.3f, clamp(1f - trap.minDist * 0.5f, 0f, 1f)};
     }
 }
