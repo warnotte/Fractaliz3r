@@ -8,8 +8,9 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * Marching Cubes isosurface extraction with 2-slice memory optimization.
+ * Marching Cubes isosurface extraction with sliding-window slice optimization.
  * Extracts a triangle mesh from the fractal's distance field at DE=0.
+ * Normals are computed from the distance grid via central differences (no CPU DE calls).
  * Supports both CPU evaluation and GPU-accelerated slice evaluation.
  */
 public class MarchingCubes {
@@ -88,33 +89,38 @@ public class MarchingCubes {
         return extract(params, resolution, boundsHalf, cpuProvider, onProgress, cancelCheck);
     }
 
-    /** Optimized extraction with SliceProvider (supports GPU). */
+    /** Optimized extraction with SliceProvider (supports GPU). Normals derived from distance grid. */
     public static Mesh extract(AbstractFractalParams params, int resolution, float boundsHalf,
                                 SliceProvider sliceProvider,
                                 Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         int res = resolution; int gridSize = res + 1; float step = (2f * boundsHalf) / res;
-        float[][] slices = new float[2][gridSize * gridSize * 4];
         HashMap<Long, Integer> vertexMap = new HashMap<>();
         FloatList positions = new FloatList(); FloatList normals = new FloatList(); FloatList vertColors = new FloatList(); IntList indices = new IntList();
-        float normalEps = step * 0.5f;
+
+        // Sliding window: sPrev (z-1), sCurr (z), sNext (z+1), sNextNext (z+2)
+        float[] sPrev = null;
+        float[] sCurr = sliceProvider.getSlice(0, -boundsHalf);
+        float[] sNext = sliceProvider.getSlice(1, -boundsHalf + step);
+        float[] sNextNext;
 
         for (int z = 0; z < res; z++) {
             if (cancelCheck != null && cancelCheck.get()) return null;
-            if (z == 0) {
-                System.arraycopy(sliceProvider.getSlice(0, -boundsHalf), 0, slices[0], 0, slices[0].length);
-                System.arraycopy(sliceProvider.getSlice(1, -boundsHalf + step), 0, slices[1], 0, slices[1].length);
-            } else {
-                float[] temp = slices[0]; slices[0] = slices[1]; slices[1] = temp;
-                System.arraycopy(sliceProvider.getSlice(z + 1, -boundsHalf + (z + 1) * step), 0, slices[1], 0, slices[1].length);
-            }
+
+            // Fetch z+2 for Z-gradient of corners at z+1
+            sNextNext = (z + 2 < gridSize)
+                ? sliceProvider.getSlice(z + 2, -boundsHalf + (z + 2) * step)
+                : sNext; // clamp at boundary
+
+            // For Z-gradient of corners at z, use sPrev (or sCurr if at boundary)
+            float[] zMinusSlice = (sPrev != null) ? sPrev : sCurr;
 
             for (int y = 0; y < res; y++) {
                 for (int x = 0; x < res; x++) {
                     float[] corners = new float[8];
-                    corners[0] = slices[0][(y*gridSize+x)*4+3]; corners[1] = slices[0][(y*gridSize+x+1)*4+3];
-                    corners[2] = slices[0][((y+1)*gridSize+x+1)*4+3]; corners[3] = slices[0][((y+1)*gridSize+x)*4+3];
-                    corners[4] = slices[1][(y*gridSize+x)*4+3]; corners[5] = slices[1][(y*gridSize+x+1)*4+3];
-                    corners[6] = slices[1][((y+1)*gridSize+x+1)*4+3]; corners[7] = slices[1][((y+1)*gridSize+x)*4+3];
+                    corners[0] = sCurr[(y*gridSize+x)*4+3]; corners[1] = sCurr[(y*gridSize+x+1)*4+3];
+                    corners[2] = sCurr[((y+1)*gridSize+x+1)*4+3]; corners[3] = sCurr[((y+1)*gridSize+x)*4+3];
+                    corners[4] = sNext[(y*gridSize+x)*4+3]; corners[5] = sNext[(y*gridSize+x+1)*4+3];
+                    corners[6] = sNext[((y+1)*gridSize+x+1)*4+3]; corners[7] = sNext[((y+1)*gridSize+x)*4+3];
 
                     int cubeIndex = 0;
                     for (int i = 0; i < 8; i++) if (corners[i] < 0) cubeIndex |= (1 << i);
@@ -136,13 +142,31 @@ public class MarchingCubes {
                         if (existing != null) edgeVerts[e] = existing;
                         else {
                             int vi = positions.size() / 3; positions.add(vx); positions.add(vy); positions.add(vz);
-                            float[] n = FractalEvaluator.computeNormal(vx, vy, vz, params, normalEps);
-                            normals.add(n[0]); normals.add(n[1]); normals.add(n[2]);
+
+                            // Normal from distance grid: interpolate corner gradients
+                            int[] g0 = cornerXY(c0, x, y), g1 = cornerXY(c1, x, y);
+                            boolean c0Next = c0 >= 4, c1Next = c1 >= 4;
+                            float[] n0 = gridNormal(g0[0], g0[1],
+                                c0Next ? sNext : sCurr,
+                                c0Next ? sCurr : zMinusSlice,
+                                c0Next ? sNextNext : sNext, gridSize);
+                            float[] n1 = gridNormal(g1[0], g1[1],
+                                c1Next ? sNext : sCurr,
+                                c1Next ? sCurr : zMinusSlice,
+                                c1Next ? sNextNext : sNext, gridSize);
+                            float nx = n0[0]+t*(n1[0]-n0[0]), ny = n0[1]+t*(n1[1]-n0[1]), nz = n0[2]+t*(n1[2]-n0[2]);
+                            float nlen = (float) Math.sqrt(nx*nx + ny*ny + nz*nz);
+                            if (nlen > 1e-12f) { nx /= nlen; ny /= nlen; nz /= nlen; }
+                            else { nx = 0; ny = 1; nz = 0; }
+                            normals.add(nx); normals.add(ny); normals.add(nz);
+
+                            // Factors: interpolate from slice data
                             int s0 = (c0 < 4) ? 0 : 1, s1 = (c1 < 4) ? 0 : 1;
+                            float[] sl0 = s0 == 0 ? sCurr : sNext, sl1 = s1 == 0 ? sCurr : sNext;
                             int idx0 = cornerGridIdx(c0, x, y, gridSize), idx1 = cornerGridIdx(c1, x, y, gridSize);
-                            float fx = mix(slices[s0][idx0*4], slices[s1][idx1*4], t);
-                            float fy = mix(slices[s0][idx0*4+1], slices[s1][idx1*4+1], t);
-                            float fz = mix(slices[s0][idx0*4+2], slices[s1][idx1*4+2], t);
+                            float fx = mix(sl0[idx0*4], sl1[idx1*4], t);
+                            float fy = mix(sl0[idx0*4+1], sl1[idx1*4+1], t);
+                            float fz = mix(sl0[idx0*4+2], sl1[idx1*4+2], t);
                             Color color = FractalEvaluator.computeColor(null, params, new float[]{fx, fy, fz});
                             vertColors.add((float) color.getRed()); vertColors.add((float) color.getGreen()); vertColors.add((float) color.getBlue()); vertColors.add(1f);
                             vertexMap.put(edgeKey, vi); edgeVerts[e] = vi;
@@ -156,8 +180,36 @@ public class MarchingCubes {
                 }
             }
             if (onProgress != null) onProgress.accept((double)(z + 1) / res);
+
+            // Slide window forward
+            sPrev = sCurr;
+            sCurr = sNext;
+            sNext = sNextNext;
         }
         return new Mesh(positions.toArray(), normals.toArray(), vertColors.toArray(), indices.toArray());
+    }
+
+    /** Compute normal at a grid point from the distance field via central differences. */
+    private static float[] gridNormal(int gx, int gy, float[] slice, float[] prevZSlice, float[] nextZSlice, int gridSize) {
+        int xm = Math.max(gx - 1, 0), xp = Math.min(gx + 1, gridSize - 1);
+        int ym = Math.max(gy - 1, 0), yp = Math.min(gy + 1, gridSize - 1);
+        float dx = slice[(gy * gridSize + xp) * 4 + 3] - slice[(gy * gridSize + xm) * 4 + 3];
+        float dy = slice[(yp * gridSize + gx) * 4 + 3] - slice[(ym * gridSize + gx) * 4 + 3];
+        float dz = nextZSlice[(gy * gridSize + gx) * 4 + 3] - prevZSlice[(gy * gridSize + gx) * 4 + 3];
+        float len = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (len < 1e-12f) return new float[]{0, 1, 0};
+        return new float[]{dx / len, dy / len, dz / len};
+    }
+
+    /** Get the grid (x, y) coordinates for a cube corner. */
+    private static int[] cornerXY(int corner, int x, int y) {
+        return switch (corner) {
+            case 0, 4 -> new int[]{x, y};
+            case 1, 5 -> new int[]{x+1, y};
+            case 2, 6 -> new int[]{x+1, y+1};
+            case 3, 7 -> new int[]{x, y+1};
+            default -> new int[]{0, 0};
+        };
     }
 
     private static int cornerGridIdx(int corner, int x, int y, int gridSize) {

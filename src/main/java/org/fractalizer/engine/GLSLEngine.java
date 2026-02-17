@@ -117,6 +117,7 @@ public class GLSLEngine implements AutoCloseable {
             evaluatorProgram.use();
             evaluatorProgram.setUniform("zPos", zPos);
             evaluatorProgram.setUniform("boundsHalf", boundsHalf);
+            evaluatorProgram.setUniform("gridResolution", res);
             for (Map.Entry<String, Object> entry : uniforms.entrySet()) { setUniformValue(evaluatorProgram, entry.getKey(), entry.getValue()); }
             glBindVertexArray(quadVAO);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
