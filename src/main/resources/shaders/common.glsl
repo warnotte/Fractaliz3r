@@ -159,6 +159,13 @@ uniform int adaptiveSampling;        // 0 = off, 1 = on
 uniform float varianceThreshold;     // Convergence threshold (default 0.005)
 uniform int minAdaptiveSamples;      // Min samples before convergence check (default 8)
 
+// Erosion
+uniform int erosionEnabled;          // 0 = off, 1 = on
+uniform float erosionStrength;       // 0-1, overall intensity
+uniform float erosionTime;           // 0-20, progression (animatable)
+uniform float erosionScale;          // 0.1-5, world-space feature scale
+uniform int erosionType;             // 0=All, 1=Hydraulic, 2=Thermal, 3=Cracks
+
 // ============================================================================
 // Math & Random Helpers
 // ============================================================================
@@ -209,6 +216,34 @@ float fbm(vec3 p) {
 float warpedFbm(vec3 p) {
     vec3 q = vec3(fbm(p), fbm(p + vec3(5.2, 1.3, 2.8)), fbm(p + vec3(1.3, 2.8, 5.2)));
     return fbm(p + 1.0 * q);
+}
+
+float getErosionDisplacement(vec3 pos) {
+    if (erosionEnabled == 0) return 0.0;
+
+    vec3 p = pos / erosionScale;
+    float t = erosionTime * erosionStrength;
+
+    float weathering = 0.0, hydraulic = 0.0, thermal = 0.0;
+
+    // Weathering: fine cracks and pits
+    if (erosionType == 0 || erosionType == 3) {
+        weathering = (fbm(p * 8.0 + vec3(42.0)) - 0.4) * 0.2;
+    }
+
+    // Hydraulic: vertical flow channels, deeper at lower Y
+    if (erosionType == 0 || erosionType == 1) {
+        vec3 flowP = p; flowP.y *= 0.25;
+        hydraulic = pow(warpedFbm(flowP * 2.5), 1.5) * 0.5;
+        hydraulic *= 1.0 + 0.3 * (1.0 - p.y);
+    }
+
+    // Thermal: large-scale rounding/smoothing
+    if (erosionType == 0 || erosionType == 2) {
+        thermal = fbm(p * 1.5 + vec3(13.0, 7.0, 19.0)) * 0.35;
+    }
+
+    return (weathering + hydraulic + thermal) * t * erosionScale;
 }
 
 uint pcg_hash(uint seed) {

@@ -184,6 +184,13 @@ public class FractalConfig {
         public boolean adaptiveSampling = false;
         public float varianceThreshold = 0.0005f;
         public int minAdaptiveSamples = 16;
+
+        // Erosion
+        public boolean erosionEnabled = false;
+        public float erosionStrength = 0.5f;
+        public float erosionTime = 0.0f;
+        public float erosionScale = 1.0f;
+        public int erosionType = 0;
     }
 
     public static class AnimationConfig {
@@ -322,6 +329,11 @@ public class FractalConfig {
         config.effects.adaptiveSampling = params.isAdaptiveSampling();
         config.effects.varianceThreshold = params.getVarianceThreshold();
         config.effects.minAdaptiveSamples = params.getMinAdaptiveSamples();
+        config.effects.erosionEnabled = params.isErosionEnabled();
+        config.effects.erosionStrength = params.getErosionStrength();
+        config.effects.erosionTime = params.getErosionTime();
+        config.effects.erosionScale = params.getErosionScale();
+        config.effects.erosionType = params.getErosionType();
 
         // Fractal-specific parameters
         extractFractalParams(params, config.fractalParams);
@@ -447,6 +459,11 @@ public class FractalConfig {
         params.setAdaptiveSampling(effects.adaptiveSampling);
         params.setVarianceThreshold(effects.varianceThreshold);
         params.setMinAdaptiveSamples(effects.minAdaptiveSamples);
+        params.setErosionEnabled(effects.erosionEnabled);
+        params.setErosionStrength(effects.erosionStrength);
+        params.setErosionTime(effects.erosionTime);
+        params.setErosionScale(effects.erosionScale);
+        params.setErosionType(effects.erosionType);
 
         // Fractal-specific parameters
         applyFractalParams(params, fractalParams);

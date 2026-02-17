@@ -176,6 +176,13 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float varianceThreshold = 0.0005f;
     protected int minAdaptiveSamples = 16;
 
+    // Erosion
+    protected boolean erosionEnabled = false;
+    protected float erosionStrength = 0.5f;
+    protected float erosionTime = 0.0f;
+    protected float erosionScale = 1.0f;
+    protected int erosionType = 0; // 0=All, 1=Hydraulic, 2=Thermal, 3=Cracks
+
     // Custom gradient palette (used when paletteIndex == 6)
     protected GradientPalette customGradient;
 
@@ -414,6 +421,13 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.adaptiveSampling = this.adaptiveSampling;
         target.varianceThreshold = this.varianceThreshold;
         target.minAdaptiveSamples = this.minAdaptiveSamples;
+
+        // Copy Erosion
+        target.erosionEnabled = this.erosionEnabled;
+        target.erosionStrength = this.erosionStrength;
+        target.erosionTime = this.erosionTime;
+        target.erosionScale = this.erosionScale;
+        target.erosionType = this.erosionType;
 
         // Copy custom gradient
         target.customGradient = this.customGradient.copy();
@@ -781,6 +795,18 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setVarianceThreshold(float threshold) { this.varianceThreshold = threshold; }
     public int getMinAdaptiveSamples() { return minAdaptiveSamples; }
     public void setMinAdaptiveSamples(int min) { this.minAdaptiveSamples = min; }
+
+    // Erosion
+    public boolean isErosionEnabled() { return erosionEnabled; }
+    public void setErosionEnabled(boolean enabled) { this.erosionEnabled = enabled; }
+    public float getErosionStrength() { return erosionStrength; }
+    public void setErosionStrength(float strength) { this.erosionStrength = Math.max(0, Math.min(1, strength)); }
+    public float getErosionTime() { return erosionTime; }
+    public void setErosionTime(float time) { this.erosionTime = Math.max(0, Math.min(20, time)); }
+    public float getErosionScale() { return erosionScale; }
+    public void setErosionScale(float scale) { this.erosionScale = Math.max(0.1f, Math.min(5, scale)); }
+    public int getErosionType() { return erosionType; }
+    public void setErosionType(int type) { this.erosionType = Math.max(0, Math.min(3, type)); }
 
     // Custom Gradient
     public GradientPalette getCustomGradient() { return customGradient; }

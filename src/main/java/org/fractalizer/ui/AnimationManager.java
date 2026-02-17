@@ -86,6 +86,11 @@ public class AnimationManager {
 
         // Base hue
         timeline.createTrack("baseHue", float[].class, new float[]{0.6f, 0.3f, 0.1f});
+
+        // Erosion
+        timeline.createTrack("erosionTime", Float.class, 0.0f);
+        timeline.createTrack("erosionStrength", Float.class, 0.5f);
+        timeline.createTrack("erosionScale", Float.class, 1.0f);
     }
 
     // ========================================================================
@@ -173,6 +178,9 @@ public class AnimationManager {
         addKeyframeForTrack("extraLightIntensity", time, easing, params);
         addKeyframeForTrack("extraLightAreaRadius", time, easing, params);
         addKeyframeForTrack("baseHue", time, easing, params);
+        addKeyframeForTrack("erosionTime", time, easing, params);
+        addKeyframeForTrack("erosionStrength", time, easing, params);
+        addKeyframeForTrack("erosionScale", time, easing, params);
 
         // Add keyframes for fractal-specific tracks
         addFractalKeyframes(time, easing, params);
@@ -248,6 +256,9 @@ public class AnimationManager {
             case "baseHue" -> timeline.setKeyframe("baseHue", time, new float[]{
                     params.getHueR(), params.getHueG(), params.getHueB()
             }, easing);
+            case "erosionTime" -> timeline.setKeyframe("erosionTime", time, params.getErosionTime(), easing);
+            case "erosionStrength" -> timeline.setKeyframe("erosionStrength", time, params.getErosionStrength(), easing);
+            case "erosionScale" -> timeline.setKeyframe("erosionScale", time, params.getErosionScale(), easing);
             default -> {
                 // Check if it's a fractal-specific track
                 addFractalKeyframeForTrack(trackName, time, easing, params);
@@ -352,6 +363,17 @@ public class AnimationManager {
         if (timeline.getTrack("baseHue").hasKeyframes()) {
             float[] hue = timeline.getValue("baseHue");
             params.materialHue(hue[0], hue[1], hue[2]);
+        }
+
+        // Apply erosion
+        if (timeline.getTrack("erosionTime").hasKeyframes()) {
+            params.setErosionTime(timeline.getValue("erosionTime"));
+        }
+        if (timeline.getTrack("erosionStrength").hasKeyframes()) {
+            params.setErosionStrength(timeline.getValue("erosionStrength"));
+        }
+        if (timeline.getTrack("erosionScale").hasKeyframes()) {
+            params.setErosionScale(timeline.getValue("erosionScale"));
         }
 
         // Apply fractal-specific parameters

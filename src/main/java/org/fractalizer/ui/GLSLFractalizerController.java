@@ -1150,6 +1150,13 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("varianceThreshold", afp.getVarianceThreshold());
             uniforms.put("minAdaptiveSamples", afp.getMinAdaptiveSamples());
             engine.setAdaptiveSamplingEnabled(adaptive);
+
+            // Erosion
+            uniforms.put("erosionEnabled", afp.isErosionEnabled() ? 1 : 0);
+            uniforms.put("erosionStrength", afp.getErosionStrength());
+            uniforms.put("erosionTime", afp.getErosionTime());
+            uniforms.put("erosionScale", afp.getErosionScale());
+            uniforms.put("erosionType", afp.getErosionType());
         }
 
         // Audio-reactive uniforms + fractal parameter modulation

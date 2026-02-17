@@ -60,7 +60,12 @@ public class TimelineWidget extends VBox {
         new TrackInfo("extraLightAreaRadius", "Extra Area Radius", Color.rgb(255, 200, 110)),
         // Color group
         TrackInfo.groupHeader("Color", Color.rgb(255, 150, 200)),
-        new TrackInfo("baseHue", "Base Hue", Color.rgb(255, 150, 200))
+        new TrackInfo("baseHue", "Base Hue", Color.rgb(255, 150, 200)),
+        // Erosion group
+        TrackInfo.groupHeader("Erosion", Color.rgb(200, 160, 120)),
+        new TrackInfo("erosionTime", "Time", Color.rgb(200, 160, 120)),
+        new TrackInfo("erosionStrength", "Strength", Color.rgb(180, 140, 100)),
+        new TrackInfo("erosionScale", "Scale", Color.rgb(160, 130, 90))
     );
 
     // UI Components

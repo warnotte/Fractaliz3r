@@ -74,6 +74,13 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider varianceThresholdSlider;
     private EnhancedSlider minAdaptiveSamplesSlider;
 
+    // Erosion
+    private CheckBox erosionEnabledCheck;
+    private ComboBox<String> erosionTypeCombo;
+    private EnhancedSlider erosionStrengthSlider;
+    private EnhancedSlider erosionTimeSlider;
+    private EnhancedSlider erosionScaleSlider;
+
     public QualityPanel(Supplier<AbstractFractalParams> paramsSupplier,
                         RenderCallback renderCallback,
                         Consumer<Boolean> autoFullQualityCallback) {
@@ -109,6 +116,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         panel.getChildren().add(createDoFPane());
         panel.getChildren().add(createPathTracingPane());
         panel.getChildren().add(createAdaptiveSamplingPane());
+        panel.getChildren().add(createErosionPane());
         panel.getChildren().add(createPresetsPane());
 
         return panel;
@@ -590,6 +598,59 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         return pane;
     }
 
+    private TitledPane createErosionPane() {
+        VBox box = new VBox(5);
+
+        erosionEnabledCheck = new CheckBox("Enable Erosion");
+        erosionEnabledCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setErosionEnabled(erosionEnabledCheck.isSelected());
+                renderCallback.requestRender();
+            }
+        });
+
+        erosionTypeCombo = new ComboBox<>();
+        erosionTypeCombo.getItems().addAll("All", "Hydraulic", "Thermal", "Cracks");
+        erosionTypeCombo.getSelectionModel().select(0);
+        erosionTypeCombo.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setErosionType(erosionTypeCombo.getSelectionModel().getSelectedIndex());
+                renderCallback.requestRender();
+            }
+        });
+
+        erosionStrengthSlider = new EnhancedSlider("Strength", 0, 1, 0.5, false);
+        erosionStrengthSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setErosionStrength(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        erosionTimeSlider = new EnhancedSlider("Time", 0, 20, 0, false);
+        erosionTimeSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setErosionTime(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        erosionScaleSlider = new EnhancedSlider("Scale", 0.1, 5, 1, false);
+        erosionScaleSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setErosionScale(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        HBox typeBox = new HBox(5, new Label("Type:"), erosionTypeCombo);
+        box.getChildren().addAll(erosionEnabledCheck, typeBox, erosionStrengthSlider, erosionTimeSlider, erosionScaleSlider);
+
+        TitledPane pane = new TitledPane("Erosion", box);
+        pane.setExpanded(false);
+        return pane;
+    }
+
     private TitledPane createPresetsPane() {
         VBox box = new VBox(5);
 
@@ -691,6 +752,13 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             adaptiveSamplingCheck.setSelected(p.isAdaptiveSampling());
             varianceThresholdSlider.setValue(p.getVarianceThreshold());
             minAdaptiveSamplesSlider.setValue(p.getMinAdaptiveSamples());
+
+            // Erosion
+            erosionEnabledCheck.setSelected(p.isErosionEnabled());
+            erosionTypeCombo.getSelectionModel().select(p.getErosionType());
+            erosionStrengthSlider.setValue(p.getErosionStrength());
+            erosionTimeSlider.setValue(p.getErosionTime());
+            erosionScaleSlider.setValue(p.getErosionScale());
 
         } finally {
             suppressRender = false;

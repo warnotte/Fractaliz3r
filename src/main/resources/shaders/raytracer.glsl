@@ -51,10 +51,10 @@ vec3 calcNormal(vec3 pos) {
     float e = max(qualityEpsilon, distToCamera * 0.00005);
 
     return normalize(
-        k1 * DE_simple(pos + k1 * e) +
-        k2 * DE_simple(pos + k2 * e) +
-        k3 * DE_simple(pos + k3 * e) +
-        k4 * DE_simple(pos + k4 * e)
+        k1 * (DE_simple(pos + k1 * e) + getErosionDisplacement(pos + k1 * e)) +
+        k2 * (DE_simple(pos + k2 * e) + getErosionDisplacement(pos + k2 * e)) +
+        k3 * (DE_simple(pos + k3 * e) + getErosionDisplacement(pos + k3 * e)) +
+        k4 * (DE_simple(pos + k4 * e) + getErosionDisplacement(pos + k4 * e))
     );
 }
 
@@ -70,7 +70,7 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
     float qualityEpsilon = baseEpsilon / qualityMultiplier;
 
     for (int i = 0; i < steps && t < maxt; i++) {
-        float h = DE_simple(ro + rd * t);
+        float h = DE_simple(ro + rd * t) + getErosionDisplacement(ro + rd * t);
 
         // Use adaptive epsilon for shadows too
         float epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
@@ -99,7 +99,7 @@ float calcAO(vec3 pos, vec3 normal) {
 
     for (int i = 0; i < steps; i++) {
         float hr = 0.01 + 0.12 * float(i + 1) / float(steps);
-        float dd = DE_simple(pos + normal * hr);
+        float dd = DE_simple(pos + normal * hr) + getErosionDisplacement(pos + normal * hr);
         ao += (hr - dd) * scale;
         scale *= 0.6;
     }
@@ -141,7 +141,7 @@ RayHit rayMarch(Ray ray) {
     for (int i = 0; i < effectiveMaxSteps; i++) {
         result.pos = ray.origin + ray.direction * result.dist;
 
-        float d = DE(result.pos, result.trap);
+        float d = DE(result.pos, result.trap) + getErosionDisplacement(result.pos);
         result.minDist = min(result.minDist, d);
         result.steps = i + 1;
 
@@ -574,7 +574,7 @@ bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist) {
 
     for (int i = 0; i < effectiveMaxSteps; i++) {
         vec3 pos = ray.origin + ray.direction * t;
-        float d = DE_simple(pos);
+        float d = DE_simple(pos) + getErosionDisplacement(pos);
 
         float epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
 
@@ -700,7 +700,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                     vec3 exitPos = hitPos;
                     for (int gs = 0; gs < 128; gs++) {
                         exitPos = hitPos + interiorDir * t;
-                        float d = DE_simple(exitPos);
+                        float d = DE_simple(exitPos) + getErosionDisplacement(exitPos);
                         if (d > 0.0) {
                             // Overshot exit surface — step back to surface
                             exitPos -= interiorDir * d;
@@ -952,7 +952,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     vec3 exitPos = hitPos;
                     for (int gs = 0; gs < 128; gs++) {
                         exitPos = hitPos + interiorDir * t;
-                        float d = DE_simple(exitPos);
+                        float d = DE_simple(exitPos) + getErosionDisplacement(exitPos);
                         if (d > 0.0) {
                             exitPos -= interiorDir * d;
                             break;
