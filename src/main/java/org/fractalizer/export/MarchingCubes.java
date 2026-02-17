@@ -10,8 +10,8 @@ import java.util.function.Supplier;
 /**
  * Marching Cubes isosurface extraction with sliding-window slice optimization.
  * Extracts a triangle mesh from the fractal's distance field at DE=0.
- * Normals are computed from the distance grid via central differences (no CPU DE calls).
- * Supports both CPU evaluation and GPU-accelerated slice evaluation.
+ * Normals are computed from the distance grid via central differences.
+ * Requires a GPU SliceProvider (evaluator.glsl) for distance/factor evaluation.
  */
 public class MarchingCubes {
 
@@ -66,30 +66,7 @@ public class MarchingCubes {
         float[] getSlice(int zIdx, float zPos);
     }
 
-    /** Standard CPU-based extraction. */
-    public static Mesh extract(AbstractFractalParams params, int resolution, float boundsHalf,
-                                Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
-        int gridSize = resolution + 1;
-        SliceProvider cpuProvider = (zIdx, zPos) -> {
-            float[] slice = new float[gridSize * gridSize * 4];
-            float step = (2f * boundsHalf) / resolution;
-            for (int y = 0; y < gridSize; y++) {
-                float yPos = -boundsHalf + y * step;
-                for (int x = 0; x < gridSize; x++) {
-                    float xPos = -boundsHalf + x * step;
-                    FractalEvaluator.OrbitTrap trap = new FractalEvaluator.OrbitTrap();
-                    float d = FractalEvaluator.evaluate(xPos, yPos, zPos, params, trap);
-                    float[] factors = FractalEvaluator.computeFactors(params, trap);
-                    int idx = (y * gridSize + x) * 4;
-                    slice[idx] = factors[0]; slice[idx+1] = factors[1]; slice[idx+2] = factors[2]; slice[idx+3] = d;
-                }
-            }
-            return slice;
-        };
-        return extract(params, resolution, boundsHalf, cpuProvider, onProgress, cancelCheck);
-    }
-
-    /** Optimized extraction with SliceProvider (supports GPU). Normals derived from distance grid. */
+    /** Extract mesh using GPU SliceProvider. Normals derived from distance grid via central differences. */
     public static Mesh extract(AbstractFractalParams params, int resolution, float boundsHalf,
                                 SliceProvider sliceProvider,
                                 Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
@@ -167,7 +144,7 @@ public class MarchingCubes {
                             float fx = mix(sl0[idx0*4], sl1[idx1*4], t);
                             float fy = mix(sl0[idx0*4+1], sl1[idx1*4+1], t);
                             float fz = mix(sl0[idx0*4+2], sl1[idx1*4+2], t);
-                            Color color = FractalEvaluator.computeColor(null, params, new float[]{fx, fy, fz});
+                            Color color = FractalEvaluator.computeColor(params, new float[]{fx, fy, fz});
                             vertColors.add((float) color.getRed()); vertColors.add((float) color.getGreen()); vertColors.add((float) color.getBlue()); vertColors.add(1f);
                             vertexMap.put(edgeKey, vi); edgeVerts[e] = vi;
                         }

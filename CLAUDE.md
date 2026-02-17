@@ -210,15 +210,14 @@ Variance-based convergence detection that skips already-converged pixels during 
 
 ## GPU-Accelerated 3D Mesh Export
 
-Export fractal geometry as 3D meshes (OBJ, glTF/GLB, PLY) using GPU-accelerated distance field evaluation. The GPU path uses the same GLSL fractal shaders as the renderer — 100% fidelity, no CPU DE duplication required.
+Export fractal geometry as 3D meshes (OBJ, glTF/GLB, PLY) using GPU-accelerated distance field evaluation. Uses the same GLSL fractal shaders as the renderer — 100% fidelity, zero CPU DE code.
 
-- **Architecture**: `evaluator.glsl` renders each Z-slice as a fullscreen quad, outputting `vec4(factors, distance)` per grid point. `MarchingCubes.java` processes slices via a `SliceProvider` functional interface.
-- **Grid alignment**: `evaluator.glsl` uses `gl_FragCoord` integer coordinates with a `gridResolution` uniform to map pixels to exact grid positions (`i/(gridResolution-1)`), matching the CPU grid formula.
-- **Normals from distance grid**: Computed via central differences on already-evaluated distance values (4-slice sliding window: z-1, z, z+1, z+2). No CPU DE calls for normals — eliminates the biggest CPU bottleneck.
+- **Architecture**: `evaluator.glsl` renders each Z-slice as a fullscreen quad, outputting `vec4(factors, distance)` per grid point. `MarchingCubes.java` processes slices via a `SliceProvider` functional interface. GPU-only (no CPU fallback).
+- **Grid alignment**: `evaluator.glsl` uses `gl_FragCoord` integer coordinates with a `gridResolution` uniform to map pixels to exact grid positions (`i/(gridResolution-1)`), matching the Marching Cubes grid formula.
+- **Normals from distance grid**: Computed via central differences on already-evaluated distance values (4-slice sliding window: z-1, z, z+1, z+2). No CPU DE calls.
 - **Colors**: Orbit trap factors from GPU slices are interpolated to vertex positions, then mapped through `FractalEvaluator.computeColor()` (palette lookup only, no DE).
-- **CPU fallback**: Toggle via "GPU Accelerated (Experimental)" checkbox in ExportPanel. CPU path uses `FractalEvaluator.evaluate()` for distances/factors (Java DE mirror of GLSL).
 - **Formats**: OBJ (vertex colors), glTF 2.0 binary (.glb), PLY binary (point cloud, 28 bytes/vertex).
-- **Adding a new fractal**: GPU mesh export works automatically — no Java DE code needed. Only the CPU fallback path requires `FractalEvaluator` entries.
+- **Adding a new fractal**: GPU mesh export works automatically — no Java DE code needed. `FractalEvaluator.java` contains only palette/color lookup.
 
 ## VR & Export Features
 
