@@ -4,6 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## IMPORTANT Rules
 - **NEVER** include `Co-Authored-By`, AI mentions, Claude mentions, or any reference to AI/LLM in commit messages, code comments, or any generated content. This rule is absolute and permanent.
+- Creative feature ideas and roadmap: see **[IDEAS.md](IDEAS.md)**
 
 ## Build Commands
 
