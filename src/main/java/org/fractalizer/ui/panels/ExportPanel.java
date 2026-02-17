@@ -13,6 +13,7 @@ import org.fractalizer.animation.Timeline;
 import org.fractalizer.export.GlbExporter;
 import org.fractalizer.export.MarchingCubes;
 import org.fractalizer.export.ObjExporter;
+import org.fractalizer.export.PlyExporter;
 import org.fractalizer.fractals.AbstractFractalParams;
 import org.fractalizer.fractals.FractalType;
 import org.fractalizer.render.FFmpegExporter;
@@ -862,34 +863,34 @@ public class ExportPanel extends ScrollPane {
         formatBox.setAlignment(Pos.CENTER_LEFT);
         formatBox.getChildren().add(new Label("Format:"));
         meshFormatCombo = new ComboBox<>();
-        meshFormatCombo.getItems().addAll("glTF Binary (.glb)", "Wavefront OBJ (.obj)");
+        meshFormatCombo.getItems().addAll("glTF Binary (.glb)", "Wavefront OBJ (.obj)", "Point Cloud (.ply)");
         meshFormatCombo.setValue("glTF Binary (.glb)");
         meshFormatCombo.setMaxWidth(Double.MAX_VALUE);
         formatBox.getChildren().add(meshFormatCombo);
 
         // Resolution slider
-        meshResolutionSlider = new EnhancedSlider("Resolution", 32, 512, 128, true);
+        meshResolutionSlider = new EnhancedSlider("Resolution", 32, 1024, 128, true);
 
         // Bounds slider
         meshBoundsSlider = new EnhancedSlider("Bounds", 1.0, 5.0, 2.5, false);
 
         // Export button
-        exportMeshBtn = new Button("Export 3D Mesh...");
+        exportMeshBtn = new Button("Export 3D Geometry...");
         exportMeshBtn.setOnAction(e -> exportMesh());
         exportMeshBtn.setMaxWidth(Double.MAX_VALUE);
 
         // Info label
         Label infoLabel = new Label(
             "Extracts fractal geometry as a 3D mesh\n" +
-            "using Marching Cubes. Includes vertex\n" +
-            "colors from the current palette."
+            "or point cloud using Marching Cubes.\n" +
+            "Includes vertex colors from current palette."
         );
         infoLabel.getStyleClass().add("small-label");
         infoLabel.setWrapText(true);
 
         box.getChildren().addAll(formatBox, meshResolutionSlider, meshBoundsSlider, exportMeshBtn, infoLabel);
 
-        TitledPane pane = new TitledPane("3D Mesh", box);
+        TitledPane pane = new TitledPane("3D Geometry", box);
         pane.setExpanded(false);
         return pane;
     }
@@ -910,13 +911,16 @@ public class ExportPanel extends ScrollPane {
             return;
         }
 
-        boolean isGlb = meshFormatCombo.getValue().contains("glb");
-        String ext = isGlb ? "*.glb" : "*.obj";
-        String desc = isGlb ? "glTF Binary" : "Wavefront OBJ";
-        String defaultName = isGlb ? "fractal.glb" : "fractal.obj";
+        String formatValue = meshFormatCombo.getValue();
+        boolean isGlb = formatValue.contains("glb");
+        boolean isPly = formatValue.contains("ply");
+        
+        String ext = isGlb ? "*.glb" : (isPly ? "*.ply" : "*.obj");
+        String desc = isGlb ? "glTF Binary" : (isPly ? "Point Cloud" : "Wavefront OBJ");
+        String defaultName = isGlb ? "fractal.glb" : (isPly ? "fractal.ply" : "fractal.obj");
 
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Export 3D Mesh");
+        fileChooser.setTitle(isPly ? "Export Point Cloud" : "Export 3D Mesh");
         fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(desc, ext));
         fileChooser.setInitialFileName(defaultName);
 
@@ -929,7 +933,7 @@ public class ExportPanel extends ScrollPane {
         meshExportCancelled = false;
         exportMeshBtn.setDisable(true);
 
-        ExportProgressDialog dialog = new ExportProgressDialog(getScene().getWindow(), "3D Mesh Export");
+        ExportProgressDialog dialog = new ExportProgressDialog(getScene().getWindow(), isPly ? "Point Cloud Export" : "3D Mesh Export");
         dialog.setAnimationMode(false);
         dialog.setOnCancelRequested(() -> meshExportCancelled = true);
 
@@ -956,7 +960,7 @@ public class ExportPanel extends ScrollPane {
                 if (meshExportCancelled || mesh == null) {
                     Platform.runLater(() -> {
                         dialog.showCancelled("Export cancelled");
-                        statusCallback.accept("Mesh export cancelled");
+                        statusCallback.accept("Geometry export cancelled");
                         exportMeshBtn.setDisable(false);
                     });
                     return;
@@ -965,6 +969,8 @@ public class ExportPanel extends ScrollPane {
                 // Write file
                 if (isGlb) {
                     GlbExporter.export(file, mesh);
+                } else if (isPly) {
+                    PlyExporter.exportPointCloud(file, mesh);
                 } else {
                     ObjExporter.export(file, mesh);
                 }
@@ -974,8 +980,8 @@ public class ExportPanel extends ScrollPane {
                 final int tris = mesh.triangleCount();
 
                 Platform.runLater(() -> {
-                    dialog.showSuccess(String.format("%,d vertices, %,d triangles in %s\n%s",
-                            verts, tris, formatDuration(totalElapsed), file.getName()));
+                    String stats = isPly ? String.format("%,d points", verts) : String.format("%,d vertices, %,d triangles", verts, tris);
+                    dialog.showSuccess(stats + " in " + formatDuration(totalElapsed) + "\n" + file.getName());
                     statusCallback.accept("Exported: " + file.getName());
                     exportMeshBtn.setDisable(false);
                     openFile(file);

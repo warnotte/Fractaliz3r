@@ -21,6 +21,45 @@ public class MarchingCubes {
         public int triangleCount() { return indices.length / 3; }
     }
 
+    /** Primitive float list to avoid boxing overhead. */
+    private static class FloatList {
+        float[] data = new float[1024];
+        int size = 0;
+        void add(float v) {
+            if (size == data.length) {
+                float[] newData = new float[data.length * 2];
+                System.arraycopy(data, 0, newData, 0, data.length);
+                data = newData;
+            }
+            data[size++] = v;
+        }
+        float[] toArray() {
+            float[] res = new float[size];
+            System.arraycopy(data, 0, res, 0, size);
+            return res;
+        }
+        int size() { return size; }
+    }
+
+    /** Primitive int list to avoid boxing overhead. */
+    private static class IntList {
+        int[] data = new int[1024];
+        int size = 0;
+        void add(int v) {
+            if (size == data.length) {
+                int[] newData = new int[data.length * 2];
+                System.arraycopy(data, 0, newData, 0, data.length);
+                data = newData;
+            }
+            data[size++] = v;
+        }
+        int[] toArray() {
+            int[] res = new int[size];
+            System.arraycopy(data, 0, res, 0, size);
+            return res;
+        }
+    }
+
     /**
      * Extract an isosurface mesh from the given fractal parameters.
      *
@@ -42,10 +81,10 @@ public class MarchingCubes {
 
         // Vertex deduplication: edge key -> vertex index
         HashMap<Long, Integer> vertexMap = new HashMap<>();
-        List<Float> positions = new ArrayList<>();
-        List<Float> normals = new ArrayList<>();
-        List<Float> vertColors = new ArrayList<>();
-        List<Integer> indices = new ArrayList<>();
+        FloatList positions = new FloatList();
+        FloatList normals = new FloatList();
+        FloatList vertColors = new FloatList();
+        IntList indices = new IntList();
 
         float normalEps = step * 0.5f;
 
@@ -167,18 +206,7 @@ public class MarchingCubes {
             }
         }
 
-        // Convert lists to arrays
-        float[] posArr = new float[positions.size()];
-        float[] normArr = new float[normals.size()];
-        float[] colorArr = new float[vertColors.size()];
-        int[] idxArr = new int[indices.size()];
-
-        for (int i = 0; i < posArr.length; i++) posArr[i] = positions.get(i);
-        for (int i = 0; i < normArr.length; i++) normArr[i] = normals.get(i);
-        for (int i = 0; i < colorArr.length; i++) colorArr[i] = vertColors.get(i);
-        for (int i = 0; i < idxArr.length; i++) idxArr[i] = indices.get(i);
-
-        return new Mesh(posArr, normArr, colorArr, idxArr);
+        return new Mesh(positions.toArray(), normals.toArray(), vertColors.toArray(), indices.toArray());
     }
 
     private static void evaluateSlice(float[] slice, AbstractFractalParams params,
