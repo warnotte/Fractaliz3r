@@ -8,7 +8,7 @@ uniform float boundsHalf;
 uniform int gridResolution;
 
 void main() {
-    // Use integer pixel coordinates for exact grid alignment with CPU Marching Cubes.
+    // Use integer pixel coordinates for exact grid alignment with Marching Cubes.
     // Pixel i maps to grid position i/(gridResolution-1), matching the CPU formula:
     //   pos = -boundsHalf + i * (2*boundsHalf / resolution)
     ivec2 coord = ivec2(gl_FragCoord.xy);
@@ -25,7 +25,8 @@ void main() {
     if (isnan(d) || isinf(d)) d = 1e10;
 
     vec3 factors = getFactors(trap);
+    vec3 color = clamp(applyMaterial(factors), 0.0, 1.0);
 
-    // RGB = Factors, A = Distance
-    FragColor = vec4(factors, d);
+    // RGB = Vertex color (LDR clamped), A = Distance
+    FragColor = vec4(color, d);
 }

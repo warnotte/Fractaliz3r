@@ -119,6 +119,8 @@ public class GLSLEngine implements AutoCloseable {
             evaluatorProgram.setUniform("boundsHalf", boundsHalf);
             evaluatorProgram.setUniform("gridResolution", res);
             for (Map.Entry<String, Object> entry : uniforms.entrySet()) { setUniformValue(evaluatorProgram, entry.getKey(), entry.getValue()); }
+            glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, paletteTexture);
+            evaluatorProgram.setUniform("paletteTexture", 1);
             glBindVertexArray(quadVAO);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             glFinish();

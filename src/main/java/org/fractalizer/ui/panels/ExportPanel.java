@@ -937,8 +937,6 @@ public class ExportPanel extends ScrollPane {
         dialog.setOnCancelRequested(() -> meshExportCancelled = true);
 
         long startTime = System.currentTimeMillis();
-        final AbstractFractalParams finalParams = params;
-
         Thread meshThread = new Thread(() -> {
             try {
                 controller.prepareGPUEvaluator();
@@ -948,7 +946,7 @@ public class ExportPanel extends ScrollPane {
 
                 MarchingCubes.Mesh mesh;
                 mesh = MarchingCubes.extract(
-                        finalParams, resolution, boundsHalf,
+                        resolution, boundsHalf,
                         sliceProvider,
                         progress -> Platform.runLater(() -> {
                             int zSlice = (int) (progress * resolution);

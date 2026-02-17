@@ -1,8 +1,5 @@
 package org.fractalizer.export;
 
-import javafx.scene.paint.Color;
-import org.fractalizer.fractals.AbstractFractalParams;
-
 import java.util.HashMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -67,7 +64,7 @@ public class MarchingCubes {
     }
 
     /** Extract mesh using GPU SliceProvider. Normals derived from distance grid via central differences. */
-    public static Mesh extract(AbstractFractalParams params, int resolution, float boundsHalf,
+    public static Mesh extract(int resolution, float boundsHalf,
                                 SliceProvider sliceProvider,
                                 Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         int res = resolution; int gridSize = res + 1; float step = (2f * boundsHalf) / res;
@@ -137,15 +134,14 @@ public class MarchingCubes {
                             else { nx = 0; ny = 1; nz = 0; }
                             normals.add(nx); normals.add(ny); normals.add(nz);
 
-                            // Factors: interpolate from slice data
+                            // Colors: interpolate RGB directly from GPU slice data
                             int s0 = (c0 < 4) ? 0 : 1, s1 = (c1 < 4) ? 0 : 1;
                             float[] sl0 = s0 == 0 ? sCurr : sNext, sl1 = s1 == 0 ? sCurr : sNext;
                             int idx0 = cornerGridIdx(c0, x, y, gridSize), idx1 = cornerGridIdx(c1, x, y, gridSize);
-                            float fx = mix(sl0[idx0*4], sl1[idx1*4], t);
-                            float fy = mix(sl0[idx0*4+1], sl1[idx1*4+1], t);
-                            float fz = mix(sl0[idx0*4+2], sl1[idx1*4+2], t);
-                            Color color = FractalEvaluator.computeColor(params, new float[]{fx, fy, fz});
-                            vertColors.add((float) color.getRed()); vertColors.add((float) color.getGreen()); vertColors.add((float) color.getBlue()); vertColors.add(1f);
+                            float cr = mix(sl0[idx0*4], sl1[idx1*4], t);
+                            float cg = mix(sl0[idx0*4+1], sl1[idx1*4+1], t);
+                            float cb = mix(sl0[idx0*4+2], sl1[idx1*4+2], t);
+                            vertColors.add(cr); vertColors.add(cg); vertColors.add(cb); vertColors.add(1f);
                             vertexMap.put(edgeKey, vi); edgeVerts[e] = vi;
                         }
                     }
