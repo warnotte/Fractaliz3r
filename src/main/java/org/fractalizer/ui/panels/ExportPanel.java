@@ -874,7 +874,7 @@ public class ExportPanel extends ScrollPane {
 
         // Bounds slider
         meshBoundsSlider = new EnhancedSlider("Bounds", 1.0, 5.0, 2.5, false);
-
+        //
         useGpuExportCheck = new CheckBox("GPU Accelerated (Experimental)");
         useGpuExportCheck.setSelected(true);
         useGpuExportCheck.setTooltip(new Tooltip("Use GLSL shaders for evaluation. 100x faster and 100% fidelity."));
