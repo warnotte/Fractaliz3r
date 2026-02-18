@@ -636,7 +636,7 @@ public class GLSLFractalizerApp extends Application {
                 }
 
                 // Update Viewport HUD
-                if (viewportHUD != null && fractalPanel != null) {
+                if (viewportHUD != null && fractalPanel != null && fractalPanel.getParams() != null) {
                     float currentFov = (float) Math.toDegrees(fractalPanel.getParams().getFov());
                     viewportHUD.draw(fractalPanel.getCamera(), currentFov);
                 }
