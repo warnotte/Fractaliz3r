@@ -213,9 +213,22 @@ float fbm(vec3 p) {
     return v;
 }
 
+// Lightweight fbm (3 octaves) for erosion displacement
+float fbmLow(vec3 p) {
+    float n0 = noise(p);
+    float n1 = noise(p * 2.0 + vec3(10.0));
+    float n2 = noise(p * 4.0 + vec3(30.0));
+    return n0 * 0.5 + n1 * 0.25 + n2 * 0.125;
+}
+
 float warpedFbm(vec3 p) {
     vec3 q = vec3(fbm(p), fbm(p + vec3(5.2, 1.3, 2.8)), fbm(p + vec3(1.3, 2.8, 5.2)));
     return fbm(p + 1.0 * q);
+}
+
+// Maximum possible erosion displacement magnitude for proximity gating
+float erosionMaxDisplacement() {
+    return (0.2 + 0.5 + 0.35) * erosionTime * erosionStrength * erosionScale;
 }
 
 float getErosionDisplacement(vec3 pos) {
@@ -226,21 +239,56 @@ float getErosionDisplacement(vec3 pos) {
 
     float weathering = 0.0, hydraulic = 0.0, thermal = 0.0;
 
-    // Weathering: fine cracks and pits
+    // Weathering: fine cracks and pits (3 octaves)
     if (erosionType == 0 || erosionType == 3) {
-        weathering = (fbm(p * 8.0 + vec3(42.0)) - 0.4) * 0.2;
+        weathering = (fbmLow(p * 8.0 + vec3(42.0)) - 0.4) * 0.2;
     }
 
     // Hydraulic: vertical flow channels, deeper at lower Y
+    // Cheap warp: single fbm offset instead of 3-component vec3 warp
     if (erosionType == 0 || erosionType == 1) {
-        vec3 flowP = p; flowP.y *= 0.25;
-        hydraulic = pow(warpedFbm(flowP * 2.5), 1.5) * 0.5;
-        hydraulic *= 1.0 + 0.3 * (1.0 - p.y);
+        vec3 flowP = vec3(p.x, p.y * 0.25, p.z);
+        vec3 wp = flowP * 2.5;
+        float warp = fbmLow(wp);
+        float raw = pow(fbmLow(wp + warp * 1.0), 1.5) * 0.5;
+        hydraulic = raw * (1.0 + 0.3 * (1.0 - p.y));
     }
 
-    // Thermal: large-scale rounding/smoothing
+    // Thermal: large-scale rounding/smoothing (3 octaves, low freq = 2 would suffice)
     if (erosionType == 0 || erosionType == 2) {
-        thermal = fbm(p * 1.5 + vec3(13.0, 7.0, 19.0)) * 0.35;
+        thermal = fbmLow(p * 1.5 + vec3(13.0, 7.0, 19.0)) * 0.35;
+    }
+
+    return (weathering + hydraulic + thermal) * t * erosionScale;
+}
+
+// Lighter erosion for shadow/AO (2 octaves, no hydraulic warp)
+float getErosionDisplacementLight(vec3 pos) {
+    if (erosionEnabled == 0) return 0.0;
+
+    vec3 p = pos / erosionScale;
+    float t = erosionTime * erosionStrength;
+
+    float weathering = 0.0;
+    float hydraulic = 0.0;
+    float thermal = 0.0;
+
+    if (erosionType == 0 || erosionType == 3) {
+        float n1 = noise(p * 8.0 + vec3(42.0)) * 0.5;
+        float n2 = noise(p * 16.0 + vec3(42.0)) * 0.25;
+        weathering = (n1 + n2 - 0.3) * 0.2;
+    }
+    if (erosionType == 0 || erosionType == 1) {
+        vec3 flowP = vec3(p.x, p.y * 0.25, p.z);
+        float n1 = noise(flowP * 2.5) * 0.5;
+        float n2 = noise(flowP * 5.0) * 0.25;
+        float raw = pow(max(0.0, n1 + n2), 1.5) * 0.5;
+        hydraulic = raw * (1.0 + 0.3 * (1.0 - p.y));
+    }
+    if (erosionType == 0 || erosionType == 2) {
+        float n1 = noise(p * 1.5 + vec3(13.0, 7.0, 19.0)) * 0.5;
+        float n2 = noise(p * 3.0 + vec3(13.0, 7.0, 19.0)) * 0.25;
+        thermal = (n1 + n2) * 0.35;
     }
 
     return (weathering + hydraulic + thermal) * t * erosionScale;

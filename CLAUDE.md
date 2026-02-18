@@ -209,6 +209,32 @@ Variance-based convergence detection that skips already-converged pixels during 
 - **Interaction with sample counts**: Min Adaptive Samples is a floor before checking, Preview/Export Samples is the ceiling. A pixel renders between `minAdaptiveSamples` and `maxSamples` passes.
 - **Render timer**: Status bar shows elapsed time after full quality render completes (e.g., "Rendered 64 samples in 3.2s").
 
+## Erosion Simulation
+
+Procedural erosion applied to any fractal distance field, making fractals look like weathered rock formations. Purely shader-side: erosion functions in `common.glsl` modify the DE result in `raytracer.glsl`. No compute shaders, no 3D textures, no new shader files.
+
+- **Core principle**: After each `DE()` or `DE_simple()` call in geometry-related functions (rayMarch, calcNormal, calcShadow, calcAO, rayMarchSimple, glass interior), add a displacement value: `eroded_d = original_d + getErosionDisplacement(pos)`. Coloring-only DE calls (orbit trap re-evaluation) are NOT modified.
+- **Three erosion layers** (combined in "All" mode):
+  - **Weathering** (type 3): Fine cracks and pits — high-freq `fbmLow` (8x scale), 3 octaves
+  - **Hydraulic** (type 1): Vertical flow channels carved by water — Y-stretched warped `fbmLow`, gravity-biased (deeper at low Y)
+  - **Thermal** (type 2): Large-scale rounding/smoothing — low-freq `fbmLow` (1.5x scale)
+- **Performance optimizations**:
+  - `fbmLow()`: Unrolled 3-octave fbm (no loop, no compound assignments) — ~40% faster than `fbm()`
+  - Cheap hydraulic warp: 2x `fbmLow` instead of 4x `fbm` via `warpedFbm` — ~70% faster
+  - **Proximity gating**: In rayMarch/rayMarchSimple, erosion only computed when `DE < erosionMaxDisplacement() + 0.1` — skips ~80-90% of ray steps in empty space
+  - `getErosionDisplacementLight()`: 2-octave inline noise for shadow/AO (no fbm calls, no warp)
+  - calcNormal keeps full quality `getErosionDisplacement()` (critical for visual fidelity)
+- **NVIDIA GLSL compiler pitfall**: Avoid `+=`/`*=` on swizzled components (e.g., `flowP.y *= 0.25`) and in complex conditional contexts — causes `C9999: Unhandled expr op assign+` fatal error. Use explicit assignments and constructors instead.
+- **Parameters** (in `AbstractFractalParams`, serialized in `EffectsConfig`):
+  - `erosionEnabled` (bool, default false)
+  - `erosionStrength` (float, 0-1, default 0.5)
+  - `erosionTime` (float, 0-20, default 0.0 — the key "how eroded" parameter)
+  - `erosionScale` (float, 0.1-5, default 1.0 — world-space feature scale)
+  - `erosionType` (int, 0=All, 1=Hydraulic, 2=Thermal, 3=Cracks)
+- **Animation**: `erosionTime`, `erosionStrength`, `erosionScale` are global timeline tracks in their own "Erosion" group (not fractal-scoped). Keyframe erosionTime 0→10 to animate a fractal slowly eroding.
+- **UI**: QualityPanel "Erosion" TitledPane (enable checkbox, type ComboBox, strength/time/scale sliders).
+- **Zero overhead when OFF**: `erosionEnabled == 0` → early return 0.0 in all erosion functions.
+
 ## GPU-Accelerated 3D Mesh Export
 
 Export fractal geometry as 3D meshes (OBJ, glTF/GLB, PLY) using GPU-accelerated distance field evaluation. Uses the same GLSL fractal shaders as the renderer — 100% fidelity, zero CPU DE code.

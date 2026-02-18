@@ -70,7 +70,8 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
     float qualityEpsilon = baseEpsilon / qualityMultiplier;
 
     for (int i = 0; i < steps && t < maxt; i++) {
-        float h = DE_simple(ro + rd * t) + getErosionDisplacement(ro + rd * t);
+        vec3 shadowPos = ro + rd * t;
+        float h = DE_simple(shadowPos) + getErosionDisplacementLight(shadowPos);
 
         // Use adaptive epsilon for shadows too
         float epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
@@ -99,7 +100,7 @@ float calcAO(vec3 pos, vec3 normal) {
 
     for (int i = 0; i < steps; i++) {
         float hr = 0.01 + 0.12 * float(i + 1) / float(steps);
-        float dd = DE_simple(pos + normal * hr) + getErosionDisplacement(pos + normal * hr);
+        float dd = DE_simple(pos + normal * hr) + getErosionDisplacementLight(pos + normal * hr);
         ao += (hr - dd) * scale;
         scale *= 0.6;
     }
@@ -141,7 +142,10 @@ RayHit rayMarch(Ray ray) {
     for (int i = 0; i < effectiveMaxSteps; i++) {
         result.pos = ray.origin + ray.direction * result.dist;
 
-        float d = DE(result.pos, result.trap) + getErosionDisplacement(result.pos);
+        float d = DE(result.pos, result.trap);
+        if (erosionEnabled != 0 && d < erosionMaxDisplacement() + 0.1) {
+            d = d + getErosionDisplacement(result.pos);
+        }
         result.minDist = min(result.minDist, d);
         result.steps = i + 1;
 
@@ -574,7 +578,10 @@ bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist) {
 
     for (int i = 0; i < effectiveMaxSteps; i++) {
         vec3 pos = ray.origin + ray.direction * t;
-        float d = DE_simple(pos) + getErosionDisplacement(pos);
+        float d = DE_simple(pos);
+        if (erosionEnabled != 0 && d < erosionMaxDisplacement() + 0.1) {
+            d = d + getErosionDisplacement(pos);
+        }
 
         float epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
 
@@ -700,7 +707,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                     vec3 exitPos = hitPos;
                     for (int gs = 0; gs < 128; gs++) {
                         exitPos = hitPos + interiorDir * t;
-                        float d = DE_simple(exitPos) + getErosionDisplacement(exitPos);
+                        float d = DE_simple(exitPos) + getErosionDisplacementLight(exitPos);
                         if (d > 0.0) {
                             // Overshot exit surface — step back to surface
                             exitPos -= interiorDir * d;
@@ -952,7 +959,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     vec3 exitPos = hitPos;
                     for (int gs = 0; gs < 128; gs++) {
                         exitPos = hitPos + interiorDir * t;
-                        float d = DE_simple(exitPos) + getErosionDisplacement(exitPos);
+                        float d = DE_simple(exitPos) + getErosionDisplacementLight(exitPos);
                         if (d > 0.0) {
                             exitPos -= interiorDir * d;
                             break;
