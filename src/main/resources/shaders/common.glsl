@@ -395,19 +395,23 @@ float getMossDisplacementLight(vec3 pos) {
 }
 
 // Factor for coloring (0 = no moss, 1 = full moss)
+// mossNormalThreshold: 0 = grows everywhere, 1 = only on horizontal surfaces and crevices
 float getMossFactor(vec3 pos, vec3 normal, float ao) {
     if (mossEnabled == 0) return 0.0;
     vec3 p = pos / mossScale;
-    float t = mossTime * mossStrength;
-    // Horizontal surface preference
-    float upFacing = smoothstep(mossNormalThreshold, mossNormalThreshold + 0.3, normal.y);
+    float t = clamp(mossTime * mossStrength, 0.0, 5.0);
+    // Horizontal surface preference (normal.y > threshold)
+    float upFacing = smoothstep(mossNormalThreshold - 0.1, mossNormalThreshold + 0.2, normal.y);
     // Crevice preference (low AO = occluded = crevice)
-    float crevice = smoothstep(0.7, 0.3, ao);
-    // Either horizontal OR crevice (weighted)
-    float placement = max(upFacing * 0.7, crevice * 1.0);
-    // Organic patchiness
+    float crevice = 1.0 - smoothstep(0.2, 0.8, ao);
+    // Combine: upFacing OR crevice
+    float placement = max(upFacing, crevice * 0.8);
+    // When threshold is low, moss grows almost everywhere
+    placement = mix(1.0, placement, mossNormalThreshold);
+    // Organic patchiness — fbmLow returns [0, 0.875], remap to wide coverage
     float patches = fbmLow(p * 3.0 + vec3(91.0, 17.0, 53.0));
-    float growth = smoothstep(0.3, 0.7, patches) * placement * t;
+    float patchMask = smoothstep(0.1, 0.6, patches);
+    float growth = patchMask * placement * t;
     return clamp(growth, 0.0, 1.0);
 }
 

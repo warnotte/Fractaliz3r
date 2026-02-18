@@ -674,6 +674,13 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
         localEmissive = emissiveIntensity;
 #endif
 
+        // Moss coloring
+        if (mossEnabled != 0) {
+            float ptAo = calcAO(hitPos, faceNormal);
+            float mf = getMossFactor(hitPos, faceNormal, ptAo);
+            albedo = mix(albedo, mossColor, mf);
+        }
+
         vec3 viewDir = -currentRay.direction;
         float cosTheta = max(dot(viewDir, faceNormal), 0.0);
         vec3 extraLightDirNorm;
@@ -928,6 +935,13 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         safeRoughness = max(roughness, 0.02);
         localEmissive = emissiveIntensity;
 #endif
+
+        // Moss coloring
+        if (mossEnabled != 0) {
+            float ptAo = calcAO(hitPos, faceNormal);
+            float mf = getMossFactor(hitPos, faceNormal, ptAo);
+            albedo = mix(albedo, mossColor, mf);
+        }
 
         vec3 viewDir = -currentRay.direction;
         float NdotV = max(dot(viewDir, faceNormal), 0.001);
@@ -1201,6 +1215,12 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 vec3 renderByMode(RayHit hit, Ray ray, vec3 normal, float shadow, float ao) {
     vec3 factors = getFactors(hit.trap);
     vec3 baseColor = applyMaterial(factors);
+
+    // Moss coloring — applied here so ALL render modes see it
+    if (mossEnabled != 0) {
+        float mf = getMossFactor(hit.pos, normal, ao);
+        baseColor = mix(baseColor, mossColor, mf);
+    }
 
     switch (renderMode) {
         case RENDER_MODE_NORMALS:
