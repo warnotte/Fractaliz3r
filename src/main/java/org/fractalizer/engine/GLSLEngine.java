@@ -160,6 +160,39 @@ public class GLSLEngine implements AutoCloseable {
         if (!name.equals(activeProgram)) { activeProgram = name; needsReset = true; }
     }
 
+    public boolean hasProgram(String name) { return programs.containsKey(name); }
+
+    /**
+     * Load raw shader source from a resource path.
+     */
+    public String loadShaderSource(String resourcePath) { return loadResource(resourcePath); }
+
+    /**
+     * Compile a boolean shader that combines two fractal shaders.
+     * The secondary source must already be preprocessed (symbols prefixed).
+     * Injects #define BOOLEAN_OPS before common.glsl.
+     */
+    public void loadBooleanFractalShader(String name, String primaryPath, String secondarySource) {
+        runOnGLThread(() -> {
+            try {
+                String vertexSource = loadResource("/shaders/fullscreen.vert");
+                String commonSource = stripVersion(loadResource("/shaders/common.glsl"));
+                String primarySource = stripVersion(loadResource(primaryPath));
+                String raytracerSource = stripVersion(loadResource("/shaders/raytracer.glsl"));
+                String fragmentSource = "#version 430 core\n#define BOOLEAN_OPS\n"
+                    + commonSource + "\n" + primarySource + "\n" + secondarySource + "\n" + raytracerSource;
+                // Delete old program if it exists
+                ShaderProgram old = programs.remove(name);
+                if (old != null) old.delete();
+                ShaderProgram program = new ShaderProgram(vertexSource, fragmentSource);
+                programs.put(name, program);
+            } catch (Exception e) {
+                System.err.println("Boolean shader compilation failed for " + name + ": " + e.getMessage());
+                // Don't crash — boolean ops will be silently disabled
+            }
+        });
+    }
+
     public void resize(int width, int height) {
         if (width != currentWidth || height != currentHeight) {
             runOnGLThread(() -> { currentWidth = width; currentHeight = height; recreateFramebuffer(); needsReset = true; });

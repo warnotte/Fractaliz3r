@@ -209,6 +209,13 @@ public class FractalConfig {
         public float mossColorB = 0.08f;
         public float mossNormalThreshold = 0.3f;
 
+        // Boolean Operations
+        public boolean booleanEnabled = false;
+        public int booleanOp = 1;
+        public String boolSecondaryType = null;
+        public float boolOffsetX = 0.5f, boolOffsetY = 0f, boolOffsetZ = 0f;
+        public float boolScale = 1.0f;
+        public float boolBlend = 0.0f;
     }
 
     public static class AnimationConfig {
@@ -365,6 +372,14 @@ public class FractalConfig {
         config.effects.mossColorG = params.getMossColorG();
         config.effects.mossColorB = params.getMossColorB();
         config.effects.mossNormalThreshold = params.getMossNormalThreshold();
+        config.effects.booleanEnabled = params.isBooleanEnabled();
+        config.effects.booleanOp = params.getBooleanOp();
+        config.effects.boolSecondaryType = params.getBoolSecondaryType();
+        config.effects.boolOffsetX = params.getBoolOffsetX();
+        config.effects.boolOffsetY = params.getBoolOffsetY();
+        config.effects.boolOffsetZ = params.getBoolOffsetZ();
+        config.effects.boolScale = params.getBoolScale();
+        config.effects.boolBlend = params.getBoolBlend();
         // Fractal-specific parameters
         extractFractalParams(params, config.fractalParams);
 
@@ -505,6 +520,14 @@ public class FractalConfig {
         params.setMossScale(effects.mossScale);
         params.setMossColor(effects.mossColorR, effects.mossColorG, effects.mossColorB);
         params.setMossNormalThreshold(effects.mossNormalThreshold);
+        params.setBooleanEnabled(effects.booleanEnabled);
+        params.setBooleanOp(effects.booleanOp);
+        params.setBoolSecondaryType(effects.boolSecondaryType);
+        params.setBoolOffsetX(effects.boolOffsetX);
+        params.setBoolOffsetY(effects.boolOffsetY);
+        params.setBoolOffsetZ(effects.boolOffsetZ);
+        params.setBoolScale(effects.boolScale);
+        params.setBoolBlend(effects.boolBlend);
         // Fractal-specific parameters
         applyFractalParams(params, fractalParams);
     }

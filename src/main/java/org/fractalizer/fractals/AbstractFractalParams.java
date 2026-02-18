@@ -200,6 +200,14 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float mossColorB = 0.08f;
     protected float mossNormalThreshold = 0.3f;
 
+    // Boolean Operations (CSG)
+    protected boolean booleanEnabled = false;
+    protected int booleanOp = 1;           // 1=Union, 2=Intersect, 3=Subtract
+    protected String boolSecondaryType = null;  // kernelName of secondary fractal
+    protected float boolOffsetX = 0.5f, boolOffsetY = 0f, boolOffsetZ = 0f;
+    protected float boolScale = 1.0f;
+    protected float boolBlend = 0.0f;
+
     // Custom gradient palette (used when paletteIndex == 6)
     protected GradientPalette customGradient;
 
@@ -462,6 +470,16 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.mossColorG = this.mossColorG;
         target.mossColorB = this.mossColorB;
         target.mossNormalThreshold = this.mossNormalThreshold;
+
+        // Copy Boolean Operations
+        target.booleanEnabled = this.booleanEnabled;
+        target.booleanOp = this.booleanOp;
+        target.boolSecondaryType = this.boolSecondaryType;
+        target.boolOffsetX = this.boolOffsetX;
+        target.boolOffsetY = this.boolOffsetY;
+        target.boolOffsetZ = this.boolOffsetZ;
+        target.boolScale = this.boolScale;
+        target.boolBlend = this.boolBlend;
 
         // Copy custom gradient
         target.customGradient = this.customGradient.copy();
@@ -873,6 +891,24 @@ public abstract class AbstractFractalParams implements FractalParams {
     }
     public float getMossNormalThreshold() { return mossNormalThreshold; }
     public void setMossNormalThreshold(float threshold) { this.mossNormalThreshold = Math.max(0, Math.min(1, threshold)); }
+
+    // Boolean Operations
+    public boolean isBooleanEnabled() { return booleanEnabled; }
+    public void setBooleanEnabled(boolean enabled) { this.booleanEnabled = enabled; }
+    public int getBooleanOp() { return booleanOp; }
+    public void setBooleanOp(int op) { this.booleanOp = Math.max(1, Math.min(3, op)); }
+    public String getBoolSecondaryType() { return boolSecondaryType; }
+    public void setBoolSecondaryType(String type) { this.boolSecondaryType = type; }
+    public float getBoolOffsetX() { return boolOffsetX; }
+    public void setBoolOffsetX(float x) { this.boolOffsetX = x; }
+    public float getBoolOffsetY() { return boolOffsetY; }
+    public void setBoolOffsetY(float y) { this.boolOffsetY = y; }
+    public float getBoolOffsetZ() { return boolOffsetZ; }
+    public void setBoolOffsetZ(float z) { this.boolOffsetZ = z; }
+    public float getBoolScale() { return boolScale; }
+    public void setBoolScale(float scale) { this.boolScale = Math.max(0.01f, Math.min(10f, scale)); }
+    public float getBoolBlend() { return boolBlend; }
+    public void setBoolBlend(float blend) { this.boolBlend = Math.max(0f, Math.min(2f, blend)); }
 
     // Custom Gradient
     public GradientPalette getCustomGradient() { return customGradient; }

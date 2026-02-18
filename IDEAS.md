@@ -38,9 +38,9 @@ Attempted implementation with procedural GPU particles (spatial hashing, fullscr
 Previously attempted and rejected — user considers it garbage.
 
 ## 8. Boolean Operations Between Fractals
-**Status:** IDEA
+**Status:** DONE
 
-Union/intersection/subtraction of two fractal distance fields. Carve a Menger Sponge out of a Mandelbulb with `max(DE_A, -DE_B)`, or merge them with `min(DE_A, DE_B)`. Each fractal has its own parameter set. A secondary fractal type selector + operation ComboBox in the UI. ~20 lines of GLSL (evaluate both DEs, combine), coloring from whichever DE is closer. Erosion applies to the combined result. **Note**: first attempt failed due to GLSL symbol conflicts (duplicate uniform declarations, OrbitTrap struct differences). Needs full uniform namespacing approach.
+CSG union/intersection/subtraction of two fractal distance fields. Carve a Menger Sponge out of a Mandelbulb, merge them smoothly, etc. Solved via Java-side `ShaderPreprocessor` that renames all local GLSL symbols in the secondary fractal with a `b_` prefix before shader concatenation — zero conflicts. `#ifdef BOOLEAN_OPS` in raytracer.glsl for clean separation. On-demand compilation with caching. Smooth blend via `smin`/`smax`. Excludes Fractal Terrain, Cornell Box, and Test Scene. Also serves as the foundation for future user-written custom DE shaders (runtime GLSL compilation pipeline).
 
 ## 9. Moss / Lichen Growth
 **Status:** DONE

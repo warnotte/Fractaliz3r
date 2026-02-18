@@ -32,6 +32,50 @@ struct RayHit {
 };
 
 // ============================================================================
+// Boolean Operations (CSG)
+// ============================================================================
+
+#ifdef BOOLEAN_OPS
+uniform int boolOp;       // 1=Union, 2=Intersect, 3=Subtract
+uniform vec3 boolOffset;  // Translation of secondary fractal
+uniform float boolScale;  // Scale of secondary fractal
+uniform float boolBlend;  // Smooth blend radius (0 = sharp)
+
+float smin_bool(float a, float b, float k) {
+    if (k <= 0.0) return min(a, b);
+    float h = max(k - abs(a - b), 0.0) / k;
+    return min(a, b) - h * h * k * 0.25;
+}
+
+float smax_bool(float a, float b, float k) {
+    if (k <= 0.0) return max(a, b);
+    float h = max(k - abs(a - b), 0.0) / k;
+    return max(a, b) + h * h * k * 0.25;
+}
+
+float boolCombine(float d1, float d2) {
+    if (boolOp == 1) return smin_bool(d1, d2, boolBlend);       // Union
+    if (boolOp == 2) return smax_bool(d1, d2, boolBlend);       // Intersect
+    if (boolOp == 3) return smax_bool(d1, -d2, boolBlend);      // Subtract
+    return d1;
+}
+
+float boolDE(vec3 pos, out OrbitTrap trap) {
+    float d1 = DE(pos, trap);
+    vec3 p2 = (pos - boolOffset) / boolScale;
+    float d2 = b_DE_simple(p2) * boolScale;
+    return boolCombine(d1, d2);
+}
+
+float boolDE_simple(vec3 pos) {
+    float d1 = DE_simple(pos);
+    vec3 p2 = (pos - boolOffset) / boolScale;
+    float d2 = b_DE_simple(p2) * boolScale;
+    return boolCombine(d1, d2);
+}
+#endif
+
+// ============================================================================
 // Normal Calculation (Tetrahedron Method with adaptive epsilon)
 // ============================================================================
 
@@ -50,12 +94,21 @@ vec3 calcNormal(vec3 pos) {
     // Adaptive epsilon: prevents artifacts on distant objects while keeping close details sharp
     float e = max(qualityEpsilon, distToCamera * 0.00005);
 
+#ifdef BOOLEAN_OPS
+    return normalize(
+        k1 * (boolDE_simple(pos + k1 * e) + getErosionDisplacement(pos + k1 * e) + getCrystalDisplacement(pos + k1 * e) + getMossDisplacement(pos + k1 * e)) +
+        k2 * (boolDE_simple(pos + k2 * e) + getErosionDisplacement(pos + k2 * e) + getCrystalDisplacement(pos + k2 * e) + getMossDisplacement(pos + k2 * e)) +
+        k3 * (boolDE_simple(pos + k3 * e) + getErosionDisplacement(pos + k3 * e) + getCrystalDisplacement(pos + k3 * e) + getMossDisplacement(pos + k3 * e)) +
+        k4 * (boolDE_simple(pos + k4 * e) + getErosionDisplacement(pos + k4 * e) + getCrystalDisplacement(pos + k4 * e) + getMossDisplacement(pos + k4 * e))
+    );
+#else
     return normalize(
         k1 * (DE_simple(pos + k1 * e) + getErosionDisplacement(pos + k1 * e) + getCrystalDisplacement(pos + k1 * e) + getMossDisplacement(pos + k1 * e)) +
         k2 * (DE_simple(pos + k2 * e) + getErosionDisplacement(pos + k2 * e) + getCrystalDisplacement(pos + k2 * e) + getMossDisplacement(pos + k2 * e)) +
         k3 * (DE_simple(pos + k3 * e) + getErosionDisplacement(pos + k3 * e) + getCrystalDisplacement(pos + k3 * e) + getMossDisplacement(pos + k3 * e)) +
         k4 * (DE_simple(pos + k4 * e) + getErosionDisplacement(pos + k4 * e) + getCrystalDisplacement(pos + k4 * e) + getMossDisplacement(pos + k4 * e))
     );
+#endif
 }
 
 // ============================================================================
@@ -71,7 +124,11 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
 
     for (int i = 0; i < steps && t < maxt; i++) {
         vec3 shadowPos = ro + rd * t;
+#ifdef BOOLEAN_OPS
+        float h = boolDE_simple(shadowPos) + getErosionDisplacementLight(shadowPos) + getCrystalDisplacementLight(shadowPos) + getMossDisplacementLight(shadowPos);
+#else
         float h = DE_simple(shadowPos) + getErosionDisplacementLight(shadowPos) + getCrystalDisplacementLight(shadowPos) + getMossDisplacementLight(shadowPos);
+#endif
 
         // Use adaptive epsilon for shadows too
         float epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
@@ -100,7 +157,11 @@ float calcAO(vec3 pos, vec3 normal) {
 
     for (int i = 0; i < steps; i++) {
         float hr = 0.01 + 0.12 * float(i + 1) / float(steps);
+#ifdef BOOLEAN_OPS
+        float dd = boolDE_simple(pos + normal * hr) + getErosionDisplacementLight(pos + normal * hr) + getCrystalDisplacementLight(pos + normal * hr) + getMossDisplacementLight(pos + normal * hr);
+#else
         float dd = DE_simple(pos + normal * hr) + getErosionDisplacementLight(pos + normal * hr) + getCrystalDisplacementLight(pos + normal * hr) + getMossDisplacementLight(pos + normal * hr);
+#endif
         ao += (hr - dd) * scale;
         scale *= 0.6;
     }
@@ -117,7 +178,11 @@ float calcSSS(vec3 pos, vec3 normal, vec3 lightDir) {
     float step = sssRadius / 5.0;
     for (int i = 1; i <= 5; i++) {
         float expectedDist = float(i) * step;
+#ifdef BOOLEAN_OPS
+        float actualDist = boolDE_simple(pos - normal * expectedDist);
+#else
         float actualDist = DE_simple(pos - normal * expectedDist);
+#endif
         thickness += max(0.0, expectedDist - actualDist);
     }
     // Wrap lighting: light coming from behind illuminates thin areas
@@ -142,7 +207,11 @@ RayHit rayMarch(Ray ray) {
     for (int i = 0; i < effectiveMaxSteps; i++) {
         result.pos = ray.origin + ray.direction * result.dist;
 
+#ifdef BOOLEAN_OPS
+        float d = boolDE(result.pos, result.trap);
+#else
         float d = DE(result.pos, result.trap);
+#endif
         if (erosionEnabled != 0 && d < erosionMaxDisplacement() + 0.1) {
             d = d + getErosionDisplacement(result.pos);
         }
@@ -596,7 +665,11 @@ bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist) {
 
     for (int i = 0; i < effectiveMaxSteps; i++) {
         vec3 pos = ray.origin + ray.direction * t;
+#ifdef BOOLEAN_OPS
+        float d = boolDE_simple(pos);
+#else
         float d = DE_simple(pos);
+#endif
         if (erosionEnabled != 0 && d < erosionMaxDisplacement() + 0.1) {
             d = d + getErosionDisplacement(pos);
         }
@@ -738,7 +811,11 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                     vec3 exitPos = hitPos;
                     for (int gs = 0; gs < 128; gs++) {
                         exitPos = hitPos + interiorDir * t;
+#ifdef BOOLEAN_OPS
+                        float d = boolDE_simple(exitPos) + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
+#else
                         float d = DE_simple(exitPos) + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
+#endif
                         if (d > 0.0) {
                             // Overshot exit surface — step back to surface
                             exitPos -= interiorDir * d;
@@ -997,7 +1074,11 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     vec3 exitPos = hitPos;
                     for (int gs = 0; gs < 128; gs++) {
                         exitPos = hitPos + interiorDir * t;
+#ifdef BOOLEAN_OPS
+                        float d = boolDE_simple(exitPos) + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
+#else
                         float d = DE_simple(exitPos) + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
+#endif
                         if (d > 0.0) {
                             exitPos -= interiorDir * d;
                             break;

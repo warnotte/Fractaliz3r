@@ -159,6 +159,15 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider cbMetalXSlider, cbMetalYSlider, cbMetalZSlider, cbMetalRadiusSlider;
     private EnhancedSlider cbLightXSlider, cbLightYSlider, cbLightZSlider, cbLightWSlider, cbLightDSlider;
 
+    // Boolean Operations
+    private TitledPane booleanOpsPane;
+    private CheckBox boolEnableCheck;
+    private ComboBox<String> boolSecondaryCombo;
+    private ComboBox<String> boolOpCombo;
+    private EnhancedSlider boolOffsetXSlider, boolOffsetYSlider, boolOffsetZSlider;
+    private EnhancedSlider boolScaleSlider;
+    private EnhancedSlider boolBlendSlider;
+
     public FractalPanel(RenderController controller, AbstractFractalParams initialParams,
                         RenderCallback renderCallback) {
         this.controller = controller;
@@ -192,6 +201,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         createFractalTerrainControls();
         createTestSceneControls();
         createCornellBoxControls();
+        createBooleanOpsPane();
 
         // Movement speed
         speedSlider = new EnhancedSlider("Move Speed", 0.001, 0.5, 0.1, false);
@@ -330,7 +340,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         TitledPane navPane = new TitledPane("Navigation", navBox);
         navPane.setExpanded(true);
 
-        panel.getChildren().addAll(typeBox, paramsPane, toolsPane, navPane);
+        panel.getChildren().addAll(typeBox, paramsPane, booleanOpsPane, toolsPane, navPane);
 
         return panel;
     }
@@ -1187,6 +1197,66 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         return combo;
     }
 
+    private void createBooleanOpsPane() {
+        boolEnableCheck = new CheckBox("Enable");
+        boolEnableCheck.setOnAction(e -> {
+            if (!suppressRender && params != null) {
+                params.setBooleanEnabled(boolEnableCheck.isSelected());
+                renderCallback.requestRender();
+            }
+        });
+
+        boolSecondaryCombo = new ComboBox<>();
+        for (FractalType ft : FractalType.values()) {
+            if (ft == FractalType.TEST_SCENE || ft == FractalType.CORNELL_BOX || ft == FractalType.FRACTAL_TERRAIN) continue;
+            boolSecondaryCombo.getItems().add(ft.getKernelName());
+        }
+        boolSecondaryCombo.setMaxWidth(Double.MAX_VALUE);
+        boolSecondaryCombo.setOnAction(e -> {
+            if (!suppressRender && params != null) {
+                params.setBoolSecondaryType(boolSecondaryCombo.getValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        boolOpCombo = new ComboBox<>();
+        boolOpCombo.getItems().addAll("Union", "Intersect", "Subtract");
+        boolOpCombo.setValue("Union");
+        boolOpCombo.setMaxWidth(Double.MAX_VALUE);
+        boolOpCombo.setOnAction(e -> {
+            if (!suppressRender && params != null) {
+                int op = boolOpCombo.getSelectionModel().getSelectedIndex() + 1;
+                params.setBooleanOp(op);
+                renderCallback.requestRender();
+            }
+        });
+
+        boolOffsetXSlider = new EnhancedSlider("Offset X", -5, 5, 0.5, false);
+        boolOffsetXSlider.setOnAction(v -> { if (!suppressRender && params != null) { params.setBoolOffsetX(v.floatValue()); renderCallback.requestRender(); } });
+        boolOffsetYSlider = new EnhancedSlider("Offset Y", -5, 5, 0, false);
+        boolOffsetYSlider.setOnAction(v -> { if (!suppressRender && params != null) { params.setBoolOffsetY(v.floatValue()); renderCallback.requestRender(); } });
+        boolOffsetZSlider = new EnhancedSlider("Offset Z", -5, 5, 0, false);
+        boolOffsetZSlider.setOnAction(v -> { if (!suppressRender && params != null) { params.setBoolOffsetZ(v.floatValue()); renderCallback.requestRender(); } });
+
+        boolScaleSlider = new EnhancedSlider("Scale", 0.01, 10, 1, false);
+        boolScaleSlider.setOnAction(v -> { if (!suppressRender && params != null) { params.setBoolScale(v.floatValue()); renderCallback.requestRender(); } });
+
+        boolBlendSlider = new EnhancedSlider("Smooth Blend", 0, 2, 0, false);
+        boolBlendSlider.setOnAction(v -> { if (!suppressRender && params != null) { params.setBoolBlend(v.floatValue()); renderCallback.requestRender(); } });
+
+        VBox content = new VBox(6,
+            boolEnableCheck,
+            new Label("Secondary Fractal:"), boolSecondaryCombo,
+            new Label("Operation:"), boolOpCombo,
+            boolOffsetXSlider, boolOffsetYSlider, boolOffsetZSlider,
+            boolScaleSlider, boolBlendSlider
+        );
+        content.setPadding(new Insets(4));
+
+        booleanOpsPane = new TitledPane("Boolean Operations", content);
+        booleanOpsPane.setExpanded(false);
+    }
+
     /**
      * Refresh all UI controls from current params.
      * Called after loading a configuration.
@@ -1350,6 +1420,21 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 cbLightWSlider.setValue(cb.getLightPanelW());
                 cbLightDSlider.setValue(cb.getLightPanelD());
             }
+
+            // Boolean Operations
+            boolEnableCheck.setSelected(params.isBooleanEnabled());
+            if (params.getBoolSecondaryType() != null) {
+                boolSecondaryCombo.setValue(params.getBoolSecondaryType());
+            }
+            int opIdx = params.getBooleanOp() - 1;
+            if (opIdx >= 0 && opIdx < boolOpCombo.getItems().size()) {
+                boolOpCombo.getSelectionModel().select(opIdx);
+            }
+            boolOffsetXSlider.setValue(params.getBoolOffsetX());
+            boolOffsetYSlider.setValue(params.getBoolOffsetY());
+            boolOffsetZSlider.setValue(params.getBoolOffsetZ());
+            boolScaleSlider.setValue(params.getBoolScale());
+            boolBlendSlider.setValue(params.getBoolBlend());
 
             // Update common controls
             speedSlider.setValue(camera.getMoveSpeed());

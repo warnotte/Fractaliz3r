@@ -34,6 +34,7 @@ org.fractalizer
 ├── GLSLFractalizerApp.java          # JavaFX entry point with FPS navigation
 ├── engine/
 │   ├── GLSLEngine.java              # GPU compute abstraction (LWJGL/OpenGL)
+│   ├── ShaderPreprocessor.java      # GLSL symbol renaming for shader concatenation (boolean ops)
 │   └── Camera.java                  # Quaternion-based FPS camera (no gimbal lock)
 ├── fractals/
 │   ├── FractalParams.java           # Interface for fractal parameters
@@ -234,6 +235,23 @@ Procedural erosion applied to any fractal distance field, making fractals look l
 - **Animation**: `erosionTime`, `erosionStrength`, `erosionScale` are global timeline tracks in their own "Erosion" group (not fractal-scoped). Keyframe erosionTime 0→10 to animate a fractal slowly eroding.
 - **UI**: QualityPanel "Erosion" TitledPane (enable checkbox, type ComboBox, strength/time/scale sliders).
 - **Zero overhead when OFF**: `erosionEnabled == 0` → early return 0.0 in all erosion functions.
+
+## Boolean Operations (CSG)
+
+Constructive Solid Geometry between two fractal distance fields: Union, Intersect, or Subtract. Combines any two fractal types (excluding Fractal Terrain, Cornell Box, Test Scene) with optional smooth blending.
+
+- **GLSL symbol conflict solution**: `ShaderPreprocessor.java` renames all local symbols (uniforms, structs, functions, consts) in the secondary fractal shader with a `b_` prefix before concatenation. Zero changes to existing fractal shaders.
+- **Shader assembly**: `GLSLEngine.loadBooleanFractalShader()` compiles `#version 430` + `#define BOOLEAN_OPS` + `common.glsl` + primary fractal + preprocessed secondary + `raytracer.glsl`. On-demand compilation with caching (avoids combinatorial explosion at startup).
+- **raytracer.glsl**: `#ifdef BOOLEAN_OPS` block defines `boolDE(pos, trap)` and `boolDE_simple(pos)` — evaluate both DEs, transform secondary by offset/scale, combine via `boolCombine()`. 8 geometry DE call sites wrapped with `#ifdef` (calcNormal, calcShadow, calcAO, calcSSS, rayMarch, rayMarchSimple, 2× glass interior). Coloring-only DE calls use primary only.
+- **Smooth boolean**: `smin_bool(a,b,k)` / `smax_bool(a,b,k)` with polynomial smooth min/max. `boolBlend=0` = hard boolean, `boolBlend>0` = organic transitions.
+- **Controller**: `activateCurrentProgram()` replaces all 11 `setActiveProgram()` calls — transparently switches between boolean and normal shader programs. `buildSecondaryUniforms()` emits `b_`-prefixed uniforms for the secondary fractal using default params.
+- **Parameters** (in `AbstractFractalParams`, serialized in `EffectsConfig`):
+  - `booleanEnabled` (bool), `booleanOp` (1=Union, 2=Intersect, 3=Subtract)
+  - `boolSecondaryType` (String, kernelName of secondary fractal)
+  - `boolOffsetX/Y/Z` (float, -5 to 5), `boolScale` (float, 0.01 to 10), `boolBlend` (float, 0 to 2)
+- **UI**: FractalPanel "Boolean Operations" TitledPane (enable checkbox, secondary fractal combo, operation combo, offset/scale/blend sliders).
+- **Foundation for custom shaders**: The runtime GLSL compilation pipeline (`ShaderPreprocessor` + `loadBooleanFractalShader`) can be extended to compile user-written DE shaders on the fly.
+- **Zero overhead when OFF**: Without `#define BOOLEAN_OPS`, all `#ifdef` blocks compile away — identical code to before.
 
 ## GPU-Accelerated 3D Mesh Export
 
