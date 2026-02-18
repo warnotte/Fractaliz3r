@@ -1,0 +1,204 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-02-18T01:22:53.179622500Z",
+  "name": null,
+  "description": null,
+  "fractalType": "MENGER_SPONGE",
+  "camera": {
+    "position": [
+      1.2113762,
+      -0.108766526,
+      -1.9858056
+    ],
+    "quaternion": [
+      0.9646898,
+      -0.057305593,
+      -0.2566268,
+      -0.015244453
+    ],
+    "fov": 60.0,
+    "moveSpeed": 0.1
+  },
+  "rendering": {
+    "maxRaySteps": 200,
+    "epsilon": 1.0E-4,
+    "qualityMultiplier": 1.0,
+    "renderMode": 0,
+    "shadowSoftness": 16.0,
+    "shadowSteps": 128,
+    "aoSteps": 5,
+    "aoIntensity": 0.5,
+    "glowIntensity": 0.15,
+    "specularIntensity": 0.5,
+    "specularPower": 32.0
+  },
+  "lighting": {
+    "direction": [
+      2.0,
+      3.0,
+      -2.0
+    ],
+    "color": [
+      1.0,
+      0.95,
+      0.9
+    ],
+    "intensity": 1.2,
+    "ambientColor": [
+      0.1,
+      0.15,
+      0.25
+    ],
+    "ambientIntensity": 0.3,
+    "extraType": 0,
+    "extraAttachToCamera": true,
+    "extraPosition": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "extraDirection": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "extraColor": [
+      1.0,
+      0.95,
+      0.9
+    ],
+    "extraIntensity": 1.5,
+    "extraRange": 2.0,
+    "extraAreaRadius": 0.03,
+    "extraConeAngle": 35.0,
+    "extraConeSoftness": 0.3
+  },
+  "material": {
+    "hue": [
+      0.0,
+      0.33,
+      0.67
+    ],
+    "paletteIndex": 0,
+    "colorStrength": 1.0,
+    "paletteOffset": 0.0,
+    "type": 0,
+    "metalness": 0.9,
+    "ior": 1.5,
+    "gradientStops": [
+      {
+        "position": 0.0,
+        "r": 0.3921568691730499,
+        "g": 0.19607843458652496,
+        "b": 0.5882353186607361
+      },
+      {
+        "position": 0.2,
+        "r": 0.19607843458652496,
+        "g": 0.3921568691730499,
+        "b": 0.7843137383460999
+      },
+      {
+        "position": 0.4,
+        "r": 0.19607843458652496,
+        "g": 0.7058823704719543,
+        "b": 0.3921568691730499
+      },
+      {
+        "position": 0.6,
+        "r": 0.7843137383460999,
+        "g": 0.7843137383460999,
+        "b": 0.19607843458652496
+      },
+      {
+        "position": 0.8,
+        "r": 0.8627451062202454,
+        "g": 0.47058823704719543,
+        "b": 0.11764705926179886
+      },
+      {
+        "position": 1.0,
+        "r": 0.7058823704719543,
+        "g": 0.19607843458652496,
+        "b": 0.19607843458652496
+      }
+    ],
+    "reflectionIntensity": 0.0,
+    "emissiveIntensity": 0.0,
+    "sssIntensity": 0.0,
+    "sssRadius": 0.1,
+    "sssColor": [
+      1.0,
+      0.4,
+      0.2
+    ]
+  },
+  "effects": {
+    "dofEnabled": false,
+    "focalDistance": 2.5,
+    "aperture": 0.02,
+    "dofSamples": 16,
+    "anamorphicRatio": 1.0,
+    "bokehBlades": 0,
+    "bokehRotation": 0.0,
+    "opticalVignettingStrength": 0.0,
+    "tiltShiftEnabled": false,
+    "tiltAngleX": 0.0,
+    "tiltAngleY": 0.0,
+    "dofChromaticStrength": 0.0,
+    "pathTracingEnabled": true,
+    "maxBounces": 4,
+    "roughness": 0.5,
+    "skyIntensity": 1.0,
+    "indirectMultiplier": 0.5,
+    "skyType": 1,
+    "cloudDensity": 0.5,
+    "skySpeed": 1.0,
+    "skyTime": 0.0,
+    "skyParallax": 0.25,
+    "projectionMode": 0,
+    "lensEffectsEnabled": false,
+    "lensDirtIntensity": 0.0,
+    "starburstIntensity": 0.0,
+    "volumetricFogEnabled": false,
+    "fogDensity": 0.15,
+    "fogColor": [
+      0.5,
+      0.6,
+      0.7
+    ],
+    "fogScattering": 0.5,
+    "fogSteps": 32,
+    "shutterAngle": 180.0,
+    "neeEnabled": true,
+    "adaptiveSampling": false,
+    "varianceThreshold": 5.0E-4,
+    "minAdaptiveSamples": 16,
+    "erosionEnabled": true,
+    "erosionStrength": 0.5,
+    "erosionTime": 0.08,
+    "erosionScale": 1.0,
+    "erosionType": 0,
+    "crystalEnabled": true,
+    "crystalStrength": 0.5,
+    "crystalTime": 0.1278772,
+    "crystalScale": 1.0,
+    "crystalSharpness": 2.0,
+    "mossEnabled": true,
+    "mossStrength": 0.5,
+    "mossTime": 0.51150894,
+    "mossScale": 1.0,
+    "mossColorR": 0.15,
+    "mossColorG": 0.35,
+    "mossColorB": 0.08,
+    "mossNormalThreshold": 0.3
+  },
+  "fractalParams": {
+    "offsetX": 1.0,
+    "maxIterations": 6,
+    "offsetZ": 1.0,
+    "offsetY": 1.0,
+    "scale": 3.0
+  },
+  "animation": null
+}
