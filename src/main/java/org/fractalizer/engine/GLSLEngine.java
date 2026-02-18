@@ -155,6 +155,29 @@ public class GLSLEngine implements AutoCloseable {
         });
     }
 
+    /**
+     * Compile a custom user-written fractal shader.
+     * @return null on success, error message on failure
+     */
+    public String loadCustomFractalShader(String name, String userSource) {
+        String[] error = {null};
+        runOnGLThread(() -> {
+            try {
+                String vertexSource = loadResource("/shaders/fullscreen.vert");
+                String commonSource = stripVersion(loadResource("/shaders/common.glsl"));
+                String raytracerSource = stripVersion(loadResource("/shaders/raytracer.glsl"));
+                String fragmentSource = "#version 430 core\n" + commonSource + "\n" + userSource + "\n" + raytracerSource;
+                ShaderProgram old = programs.remove(name);
+                if (old != null) old.delete();
+                ShaderProgram program = new ShaderProgram(vertexSource, fragmentSource);
+                programs.put(name, program);
+            } catch (Exception e) {
+                error[0] = e.getMessage();
+            }
+        });
+        return error[0];
+    }
+
     public void setActiveProgram(String name) {
         if (!programs.containsKey(name)) return;
         if (!name.equals(activeProgram)) { activeProgram = name; needsReset = true; }

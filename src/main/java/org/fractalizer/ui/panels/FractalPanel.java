@@ -1,5 +1,6 @@
 package org.fractalizer.ui.panels;
 
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -159,6 +160,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider cbMetalXSlider, cbMetalYSlider, cbMetalZSlider, cbMetalRadiusSlider;
     private EnhancedSlider cbLightXSlider, cbLightYSlider, cbLightZSlider, cbLightWSlider, cbLightDSlider;
 
+    // Custom Shader
+    private VBox customShaderControls;
+    private org.fractalizer.ui.components.CustomShaderEditor customShaderEditor;
+
     // Boolean Operations
     private TitledPane booleanOpsPane;
     private CheckBox boolEnableCheck;
@@ -199,6 +204,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         createBristorbrotControls();
         createQuaternionJulia4DControls();
         createFractalTerrainControls();
+        createCustomShaderControls();
         createTestSceneControls();
         createCornellBoxControls();
         createBooleanOpsPane();
@@ -290,6 +296,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             bristorbrotControls,
             quaternionJulia4DControls,
             fractalTerrainControls,
+            customShaderControls,
             testSceneControls,
             cornellBoxControls
         );
@@ -966,6 +973,13 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         }
     }
 
+    private void createCustomShaderControls() {
+        customShaderEditor = new org.fractalizer.ui.components.CustomShaderEditor(controller, renderCallback);
+        customShaderControls = new VBox(customShaderEditor);
+        customShaderControls.setVisible(false);
+        customShaderControls.setManaged(false);
+    }
+
     private void createTestSceneControls() {
         testSceneControls = new VBox(8);
 
@@ -1122,6 +1136,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             quaternionJulia4DControls.setManaged(false);
             fractalTerrainControls.setVisible(false);
             fractalTerrainControls.setManaged(false);
+            customShaderControls.setVisible(false);
+            customShaderControls.setManaged(false);
             testSceneControls.setVisible(false);
             testSceneControls.setManaged(false);
             cornellBoxControls.setVisible(false);
@@ -1173,6 +1189,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                     fractalTerrainControls.setVisible(true);
                     fractalTerrainControls.setManaged(true);
                 }
+                case CUSTOM_SHADER -> {
+                    customShaderControls.setVisible(true);
+                    customShaderControls.setManaged(true);
+                }
                 case TEST_SCENE -> {
                     testSceneControls.setVisible(true);
                     testSceneControls.setManaged(true);
@@ -1208,7 +1228,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         boolSecondaryCombo = new ComboBox<>();
         for (FractalType ft : FractalType.values()) {
-            if (ft == FractalType.TEST_SCENE || ft == FractalType.CORNELL_BOX || ft == FractalType.FRACTAL_TERRAIN) continue;
+            if (ft == FractalType.TEST_SCENE || ft == FractalType.CORNELL_BOX || ft == FractalType.FRACTAL_TERRAIN || ft == FractalType.CUSTOM_SHADER) continue;
             boolSecondaryCombo.getItems().add(ft.getKernelName());
         }
         boolSecondaryCombo.setMaxWidth(Double.MAX_VALUE);
@@ -1292,6 +1312,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             quaternionJulia4DControls.setManaged(false);
             fractalTerrainControls.setVisible(false);
             fractalTerrainControls.setManaged(false);
+            customShaderControls.setVisible(false);
+            customShaderControls.setManaged(false);
             testSceneControls.setVisible(false);
             testSceneControls.setManaged(false);
             cornellBoxControls.setVisible(false);
@@ -1398,6 +1420,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 ftWarpSlider.setValue(ft.getWarpStrength());
                 ftRidgeSlider.setValue(ft.getRidgeSharpness());
                 ftOffsetSlider.setValue(ft.getTerrainOffset());
+            } else if (params instanceof CustomShaderParams csp) {
+                customShaderControls.setVisible(true);
+                customShaderControls.setManaged(true);
+                customShaderEditor.loadParams(csp);
             } else if (params instanceof TestSceneParams ts) {
                 testSceneControls.setVisible(true);
                 testSceneControls.setManaged(true);

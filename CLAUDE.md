@@ -52,7 +52,8 @@ org.fractalizer
 │   ├── ApollonianParams.java        # Apollonian Gasket: iterations, scale, foldRadius
 │   ├── BristorbrotParams.java       # Bristorbrot: iterations, bailout
 │   ├── FractalTerrainParams.java    # Fractal Terrain: fBm heightfield with octaves, lacunarity, warp, ridge
-│   └── CornellBoxParams.java        # Cornell Box: sceneScale (per-object materials in shader)
+│   ├── CornellBoxParams.java        # Cornell Box: sceneScale (per-object materials in shader)
+│   └── CustomShaderParams.java      # Custom Shader: user GLSL source + dynamic uniform values
 ├── audio/
 │   ├── AudioReactiveEngine.java     # Spectrum analysis, beat/onset detection
 │   └── AudioPreAnalyzer.java        # Offline FFT pre-analysis (FFmpeg decode)
@@ -69,7 +70,8 @@ org.fractalizer
     ├── AnimationManager.java           # Manages timeline and keyframe editing
     ├── components/
     │   ├── EnhancedSlider.java         # Professional UI slider with mouse wheel & precision control
-    │   └── GradientEditor.java         # Visual gradient editor with draggable color stops
+    │   ├── GradientEditor.java         # Visual gradient editor with draggable color stops
+    │   └── CustomShaderEditor.java     # GLSL editor with @param parsing, dynamic sliders, templates
     ├── panels/
     │   ├── FractalPanel.java           # Fractal type and parameters (uses EnhancedSlider)
     │   ├── MaterialPanel.java          # Material type, physical props, and artistic palettes (uses EnhancedSlider)
@@ -252,6 +254,27 @@ Constructive Solid Geometry between two fractal distance fields: Union, Intersec
 - **UI**: FractalPanel "Boolean Operations" TitledPane (enable checkbox, secondary fractal combo, operation combo, offset/scale/blend sliders).
 - **Foundation for custom shaders**: The runtime GLSL compilation pipeline (`ShaderPreprocessor` + `loadBooleanFractalShader`) can be extended to compile user-written DE shaders on the fly.
 - **Zero overhead when OFF**: Without `#define BOOLEAN_OPS`, all `#ifdef` blocks compile away — identical code to before.
+
+## Custom Shader Editor
+
+Write custom fractal DE shaders and compile them on the fly. Built on the same runtime GLSL compilation pipeline as Boolean Operations.
+
+- **User writes fractal part only** — `common.glsl` + `raytracer.glsl` are assembled automatically by `GLSLEngine.loadCustomFractalShader()`.
+- **Shader contract**: User must define `OrbitTrap` struct, `DE()`, `DE_simple()`, `getFactors()` — same as any built-in fractal shader.
+- **`@param` annotations** for automatic slider UI:
+  ```glsl
+  uniform float power;      // @param min:2 max:16 default:8
+  uniform int maxIterations; // @param min:3 max:30 default:15
+  uniform vec3 offset;       // @param min:-2 max:2 default:0,0,0
+  ```
+  Supported types: `float`, `int`, `vec2`, `vec3`, `vec4`. Uniforms without `@param` get no slider (hardcoded in GLSL).
+- **Dynamic sliders**: `CustomShaderEditor` (in `ui/components/`) parses `@param` annotations on successful compile and generates `EnhancedSlider` controls. Values stored in `CustomShaderParams.uniformValues` map, emitted via `buildUniforms()`.
+- **Async compilation**: Runs on a daemon thread to avoid blocking the FX thread. UI shows "Compiling..." state with disabled controls.
+- **6 templates**: Sphere, Torus, Gyroid, Infinite Spheres, Menger Sponge, Mandelbulb (Simple) — each demonstrates a different SDF technique.
+- **Auto-compile on load**: When loading a `.frac` file with a custom shader, `loadParams()` triggers compilation via `Platform.runLater` so saved shaders render immediately.
+- **Serialization**: `shaderSource` (String) + `uniformValues` (Map) in `FractalConfig`. Gson `List<Double>` → `float[]` conversion handled in `applyFractalParams()`.
+- **Not usable as boolean secondary** — excluded from the boolean ops combo alongside `TEST_SCENE`, `CORNELL_BOX`, `FRACTAL_TERRAIN`.
+- **Files**: `CustomShaderParams.java` (model), `CustomShaderEditor.java` (UI component in `ui/components/`), `FractalType.CUSTOM_SHADER` enum value.
 
 ## GPU-Accelerated 3D Mesh Export
 

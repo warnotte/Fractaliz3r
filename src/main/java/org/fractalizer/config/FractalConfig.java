@@ -631,6 +631,11 @@ public class FractalConfig {
             map.put("warpStrength", ft.getWarpStrength());
             map.put("ridgeSharpness", ft.getRidgeSharpness());
             map.put("terrainOffset", ft.getTerrainOffset());
+        } else if (params instanceof CustomShaderParams csp) {
+            map.put("shaderSource", csp.getShaderSource());
+            if (!csp.getUniformValues().isEmpty()) {
+                map.put("uniformValues", new java.util.LinkedHashMap<>(csp.getUniformValues()));
+            }
         } else if (params instanceof TestSceneParams ts) {
             map.put("sceneScale", ts.getSceneScale());
         } else if (params instanceof CornellBoxParams cb) {
@@ -735,6 +740,27 @@ public class FractalConfig {
             if (map.containsKey("warpStrength")) ft.setWarpStrength(getFloat(map, "warpStrength"));
             if (map.containsKey("ridgeSharpness")) ft.setRidgeSharpness(getFloat(map, "ridgeSharpness"));
             if (map.containsKey("terrainOffset")) ft.setTerrainOffset(getFloat(map, "terrainOffset"));
+        } else if (params instanceof CustomShaderParams csp) {
+            if (map.containsKey("shaderSource")) csp.setShaderSource((String) map.get("shaderSource"));
+            if (map.containsKey("uniformValues") && map.get("uniformValues") instanceof Map<?,?> rawMap) {
+                csp.clearUniformValues();
+                for (var entry : rawMap.entrySet()) {
+                    String key = String.valueOf(entry.getKey());
+                    Object val = entry.getValue();
+                    // Gson deserializes float[] as List<Double> — convert back
+                    if (val instanceof List<?> list) {
+                        float[] arr = new float[list.size()];
+                        for (int i = 0; i < list.size(); i++) {
+                            arr[i] = ((Number) list.get(i)).floatValue();
+                        }
+                        csp.setUniformValue(key, arr);
+                    } else if (val instanceof Number n) {
+                        // Gson deserializes all numbers as Double — keep as Number,
+                        // rebuildSliders() will convert to int/float based on @param type
+                        csp.setUniformValue(key, n);
+                    }
+                }
+            }
         } else if (params instanceof TestSceneParams ts) {
             if (map.containsKey("sceneScale")) ts.setSceneScale(getFloat(map, "sceneScale"));
         } else if (params instanceof CornellBoxParams cb) {

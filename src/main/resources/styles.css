@@ -290,3 +290,32 @@
     -fx-font-size: 10px;
     -fx-text-fill: #ff4444;
 }
+
+/* Custom Shader Editor */
+.compile-btn {
+    -fx-background-color: #2e7d32;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+
+.compile-btn:hover {
+    -fx-background-color: #388e3c;
+}
+
+.compile-status {
+    -fx-font-family: "Consolas", monospace;
+    -fx-font-size: 10px;
+    -fx-wrap-text: true;
+}
+
+.compile-status.success {
+    -fx-text-fill: #4caf50;
+}
+
+.compile-status.error {
+    -fx-text-fill: #f44336;
+}
+
+.compile-status.pending {
+    -fx-text-fill: #ff9800;
+}

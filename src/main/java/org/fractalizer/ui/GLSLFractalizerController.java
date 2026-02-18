@@ -79,13 +79,14 @@ public class GLSLFractalizerController implements RenderController {
         FractalType[] types = FractalType.values();
         for (int i = 0; i < types.length; i++) {
             FractalType type = types[i];
+            if (type == FractalType.CUSTOM_SHADER) continue; // no resource file
             String name = type.getKernelName();
             String path = "/shaders/fractals/" + name + ".glsl";
-            
+
             if (progressCallback != null) {
                 progressCallback.accept("Compiling " + type.getDisplayName() + "...", (double) i / types.length);
             }
-            
+
             engine.loadFractalShader(name, path);
         }
         
@@ -127,6 +128,7 @@ public class GLSLFractalizerController implements RenderController {
                 case APOLLONIAN -> this.currentParams = new ApollonianParams();
                 case BRISTORBROT -> this.currentParams = new BristorbrotParams();
                 case QUATERNION_JULIA_4D -> this.currentParams = new QuaternionJulia4DParams();
+                case CUSTOM_SHADER -> this.currentParams = new CustomShaderParams();
                 case TEST_SCENE -> this.currentParams = new TestSceneParams();
                 case CORNELL_BOX -> this.currentParams = new CornellBoxParams();
             }
@@ -155,7 +157,10 @@ public class GLSLFractalizerController implements RenderController {
             }
         }
         currentBooleanProgramKey = null;
-        engine.setActiveProgram(currentFractalType.getKernelName());
+        String key = currentFractalType.getKernelName();
+        if (engine.hasProgram(key)) {
+            engine.setActiveProgram(key);
+        }
     }
 
     private void ensureBooleanShader(String secondaryKernelName) {
@@ -171,6 +176,16 @@ public class GLSLFractalizerController implements RenderController {
 
         String primaryPath = "/shaders/fractals/" + currentFractalType.getKernelName() + ".glsl";
         engine.loadBooleanFractalShader(key, primaryPath, preprocessed);
+    }
+
+    @Override
+    public String compileCustomShader(String source) {
+        String error = engine.loadCustomFractalShader("customshader", source);
+        if (error == null) {
+            engine.setActiveProgram("customshader");
+            engine.resetAccumulation();
+        }
+        return error;
     }
 
     /**
@@ -1152,6 +1167,11 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("rotXW", (float) Math.toRadians(p.getRotXW()));
                 uniforms.put("rotYW", (float) Math.toRadians(p.getRotYW()));
                 uniforms.put("rotZW", (float) Math.toRadians(p.getRotZW()));
+            }
+            case CUSTOM_SHADER -> {
+                if (currentParams instanceof CustomShaderParams csp) {
+                    uniforms.putAll(csp.getUniformValues());
+                }
             }
             case TEST_SCENE -> {
                 TestSceneParams p = (TestSceneParams) currentParams;

@@ -60,5 +60,11 @@ public interface RenderController {
     String getDeviceName();
     String getDeviceType();
 
+    /**
+     * Compile a custom user-written fractal shader.
+     * @return null on success, error message on failure
+     */
+    String compileCustomShader(String source);
+
     void close();
 }
