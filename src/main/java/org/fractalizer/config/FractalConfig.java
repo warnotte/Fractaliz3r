@@ -191,6 +191,24 @@ public class FractalConfig {
         public float erosionTime = 0.0f;
         public float erosionScale = 1.0f;
         public int erosionType = 0;
+
+        // Crystallization
+        public boolean crystalEnabled = false;
+        public float crystalStrength = 0.5f;
+        public float crystalTime = 0.0f;
+        public float crystalScale = 1.0f;
+        public float crystalSharpness = 2.0f;
+
+        // Moss/Lichen
+        public boolean mossEnabled = false;
+        public float mossStrength = 0.5f;
+        public float mossTime = 0.0f;
+        public float mossScale = 1.0f;
+        public float mossColorR = 0.15f;
+        public float mossColorG = 0.35f;
+        public float mossColorB = 0.08f;
+        public float mossNormalThreshold = 0.3f;
+
     }
 
     public static class AnimationConfig {
@@ -334,7 +352,19 @@ public class FractalConfig {
         config.effects.erosionTime = params.getErosionTime();
         config.effects.erosionScale = params.getErosionScale();
         config.effects.erosionType = params.getErosionType();
-
+        config.effects.crystalEnabled = params.isCrystalEnabled();
+        config.effects.crystalStrength = params.getCrystalStrength();
+        config.effects.crystalTime = params.getCrystalTime();
+        config.effects.crystalScale = params.getCrystalScale();
+        config.effects.crystalSharpness = params.getCrystalSharpness();
+        config.effects.mossEnabled = params.isMossEnabled();
+        config.effects.mossStrength = params.getMossStrength();
+        config.effects.mossTime = params.getMossTime();
+        config.effects.mossScale = params.getMossScale();
+        config.effects.mossColorR = params.getMossColorR();
+        config.effects.mossColorG = params.getMossColorG();
+        config.effects.mossColorB = params.getMossColorB();
+        config.effects.mossNormalThreshold = params.getMossNormalThreshold();
         // Fractal-specific parameters
         extractFractalParams(params, config.fractalParams);
 
@@ -464,7 +494,17 @@ public class FractalConfig {
         params.setErosionTime(effects.erosionTime);
         params.setErosionScale(effects.erosionScale);
         params.setErosionType(effects.erosionType);
-
+        params.setCrystalEnabled(effects.crystalEnabled);
+        params.setCrystalStrength(effects.crystalStrength);
+        params.setCrystalTime(effects.crystalTime);
+        params.setCrystalScale(effects.crystalScale);
+        params.setCrystalSharpness(effects.crystalSharpness);
+        params.setMossEnabled(effects.mossEnabled);
+        params.setMossStrength(effects.mossStrength);
+        params.setMossTime(effects.mossTime);
+        params.setMossScale(effects.mossScale);
+        params.setMossColor(effects.mossColorR, effects.mossColorG, effects.mossColorB);
+        params.setMossNormalThreshold(effects.mossNormalThreshold);
         // Fractal-specific parameters
         applyFractalParams(params, fractalParams);
     }

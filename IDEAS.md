@@ -40,10 +40,10 @@ Previously attempted and rejected — user considers it garbage.
 ## 8. Boolean Operations Between Fractals
 **Status:** IDEA
 
-Union/intersection/subtraction of two fractal distance fields. Carve a Menger Sponge out of a Mandelbulb with `max(DE_A, -DE_B)`, or merge them with `min(DE_A, DE_B)`. Each fractal has its own parameter set. A secondary fractal type selector + operation ComboBox in the UI. ~20 lines of GLSL (evaluate both DEs, combine), coloring from whichever DE is closer. Erosion applies to the combined result.
+Union/intersection/subtraction of two fractal distance fields. Carve a Menger Sponge out of a Mandelbulb with `max(DE_A, -DE_B)`, or merge them with `min(DE_A, DE_B)`. Each fractal has its own parameter set. A secondary fractal type selector + operation ComboBox in the UI. ~20 lines of GLSL (evaluate both DEs, combine), coloring from whichever DE is closer. Erosion applies to the combined result. **Note**: first attempt failed due to GLSL symbol conflicts (duplicate uniform declarations, OrbitTrap struct differences). Needs full uniform namespacing approach.
 
 ## 9. Moss / Lichen Growth
-**Status:** IDEA
+**Status:** DONE
 
 The natural complement to erosion: instead of removing material, add organic growth. Green moss/lichen that favors crevices (high AO regions) and horizontal surfaces (normal.y > threshold). Modifies both geometry (slight negative displacement = surface advances) and color (green/moss tint blended with base color based on growth factor). Animatable like erosionTime. Reuses the same displacement injection pattern as erosion.
 
@@ -63,6 +63,6 @@ Render the fractal as semi-transparent. Instead of stopping at the first hit, th
 A large-scale Menger Sponge where each cube is replaced by a tiny Mandelbulb. Evaluate DE_A at large scale, then when close enough, switch to DE_B at small scale with a coordinate transform. Fractals within fractals — infinite complexity at every zoom level.
 
 ## 13. Crystallization
-**Status:** IDEA
+**Status:** DONE
 
 The opposite of thermal erosion: sharp crystalline structures grow from the fractal surface. Negative displacement via Voronoi-based noise (cell edges = crystal facets). Animatable like erosion. Combine erosion + crystallization = ancient ruin with crystals growing in the cracks.

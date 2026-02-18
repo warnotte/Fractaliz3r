@@ -65,7 +65,17 @@ public class TimelineWidget extends VBox {
         TrackInfo.groupHeader("Erosion", Color.rgb(200, 160, 120)),
         new TrackInfo("erosionTime", "Time", Color.rgb(200, 160, 120)),
         new TrackInfo("erosionStrength", "Strength", Color.rgb(180, 140, 100)),
-        new TrackInfo("erosionScale", "Scale", Color.rgb(160, 130, 90))
+        new TrackInfo("erosionScale", "Scale", Color.rgb(160, 130, 90)),
+        // Crystal group
+        TrackInfo.groupHeader("Crystal", Color.rgb(180, 140, 220)),
+        new TrackInfo("crystalTime", "Time", Color.rgb(180, 140, 220)),
+        new TrackInfo("crystalStrength", "Strength", Color.rgb(160, 120, 200)),
+        new TrackInfo("crystalScale", "Scale", Color.rgb(140, 110, 180)),
+        // Moss group
+        TrackInfo.groupHeader("Moss", Color.rgb(100, 180, 80)),
+        new TrackInfo("mossTime", "Time", Color.rgb(100, 180, 80)),
+        new TrackInfo("mossStrength", "Strength", Color.rgb(80, 160, 60)),
+        new TrackInfo("mossScale", "Scale", Color.rgb(70, 140, 50))
     );
 
     // UI Components

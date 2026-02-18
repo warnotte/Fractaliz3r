@@ -1157,6 +1157,22 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("erosionTime", afp.getErosionTime());
             uniforms.put("erosionScale", afp.getErosionScale());
             uniforms.put("erosionType", afp.getErosionType());
+
+            // Crystallization
+            uniforms.put("crystalEnabled", afp.isCrystalEnabled() ? 1 : 0);
+            uniforms.put("crystalStrength", afp.getCrystalStrength());
+            uniforms.put("crystalTime", afp.getCrystalTime());
+            uniforms.put("crystalScale", afp.getCrystalScale());
+            uniforms.put("crystalSharpness", afp.getCrystalSharpness());
+
+            // Moss/Lichen
+            uniforms.put("mossEnabled", afp.isMossEnabled() ? 1 : 0);
+            uniforms.put("mossStrength", afp.getMossStrength());
+            uniforms.put("mossTime", afp.getMossTime());
+            uniforms.put("mossScale", afp.getMossScale());
+            uniforms.put("mossColor", new float[]{afp.getMossColorR(), afp.getMossColorG(), afp.getMossColorB()});
+            uniforms.put("mossNormalThreshold", afp.getMossNormalThreshold());
+
         }
 
         // Audio-reactive uniforms + fractal parameter modulation

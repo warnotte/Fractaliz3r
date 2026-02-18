@@ -91,6 +91,16 @@ public class AnimationManager {
         timeline.createTrack("erosionTime", Float.class, 0.0f);
         timeline.createTrack("erosionStrength", Float.class, 0.5f);
         timeline.createTrack("erosionScale", Float.class, 1.0f);
+
+        // Crystallization
+        timeline.createTrack("crystalTime", Float.class, 0.0f);
+        timeline.createTrack("crystalStrength", Float.class, 0.5f);
+        timeline.createTrack("crystalScale", Float.class, 1.0f);
+
+        // Moss
+        timeline.createTrack("mossTime", Float.class, 0.0f);
+        timeline.createTrack("mossStrength", Float.class, 0.5f);
+        timeline.createTrack("mossScale", Float.class, 1.0f);
     }
 
     // ========================================================================
@@ -181,6 +191,12 @@ public class AnimationManager {
         addKeyframeForTrack("erosionTime", time, easing, params);
         addKeyframeForTrack("erosionStrength", time, easing, params);
         addKeyframeForTrack("erosionScale", time, easing, params);
+        addKeyframeForTrack("crystalTime", time, easing, params);
+        addKeyframeForTrack("crystalStrength", time, easing, params);
+        addKeyframeForTrack("crystalScale", time, easing, params);
+        addKeyframeForTrack("mossTime", time, easing, params);
+        addKeyframeForTrack("mossStrength", time, easing, params);
+        addKeyframeForTrack("mossScale", time, easing, params);
 
         // Add keyframes for fractal-specific tracks
         addFractalKeyframes(time, easing, params);
@@ -259,6 +275,12 @@ public class AnimationManager {
             case "erosionTime" -> timeline.setKeyframe("erosionTime", time, params.getErosionTime(), easing);
             case "erosionStrength" -> timeline.setKeyframe("erosionStrength", time, params.getErosionStrength(), easing);
             case "erosionScale" -> timeline.setKeyframe("erosionScale", time, params.getErosionScale(), easing);
+            case "crystalTime" -> timeline.setKeyframe("crystalTime", time, params.getCrystalTime(), easing);
+            case "crystalStrength" -> timeline.setKeyframe("crystalStrength", time, params.getCrystalStrength(), easing);
+            case "crystalScale" -> timeline.setKeyframe("crystalScale", time, params.getCrystalScale(), easing);
+            case "mossTime" -> timeline.setKeyframe("mossTime", time, params.getMossTime(), easing);
+            case "mossStrength" -> timeline.setKeyframe("mossStrength", time, params.getMossStrength(), easing);
+            case "mossScale" -> timeline.setKeyframe("mossScale", time, params.getMossScale(), easing);
             default -> {
                 // Check if it's a fractal-specific track
                 addFractalKeyframeForTrack(trackName, time, easing, params);
@@ -374,6 +396,28 @@ public class AnimationManager {
         }
         if (timeline.getTrack("erosionScale").hasKeyframes()) {
             params.setErosionScale(timeline.getValue("erosionScale"));
+        }
+
+        // Apply crystallization
+        if (timeline.getTrack("crystalTime").hasKeyframes()) {
+            params.setCrystalTime(timeline.getValue("crystalTime"));
+        }
+        if (timeline.getTrack("crystalStrength").hasKeyframes()) {
+            params.setCrystalStrength(timeline.getValue("crystalStrength"));
+        }
+        if (timeline.getTrack("crystalScale").hasKeyframes()) {
+            params.setCrystalScale(timeline.getValue("crystalScale"));
+        }
+
+        // Apply moss
+        if (timeline.getTrack("mossTime").hasKeyframes()) {
+            params.setMossTime(timeline.getValue("mossTime"));
+        }
+        if (timeline.getTrack("mossStrength").hasKeyframes()) {
+            params.setMossStrength(timeline.getValue("mossStrength"));
+        }
+        if (timeline.getTrack("mossScale").hasKeyframes()) {
+            params.setMossScale(timeline.getValue("mossScale"));
         }
 
         // Apply fractal-specific parameters

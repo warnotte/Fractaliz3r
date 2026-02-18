@@ -51,10 +51,10 @@ vec3 calcNormal(vec3 pos) {
     float e = max(qualityEpsilon, distToCamera * 0.00005);
 
     return normalize(
-        k1 * (DE_simple(pos + k1 * e) + getErosionDisplacement(pos + k1 * e)) +
-        k2 * (DE_simple(pos + k2 * e) + getErosionDisplacement(pos + k2 * e)) +
-        k3 * (DE_simple(pos + k3 * e) + getErosionDisplacement(pos + k3 * e)) +
-        k4 * (DE_simple(pos + k4 * e) + getErosionDisplacement(pos + k4 * e))
+        k1 * (DE_simple(pos + k1 * e) + getErosionDisplacement(pos + k1 * e) + getCrystalDisplacement(pos + k1 * e) + getMossDisplacement(pos + k1 * e)) +
+        k2 * (DE_simple(pos + k2 * e) + getErosionDisplacement(pos + k2 * e) + getCrystalDisplacement(pos + k2 * e) + getMossDisplacement(pos + k2 * e)) +
+        k3 * (DE_simple(pos + k3 * e) + getErosionDisplacement(pos + k3 * e) + getCrystalDisplacement(pos + k3 * e) + getMossDisplacement(pos + k3 * e)) +
+        k4 * (DE_simple(pos + k4 * e) + getErosionDisplacement(pos + k4 * e) + getCrystalDisplacement(pos + k4 * e) + getMossDisplacement(pos + k4 * e))
     );
 }
 
@@ -71,7 +71,7 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
 
     for (int i = 0; i < steps && t < maxt; i++) {
         vec3 shadowPos = ro + rd * t;
-        float h = DE_simple(shadowPos) + getErosionDisplacementLight(shadowPos);
+        float h = DE_simple(shadowPos) + getErosionDisplacementLight(shadowPos) + getCrystalDisplacementLight(shadowPos) + getMossDisplacementLight(shadowPos);
 
         // Use adaptive epsilon for shadows too
         float epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
@@ -100,7 +100,7 @@ float calcAO(vec3 pos, vec3 normal) {
 
     for (int i = 0; i < steps; i++) {
         float hr = 0.01 + 0.12 * float(i + 1) / float(steps);
-        float dd = DE_simple(pos + normal * hr) + getErosionDisplacementLight(pos + normal * hr);
+        float dd = DE_simple(pos + normal * hr) + getErosionDisplacementLight(pos + normal * hr) + getCrystalDisplacementLight(pos + normal * hr) + getMossDisplacementLight(pos + normal * hr);
         ao += (hr - dd) * scale;
         scale *= 0.6;
     }
@@ -145,6 +145,12 @@ RayHit rayMarch(Ray ray) {
         float d = DE(result.pos, result.trap);
         if (erosionEnabled != 0 && d < erosionMaxDisplacement() + 0.1) {
             d = d + getErosionDisplacement(result.pos);
+        }
+        if (crystalEnabled != 0 && d < crystalMaxDisplacement() + 0.1) {
+            d = d + getCrystalDisplacement(result.pos);
+        }
+        if (mossEnabled != 0 && d < mossMaxDisplacement() + 0.1) {
+            d = d + getMossDisplacement(result.pos);
         }
         result.minDist = min(result.minDist, d);
         result.steps = i + 1;
@@ -342,6 +348,12 @@ vec3 shadeSimple(vec3 hitPos, Ray ray) {
     float shadow = calcShadow(hitPos + normal * shadowBias, light, shadowBias, 15.0);
     float ao = calcAO(hitPos, normal);
 
+    // Moss coloring
+    if (mossEnabled != 0) {
+        float mf = getMossFactor(hitPos, normal, ao);
+        baseColor = mix(baseColor, mossColor, mf);
+    }
+
     vec3 ambient = getAmbientLighting(normal) * baseColor * ao;
     vec3 diffuse = lightColor * lightIntensity * baseColor * NdotL * shadow;
 
@@ -413,6 +425,12 @@ vec3 shade(RayHit hit, Ray ray) {
 
     // Ambient occlusion
     float ao = calcAO(hit.pos, normal);
+
+    // Moss coloring
+    if (mossEnabled != 0) {
+        float mf = getMossFactor(hit.pos, normal, ao);
+        baseColor = mix(baseColor, mossColor, mf);
+    }
 
     // Combine lighting
     vec3 ambient = getAmbientLighting(normal) * baseColor * ao;
@@ -582,6 +600,12 @@ bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist) {
         if (erosionEnabled != 0 && d < erosionMaxDisplacement() + 0.1) {
             d = d + getErosionDisplacement(pos);
         }
+        if (crystalEnabled != 0 && d < crystalMaxDisplacement() + 0.1) {
+            d = d + getCrystalDisplacement(pos);
+        }
+        if (mossEnabled != 0 && d < mossMaxDisplacement() + 0.1) {
+            d = d + getMossDisplacement(pos);
+        }
 
         float epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
 
@@ -707,7 +731,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                     vec3 exitPos = hitPos;
                     for (int gs = 0; gs < 128; gs++) {
                         exitPos = hitPos + interiorDir * t;
-                        float d = DE_simple(exitPos) + getErosionDisplacementLight(exitPos);
+                        float d = DE_simple(exitPos) + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
                         if (d > 0.0) {
                             // Overshot exit surface — step back to surface
                             exitPos -= interiorDir * d;
@@ -959,7 +983,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     vec3 exitPos = hitPos;
                     for (int gs = 0; gs < 128; gs++) {
                         exitPos = hitPos + interiorDir * t;
-                        float d = DE_simple(exitPos) + getErosionDisplacementLight(exitPos);
+                        float d = DE_simple(exitPos) + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
                         if (d > 0.0) {
                             exitPos -= interiorDir * d;
                             break;

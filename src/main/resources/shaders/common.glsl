@@ -166,6 +166,21 @@ uniform float erosionTime;           // 0-20, progression (animatable)
 uniform float erosionScale;          // 0.1-5, world-space feature scale
 uniform int erosionType;             // 0=All, 1=Hydraulic, 2=Thermal, 3=Cracks
 
+// Crystallization
+uniform int crystalEnabled;          // 0 = off, 1 = on
+uniform float crystalStrength;       // 0-1
+uniform float crystalTime;           // 0-10, growth progression
+uniform float crystalScale;          // 0.1-5, crystal size
+uniform float crystalSharpness;      // 0.5-5, edge sharpness
+
+// Moss/Lichen
+uniform int mossEnabled;             // 0 = off, 1 = on
+uniform float mossStrength;          // 0-1
+uniform float mossTime;              // 0-10, growth progression
+uniform float mossScale;             // 0.1-5, patch size
+uniform vec3 mossColor;              // default (0.15, 0.35, 0.08) = dark green
+uniform float mossNormalThreshold;   // 0-1, default 0.3
+
 // ============================================================================
 // Math & Random Helpers
 // ============================================================================
@@ -262,6 +277,30 @@ float getErosionDisplacement(vec3 pos) {
     return (weathering + hydraulic + thermal) * t * erosionScale;
 }
 
+// Voronoi / cellular noise — returns vec2(minDist, secondMinDist)
+vec2 voronoi3D(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    float d1 = 1e10;
+    float d2 = 1e10;
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            for (int z = -1; z <= 1; z++) {
+                vec3 neighbor = vec3(float(x), float(y), float(z));
+                vec3 cellPos = neighbor + vec3(
+                    hash3D(ivec3(i + neighbor)),
+                    hash3D(ivec3(i + neighbor) + ivec3(127, 311, 74)),
+                    hash3D(ivec3(i + neighbor) + ivec3(269, 183, 47))
+                );
+                float d = length(f - cellPos);
+                if (d < d1) { d2 = d1; d1 = d; }
+                else if (d < d2) { d2 = d; }
+            }
+        }
+    }
+    return vec2(d1, d2);
+}
+
 // Lighter erosion for shadow/AO (2 octaves, no hydraulic warp)
 float getErosionDisplacementLight(vec3 pos) {
     if (erosionEnabled == 0) return 0.0;
@@ -292,6 +331,84 @@ float getErosionDisplacementLight(vec3 pos) {
     }
 
     return (weathering + hydraulic + thermal) * t * erosionScale;
+}
+
+// ============================================================================
+// Crystallization — sharp Voronoi facets growing outward from surface
+// ============================================================================
+
+float crystalMaxDisplacement() {
+    return crystalTime * crystalStrength * crystalScale * 0.3;
+}
+
+float getCrystalDisplacement(vec3 pos) {
+    if (crystalEnabled == 0) return 0.0;
+    vec3 p = pos / crystalScale;
+    float t = crystalTime * crystalStrength;
+    // Voronoi cell edges = crystal facets
+    vec2 v = voronoi3D(p * 4.0 + vec3(77.0, 33.0, 55.0));
+    float edgeDist = v.y - v.x;
+    float facet = pow(max(0.0, 1.0 - edgeDist * crystalSharpness), 2.0);
+    // Fine detail layer
+    vec2 v2 = voronoi3D(p * 12.0 + vec3(11.0, 22.0, 33.0));
+    float fine = pow(max(0.0, 1.0 - (v2.y - v2.x) * crystalSharpness * 1.5), 3.0);
+    // Negative displacement = growth outward
+    return -(facet * 0.25 + fine * 0.05) * t * crystalScale;
+}
+
+float getCrystalDisplacementLight(vec3 pos) {
+    if (crystalEnabled == 0) return 0.0;
+    vec3 p = pos / crystalScale;
+    float t = crystalTime * crystalStrength;
+    vec2 v = voronoi3D(p * 4.0 + vec3(77.0, 33.0, 55.0));
+    float edgeDist = v.y - v.x;
+    float facet = pow(max(0.0, 1.0 - edgeDist * crystalSharpness), 2.0);
+    return -(facet * 0.25) * t * crystalScale;
+}
+
+// ============================================================================
+// Moss/Lichen — organic growth on surfaces
+// ============================================================================
+
+float mossMaxDisplacement() {
+    return mossTime * mossStrength * mossScale * 0.05;
+}
+
+float getMossDisplacement(vec3 pos) {
+    if (mossEnabled == 0) return 0.0;
+    vec3 p = pos / mossScale;
+    float t = mossTime * mossStrength;
+    float patches = fbmLow(p * 3.0 + vec3(91.0, 17.0, 53.0));
+    float detail = noise(p * 12.0 + vec3(7.0)) * 0.3;
+    float growth = max(0.0, patches + detail - 0.3);
+    return -growth * 0.05 * t * mossScale;
+}
+
+float getMossDisplacementLight(vec3 pos) {
+    if (mossEnabled == 0) return 0.0;
+    vec3 p = pos / mossScale;
+    float t = mossTime * mossStrength;
+    float n1 = noise(p * 3.0 + vec3(91.0, 17.0, 53.0)) * 0.5;
+    float n2 = noise(p * 6.0 + vec3(91.0, 17.0, 53.0)) * 0.25;
+    float growth = max(0.0, n1 + n2 - 0.2);
+    return -growth * 0.05 * t * mossScale;
+}
+
+// Factor for coloring (0 = no moss, 1 = full moss)
+float getMossFactor(vec3 pos, vec3 normal, float ao) {
+    if (mossEnabled == 0) return 0.0;
+    vec3 p = pos / mossScale;
+    float t = mossTime * mossStrength;
+    // Horizontal surface preference
+    float upFacing = smoothstep(mossNormalThreshold, mossNormalThreshold + 0.3, normal.y);
+    // Crevice preference (low AO = occluded = crevice)
+    float crevice = smoothstep(0.7, 0.3, ao);
+    // Either horizontal OR crevice (weighted)
+    float placement = max(upFacing * 0.7, crevice * 1.0);
+    // Organic patchiness
+    float patches = fbmLow(p * 3.0 + vec3(91.0, 17.0, 53.0));
+    float growth = smoothstep(0.3, 0.7, patches) * placement * t;
+    return clamp(growth, 0.0, 1.0);
 }
 
 uint pcg_hash(uint seed) {

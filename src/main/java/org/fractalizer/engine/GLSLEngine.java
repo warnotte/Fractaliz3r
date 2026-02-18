@@ -156,7 +156,7 @@ public class GLSLEngine implements AutoCloseable {
     }
 
     public void setActiveProgram(String name) {
-        if (!programs.containsKey(name)) throw new IllegalArgumentException();
+        if (!programs.containsKey(name)) return;
         if (!name.equals(activeProgram)) { activeProgram = name; needsReset = true; }
     }
 

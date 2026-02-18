@@ -183,6 +183,23 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float erosionScale = 1.0f;
     protected int erosionType = 0; // 0=All, 1=Hydraulic, 2=Thermal, 3=Cracks
 
+    // Crystallization
+    protected boolean crystalEnabled = false;
+    protected float crystalStrength = 0.5f;
+    protected float crystalTime = 0.0f;
+    protected float crystalScale = 1.0f;
+    protected float crystalSharpness = 2.0f;
+
+    // Moss/Lichen
+    protected boolean mossEnabled = false;
+    protected float mossStrength = 0.5f;
+    protected float mossTime = 0.0f;
+    protected float mossScale = 1.0f;
+    protected float mossColorR = 0.15f;
+    protected float mossColorG = 0.35f;
+    protected float mossColorB = 0.08f;
+    protected float mossNormalThreshold = 0.3f;
+
     // Custom gradient palette (used when paletteIndex == 6)
     protected GradientPalette customGradient;
 
@@ -428,6 +445,23 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.erosionTime = this.erosionTime;
         target.erosionScale = this.erosionScale;
         target.erosionType = this.erosionType;
+
+        // Copy Crystallization
+        target.crystalEnabled = this.crystalEnabled;
+        target.crystalStrength = this.crystalStrength;
+        target.crystalTime = this.crystalTime;
+        target.crystalScale = this.crystalScale;
+        target.crystalSharpness = this.crystalSharpness;
+
+        // Copy Moss
+        target.mossEnabled = this.mossEnabled;
+        target.mossStrength = this.mossStrength;
+        target.mossTime = this.mossTime;
+        target.mossScale = this.mossScale;
+        target.mossColorR = this.mossColorR;
+        target.mossColorG = this.mossColorG;
+        target.mossColorB = this.mossColorB;
+        target.mossNormalThreshold = this.mossNormalThreshold;
 
         // Copy custom gradient
         target.customGradient = this.customGradient.copy();
@@ -807,6 +841,38 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setErosionScale(float scale) { this.erosionScale = Math.max(0.1f, Math.min(5, scale)); }
     public int getErosionType() { return erosionType; }
     public void setErosionType(int type) { this.erosionType = Math.max(0, Math.min(3, type)); }
+
+    // Crystallization
+    public boolean isCrystalEnabled() { return crystalEnabled; }
+    public void setCrystalEnabled(boolean enabled) { this.crystalEnabled = enabled; }
+    public float getCrystalStrength() { return crystalStrength; }
+    public void setCrystalStrength(float strength) { this.crystalStrength = Math.max(0, Math.min(1, strength)); }
+    public float getCrystalTime() { return crystalTime; }
+    public void setCrystalTime(float time) { this.crystalTime = Math.max(0, Math.min(10, time)); }
+    public float getCrystalScale() { return crystalScale; }
+    public void setCrystalScale(float scale) { this.crystalScale = Math.max(0.1f, Math.min(5, scale)); }
+    public float getCrystalSharpness() { return crystalSharpness; }
+    public void setCrystalSharpness(float sharpness) { this.crystalSharpness = Math.max(0.5f, Math.min(5, sharpness)); }
+
+    // Moss/Lichen
+    public boolean isMossEnabled() { return mossEnabled; }
+    public void setMossEnabled(boolean enabled) { this.mossEnabled = enabled; }
+    public float getMossStrength() { return mossStrength; }
+    public void setMossStrength(float strength) { this.mossStrength = Math.max(0, Math.min(1, strength)); }
+    public float getMossTime() { return mossTime; }
+    public void setMossTime(float time) { this.mossTime = Math.max(0, Math.min(10, time)); }
+    public float getMossScale() { return mossScale; }
+    public void setMossScale(float scale) { this.mossScale = Math.max(0.1f, Math.min(5, scale)); }
+    public float getMossColorR() { return mossColorR; }
+    public float getMossColorG() { return mossColorG; }
+    public float getMossColorB() { return mossColorB; }
+    public void setMossColor(float r, float g, float b) {
+        this.mossColorR = r;
+        this.mossColorG = g;
+        this.mossColorB = b;
+    }
+    public float getMossNormalThreshold() { return mossNormalThreshold; }
+    public void setMossNormalThreshold(float threshold) { this.mossNormalThreshold = Math.max(0, Math.min(1, threshold)); }
 
     // Custom Gradient
     public GradientPalette getCustomGradient() { return customGradient; }
