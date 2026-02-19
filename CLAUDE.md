@@ -276,6 +276,26 @@ Write custom fractal DE shaders and compile them on the fly. Built on the same r
 - **Not usable as boolean secondary** — excluded from the boolean ops combo alongside `TEST_SCENE`, `CORNELL_BOX`, `FRACTAL_TERRAIN`.
 - **Files**: `CustomShaderParams.java` (model), `CustomShaderEditor.java` (UI component in `ui/components/`), `FractalType.CUSTOM_SHADER` enum value.
 
+## Multi-Fractal Nesting (Experimental)
+
+Tiles a secondary fractal as micro-geometry on the surface of a primary fractal. E.g., a Menger Sponge covered in mini-Mandelbulbs. Extends the Boolean Operations system with `boolOp == 4` ("Nesting").
+
+- **Reuses 100% of the boolean pipeline**: `ShaderPreprocessor` + `loadBooleanFractalShader` + `#ifdef BOOLEAN_OPS`. No new shader files or compilation paths.
+- **raytracer.glsl**: `boolDE()`/`boolDE_simple()` check `boolOp == 4` before the standard `boolCombine()` path. Nesting logic:
+  1. Early-out when `d1 > nestThreshold` (far from primary surface — skip secondary eval)
+  2. `fract(pos * nestRepeatScale)` tiles world space into repeating cells
+  3. Per-cell random rotation via `nestCellRotate()`: hashes `cellId = floor(pos * nestRepeatScale)` to produce a unique axis + angle per cell (Rodrigues rotation). `nestRotation` uniform controls max amplitude (0 = all aligned, 2π = fully random).
+  4. Evaluate `b_DE_simple(cellPos)` in the tiled/rotated cell, scale result back to world space
+  5. `smoothstep` blend between primary DE and nested DE near the surface
+- **All 8 existing boolean DE call sites** (calcNormal, calcShadow, calcAO, calcSSS, rayMarch, rayMarchSimple, 2× glass) work automatically — they already dispatch through `boolDE`/`boolDE_simple`.
+- **Parameters** (in `AbstractFractalParams`, serialized in `EffectsConfig`):
+  - `nestThreshold` (float, 0.01-1.0, default 0.1) — shell thickness: how close to the primary surface the nesting appears
+  - `nestRepeatScale` (float, 0.5-50, default 5.0) — repetition density of the secondary fractal
+  - `nestRotation` (float, 0-360°, default 0) — max per-cell random rotation amplitude (converted to radians in controller)
+  - Also uses existing `boolScale` for secondary fractal size within each cell
+- **UI**: "Nesting" option in the Boolean Operations operation ComboBox. Threshold, Repeat Scale, and Rotation sliders appear only when Nesting is selected.
+- **Zero overhead when not Nesting**: `boolOp != 4` takes the normal boolean path with zero extra cost.
+
 ## GPU-Accelerated 3D Mesh Export
 
 Export fractal geometry as 3D meshes (OBJ, glTF/GLB, PLY) using GPU-accelerated distance field evaluation. Uses the same GLSL fractal shaders as the renderer — 100% fidelity, zero CPU DE code.
