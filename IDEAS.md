@@ -41,3 +41,18 @@ Attempted implementation with procedural GPU particles (spatial hashing, fullscr
 **Status:** REJECTED
 
 Previously attempted and rejected — user considers it garbage.
+
+## 9. Orbit Trap Modes
+**Status:** IDEA
+
+New coloring modes beyond the current cumulative plane traps. Sphere trap (distance to a point), line trap (distance to an axis), cross trap (min of X/Y/Z distances), point trap (closest orbit point). Each mode produces radically different patterns on the same fractal geometry. Purely shader-side modification of `getFactors()` / orbit trap struct. Controlled via a ComboBox in MaterialPanel.
+
+## 10. Domain Distortions (Twist/Bend/Repetition)
+**Status:** IDEA
+
+Space-warping transformations applied to `pos` before DE evaluation. Twist (spiral around an axis), Bend (curve space along an axis), Taper (cone-scale), Domain Repetition (infinite copies with `mod()`). Transforms any fractal into impossible shapes. Same injection pattern as erosion — modify `pos` in all geometry DE call sites. Parameters: distortion type, axis, strength, frequency. Animatable via global timeline tracks.
+
+## 11. Fractal Morphing
+**Status:** IDEA
+
+Continuous blend between two fractal DE functions: `mix(DE_A(pos), DE_B(pos), t)`. Reuses the Boolean Operations shader compilation pipeline (both fractals already compiled and available as `DE`/`b_DE_simple`). A morph slider (0→1) smoothly transitions geometry from one fractal type to another in real-time. Could be implemented as `boolOp == 5` alongside nesting.
