@@ -40,7 +40,7 @@ Previously attempted and rejected — user considers it garbage.
 ## 8. Boolean Operations Between Fractals
 **Status:** DONE
 
-CSG union/intersection/subtraction of two fractal distance fields. Carve a Menger Sponge out of a Mandelbulb, merge them smoothly, etc. Solved via Java-side `ShaderPreprocessor` that renames all local GLSL symbols in the secondary fractal with a `b_` prefix before shader concatenation — zero conflicts. `#ifdef BOOLEAN_OPS` in raytracer.glsl for clean separation. On-demand compilation with caching. Smooth blend via `smin`/`smax`. Excludes Fractal Terrain, Cornell Box, and Test Scene. Also serves as the foundation for future user-written custom DE shaders (runtime GLSL compilation pipeline).
+CSG union/intersection/subtraction/nesting of two fractal distance fields. Carve a Menger Sponge out of a Mandelbulb, merge them smoothly, tile micro-fractals on a surface, etc. Solved via Java-side `ShaderPreprocessor` that renames all local GLSL symbols in the secondary fractal with a `b_` prefix before shader concatenation — zero conflicts. `#ifdef BOOLEAN_OPS` in raytracer.glsl for clean separation. On-demand compilation with caching. Smooth blend via `smin`/`smax`. Euler XYZ rotation of the secondary fractal. Excludes Fractal Terrain, Cornell Box, and Test Scene. Also serves as the foundation for user-written custom DE shaders (runtime GLSL compilation pipeline).
 
 ## 9. Moss / Lichen Growth
 **Status:** DONE
@@ -58,9 +58,9 @@ Autonomous drift through parameter space via smooth Perlin noise over time. Para
 Render the fractal as semi-transparent. Instead of stopping at the first hit, the ray continues and accumulates density based on DE proximity. Reveals internal structure like a CT scanner. Controlled by an "opacity" slider that interpolates between solid surface and translucent volume. Could use the existing orbit trap data for interior coloring.
 
 ## 12. Multi-Fractal Nesting
-**Status:** IDEA
+**Status:** DONE
 
-A large-scale Menger Sponge where each cube is replaced by a tiny Mandelbulb. Evaluate DE_A at large scale, then when close enough, switch to DE_B at small scale with a coordinate transform. Fractals within fractals — infinite complexity at every zoom level.
+Tiles a secondary fractal as micro-geometry on the primary fractal's surface. Implemented as `boolOp == 4` ("Nesting") in the Boolean Operations system. Domain warp (3× fbmLow) breaks the regular tiling grid, edge fade eliminates visible cell seams. Per-cell random rotation (Rodrigues, hashed from cell ID) gives each micro-fractal a unique orientation. Nest Mix slider crossfades between pure primary and full nesting. Reuses 100% of the boolean compilation pipeline.
 
 ## 13. Crystallization
 **Status:** DONE
