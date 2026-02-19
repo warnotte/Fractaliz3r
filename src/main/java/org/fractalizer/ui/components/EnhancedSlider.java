@@ -123,7 +123,8 @@ public class EnhancedSlider extends VBox {
         if (isInteger) {
             currentValue = String.valueOf((int) Math.round(slider.getValue()));
         } else {
-            currentValue = String.format("%." + precision + "f", slider.getValue());
+            // Show real value, not display-rounded value
+            currentValue = String.valueOf(slider.getValue());
         }
 
         TextField field = new TextField(currentValue);
