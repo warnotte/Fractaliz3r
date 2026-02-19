@@ -1242,7 +1242,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         });
 
         boolOpCombo = new ComboBox<>();
-        boolOpCombo.getItems().addAll("Union", "Intersect", "Subtract", "Nesting");
+        boolOpCombo.getItems().addAll("Union", "Intersect", "Subtract", "Nesting", "Morph");
         boolOpCombo.setValue("Union");
         boolOpCombo.setMaxWidth(Double.MAX_VALUE);
         boolOpCombo.setOnAction(e -> {

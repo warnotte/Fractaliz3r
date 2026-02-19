@@ -53,6 +53,6 @@ Previously attempted and rejected — user considers it garbage.
 5 space-warping transforms applied to `pos` before DE evaluation: Twist (spiral around axis), Bend (curve along axis), Taper (cone-scale), Repetition 1D (infinite copies on one axis), Repetition 3D (infinite grid). DE correction factor for non-isometric transforms prevents raymarching overshoot. Axis selector (X/Y/Z), strength, frequency, offset parameters. 8 geometry DE sites + 4 coloring-only DE sites in raytracer.glsl. 3 animatable global timeline tracks (strength, frequency, offset). Zero overhead when disabled.
 
 ## 11. Fractal Morphing
-**Status:** IDEA
+**Status:** DONE
 
-Continuous blend between two fractal DE functions: `mix(DE_A(pos), DE_B(pos), t)`. Reuses the Boolean Operations shader compilation pipeline (both fractals already compiled and available as `DE`/`b_DE_simple`). A morph slider (0→1) smoothly transitions geometry from one fractal type to another in real-time. Could be implemented as `boolOp == 5` alongside nesting.
+Continuous blend between two fractal DE functions: `mix(DE_A, DE_B, boolBlend)`. Implemented as `boolOp == 5` in the Boolean Operations system — zero new files, reuses 100% of the compilation pipeline. Color mixing via `morphFactors()` evaluates both fractals' orbit traps and blends the coloring factors. boolBlend 0→1 = primary→secondary. Offset/rotation/scale of secondary work naturally. `boolBlend` is a global timeline track ("Boolean" group) for animated morphing.

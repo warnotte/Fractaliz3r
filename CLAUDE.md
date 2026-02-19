@@ -264,15 +264,16 @@ Space-warping transformations applied to `pos` BEFORE DE evaluation. Turns any f
 
 ## Boolean Operations (CSG)
 
-Constructive Solid Geometry between two fractal distance fields: Union, Intersect, or Subtract. Combines any two fractal types (excluding Fractal Terrain, Cornell Box, Test Scene) with optional smooth blending.
+Constructive Solid Geometry between two fractal distance fields: Union, Intersect, Subtract, Nesting, or Morph. Combines any two fractal types (excluding Fractal Terrain, Cornell Box, Test Scene) with optional smooth blending.
 
 - **GLSL symbol conflict solution**: `ShaderPreprocessor.java` renames all local symbols (uniforms, structs, functions, consts) in the secondary fractal shader with a `b_` prefix before concatenation. Zero changes to existing fractal shaders.
 - **Shader assembly**: `GLSLEngine.loadBooleanFractalShader()` compiles `#version 430` + `#define BOOLEAN_OPS` + `common.glsl` + primary fractal + preprocessed secondary + `raytracer.glsl`. On-demand compilation with caching (avoids combinatorial explosion at startup).
 - **raytracer.glsl**: `#ifdef BOOLEAN_OPS` block defines `boolDE(pos, trap)` and `boolDE_simple(pos)` — evaluate both DEs, transform secondary by offset/scale, combine via `boolCombine()`. 8 geometry DE call sites wrapped with `#ifdef` (calcNormal, calcShadow, calcAO, calcSSS, rayMarch, rayMarchSimple, 2× glass interior). Coloring-only DE calls use primary only.
 - **Smooth boolean**: `smin_bool(a,b,k)` / `smax_bool(a,b,k)` with polynomial smooth min/max. `boolBlend=0` = hard boolean, `boolBlend>0` = organic transitions.
+- **Morph** (`boolOp == 5`): `mix(d1, d2, boolBlend)` continuous DE blend. `morphFactors()` evaluates both fractals' orbit traps (`DE` + `b_DE`) and blends coloring factors at all 6 shading sites. `boolBlend` 0→1 = primary→secondary. Offset/rotation/scale of secondary work naturally.
 - **Controller**: `activateCurrentProgram()` replaces all 11 `setActiveProgram()` calls — transparently switches between boolean and normal shader programs. `buildSecondaryUniforms()` emits `b_`-prefixed uniforms for the secondary fractal using default params.
 - **Parameters** (in `AbstractFractalParams`, serialized in `EffectsConfig`):
-  - `booleanEnabled` (bool), `booleanOp` (1=Union, 2=Intersect, 3=Subtract, 4=Nesting)
+  - `booleanEnabled` (bool), `booleanOp` (1=Union, 2=Intersect, 3=Subtract, 4=Nesting, 5=Morph)
   - `boolSecondaryType` (String, kernelName of secondary fractal)
   - `boolOffsetX/Y/Z` (float, -5 to 5), `boolRotX/Y/Z` (float, -180 to 180°), `boolScale` (float, 0.01 to 10), `boolBlend` (float, 0 to 2)
 - **Secondary rotation**: Euler XYZ rotation applied to secondary position via `boolRotateSecondary()` (3× Rodrigues). Available in Union/Intersect/Subtract modes.

@@ -106,6 +106,9 @@ public class AnimationManager {
         timeline.createTrack("distortionStrength", Float.class, 0.0f);
         timeline.createTrack("distortionFrequency", Float.class, 1.0f);
         timeline.createTrack("distortionOffset", Float.class, 0.0f);
+
+        // Boolean/Morph
+        timeline.createTrack("boolBlend", Float.class, 0.0f);
     }
 
     // ========================================================================
@@ -205,6 +208,7 @@ public class AnimationManager {
         addKeyframeForTrack("distortionStrength", time, easing, params);
         addKeyframeForTrack("distortionFrequency", time, easing, params);
         addKeyframeForTrack("distortionOffset", time, easing, params);
+        addKeyframeForTrack("boolBlend", time, easing, params);
 
         // Add keyframes for fractal-specific tracks
         addFractalKeyframes(time, easing, params);
@@ -292,6 +296,7 @@ public class AnimationManager {
             case "distortionStrength" -> timeline.setKeyframe("distortionStrength", time, params.getDistortionStrength(), easing);
             case "distortionFrequency" -> timeline.setKeyframe("distortionFrequency", time, params.getDistortionFrequency(), easing);
             case "distortionOffset" -> timeline.setKeyframe("distortionOffset", time, params.getDistortionOffset(), easing);
+            case "boolBlend" -> timeline.setKeyframe("boolBlend", time, params.getBoolBlend(), easing);
             default -> {
                 // Check if it's a fractal-specific track
                 addFractalKeyframeForTrack(trackName, time, easing, params);
@@ -440,6 +445,11 @@ public class AnimationManager {
         }
         if (timeline.getTrack("distortionOffset").hasKeyframes()) {
             params.setDistortionOffset(timeline.getValue("distortionOffset"));
+        }
+
+        // Apply boolean/morph blend
+        if (timeline.getTrack("boolBlend").hasKeyframes()) {
+            params.setBoolBlend(timeline.getValue("boolBlend"));
         }
 
         // Apply fractal-specific parameters

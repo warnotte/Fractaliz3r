@@ -82,6 +82,7 @@ float boolCombine(float d1, float d2) {
     if (boolOp == 1) return smin_bool(d1, d2, boolBlend);       // Union
     if (boolOp == 2) return smax_bool(d1, d2, boolBlend);       // Intersect
     if (boolOp == 3) return smax_bool(d1, -d2, boolBlend);      // Subtract
+    if (boolOp == 5) return mix(d1, d2, clamp(boolBlend, 0.0, 1.0)); // Morph
     return d1;
 }
 
@@ -139,6 +140,16 @@ float boolDE_simple(vec3 pos) {
     vec3 p2 = boolRotateSecondary((pos - boolOffset) / boolScale);
     float d2 = b_DE_simple(p2) * boolScale;
     return boolCombine(d1, d2);
+}
+
+// Mix coloring factors between primary and secondary for morph mode
+vec3 morphFactors(vec3 pos, vec3 primaryFactors) {
+    if (boolOp != 5) return primaryFactors;
+    vec3 p2 = boolRotateSecondary((pos - boolOffset) / boolScale);
+    b_OrbitTrap b_trap;
+    b_DE(p2, b_trap);
+    vec3 secondaryFactors = b_getFactors(b_trap);
+    return mix(primaryFactors, secondaryFactors, clamp(boolBlend, 0.0, 1.0));
 }
 #endif
 
@@ -476,6 +487,9 @@ vec3 shadeSimple(vec3 hitPos, Ray ray) {
     OrbitTrap trap;
     DE(distortPos(hitPos), trap);
     vec3 factors = getFactors(trap);
+#ifdef BOOLEAN_OPS
+    factors = morphFactors(distortPos(hitPos), factors);
+#endif
     factors = remapTrapFactors(factors, hitPos);
 
     vec3 baseColor;
@@ -539,6 +553,9 @@ vec3 shade(RayHit hit, Ray ray) {
 
     // Base color and material properties
     vec3 factors = getFactors(hit.trap);
+#ifdef BOOLEAN_OPS
+    factors = morphFactors(distortPos(hit.pos), factors);
+#endif
     factors = remapTrapFactors(factors, hit.pos);
 
     vec3 baseColor;
@@ -820,7 +837,13 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
         safeRoughness = max(objMat.roughness, 0.02);
         localEmissive = objMat.emissive;
 #else
-        albedo = applyMaterial(remapTrapFactors(getFactors(trap), hitPos));
+        {
+            vec3 mf = getFactors(trap);
+#ifdef BOOLEAN_OPS
+            mf = morphFactors(distortPos(hitPos), mf);
+#endif
+            albedo = applyMaterial(remapTrapFactors(mf, hitPos));
+        }
         localMatType = materialType;
         localIor = ior;
         localMetalness = metalness;
@@ -848,7 +871,11 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
             radiance += clamp(throughput * albedo, 0.0, FIREFLY_CLAMP);
             break; // Light source reached — stop bouncing
 #else
-            vec3 factors = remapTrapFactors(getFactors(trap), hitPos);
+            vec3 emFactorsRaw = getFactors(trap);
+#ifdef BOOLEAN_OPS
+            emFactorsRaw = morphFactors(distortPos(hitPos), emFactorsRaw);
+#endif
+            vec3 factors = remapTrapFactors(emFactorsRaw, hitPos);
             float structural = factors.x;
             float depth = factors.z;
             float emFactor = mix(structural, 1.0 - depth, 0.5);
@@ -1088,7 +1115,13 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         safeRoughness = max(objMat.roughness, 0.02);
         localEmissive = objMat.emissive;
 #else
-        albedo = applyMaterial(remapTrapFactors(getFactors(trap), hitPos));
+        {
+            vec3 mf = getFactors(trap);
+#ifdef BOOLEAN_OPS
+            mf = morphFactors(distortPos(hitPos), mf);
+#endif
+            albedo = applyMaterial(remapTrapFactors(mf, hitPos));
+        }
         localMatType = materialType;
         localIor = ior;
         localMetalness = metalness;
@@ -1118,7 +1151,11 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             radiance += clamp(throughput * albedo, 0.0, FIREFLY_CLAMP);
             break;
 #else
-            vec3 factors = remapTrapFactors(getFactors(trap), hitPos);
+            vec3 emFactorsRaw = getFactors(trap);
+#ifdef BOOLEAN_OPS
+            emFactorsRaw = morphFactors(distortPos(hitPos), emFactorsRaw);
+#endif
+            vec3 factors = remapTrapFactors(emFactorsRaw, hitPos);
             float structural = factors.x;
             float depth = factors.z;
             float emFactor = mix(structural, 1.0 - depth, 0.5);
@@ -1380,6 +1417,9 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 
 vec3 renderByMode(RayHit hit, Ray ray, vec3 normal, float shadow, float ao) {
     vec3 factors = getFactors(hit.trap);
+#ifdef BOOLEAN_OPS
+    factors = morphFactors(distortPos(hit.pos), factors);
+#endif
     factors = remapTrapFactors(factors, hit.pos);
     vec3 baseColor = applyMaterial(factors);
 

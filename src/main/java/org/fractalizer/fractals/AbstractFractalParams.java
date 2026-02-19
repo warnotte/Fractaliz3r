@@ -943,7 +943,7 @@ public abstract class AbstractFractalParams implements FractalParams {
     public boolean isBooleanEnabled() { return booleanEnabled; }
     public void setBooleanEnabled(boolean enabled) { this.booleanEnabled = enabled; }
     public int getBooleanOp() { return booleanOp; }
-    public void setBooleanOp(int op) { this.booleanOp = Math.max(1, Math.min(4, op)); }
+    public void setBooleanOp(int op) { this.booleanOp = Math.max(1, Math.min(5, op)); }
     public String getBoolSecondaryType() { return boolSecondaryType; }
     public void setBoolSecondaryType(String type) { this.boolSecondaryType = type; }
     public float getBoolOffsetX() { return boolOffsetX; }
