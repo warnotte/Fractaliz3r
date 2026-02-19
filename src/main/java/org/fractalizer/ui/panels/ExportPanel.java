@@ -256,7 +256,7 @@ public class ExportPanel extends ScrollPane {
         HBox imageSamplesBox = new HBox(5);
         imageSamplesBox.setAlignment(Pos.CENTER_LEFT);
         imageSamplesBox.getChildren().add(new Label("Samples:"));
-        imageExportSamplesSpinner = new Spinner<>(16, 1024, 128, 16);
+        imageExportSamplesSpinner = new Spinner<>(16, 8192, 128, 16);
         imageExportSamplesSpinner.setPrefWidth(80);
         imageExportSamplesSpinner.setEditable(true);
         imageExportSamplesSpinner.setTooltip(new Tooltip("Number of render iterations for image export"));
