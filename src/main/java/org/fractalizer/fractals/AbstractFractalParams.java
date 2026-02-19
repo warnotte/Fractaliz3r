@@ -207,9 +207,11 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float boolOffsetX = 0.5f, boolOffsetY = 0f, boolOffsetZ = 0f;
     protected float boolScale = 1.0f;
     protected float boolBlend = 0.0f;
+    protected float boolRotX = 0f, boolRotY = 0f, boolRotZ = 0f;
     protected float nestThreshold = 0.1f;
     protected float nestRepeatScale = 5.0f;
     protected float nestRotation = 0.0f;
+    protected float nestMix = 1.0f;
 
     // Custom gradient palette (used when paletteIndex == 6)
     protected GradientPalette customGradient;
@@ -483,9 +485,13 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.boolOffsetZ = this.boolOffsetZ;
         target.boolScale = this.boolScale;
         target.boolBlend = this.boolBlend;
+        target.boolRotX = this.boolRotX;
+        target.boolRotY = this.boolRotY;
+        target.boolRotZ = this.boolRotZ;
         target.nestThreshold = this.nestThreshold;
         target.nestRepeatScale = this.nestRepeatScale;
         target.nestRotation = this.nestRotation;
+        target.nestMix = this.nestMix;
 
         // Copy custom gradient
         target.customGradient = this.customGradient.copy();
@@ -915,12 +921,20 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setBoolScale(float scale) { this.boolScale = Math.max(0.01f, Math.min(10f, scale)); }
     public float getBoolBlend() { return boolBlend; }
     public void setBoolBlend(float blend) { this.boolBlend = Math.max(0f, Math.min(2f, blend)); }
+    public float getBoolRotX() { return boolRotX; }
+    public void setBoolRotX(float v) { this.boolRotX = v; }
+    public float getBoolRotY() { return boolRotY; }
+    public void setBoolRotY(float v) { this.boolRotY = v; }
+    public float getBoolRotZ() { return boolRotZ; }
+    public void setBoolRotZ(float v) { this.boolRotZ = v; }
     public float getNestThreshold() { return nestThreshold; }
     public void setNestThreshold(float v) { this.nestThreshold = Math.max(0.01f, Math.min(1.0f, v)); }
     public float getNestRepeatScale() { return nestRepeatScale; }
     public void setNestRepeatScale(float v) { this.nestRepeatScale = Math.max(0.5f, Math.min(50.0f, v)); }
     public float getNestRotation() { return nestRotation; }
     public void setNestRotation(float v) { this.nestRotation = Math.max(0f, Math.min(360f, v)); }
+    public float getNestMix() { return nestMix; }
+    public void setNestMix(float v) { this.nestMix = Math.max(0f, Math.min(1f, v)); }
 
     // Custom Gradient
     public GradientPalette getCustomGradient() { return customGradient; }

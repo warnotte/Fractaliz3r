@@ -1238,9 +1238,15 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("boolOffset", new float[]{afp.getBoolOffsetX(), afp.getBoolOffsetY(), afp.getBoolOffsetZ()});
                 uniforms.put("boolScale", afp.getBoolScale());
                 uniforms.put("boolBlend", afp.getBoolBlend());
+                uniforms.put("boolRotation", new float[]{
+                    (float) Math.toRadians(afp.getBoolRotX()),
+                    (float) Math.toRadians(afp.getBoolRotY()),
+                    (float) Math.toRadians(afp.getBoolRotZ())
+                });
                 uniforms.put("nestThreshold", afp.getNestThreshold());
                 uniforms.put("nestRepeatScale", afp.getNestRepeatScale());
                 uniforms.put("nestRotation", (float) Math.toRadians(afp.getNestRotation()));
+                uniforms.put("nestMix", afp.getNestMix());
                 buildSecondaryUniforms(uniforms, afp.getBoolSecondaryType());
             }
         }

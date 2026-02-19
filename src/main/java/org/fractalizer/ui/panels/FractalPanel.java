@@ -171,8 +171,9 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private ComboBox<String> boolOpCombo;
     private EnhancedSlider boolOffsetXSlider, boolOffsetYSlider, boolOffsetZSlider;
     private EnhancedSlider boolScaleSlider;
+    private EnhancedSlider boolRotXSlider, boolRotYSlider, boolRotZSlider;
     private EnhancedSlider boolBlendSlider;
-    private EnhancedSlider nestThresholdSlider, nestRepeatScaleSlider, nestRotationSlider;
+    private EnhancedSlider nestThresholdSlider, nestRepeatScaleSlider, nestRotationSlider, nestMixSlider;
 
     public FractalPanel(RenderController controller, AbstractFractalParams initialParams,
                         RenderCallback renderCallback) {
@@ -1255,6 +1256,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 nestRepeatScaleSlider.setManaged(nesting);
                 nestRotationSlider.setVisible(nesting);
                 nestRotationSlider.setManaged(nesting);
+                nestMixSlider.setVisible(nesting);
+                nestMixSlider.setManaged(nesting);
                 renderCallback.requestRender();
             }
         });
@@ -1268,6 +1271,13 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         boolScaleSlider = new EnhancedSlider("Scale", 0.01, 10, 1, false);
         boolScaleSlider.setOnAction(v -> { if (!suppressRender && params != null) { params.setBoolScale(v.floatValue()); renderCallback.requestRender(); } });
+
+        boolRotXSlider = new EnhancedSlider("Rotation X", -180, 180, 0, false);
+        boolRotXSlider.setOnAction(v -> { if (!suppressRender && params != null) { params.setBoolRotX(v.floatValue()); renderCallback.requestRender(); } });
+        boolRotYSlider = new EnhancedSlider("Rotation Y", -180, 180, 0, false);
+        boolRotYSlider.setOnAction(v -> { if (!suppressRender && params != null) { params.setBoolRotY(v.floatValue()); renderCallback.requestRender(); } });
+        boolRotZSlider = new EnhancedSlider("Rotation Z", -180, 180, 0, false);
+        boolRotZSlider.setOnAction(v -> { if (!suppressRender && params != null) { params.setBoolRotZ(v.floatValue()); renderCallback.requestRender(); } });
 
         boolBlendSlider = new EnhancedSlider("Smooth Blend", 0, 2, 0, false);
         boolBlendSlider.setOnAction(v -> { if (!suppressRender && params != null) { params.setBoolBlend(v.floatValue()); renderCallback.requestRender(); } });
@@ -1287,13 +1297,19 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         nestRotationSlider.setVisible(false);
         nestRotationSlider.setManaged(false);
 
+        nestMixSlider = new EnhancedSlider("Nest Mix", 0, 1, 1, false);
+        nestMixSlider.setOnAction(v -> { if (!suppressRender && params != null) { params.setNestMix(v.floatValue()); renderCallback.requestRender(); } });
+        nestMixSlider.setVisible(false);
+        nestMixSlider.setManaged(false);
+
         VBox content = new VBox(6,
             boolEnableCheck,
             new Label("Secondary Fractal:"), boolSecondaryCombo,
             new Label("Operation:"), boolOpCombo,
             boolOffsetXSlider, boolOffsetYSlider, boolOffsetZSlider,
+            boolRotXSlider, boolRotYSlider, boolRotZSlider,
             boolScaleSlider, boolBlendSlider,
-            nestThresholdSlider, nestRepeatScaleSlider, nestRotationSlider
+            nestMixSlider, nestThresholdSlider, nestRepeatScaleSlider, nestRotationSlider
         );
         content.setPadding(new Insets(4));
 
@@ -1484,10 +1500,14 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             boolOffsetYSlider.setValue(params.getBoolOffsetY());
             boolOffsetZSlider.setValue(params.getBoolOffsetZ());
             boolScaleSlider.setValue(params.getBoolScale());
+            boolRotXSlider.setValue(params.getBoolRotX());
+            boolRotYSlider.setValue(params.getBoolRotY());
+            boolRotZSlider.setValue(params.getBoolRotZ());
             boolBlendSlider.setValue(params.getBoolBlend());
             nestThresholdSlider.setValue(params.getNestThreshold());
             nestRepeatScaleSlider.setValue(params.getNestRepeatScale());
             nestRotationSlider.setValue(params.getNestRotation());
+            nestMixSlider.setValue(params.getNestMix());
             boolean nesting = (params.getBooleanOp() == 4);
             nestThresholdSlider.setVisible(nesting);
             nestThresholdSlider.setManaged(nesting);
@@ -1495,6 +1515,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             nestRepeatScaleSlider.setManaged(nesting);
             nestRotationSlider.setVisible(nesting);
             nestRotationSlider.setManaged(nesting);
+            nestMixSlider.setVisible(nesting);
+            nestMixSlider.setManaged(nesting);
 
             // Update common controls
             speedSlider.setValue(camera.getMoveSpeed());

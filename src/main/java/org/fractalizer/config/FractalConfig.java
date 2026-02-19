@@ -216,9 +216,11 @@ public class FractalConfig {
         public float boolOffsetX = 0.5f, boolOffsetY = 0f, boolOffsetZ = 0f;
         public float boolScale = 1.0f;
         public float boolBlend = 0.0f;
+        public float boolRotX = 0f, boolRotY = 0f, boolRotZ = 0f;
         public float nestThreshold = 0.1f;
         public float nestRepeatScale = 5.0f;
         public float nestRotation = 0.0f;
+        public float nestMix = 1.0f;
     }
 
     public static class AnimationConfig {
@@ -383,9 +385,13 @@ public class FractalConfig {
         config.effects.boolOffsetZ = params.getBoolOffsetZ();
         config.effects.boolScale = params.getBoolScale();
         config.effects.boolBlend = params.getBoolBlend();
+        config.effects.boolRotX = params.getBoolRotX();
+        config.effects.boolRotY = params.getBoolRotY();
+        config.effects.boolRotZ = params.getBoolRotZ();
         config.effects.nestThreshold = params.getNestThreshold();
         config.effects.nestRepeatScale = params.getNestRepeatScale();
         config.effects.nestRotation = params.getNestRotation();
+        config.effects.nestMix = params.getNestMix();
         // Fractal-specific parameters
         extractFractalParams(params, config.fractalParams);
 
@@ -534,9 +540,13 @@ public class FractalConfig {
         params.setBoolOffsetZ(effects.boolOffsetZ);
         params.setBoolScale(effects.boolScale);
         params.setBoolBlend(effects.boolBlend);
+        params.setBoolRotX(effects.boolRotX);
+        params.setBoolRotY(effects.boolRotY);
+        params.setBoolRotZ(effects.boolRotZ);
         params.setNestThreshold(effects.nestThreshold);
         params.setNestRepeatScale(effects.nestRepeatScale);
         params.setNestRotation(effects.nestRotation);
+        params.setNestMix(effects.nestMix);
         // Fractal-specific parameters
         applyFractalParams(params, fractalParams);
     }

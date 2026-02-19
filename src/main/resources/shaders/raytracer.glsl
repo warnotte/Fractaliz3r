@@ -40,9 +40,11 @@ uniform int boolOp;       // 1=Union, 2=Intersect, 3=Subtract
 uniform vec3 boolOffset;  // Translation of secondary fractal
 uniform float boolScale;  // Scale of secondary fractal
 uniform float boolBlend;  // Smooth blend radius (0 = sharp)
+uniform vec3 boolRotation; // Euler rotation XYZ (radians) of secondary fractal
 uniform float nestThreshold;   // Nesting: shell thickness around primary surface
 uniform float nestRepeatScale; // Nesting: repetition density of secondary
 uniform float nestRotation;    // Nesting: rotation angle (radians) around (1,1,1) axis
+uniform float nestMix;         // Nesting: 0 = pure primary, 1 = full nesting
 
 // Rodrigues rotation around arbitrary axis
 vec3 nestRotate(vec3 p, vec3 axis, float angle) {
@@ -83,19 +85,47 @@ float boolCombine(float d1, float d2) {
     return d1;
 }
 
+float nestEvalCell(vec3 pos, float d1) {
+    // Domain warp: break regular grid with noise displacement
+    vec3 warpedPos = pos * nestRepeatScale;
+    float warpAmt = 0.35;
+    vec3 warpOff = vec3(
+        fbmLow(pos * 2.0 + vec3(7.3, 0.0, 0.0)),
+        fbmLow(pos * 2.0 + vec3(0.0, 11.7, 0.0)),
+        fbmLow(pos * 2.0 + vec3(0.0, 0.0, 5.1))
+    );
+    warpedPos = warpedPos + warpOff * warpAmt * nestRepeatScale;
+
+    vec3 cellId = floor(warpedPos);
+    vec3 cellPos = fract(warpedPos) * 2.0 - 1.0;
+
+    // Fade-out at cell edges: distance from center in [-1,1] cube
+    float edgeDist = max(max(abs(cellPos.x), abs(cellPos.y)), abs(cellPos.z));
+    float fade = 1.0 - smoothstep(0.6, 1.0, edgeDist);
+
+    cellPos = nestCellRotate(cellPos, cellId, nestRotation);
+    cellPos = cellPos / boolScale;
+    float d_inner = b_DE_simple(cellPos) * boolScale / nestRepeatScale;
+
+    // Blend: primary surface proximity + cell edge fade + global mix
+    float t = smoothstep(nestThreshold, nestThreshold * 0.1, d1) * fade * nestMix;
+    return mix(d1, d_inner, t);
+}
+
+vec3 boolRotateSecondary(vec3 p) {
+    if (boolRotation.x != 0.0) p = nestRotate(p, vec3(1.0, 0.0, 0.0), boolRotation.x);
+    if (boolRotation.y != 0.0) p = nestRotate(p, vec3(0.0, 1.0, 0.0), boolRotation.y);
+    if (boolRotation.z != 0.0) p = nestRotate(p, vec3(0.0, 0.0, 1.0), boolRotation.z);
+    return p;
+}
+
 float boolDE(vec3 pos, out OrbitTrap trap) {
     float d1 = DE(pos, trap);
     if (boolOp == 4) {
         if (d1 > nestThreshold) return d1;
-        vec3 cellId = floor(pos * nestRepeatScale);
-        vec3 cellPos = fract(pos * nestRepeatScale) * 2.0 - 1.0;
-        cellPos = nestCellRotate(cellPos, cellId, nestRotation);
-        cellPos = cellPos / boolScale;
-        float d_inner = b_DE_simple(cellPos) * boolScale / nestRepeatScale;
-        float t = smoothstep(nestThreshold, nestThreshold * 0.1, d1);
-        return mix(d1, d_inner, t);
+        return nestEvalCell(pos, d1);
     }
-    vec3 p2 = (pos - boolOffset) / boolScale;
+    vec3 p2 = boolRotateSecondary((pos - boolOffset) / boolScale);
     float d2 = b_DE_simple(p2) * boolScale;
     return boolCombine(d1, d2);
 }
@@ -104,15 +134,9 @@ float boolDE_simple(vec3 pos) {
     float d1 = DE_simple(pos);
     if (boolOp == 4) {
         if (d1 > nestThreshold) return d1;
-        vec3 cellId = floor(pos * nestRepeatScale);
-        vec3 cellPos = fract(pos * nestRepeatScale) * 2.0 - 1.0;
-        cellPos = nestCellRotate(cellPos, cellId, nestRotation);
-        cellPos = cellPos / boolScale;
-        float d_inner = b_DE_simple(cellPos) * boolScale / nestRepeatScale;
-        float t = smoothstep(nestThreshold, nestThreshold * 0.1, d1);
-        return mix(d1, d_inner, t);
+        return nestEvalCell(pos, d1);
     }
-    vec3 p2 = (pos - boolOffset) / boolScale;
+    vec3 p2 = boolRotateSecondary((pos - boolOffset) / boolScale);
     float d2 = b_DE_simple(p2) * boolScale;
     return boolCombine(d1, d2);
 }
