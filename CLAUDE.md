@@ -115,7 +115,8 @@ A standard component used for **all** numeric parameters across the application:
   - `ALT + Scroll`: Normal speed adjustment.
   - `SHIFT + Scroll`: Fine/Precision control (10x slower).
   - `CTRL + Scroll`: Fast movement (10x faster).
-- **Automatic Labels**: Displays title and value with configurable precision.
+- **Automatic Labels**: Displays title and value with configurable precision (default 3 decimals).
+- **Inline Value Entry**: Double-click on the label or slider track to open an inline text field. Shows the real (unrounded) value. Enter to confirm, Escape to cancel, focus-loss auto-commits. Value is clamped to slider min/max. Styled via `.inline-edit-field` CSS class.
 - **Lock Button**: Each slider has a lock toggle (🔓/🔒) that protects it from the dice randomizer.
 - **Tooltip Help**: Explains shortcuts when hovering.
 
