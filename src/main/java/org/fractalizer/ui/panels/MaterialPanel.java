@@ -29,6 +29,7 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
     private GradientEditor gradientEditor;
     private Consumer<GradientPalette> onGradientChanged;
     private ComboBox<String> coloringModeCombo;
+    private ComboBox<String> trapModeCombo;
     private EnhancedSlider colorStrengthSlider;
     private EnhancedSlider paletteOffsetSlider;
 
@@ -106,6 +107,30 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         HBox modeBox = new HBox(8, new Label("Coloring:"), coloringModeCombo);
         modeBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         javafx.scene.layout.HBox.setHgrow(coloringModeCombo, javafx.scene.layout.Priority.ALWAYS);
+
+        // Trap Mode
+        trapModeCombo = new ComboBox<>();
+        trapModeCombo.getItems().addAll(
+            "Default",    // 0: passthrough (fractal's own traps)
+            "Sphere",     // 1: distance to origin + angular
+            "Line X",     // 2: distance to X axis
+            "Line Y",     // 3: distance to Y axis
+            "Line Z",     // 4: distance to Z axis
+            "Cross",      // 5: min distance to any axis
+            "Grid"        // 6: fract-based 3D cell
+        );
+        trapModeCombo.getSelectionModel().select(0);
+        trapModeCombo.setMaxWidth(Double.MAX_VALUE);
+        trapModeCombo.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setTrapMode(trapModeCombo.getSelectionModel().getSelectedIndex());
+                renderCallback.requestRender();
+            }
+        });
+
+        HBox trapBox = new HBox(8, new Label("Trap Mode:"), trapModeCombo);
+        trapBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        javafx.scene.layout.HBox.setHgrow(trapModeCombo, javafx.scene.layout.Priority.ALWAYS);
 
         // Color Strength
         colorStrengthSlider = new EnhancedSlider("Color Strength", 0.1, 5.0, 1.0, false);
@@ -226,7 +251,7 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        VBox paletteBox = new VBox(5, gradientEditor, modeBox, colorStrengthSlider, paletteOffsetSlider,
+        VBox paletteBox = new VBox(5, gradientEditor, modeBox, trapBox, colorStrengthSlider, paletteOffsetSlider,
             new Label("Material Presets:"), presetsBox);
         TitledPane palettePane = new TitledPane("Color Palette", paletteBox);
         palettePane.setExpanded(true);
@@ -327,6 +352,7 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             // Gradient
             gradientEditor.setPalette(p.getCustomGradient());
             coloringModeCombo.getSelectionModel().select(p.getColoringMode());
+            trapModeCombo.getSelectionModel().select(p.getTrapMode());
             colorStrengthSlider.setValue(p.getColorStrength());
             paletteOffsetSlider.setValue(p.getPaletteOffset());
 
