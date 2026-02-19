@@ -3,8 +3,11 @@ package org.fractalizer.ui.components;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
+import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -13,16 +16,18 @@ import javafx.util.Duration;
 /**
  * A professional UI component combining a Label and a Slider.
  * Supports fine control via mouse wheel and modifier keys.
- * Only captures scroll events when a modifier key is pressed to avoid conflicts with parent ScrollPanes.
+ * Double-click on the label to type an exact value (Enter to confirm, Escape to cancel).
  */
 public class EnhancedSlider extends VBox {
 
     private final Label label;
     private final Slider slider;
+    private final HBox labelRow;
     private final String title;
     private final boolean isInteger;
     private final ToggleButton lockBtn;
     private int precision = 3;
+    private boolean editing = false;
 
     public EnhancedSlider(String title, double min, double max, double initial, boolean isInteger) {
         super(4); // Spacing
@@ -39,7 +44,7 @@ public class EnhancedSlider extends VBox {
         lockBtn.selectedProperty().addListener((obs, old, locked) ->
                 lockBtn.setText(locked ? "\uD83D\uDD12" : "\uD83D\uDD13"));
 
-        HBox labelRow = new HBox(4, label, lockBtn);
+        labelRow = new HBox(4, label, lockBtn);
         labelRow.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(label, Priority.ALWAYS);
 
@@ -47,15 +52,33 @@ public class EnhancedSlider extends VBox {
         this.slider.setFocusTraversable(false);
 
         updateLabel(initial);
-        slider.valueProperty().addListener((obs, old, val) -> updateLabel(val.doubleValue()));
+        slider.valueProperty().addListener((obs, old, val) -> {
+            if (!editing) updateLabel(val.doubleValue());
+        });
+
+        // Double-click on label → inline text field for exact value entry
+        label.setOnMouseClicked(e -> {
+            if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) {
+                startInlineEdit();
+                e.consume();
+            }
+        });
+
+        // Also support double-click on the slider track itself
+        slider.setOnMouseClicked(e -> {
+            if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) {
+                startInlineEdit();
+                e.consume();
+            }
+        });
 
         // Improved Tooltip for better guidance
         Tooltip help = new Tooltip(
-            "Navigation: Scroll normally to move the panel\n" +
-            "Adjust Value: Hold a modifier and Scroll over slider:\n" +
-            " • ALT + Scroll: Normal adjustment\n" +
-            " • SHIFT + Scroll: Fine control (Precision)\n" +
-            " • CTRL + Scroll: Fast movement"
+            "Double-click label or slider to type exact value\n" +
+            "Adjust Value: Hold a modifier and Scroll:\n" +
+            " \u2022 ALT + Scroll: Normal adjustment\n" +
+            " \u2022 SHIFT + Scroll: Fine control (Precision)\n" +
+            " \u2022 CTRL + Scroll: Fast movement"
         );
         help.setShowDelay(Duration.millis(300));
         Tooltip.install(this, help);
@@ -90,6 +113,66 @@ public class EnhancedSlider extends VBox {
         });
 
         this.getChildren().addAll(labelRow, slider);
+    }
+
+    private void startInlineEdit() {
+        if (editing) return;
+        editing = true;
+
+        String currentValue;
+        if (isInteger) {
+            currentValue = String.valueOf((int) Math.round(slider.getValue()));
+        } else {
+            currentValue = String.format("%." + precision + "f", slider.getValue());
+        }
+
+        TextField field = new TextField(currentValue);
+        field.getStyleClass().add("inline-edit-field");
+        field.setPrefWidth(label.getWidth());
+        field.selectAll();
+
+        // Replace label with text field in the HBox
+        int idx = labelRow.getChildren().indexOf(label);
+        labelRow.getChildren().set(idx, field);
+        HBox.setHgrow(field, Priority.ALWAYS);
+        field.requestFocus();
+
+        Runnable commit = () -> {
+            if (!editing) return;
+            try {
+                double val = Double.parseDouble(field.getText().replace(',', '.'));
+                val = Math.max(slider.getMin(), Math.min(slider.getMax(), val));
+                if (isInteger) val = Math.round(val);
+                slider.setValue(val);
+            } catch (NumberFormatException ignored) {
+                // Invalid input — keep current value
+            }
+            finishEdit(field);
+        };
+
+        Runnable cancel = () -> {
+            if (!editing) return;
+            finishEdit(field);
+        };
+
+        field.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) { commit.run(); e.consume(); }
+            else if (e.getCode() == KeyCode.ESCAPE) { cancel.run(); e.consume(); }
+        });
+
+        field.focusedProperty().addListener((obs, wasFocused, isFocused) -> {
+            if (!isFocused) commit.run();
+        });
+    }
+
+    private void finishEdit(TextField field) {
+        editing = false;
+        int idx = labelRow.getChildren().indexOf(field);
+        if (idx >= 0) {
+            labelRow.getChildren().set(idx, label);
+            HBox.setHgrow(label, Priority.ALWAYS);
+        }
+        updateLabel(slider.getValue());
     }
 
     private void updateLabel(double value) {

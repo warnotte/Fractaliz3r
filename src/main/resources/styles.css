@@ -259,6 +259,18 @@
     -fx-background-color: #e8a030;
 }
 
+.inline-edit-field {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-padding: 0 2 0 2;
+    -fx-background-color: #1a1a2e;
+    -fx-text-fill: #e0e0ff;
+    -fx-border-color: #5588cc;
+    -fx-border-width: 1;
+    -fx-border-radius: 2;
+    -fx-background-radius: 2;
+}
+
 .hint-label {
     -fx-font-size: 10px;
     -fx-text-fill: gray;
