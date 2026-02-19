@@ -163,17 +163,17 @@ vec3 calcNormal(vec3 pos) {
 
 #ifdef BOOLEAN_OPS
     return normalize(
-        k1 * (boolDE_simple(pos + k1 * e) + getErosionDisplacement(pos + k1 * e) + getCrystalDisplacement(pos + k1 * e) + getMossDisplacement(pos + k1 * e)) +
-        k2 * (boolDE_simple(pos + k2 * e) + getErosionDisplacement(pos + k2 * e) + getCrystalDisplacement(pos + k2 * e) + getMossDisplacement(pos + k2 * e)) +
-        k3 * (boolDE_simple(pos + k3 * e) + getErosionDisplacement(pos + k3 * e) + getCrystalDisplacement(pos + k3 * e) + getMossDisplacement(pos + k3 * e)) +
-        k4 * (boolDE_simple(pos + k4 * e) + getErosionDisplacement(pos + k4 * e) + getCrystalDisplacement(pos + k4 * e) + getMossDisplacement(pos + k4 * e))
+        k1 * (boolDE_simple(distortPos(pos + k1 * e)) + getErosionDisplacement(pos + k1 * e) + getCrystalDisplacement(pos + k1 * e) + getMossDisplacement(pos + k1 * e)) +
+        k2 * (boolDE_simple(distortPos(pos + k2 * e)) + getErosionDisplacement(pos + k2 * e) + getCrystalDisplacement(pos + k2 * e) + getMossDisplacement(pos + k2 * e)) +
+        k3 * (boolDE_simple(distortPos(pos + k3 * e)) + getErosionDisplacement(pos + k3 * e) + getCrystalDisplacement(pos + k3 * e) + getMossDisplacement(pos + k3 * e)) +
+        k4 * (boolDE_simple(distortPos(pos + k4 * e)) + getErosionDisplacement(pos + k4 * e) + getCrystalDisplacement(pos + k4 * e) + getMossDisplacement(pos + k4 * e))
     );
 #else
     return normalize(
-        k1 * (DE_simple(pos + k1 * e) + getErosionDisplacement(pos + k1 * e) + getCrystalDisplacement(pos + k1 * e) + getMossDisplacement(pos + k1 * e)) +
-        k2 * (DE_simple(pos + k2 * e) + getErosionDisplacement(pos + k2 * e) + getCrystalDisplacement(pos + k2 * e) + getMossDisplacement(pos + k2 * e)) +
-        k3 * (DE_simple(pos + k3 * e) + getErosionDisplacement(pos + k3 * e) + getCrystalDisplacement(pos + k3 * e) + getMossDisplacement(pos + k3 * e)) +
-        k4 * (DE_simple(pos + k4 * e) + getErosionDisplacement(pos + k4 * e) + getCrystalDisplacement(pos + k4 * e) + getMossDisplacement(pos + k4 * e))
+        k1 * (DE_simple(distortPos(pos + k1 * e)) + getErosionDisplacement(pos + k1 * e) + getCrystalDisplacement(pos + k1 * e) + getMossDisplacement(pos + k1 * e)) +
+        k2 * (DE_simple(distortPos(pos + k2 * e)) + getErosionDisplacement(pos + k2 * e) + getCrystalDisplacement(pos + k2 * e) + getMossDisplacement(pos + k2 * e)) +
+        k3 * (DE_simple(distortPos(pos + k3 * e)) + getErosionDisplacement(pos + k3 * e) + getCrystalDisplacement(pos + k3 * e) + getMossDisplacement(pos + k3 * e)) +
+        k4 * (DE_simple(distortPos(pos + k4 * e)) + getErosionDisplacement(pos + k4 * e) + getCrystalDisplacement(pos + k4 * e) + getMossDisplacement(pos + k4 * e))
     );
 #endif
 }
@@ -191,10 +191,12 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
 
     for (int i = 0; i < steps && t < maxt; i++) {
         vec3 shadowPos = ro + rd * t;
+        float distCorr;
+        vec3 distShadowPos = applyDomainDistortion(shadowPos, distCorr);
 #ifdef BOOLEAN_OPS
-        float h = boolDE_simple(shadowPos) + getErosionDisplacementLight(shadowPos) + getCrystalDisplacementLight(shadowPos) + getMossDisplacementLight(shadowPos);
+        float h = boolDE_simple(distShadowPos) * distCorr + getErosionDisplacementLight(shadowPos) + getCrystalDisplacementLight(shadowPos) + getMossDisplacementLight(shadowPos);
 #else
-        float h = DE_simple(shadowPos) + getErosionDisplacementLight(shadowPos) + getCrystalDisplacementLight(shadowPos) + getMossDisplacementLight(shadowPos);
+        float h = DE_simple(distShadowPos) * distCorr + getErosionDisplacementLight(shadowPos) + getCrystalDisplacementLight(shadowPos) + getMossDisplacementLight(shadowPos);
 #endif
 
         // Use adaptive epsilon for shadows too
@@ -224,10 +226,13 @@ float calcAO(vec3 pos, vec3 normal) {
 
     for (int i = 0; i < steps; i++) {
         float hr = 0.01 + 0.12 * float(i + 1) / float(steps);
+        vec3 aoPos = pos + normal * hr;
+        float distCorrAO;
+        vec3 distAOPos = applyDomainDistortion(aoPos, distCorrAO);
 #ifdef BOOLEAN_OPS
-        float dd = boolDE_simple(pos + normal * hr) + getErosionDisplacementLight(pos + normal * hr) + getCrystalDisplacementLight(pos + normal * hr) + getMossDisplacementLight(pos + normal * hr);
+        float dd = boolDE_simple(distAOPos) * distCorrAO + getErosionDisplacementLight(aoPos) + getCrystalDisplacementLight(aoPos) + getMossDisplacementLight(aoPos);
 #else
-        float dd = DE_simple(pos + normal * hr) + getErosionDisplacementLight(pos + normal * hr) + getCrystalDisplacementLight(pos + normal * hr) + getMossDisplacementLight(pos + normal * hr);
+        float dd = DE_simple(distAOPos) * distCorrAO + getErosionDisplacementLight(aoPos) + getCrystalDisplacementLight(aoPos) + getMossDisplacementLight(aoPos);
 #endif
         ao += (hr - dd) * scale;
         scale *= 0.6;
@@ -245,10 +250,13 @@ float calcSSS(vec3 pos, vec3 normal, vec3 lightDir) {
     float step = sssRadius / 5.0;
     for (int i = 1; i <= 5; i++) {
         float expectedDist = float(i) * step;
+        vec3 sssPos = pos - normal * expectedDist;
+        float distCorrSSS;
+        vec3 distSSSPos = applyDomainDistortion(sssPos, distCorrSSS);
 #ifdef BOOLEAN_OPS
-        float actualDist = boolDE_simple(pos - normal * expectedDist);
+        float actualDist = boolDE_simple(distSSSPos) * distCorrSSS;
 #else
-        float actualDist = DE_simple(pos - normal * expectedDist);
+        float actualDist = DE_simple(distSSSPos) * distCorrSSS;
 #endif
         thickness += max(0.0, expectedDist - actualDist);
     }
@@ -274,10 +282,12 @@ RayHit rayMarch(Ray ray) {
     for (int i = 0; i < effectiveMaxSteps; i++) {
         result.pos = ray.origin + ray.direction * result.dist;
 
+        float distCorrRM;
+        vec3 distRMPos = applyDomainDistortion(result.pos, distCorrRM);
 #ifdef BOOLEAN_OPS
-        float d = boolDE(result.pos, result.trap);
+        float d = boolDE(distRMPos, result.trap) * distCorrRM;
 #else
-        float d = DE(result.pos, result.trap);
+        float d = DE(distRMPos, result.trap) * distCorrRM;
 #endif
         if (erosionEnabled != 0 && d < erosionMaxDisplacement() + 0.1) {
             d = d + getErosionDisplacement(result.pos);
@@ -464,8 +474,9 @@ vec3 shadeSimple(vec3 hitPos, Ray ray) {
     vec3 light = normalize(lightDir);
 
     OrbitTrap trap;
-    DE(hitPos, trap);
+    DE(distortPos(hitPos), trap);
     vec3 factors = getFactors(trap);
+    factors = remapTrapFactors(factors, hitPos);
 
     vec3 baseColor;
     float localEmissive;
@@ -528,6 +539,7 @@ vec3 shade(RayHit hit, Ray ray) {
 
     // Base color and material properties
     vec3 factors = getFactors(hit.trap);
+    factors = remapTrapFactors(factors, hit.pos);
 
     vec3 baseColor;
     int localMatType;
@@ -732,10 +744,12 @@ bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist) {
 
     for (int i = 0; i < effectiveMaxSteps; i++) {
         vec3 pos = ray.origin + ray.direction * t;
+        float distCorrRMS;
+        vec3 distRMSPos = applyDomainDistortion(pos, distCorrRMS);
 #ifdef BOOLEAN_OPS
-        float d = boolDE_simple(pos);
+        float d = boolDE_simple(distRMSPos) * distCorrRMS;
 #else
-        float d = DE_simple(pos);
+        float d = DE_simple(distRMSPos) * distCorrRMS;
 #endif
         if (erosionEnabled != 0 && d < erosionMaxDisplacement() + 0.1) {
             d = d + getErosionDisplacement(pos);
@@ -790,7 +804,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
 
         // Get surface color and material properties
         OrbitTrap trap;
-        DE(hitPos, trap);
+        DE(distortPos(hitPos), trap);
 
         vec3 albedo;
         int localMatType;
@@ -806,7 +820,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
         safeRoughness = max(objMat.roughness, 0.02);
         localEmissive = objMat.emissive;
 #else
-        albedo = applyMaterial(getFactors(trap));
+        albedo = applyMaterial(remapTrapFactors(getFactors(trap), hitPos));
         localMatType = materialType;
         localIor = ior;
         localMetalness = metalness;
@@ -834,7 +848,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
             radiance += clamp(throughput * albedo, 0.0, FIREFLY_CLAMP);
             break; // Light source reached — stop bouncing
 #else
-            vec3 factors = getFactors(trap);
+            vec3 factors = remapTrapFactors(getFactors(trap), hitPos);
             float structural = factors.x;
             float depth = factors.z;
             float emFactor = mix(structural, 1.0 - depth, 0.5);
@@ -878,10 +892,12 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                     vec3 exitPos = hitPos;
                     for (int gs = 0; gs < 128; gs++) {
                         exitPos = hitPos + interiorDir * t;
+                        float distCorrGlass1;
+                        vec3 distGlassPos1 = applyDomainDistortion(exitPos, distCorrGlass1);
 #ifdef BOOLEAN_OPS
-                        float d = boolDE_simple(exitPos) + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
+                        float d = boolDE_simple(distGlassPos1) * distCorrGlass1 + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
 #else
-                        float d = DE_simple(exitPos) + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
+                        float d = DE_simple(distGlassPos1) * distCorrGlass1 + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
 #endif
                         if (d > 0.0) {
                             // Overshot exit surface — step back to surface
@@ -1056,7 +1072,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         vec3 faceNormal = (dot(currentRay.direction, normal) > 0.0) ? -normal : normal;
 
         OrbitTrap trap;
-        DE(hitPos, trap);
+        DE(distortPos(hitPos), trap);
 
         vec3 albedo;
         int localMatType;
@@ -1072,7 +1088,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         safeRoughness = max(objMat.roughness, 0.02);
         localEmissive = objMat.emissive;
 #else
-        albedo = applyMaterial(getFactors(trap));
+        albedo = applyMaterial(remapTrapFactors(getFactors(trap), hitPos));
         localMatType = materialType;
         localIor = ior;
         localMetalness = metalness;
@@ -1102,7 +1118,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             radiance += clamp(throughput * albedo, 0.0, FIREFLY_CLAMP);
             break;
 #else
-            vec3 factors = getFactors(trap);
+            vec3 factors = remapTrapFactors(getFactors(trap), hitPos);
             float structural = factors.x;
             float depth = factors.z;
             float emFactor = mix(structural, 1.0 - depth, 0.5);
@@ -1141,10 +1157,12 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     vec3 exitPos = hitPos;
                     for (int gs = 0; gs < 128; gs++) {
                         exitPos = hitPos + interiorDir * t;
+                        float distCorrGlass2;
+                        vec3 distGlassPos2 = applyDomainDistortion(exitPos, distCorrGlass2);
 #ifdef BOOLEAN_OPS
-                        float d = boolDE_simple(exitPos) + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
+                        float d = boolDE_simple(distGlassPos2) * distCorrGlass2 + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
 #else
-                        float d = DE_simple(exitPos) + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
+                        float d = DE_simple(distGlassPos2) * distCorrGlass2 + getErosionDisplacementLight(exitPos) + getCrystalDisplacementLight(exitPos) + getMossDisplacementLight(exitPos);
 #endif
                         if (d > 0.0) {
                             exitPos -= interiorDir * d;
@@ -1362,6 +1380,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 
 vec3 renderByMode(RayHit hit, Ray ray, vec3 normal, float shadow, float ao) {
     vec3 factors = getFactors(hit.trap);
+    factors = remapTrapFactors(factors, hit.pos);
     vec3 baseColor = applyMaterial(factors);
 
     // Moss coloring — applied here so ALL render modes see it
@@ -1471,7 +1490,7 @@ void main() {
             // STRICT COLORING:
             // Evaluate fractal exactly at the surface hit point.
             // This ensures perfect alignment between geometry (Normals/AO) and Material Color.
-            DE(hit.pos, hit.trap);
+            DE(distortPos(hit.pos), hit.trap);
             
             vec3 normal = calcNormal(hit.pos); 
             float shadowBias = 0.001 + hit.dist * 0.001;

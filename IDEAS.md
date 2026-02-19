@@ -43,14 +43,14 @@ Attempted implementation with procedural GPU particles (spatial hashing, fullscr
 Previously attempted and rejected — user considers it garbage.
 
 ## 9. Orbit Trap Modes
-**Status:** IDEA
+**Status:** DONE
 
-New coloring modes beyond the current cumulative plane traps. Sphere trap (distance to a point), line trap (distance to an axis), cross trap (min of X/Y/Z distances), point trap (closest orbit point). Each mode produces radically different patterns on the same fractal geometry. Purely shader-side modification of `getFactors()` / orbit trap struct. Controlled via a ComboBox in MaterialPanel.
+7 trap modes (Default, Sphere, Line X/Y/Z, Cross, Grid) that remap coloring factors with position-based computations before `applyMaterial()`. 7 traps × 9 coloring modes = 63 visual combinations. Zero changes to any fractal shader — `remapTrapFactors()` in common.glsl applied at all 7 `getFactors()` call sites. ComboBox in MaterialPanel, serialized in MaterialConfig.
 
-## 10. Domain Distortions (Twist/Bend/Repetition)
-**Status:** IDEA
+## 10. Domain Distortions (Twist/Bend/Taper/Repetition)
+**Status:** DONE
 
-Space-warping transformations applied to `pos` before DE evaluation. Twist (spiral around an axis), Bend (curve space along an axis), Taper (cone-scale), Domain Repetition (infinite copies with `mod()`). Transforms any fractal into impossible shapes. Same injection pattern as erosion — modify `pos` in all geometry DE call sites. Parameters: distortion type, axis, strength, frequency. Animatable via global timeline tracks.
+5 space-warping transforms applied to `pos` before DE evaluation: Twist (spiral around axis), Bend (curve along axis), Taper (cone-scale), Repetition 1D (infinite copies on one axis), Repetition 3D (infinite grid). DE correction factor for non-isometric transforms prevents raymarching overshoot. Axis selector (X/Y/Z), strength, frequency, offset parameters. 8 geometry DE sites + 4 coloring-only DE sites in raytracer.glsl. 3 animatable global timeline tracks (strength, frequency, offset). Zero overhead when disabled.
 
 ## 11. Fractal Morphing
 **Status:** IDEA

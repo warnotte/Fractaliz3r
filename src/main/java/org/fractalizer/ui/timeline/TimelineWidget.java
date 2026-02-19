@@ -75,7 +75,12 @@ public class TimelineWidget extends VBox {
         TrackInfo.groupHeader("Moss", Color.rgb(100, 180, 80)),
         new TrackInfo("mossTime", "Time", Color.rgb(100, 180, 80)),
         new TrackInfo("mossStrength", "Strength", Color.rgb(80, 160, 60)),
-        new TrackInfo("mossScale", "Scale", Color.rgb(70, 140, 50))
+        new TrackInfo("mossScale", "Scale", Color.rgb(70, 140, 50)),
+        // Distortion group
+        TrackInfo.groupHeader("Distortion", Color.rgb(255, 130, 80)),
+        new TrackInfo("distortionStrength", "Strength", Color.rgb(255, 130, 80)),
+        new TrackInfo("distortionFrequency", "Frequency", Color.rgb(235, 110, 60)),
+        new TrackInfo("distortionOffset", "Offset", Color.rgb(215, 100, 50))
     );
 
     // UI Components

@@ -101,6 +101,11 @@ public class AnimationManager {
         timeline.createTrack("mossTime", Float.class, 0.0f);
         timeline.createTrack("mossStrength", Float.class, 0.5f);
         timeline.createTrack("mossScale", Float.class, 1.0f);
+
+        // Domain Distortion
+        timeline.createTrack("distortionStrength", Float.class, 0.0f);
+        timeline.createTrack("distortionFrequency", Float.class, 1.0f);
+        timeline.createTrack("distortionOffset", Float.class, 0.0f);
     }
 
     // ========================================================================
@@ -197,6 +202,9 @@ public class AnimationManager {
         addKeyframeForTrack("mossTime", time, easing, params);
         addKeyframeForTrack("mossStrength", time, easing, params);
         addKeyframeForTrack("mossScale", time, easing, params);
+        addKeyframeForTrack("distortionStrength", time, easing, params);
+        addKeyframeForTrack("distortionFrequency", time, easing, params);
+        addKeyframeForTrack("distortionOffset", time, easing, params);
 
         // Add keyframes for fractal-specific tracks
         addFractalKeyframes(time, easing, params);
@@ -281,6 +289,9 @@ public class AnimationManager {
             case "mossTime" -> timeline.setKeyframe("mossTime", time, params.getMossTime(), easing);
             case "mossStrength" -> timeline.setKeyframe("mossStrength", time, params.getMossStrength(), easing);
             case "mossScale" -> timeline.setKeyframe("mossScale", time, params.getMossScale(), easing);
+            case "distortionStrength" -> timeline.setKeyframe("distortionStrength", time, params.getDistortionStrength(), easing);
+            case "distortionFrequency" -> timeline.setKeyframe("distortionFrequency", time, params.getDistortionFrequency(), easing);
+            case "distortionOffset" -> timeline.setKeyframe("distortionOffset", time, params.getDistortionOffset(), easing);
             default -> {
                 // Check if it's a fractal-specific track
                 addFractalKeyframeForTrack(trackName, time, easing, params);
@@ -418,6 +429,17 @@ public class AnimationManager {
         }
         if (timeline.getTrack("mossScale").hasKeyframes()) {
             params.setMossScale(timeline.getValue("mossScale"));
+        }
+
+        // Apply domain distortion
+        if (timeline.getTrack("distortionStrength").hasKeyframes()) {
+            params.setDistortionStrength(timeline.getValue("distortionStrength"));
+        }
+        if (timeline.getTrack("distortionFrequency").hasKeyframes()) {
+            params.setDistortionFrequency(timeline.getValue("distortionFrequency"));
+        }
+        if (timeline.getTrack("distortionOffset").hasKeyframes()) {
+            params.setDistortionOffset(timeline.getValue("distortionOffset"));
         }
 
         // Apply fractal-specific parameters

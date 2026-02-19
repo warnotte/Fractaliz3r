@@ -238,6 +238,30 @@ Procedural erosion applied to any fractal distance field, making fractals look l
 - **UI**: QualityPanel "Erosion" TitledPane (enable checkbox, type ComboBox, strength/time/scale sliders).
 - **Zero overhead when OFF**: `erosionEnabled == 0` → early return 0.0 in all erosion functions.
 
+## Domain Distortion (Twist/Bend/Taper/Repetition)
+
+Space-warping transformations applied to `pos` BEFORE DE evaluation. Turns any fractal into impossible shapes — twisted Mandelbulbs, infinitely repeated Menger Sponges, tapered Julia sets.
+
+- **Key difference from erosion**: Erosion adds to DE result (post-DE). Domain distortion modifies pos (pre-DE). Non-isometric transforms (twist, bend, taper) require a DE correction factor to prevent raymarching overshoot.
+- **5 distortion types**:
+  - **Twist** (type 0): Rotate perpendicular plane by `axisCoord * strength`. Correction: `1/(1 + |sf| * perpDist)`
+  - **Bend** (type 1): Rotate along axis plane by `axisCoord * strength`. Correction: `1/(1 + |sf| * |axisCoord|)`
+  - **Taper** (type 2): Scale perpendicular plane by `1 + axisCoord * strength`. Correction: `1/max(|scale|, 0.01)`
+  - **Repetition** (type 3): `mod(pos, period) - period/2` single axis. Correction: 1.0 (exact)
+  - **Repetition 3D** (type 4): `mod(pos, period) - period/2` all axes. Correction: 1.0 (exact)
+- **Axis selector**: X/Y/Z controls which axis the distortion operates along (ignored for Rep 3D).
+- **GLSL**: `applyDomainDistortion(pos, out deCorrection)` in common.glsl. `distortPos(pos)` wrapper for normals/coloring. 8 geometry DE sites + 4 coloring-only DE sites wrapped in raytracer.glsl.
+- **Parameters** (in `AbstractFractalParams`, serialized in `EffectsConfig`):
+  - `distortionEnabled` (bool, default false)
+  - `distortionType` (int, 0-4)
+  - `distortionAxis` (int, 0=X, 1=Y, 2=Z, default Y)
+  - `distortionStrength` (float, -5 to 5, default 0)
+  - `distortionFrequency` (float, 0.1 to 10, default 1) — multiplier for twist/bend, 1/period for repetition
+  - `distortionOffset` (float, -10 to 10, default 0) — shift along axis
+- **Animation**: `distortionStrength`, `distortionFrequency`, `distortionOffset` are global timeline tracks in "Distortion" group (orange).
+- **UI**: QualityPanel "Domain Distortion" TitledPane (enable checkbox, type ComboBox, axis ComboBox, strength/frequency/offset sliders).
+- **Zero overhead when OFF**: Early return in GLSL function, no extra computation.
+
 ## Boolean Operations (CSG)
 
 Constructive Solid Geometry between two fractal distance fields: Union, Intersect, or Subtract. Combines any two fractal types (excluding Fractal Terrain, Cornell Box, Test Scene) with optional smooth blending.

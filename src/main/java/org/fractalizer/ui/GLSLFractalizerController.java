@@ -1026,6 +1026,7 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("colorStrength", params.getColorStrength());
             uniforms.put("paletteOffset", params.getPaletteOffset());
             uniforms.put("coloringMode", params.getColoringMode());
+            uniforms.put("trapMode", params.getTrapMode());
 
             // Effects
             uniforms.put("shadowSoftness", params.getShadowSoftness());
@@ -1231,6 +1232,14 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("mossScale", afp.getMossScale());
             uniforms.put("mossColor", new float[]{afp.getMossColorR(), afp.getMossColorG(), afp.getMossColorB()});
             uniforms.put("mossNormalThreshold", afp.getMossNormalThreshold());
+
+            // Domain Distortion
+            uniforms.put("distortionEnabled", afp.isDistortionEnabled() ? 1 : 0);
+            uniforms.put("distortionType", afp.getDistortionType());
+            uniforms.put("distortionAxis", afp.getDistortionAxis());
+            uniforms.put("distortionStrength", afp.getDistortionStrength());
+            uniforms.put("distortionFrequency", afp.getDistortionFrequency());
+            uniforms.put("distortionOffset", afp.getDistortionOffset());
 
             // Boolean Operations
             if (afp.isBooleanEnabled() && afp.getBoolSecondaryType() != null && currentBooleanProgramKey != null) {

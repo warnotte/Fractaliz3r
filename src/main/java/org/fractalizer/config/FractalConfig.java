@@ -105,6 +105,7 @@ public class FractalConfig {
         public int paletteIndex = 0;
         public float colorStrength = 1.0f;
         public float paletteOffset = 0.0f;
+        public int trapMode = 0;
         public int type = 0;  // 0=Lambertian, 1=Metallic, 2=Glass
         public float metalness = 0.9f;
         public float ior = 1.5f;
@@ -209,6 +210,14 @@ public class FractalConfig {
         public float mossColorB = 0.08f;
         public float mossNormalThreshold = 0.3f;
 
+        // Domain Distortion
+        public boolean distortionEnabled = false;
+        public int distortionType = 0;
+        public int distortionAxis = 1;
+        public float distortionStrength = 0.0f;
+        public float distortionFrequency = 1.0f;
+        public float distortionOffset = 0.0f;
+
         // Boolean Operations
         public boolean booleanEnabled = false;
         public int booleanOp = 1;
@@ -300,6 +309,7 @@ public class FractalConfig {
         config.material.paletteIndex = params.getPaletteIndex();
         config.material.colorStrength = params.getColorStrength();
         config.material.paletteOffset = params.getPaletteOffset();
+        config.material.trapMode = params.getTrapMode();
         config.material.type = params.getMaterialType();
         config.material.metalness = params.getMetalness();
         config.material.ior = params.getIor();
@@ -377,6 +387,12 @@ public class FractalConfig {
         config.effects.mossColorG = params.getMossColorG();
         config.effects.mossColorB = params.getMossColorB();
         config.effects.mossNormalThreshold = params.getMossNormalThreshold();
+        config.effects.distortionEnabled = params.isDistortionEnabled();
+        config.effects.distortionType = params.getDistortionType();
+        config.effects.distortionAxis = params.getDistortionAxis();
+        config.effects.distortionStrength = params.getDistortionStrength();
+        config.effects.distortionFrequency = params.getDistortionFrequency();
+        config.effects.distortionOffset = params.getDistortionOffset();
         config.effects.booleanEnabled = params.isBooleanEnabled();
         config.effects.booleanOp = params.getBooleanOp();
         config.effects.boolSecondaryType = params.getBoolSecondaryType();
@@ -451,6 +467,7 @@ public class FractalConfig {
         params.setPaletteIndex(material.paletteIndex);
         params.setColorStrength(material.colorStrength);
         params.setPaletteOffset(material.paletteOffset);
+        params.setTrapMode(material.trapMode);
         params.setMaterialType(material.type);
         params.setMetalness(material.metalness);
         params.setIor(material.ior);
@@ -532,6 +549,12 @@ public class FractalConfig {
         params.setMossScale(effects.mossScale);
         params.setMossColor(effects.mossColorR, effects.mossColorG, effects.mossColorB);
         params.setMossNormalThreshold(effects.mossNormalThreshold);
+        params.setDistortionEnabled(effects.distortionEnabled);
+        params.setDistortionType(effects.distortionType);
+        params.setDistortionAxis(effects.distortionAxis);
+        params.setDistortionStrength(effects.distortionStrength);
+        params.setDistortionFrequency(effects.distortionFrequency);
+        params.setDistortionOffset(effects.distortionOffset);
         params.setBooleanEnabled(effects.booleanEnabled);
         params.setBooleanOp(effects.booleanOp);
         params.setBoolSecondaryType(effects.boolSecondaryType);

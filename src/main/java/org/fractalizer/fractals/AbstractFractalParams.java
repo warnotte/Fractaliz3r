@@ -86,6 +86,7 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float colorStrength;
     protected float paletteOffset;
     protected int coloringMode;  // 0=Standard, 1=Bands, 2=Distance, 3=Angle, 4=Blend, 5=Contour
+    protected int trapMode;      // 0=Default, 1=Sphere, 2=LineX, 3=LineY, 4=LineZ, 5=Cross, 6=Grid
 
     // Rendering quality
     protected float shadowSoftness;
@@ -200,6 +201,14 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float mossColorB = 0.08f;
     protected float mossNormalThreshold = 0.3f;
 
+    // Domain Distortion
+    protected boolean distortionEnabled = false;
+    protected int distortionType = 0;       // 0=Twist, 1=Bend, 2=Taper, 3=Rep1D, 4=Rep3D
+    protected int distortionAxis = 1;       // 0=X, 1=Y, 2=Z
+    protected float distortionStrength = 0.0f;
+    protected float distortionFrequency = 1.0f;
+    protected float distortionOffset = 0.0f;
+
     // Boolean Operations (CSG)
     protected boolean booleanEnabled = false;
     protected int booleanOp = 1;           // 1=Union, 2=Intersect, 3=Subtract
@@ -272,6 +281,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.colorStrength = 1.0f;
         this.paletteOffset = 0.0f;
         this.coloringMode = 0;
+        this.trapMode = 0;
 
         // Enhanced rendering defaults
         this.shadowSoftness = 16f;
@@ -379,6 +389,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.colorStrength = this.colorStrength;
         target.paletteOffset = this.paletteOffset;
         target.coloringMode = this.coloringMode;
+        target.trapMode = this.trapMode;
 
         // Copy specular
         target.specularIntensity = this.specularIntensity;
@@ -475,6 +486,14 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.mossColorG = this.mossColorG;
         target.mossColorB = this.mossColorB;
         target.mossNormalThreshold = this.mossNormalThreshold;
+
+        // Copy Domain Distortion
+        target.distortionEnabled = this.distortionEnabled;
+        target.distortionType = this.distortionType;
+        target.distortionAxis = this.distortionAxis;
+        target.distortionStrength = this.distortionStrength;
+        target.distortionFrequency = this.distortionFrequency;
+        target.distortionOffset = this.distortionOffset;
 
         // Copy Boolean Operations
         target.booleanEnabled = this.booleanEnabled;
@@ -717,6 +736,8 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setPaletteOffset(float offset) { this.paletteOffset = offset; }
     public int getColoringMode() { return coloringMode; }
     public void setColoringMode(int mode) { this.coloringMode = mode; }
+    public int getTrapMode() { return trapMode; }
+    public void setTrapMode(int mode) { this.trapMode = mode; }
 
     // Shadows
     public float getShadowSoftness() { return shadowSoftness; }
@@ -903,6 +924,20 @@ public abstract class AbstractFractalParams implements FractalParams {
     }
     public float getMossNormalThreshold() { return mossNormalThreshold; }
     public void setMossNormalThreshold(float threshold) { this.mossNormalThreshold = Math.max(0, Math.min(1, threshold)); }
+
+    // Domain Distortion
+    public boolean isDistortionEnabled() { return distortionEnabled; }
+    public void setDistortionEnabled(boolean enabled) { this.distortionEnabled = enabled; }
+    public int getDistortionType() { return distortionType; }
+    public void setDistortionType(int type) { this.distortionType = Math.max(0, Math.min(4, type)); }
+    public int getDistortionAxis() { return distortionAxis; }
+    public void setDistortionAxis(int axis) { this.distortionAxis = Math.max(0, Math.min(2, axis)); }
+    public float getDistortionStrength() { return distortionStrength; }
+    public void setDistortionStrength(float strength) { this.distortionStrength = Math.max(-5, Math.min(5, strength)); }
+    public float getDistortionFrequency() { return distortionFrequency; }
+    public void setDistortionFrequency(float frequency) { this.distortionFrequency = Math.max(0.1f, Math.min(10, frequency)); }
+    public float getDistortionOffset() { return distortionOffset; }
+    public void setDistortionOffset(float offset) { this.distortionOffset = Math.max(-10, Math.min(10, offset)); }
 
     // Boolean Operations
     public boolean isBooleanEnabled() { return booleanEnabled; }

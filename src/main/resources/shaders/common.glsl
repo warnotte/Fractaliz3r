@@ -71,6 +71,7 @@ uniform int paletteIndex;
 uniform float colorStrength;
 uniform float paletteOffset;
 uniform int coloringMode;
+uniform int trapMode;
 
 uniform float qualityMultiplier;
 uniform int maxRaySteps;
@@ -181,6 +182,14 @@ uniform float mossScale;             // 0.1-5, patch size
 uniform vec3 mossColor;              // default (0.15, 0.35, 0.08) = dark green
 uniform float mossNormalThreshold;   // 0-1, default 0.3
 
+// Domain Distortion
+uniform int distortionEnabled;       // 0 = off, 1 = on
+uniform int distortionType;          // 0=Twist, 1=Bend, 2=Taper, 3=Rep1D, 4=Rep3D
+uniform int distortionAxis;          // 0=X, 1=Y, 2=Z
+uniform float distortionStrength;    // -5 to 5
+uniform float distortionFrequency;   // 0.1 to 10
+uniform float distortionOffset;      // -10 to 10
+
 // ============================================================================
 // Math & Random Helpers
 // ============================================================================
@@ -239,6 +248,76 @@ float fbmLow(vec3 p) {
 float warpedFbm(vec3 p) {
     vec3 q = vec3(fbm(p), fbm(p + vec3(5.2, 1.3, 2.8)), fbm(p + vec3(1.3, 2.8, 5.2)));
     return fbm(p + 1.0 * q);
+}
+
+// ============================================================================
+// Domain Distortion — space-warping transforms applied before DE evaluation
+// ============================================================================
+
+vec3 applyDomainDistortion(vec3 pos, out float deCorrection) {
+    deCorrection = 1.0;
+    if (distortionEnabled == 0) return pos;
+
+    // Extract axis-aligned components generically
+    float axisVal, perpA, perpB;
+    if (distortionAxis == 0)      { axisVal = pos.x; perpA = pos.y; perpB = pos.z; }
+    else if (distortionAxis == 1) { axisVal = pos.y; perpA = pos.x; perpB = pos.z; }
+    else                          { axisVal = pos.z; perpA = pos.x; perpB = pos.y; }
+
+    float sf = distortionStrength * distortionFrequency;
+
+    if (distortionType == 0) {
+        // Twist: rotate perpendicular plane by axisCoord * strength
+        float angle = (axisVal + distortionOffset) * sf;
+        float c = cos(angle);
+        float s = sin(angle);
+        float newA = c * perpA - s * perpB;
+        float newB = s * perpA + c * perpB;
+        perpA = newA;
+        perpB = newB;
+        deCorrection = 1.0 / max(1.0, abs(sf) * length(vec2(perpA, perpB)));
+    }
+    else if (distortionType == 1) {
+        // Bend: rotate along axis plane by axisCoord * strength
+        float angle = (axisVal + distortionOffset) * sf;
+        float c = cos(angle);
+        float s = sin(angle);
+        float newAxis = c * axisVal - s * perpA;
+        float newPerp = s * axisVal + c * perpA;
+        axisVal = newAxis;
+        perpA = newPerp;
+        deCorrection = 1.0 / max(1.0, abs(sf) * abs(axisVal));
+    }
+    else if (distortionType == 2) {
+        // Taper: scale perpendicular plane by 1 + axisCoord * strength
+        float scale = 1.0 + (axisVal + distortionOffset) * sf;
+        scale = max(abs(scale), 0.01);
+        perpA = perpA / scale;
+        perpB = perpB / scale;
+        deCorrection = 1.0 / scale;
+    }
+    else if (distortionType == 3) {
+        // Repetition (single axis)
+        float period = 1.0 / max(distortionFrequency, 0.01);
+        axisVal = mod(axisVal + distortionOffset + period * 0.5, period) - period * 0.5;
+    }
+    else if (distortionType == 4) {
+        // Repetition 3D
+        float period = 1.0 / max(distortionFrequency, 0.01);
+        vec3 p = pos + vec3(distortionOffset);
+        p = mod(p + period * 0.5, vec3(period)) - period * 0.5;
+        return p;
+    }
+
+    // Reassemble position from axis components
+    if (distortionAxis == 0)      return vec3(axisVal, perpA, perpB);
+    else if (distortionAxis == 1) return vec3(perpA, axisVal, perpB);
+    else                          return vec3(perpA, perpB, axisVal);
+}
+
+vec3 distortPos(vec3 pos) {
+    float unused;
+    return applyDomainDistortion(pos, unused);
 }
 
 // Maximum possible erosion displacement magnitude for proximity gating
@@ -460,6 +539,61 @@ vec3 rgb2hsv(vec3 c) {
     float d = q.x - min(q.w, q.y);
     float e = 1.0e-10;
     return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+vec3 remapTrapFactors(vec3 factors, vec3 hitPos) {
+    if (trapMode == 0) return factors;
+
+    float depth = factors.z; // always keep original depth
+
+    if (trapMode == 1) {
+        // Sphere trap: distance to origin + angular
+        float d = length(hitPos);
+        float structural = 1.0 - exp(-d * 2.0);
+        float flow = atan(hitPos.x, hitPos.z) / 6.2832 + 0.5;
+        return vec3(structural, flow, depth);
+    }
+    if (trapMode == 2) {
+        // Line X trap: distance to X axis + angular around X
+        float d = length(hitPos.yz);
+        float structural = 1.0 - exp(-d * 3.0);
+        float flow = atan(hitPos.y, hitPos.z) / 6.2832 + 0.5;
+        return vec3(structural, flow, depth);
+    }
+    if (trapMode == 3) {
+        // Line Y trap: distance to Y axis + angular around Y
+        float d = length(hitPos.xz);
+        float structural = 1.0 - exp(-d * 3.0);
+        float flow = atan(hitPos.x, hitPos.z) / 6.2832 + 0.5;
+        return vec3(structural, flow, depth);
+    }
+    if (trapMode == 4) {
+        // Line Z trap: distance to Z axis + angular around Z
+        float d = length(hitPos.xy);
+        float structural = 1.0 - exp(-d * 3.0);
+        float flow = atan(hitPos.x, hitPos.y) / 6.2832 + 0.5;
+        return vec3(structural, flow, depth);
+    }
+    if (trapMode == 5) {
+        // Cross trap: min distance to any axis + which-axis indicator
+        float dx = length(hitPos.yz);
+        float dy = length(hitPos.xz);
+        float dz = length(hitPos.xy);
+        float minD = min(dx, min(dy, dz));
+        float structural = 1.0 - exp(-minD * 3.0);
+        float flow = (minD == dx) ? 0.0 : (minD == dy) ? 0.333 : 0.667;
+        return vec3(structural, flow, depth);
+    }
+    if (trapMode == 6) {
+        // Grid trap: fract-based 3D cell + per-cell hash
+        vec3 cell = floor(hitPos * 3.0);
+        vec3 f = fract(hitPos * 3.0);
+        float structural = 1.0 - exp(-length(f - 0.5) * 4.0);
+        float flow = fract(sin(dot(cell, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+        return vec3(structural, flow, depth);
+    }
+
+    return factors;
 }
 
 vec3 applyMaterial(vec3 factors) {
