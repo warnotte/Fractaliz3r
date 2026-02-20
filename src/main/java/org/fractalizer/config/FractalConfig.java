@@ -230,6 +230,15 @@ public class FractalConfig {
         public float nestRepeatScale = 5.0f;
         public float nestRotation = 0.0f;
         public float nestMix = 1.0f;
+
+        // Ocean & Floor
+        public boolean oceanEnabled = false;
+        public float oceanHeight = -1.0f;
+        public float[] oceanColor = {0.05f, 0.15f, 0.3f};
+        public float oceanWaveScale = 2.0f;
+        public float oceanWaveHeight = 0.1f;
+        public float oceanSpeed = 1.0f;
+        public float oceanTime = 0.0f;
     }
 
     public static class AnimationConfig {
@@ -408,6 +417,16 @@ public class FractalConfig {
         config.effects.nestRepeatScale = params.getNestRepeatScale();
         config.effects.nestRotation = params.getNestRotation();
         config.effects.nestMix = params.getNestMix();
+
+        // Ocean & Floor
+        config.effects.oceanEnabled = params.isOceanEnabled();
+        config.effects.oceanHeight = params.getOceanHeight();
+        config.effects.oceanColor = new float[]{params.getOceanColorR(), params.getOceanColorG(), params.getOceanColorB()};
+        config.effects.oceanWaveScale = params.getOceanWaveScale();
+        config.effects.oceanWaveHeight = params.getOceanWaveHeight();
+        config.effects.oceanSpeed = params.getOceanSpeed();
+        config.effects.oceanTime = params.getOceanTime();
+
         // Fractal-specific parameters
         extractFractalParams(params, config.fractalParams);
 
@@ -570,6 +589,18 @@ public class FractalConfig {
         params.setNestRepeatScale(effects.nestRepeatScale);
         params.setNestRotation(effects.nestRotation);
         params.setNestMix(effects.nestMix);
+
+        // Ocean & Floor
+        params.setOceanEnabled(effects.oceanEnabled);
+        params.setOceanHeight(effects.oceanHeight);
+        if (effects.oceanColor != null && effects.oceanColor.length == 3) {
+            params.setOceanColor(effects.oceanColor[0], effects.oceanColor[1], effects.oceanColor[2]);
+        }
+        params.setOceanWaveScale(effects.oceanWaveScale);
+        params.setOceanWaveHeight(effects.oceanWaveHeight);
+        params.setOceanSpeed(effects.oceanSpeed);
+        params.setOceanTime(effects.oceanTime);
+
         // Fractal-specific parameters
         applyFractalParams(params, fractalParams);
     }

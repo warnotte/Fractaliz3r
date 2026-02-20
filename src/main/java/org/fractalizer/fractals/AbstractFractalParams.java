@@ -222,6 +222,26 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float nestRotation = 0.0f;
     protected float nestMix = 1.0f;
 
+    // Ocean & Floor
+    @Animatable(display = "Ocean Enabled")
+    protected boolean oceanEnabled = false;
+    @Animatable(display = "Ocean Height")
+    protected float oceanHeight = -1.0f;
+    @Animatable(display = "Ocean Color R")
+    protected float oceanColorR = 0.05f;
+    @Animatable(display = "Ocean Color G")
+    protected float oceanColorG = 0.15f;
+    @Animatable(display = "Ocean Color B")
+    protected float oceanColorB = 0.3f;
+    @Animatable(display = "Ocean Wave Scale")
+    protected float oceanWaveScale = 2.0f;
+    @Animatable(display = "Ocean Wave Height")
+    protected float oceanWaveHeight = 0.1f;
+    @Animatable(display = "Ocean Speed")
+    protected float oceanSpeed = 1.0f;
+    @Animatable(display = "Ocean Time")
+    protected float oceanTime = 0.0f;
+
     // Custom gradient palette (used when paletteIndex == 6)
     protected GradientPalette customGradient;
 
@@ -511,6 +531,17 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.nestRepeatScale = this.nestRepeatScale;
         target.nestRotation = this.nestRotation;
         target.nestMix = this.nestMix;
+
+        // Copy Ocean & Floor
+        target.oceanEnabled = this.oceanEnabled;
+        target.oceanHeight = this.oceanHeight;
+        target.oceanColorR = this.oceanColorR;
+        target.oceanColorG = this.oceanColorG;
+        target.oceanColorB = this.oceanColorB;
+        target.oceanWaveScale = this.oceanWaveScale;
+        target.oceanWaveHeight = this.oceanWaveHeight;
+        target.oceanSpeed = this.oceanSpeed;
+        target.oceanTime = this.oceanTime;
 
         // Copy custom gradient
         target.customGradient = this.customGradient.copy();
@@ -1089,4 +1120,26 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.dofSamples = samples;
         return self();
     }
+
+    // Ocean
+    public boolean isOceanEnabled() { return oceanEnabled; }
+    public void setOceanEnabled(boolean enabled) { this.oceanEnabled = enabled; }
+    public float getOceanHeight() { return oceanHeight; }
+    public void setOceanHeight(float height) { this.oceanHeight = height; }
+    public float getOceanColorR() { return oceanColorR; }
+    public float getOceanColorG() { return oceanColorG; }
+    public float getOceanColorB() { return oceanColorB; }
+    public void setOceanColor(float r, float g, float b) {
+        this.oceanColorR = r;
+        this.oceanColorG = g;
+        this.oceanColorB = b;
+    }
+    public float getOceanWaveScale() { return oceanWaveScale; }
+    public void setOceanWaveScale(float scale) { this.oceanWaveScale = scale; }
+    public float getOceanWaveHeight() { return oceanWaveHeight; }
+    public void setOceanWaveHeight(float height) { this.oceanWaveHeight = height; }
+    public float getOceanSpeed() { return oceanSpeed; }
+    public void setOceanSpeed(float speed) { this.oceanSpeed = speed; }
+    public float getOceanTime() { return oceanTime; }
+    public void setOceanTime(float time) { this.oceanTime = time; }
 }

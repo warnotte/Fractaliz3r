@@ -41,6 +41,15 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider fogScatteringSlider;
     private EnhancedSlider fogStepsSlider;
 
+    // Ocean controls
+    private CheckBox oceanEnabledCheck;
+    private EnhancedSlider oceanHeightSlider;
+    private ColorPicker oceanColorPicker;
+    private EnhancedSlider oceanWaveScaleSlider;
+    private EnhancedSlider oceanWaveHeightSlider;
+    private EnhancedSlider oceanSpeedSlider;
+    private EnhancedSlider oceanTimeSlider;
+
     public EnvironmentPanel(GLSLEngine engine, Supplier<AbstractFractalParams> paramsSupplier, Runnable onUpdate) {
         this.engine = engine;
         this.paramsSupplier = paramsSupplier;
@@ -193,6 +202,70 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
             }
         });
 
+        // Ocean Section
+        oceanEnabledCheck = new CheckBox("Enable Physical Ocean");
+        oceanEnabledCheck.getStyleClass().add("bold-label");
+        oceanEnabledCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setOceanEnabled(oceanEnabledCheck.isSelected());
+                onUpdate.run();
+            }
+        });
+
+        oceanHeightSlider = new EnhancedSlider("Water Height", -5, 5, -1, false);
+        oceanHeightSlider.setPrecision(2);
+        oceanHeightSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setOceanHeight(v.floatValue());
+                onUpdate.run();
+            }
+        });
+
+        HBox oceanColorBox = new HBox(10);
+        oceanColorPicker = new ColorPicker(javafx.scene.paint.Color.rgb(13, 38, 77));
+        oceanColorPicker.setMaxWidth(Double.MAX_VALUE);
+        oceanColorPicker.setOnAction(e -> {
+            if (!suppressRender) {
+                javafx.scene.paint.Color c = oceanColorPicker.getValue();
+                getParams().setOceanColor((float) c.getRed(), (float) c.getGreen(), (float) c.getBlue());
+                onUpdate.run();
+            }
+        });
+        oceanColorBox.getChildren().addAll(new Label("Water Color:"), oceanColorPicker);
+
+        oceanWaveScaleSlider = new EnhancedSlider("Wave Scale", 0.1, 10, 2, false);
+        oceanWaveScaleSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setOceanWaveScale(v.floatValue());
+                onUpdate.run();
+            }
+        });
+
+        oceanWaveHeightSlider = new EnhancedSlider("Wave Height", 0, 1, 0.1, false);
+        oceanWaveHeightSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setOceanWaveHeight(v.floatValue());
+                onUpdate.run();
+            }
+        });
+
+        oceanSpeedSlider = new EnhancedSlider("Wave Speed", 0, 5, 1, false);
+        oceanSpeedSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setOceanSpeed(v.floatValue());
+                onUpdate.run();
+            }
+        });
+
+        oceanTimeSlider = new EnhancedSlider("Wave Time (Anim)", 0, 100, 0, false);
+        oceanTimeSlider.setPrecision(3);
+        oceanTimeSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setOceanTime(v.floatValue());
+                onUpdate.run();
+            }
+        });
+
         // Info
         Label infoLabel = new Label(
             "Procedural sky uses FBM noise clouds.\n" +
@@ -206,14 +279,19 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
 
         VBox skyBox = new VBox(5, typeBox, cloudDensitySlider, skySpeedSlider, skyTimeSlider, skyParallaxSlider);
         TitledPane skyPane = new TitledPane("Dynamic Procedural Sky", skyBox);
-        skyPane.setExpanded(true);
+        skyPane.setExpanded(false);
+
+        VBox oceanBox = new VBox(5, oceanEnabledCheck, oceanHeightSlider, oceanColorBox,
+            oceanWaveScaleSlider, oceanWaveHeightSlider, oceanSpeedSlider, oceanTimeSlider);
+        TitledPane oceanPane = new TitledPane("Physical Ocean (Raymarched)", oceanBox);
+        oceanPane.setExpanded(false);
 
         VBox fogBox = new VBox(5, fogEnabledCheck, fogDensitySlider, fogColorBox,
             fogScatteringSlider, fogStepsSlider, infoLabel);
         TitledPane fogPane = new TitledPane("Volumetric Fog & God Rays", fogBox);
         fogPane.setExpanded(false);
 
-        panel.getChildren().addAll(hdriPane, skyPane, fogPane);
+        panel.getChildren().addAll(hdriPane, skyPane, oceanPane, fogPane);
 
         return panel;
     }
@@ -255,7 +333,15 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
             fogColorPicker.setValue(javafx.scene.paint.Color.color(fc[0], fc[1], fc[2]));
             fogScatteringSlider.setValue(p.getFogScattering());
             fogStepsSlider.setValue(p.getFogSteps());
-            
+
+            oceanEnabledCheck.setSelected(p.isOceanEnabled());
+            oceanHeightSlider.setValue(p.getOceanHeight());
+            oceanColorPicker.setValue(javafx.scene.paint.Color.color(p.getOceanColorR(), p.getOceanColorG(), p.getOceanColorB()));
+            oceanWaveScaleSlider.setValue(p.getOceanWaveScale());
+            oceanWaveHeightSlider.setValue(p.getOceanWaveHeight());
+            oceanSpeedSlider.setValue(p.getOceanSpeed());
+            oceanTimeSlider.setValue(p.getOceanTime());
+
             // Re-sync engine state if needed
             rotationSlider.setValue(Math.toDegrees(engine.getEnvRotation()));
             lightingMixSlider.setValue(engine.getEnvLightingMix() * 100.0);

@@ -1258,6 +1258,15 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("nestMix", afp.getNestMix());
                 buildSecondaryUniforms(uniforms, afp.getBoolSecondaryType());
             }
+
+            // Ocean & Floor
+            uniforms.put("oceanEnabled", afp.isOceanEnabled() ? 1 : 0);
+            uniforms.put("oceanHeight", afp.getOceanHeight());
+            uniforms.put("oceanColor", new float[]{afp.getOceanColorR(), afp.getOceanColorG(), afp.getOceanColorB()});
+            uniforms.put("oceanWaveScale", afp.getOceanWaveScale());
+            uniforms.put("oceanWaveHeight", afp.getOceanWaveHeight());
+            uniforms.put("oceanSpeed", afp.getOceanSpeed());
+            uniforms.put("oceanTime", afp.getOceanTime());
         }
 
         // Audio-reactive uniforms + fractal parameter modulation

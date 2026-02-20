@@ -190,6 +190,15 @@ uniform float distortionStrength;    // -5 to 5
 uniform float distortionFrequency;   // 0.1 to 10
 uniform float distortionOffset;      // -10 to 10
 
+// Ocean & Floor
+uniform int oceanEnabled;
+uniform float oceanHeight;
+uniform vec3 oceanColor;
+uniform float oceanWaveScale;
+uniform float oceanWaveHeight;
+uniform float oceanSpeed;
+uniform float oceanTime;
+
 // ============================================================================
 // Math & Random Helpers
 // ============================================================================
