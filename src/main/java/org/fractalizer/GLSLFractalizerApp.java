@@ -263,6 +263,23 @@ public class GLSLFractalizerApp extends Application {
         // Setup click-to-focus handler (middle click or Ctrl+click)
         setupFocusPickHandler();
 
+        primaryStage.setOnCloseRequest(event -> {
+            javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                javafx.scene.control.Alert.AlertType.CONFIRMATION,
+                "Are you sure you want to quit Fractaliz3r?",
+                javafx.scene.control.ButtonType.YES,
+                javafx.scene.control.ButtonType.NO
+            );
+            alert.setTitle("Quit");
+            alert.setHeaderText(null);
+            alert.initOwner(primaryStage);
+            alert.showAndWait().ifPresent(response -> {
+                if (response != javafx.scene.control.ButtonType.YES) {
+                    event.consume();
+                }
+            });
+        });
+
         primaryStage.setScene(scene);
         primaryStage.show();
 

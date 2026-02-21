@@ -254,8 +254,8 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.fov = (float) Math.toRadians(60);
 
         // Ray marching defaults
-        this.maxRaySteps = 200;
-        this.epsilon = 0.0001f;
+        this.maxRaySteps = 400;
+        this.epsilon = 0.00001f;
         this.qualityMultiplier = 1.0f;
 
         // Default light direction (top-right-front)
