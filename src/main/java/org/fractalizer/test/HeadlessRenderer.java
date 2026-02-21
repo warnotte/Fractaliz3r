@@ -274,6 +274,9 @@ public class HeadlessRenderer {
         applyFloatTrack(timeline, "mossStrength", params::setMossStrength);
         applyFloatTrack(timeline, "mossScale", params::setMossScale);
 
+        // Ocean
+        applyFloatTrack(timeline, "oceanTime", params::setOceanTime);
+
         // Domain distortion
         applyFloatTrack(timeline, "distortionStrength", params::setDistortionStrength);
         applyFloatTrack(timeline, "distortionFrequency", params::setDistortionFrequency);

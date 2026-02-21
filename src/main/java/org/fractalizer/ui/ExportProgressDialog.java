@@ -240,6 +240,17 @@ public class ExportProgressDialog extends Stage {
     }
 
     /**
+     * Re-enable the cancel button for FFmpeg encoding phase.
+     * After animation cancel, the button is disabled — this restores it
+     * with a new handler and appropriate label.
+     */
+    public void enableCancelForFFmpeg(Runnable handler) {
+        this.onCancelRequested = handler;
+        actionButton.setText("Cancel FFmpeg");
+        actionButton.setDisable(false);
+    }
+
+    /**
      * Set the pause toggle handler (true = paused, false = resumed).
      */
     public void setOnPauseToggled(Consumer<Boolean> handler) {

@@ -102,6 +102,9 @@ public class AnimationManager {
         timeline.createTrack("mossStrength", Float.class, 0.5f);
         timeline.createTrack("mossScale", Float.class, 1.0f);
 
+        // Ocean
+        timeline.createTrack("oceanTime", Float.class, 0.0f);
+
         // Domain Distortion
         timeline.createTrack("distortionStrength", Float.class, 0.0f);
         timeline.createTrack("distortionFrequency", Float.class, 1.0f);
@@ -205,6 +208,7 @@ public class AnimationManager {
         addKeyframeForTrack("mossTime", time, easing, params);
         addKeyframeForTrack("mossStrength", time, easing, params);
         addKeyframeForTrack("mossScale", time, easing, params);
+        addKeyframeForTrack("oceanTime", time, easing, params);
         addKeyframeForTrack("distortionStrength", time, easing, params);
         addKeyframeForTrack("distortionFrequency", time, easing, params);
         addKeyframeForTrack("distortionOffset", time, easing, params);
@@ -293,6 +297,7 @@ public class AnimationManager {
             case "mossTime" -> timeline.setKeyframe("mossTime", time, params.getMossTime(), easing);
             case "mossStrength" -> timeline.setKeyframe("mossStrength", time, params.getMossStrength(), easing);
             case "mossScale" -> timeline.setKeyframe("mossScale", time, params.getMossScale(), easing);
+            case "oceanTime" -> timeline.setKeyframe("oceanTime", time, params.getOceanTime(), easing);
             case "distortionStrength" -> timeline.setKeyframe("distortionStrength", time, params.getDistortionStrength(), easing);
             case "distortionFrequency" -> timeline.setKeyframe("distortionFrequency", time, params.getDistortionFrequency(), easing);
             case "distortionOffset" -> timeline.setKeyframe("distortionOffset", time, params.getDistortionOffset(), easing);
@@ -434,6 +439,11 @@ public class AnimationManager {
         }
         if (timeline.getTrack("mossScale").hasKeyframes()) {
             params.setMossScale(timeline.getValue("mossScale"));
+        }
+
+        // Apply ocean
+        if (timeline.getTrack("oceanTime").hasKeyframes()) {
+            params.setOceanTime(timeline.getValue("oceanTime"));
         }
 
         // Apply domain distortion

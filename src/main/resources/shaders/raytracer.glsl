@@ -1561,15 +1561,18 @@ void main() {
         } else {
             color = pathTraceClassic(ray, seed); // Legacy behavior
         }
-        // For path tracing, get depth from center ray (first bounce)
-        vec2 centerFullUV = tileOffset + (fragCoord * 0.5 + 0.5) * tileScale;
-        Ray centerRay = getCameraRay(centerFullUV * 2.0 - 1.0); // No DoF jitter
-        RayHit depthHit = rayMarch(centerRay);
-        depth = depthHit.hit ? depthHit.dist : 100.0;
-        
-        // Apply volumetric fog to the path tracing result
-        float extinction;
-        color = computeVolumetricFog(ray, depth, color, extinction);
+        // Apply volumetric fog using the actual DoF ray depth
+        // (Using centerRay here would show sharp fractal edges through DoF blur)
+        if (volumetricFogEnabled != 0 && fogDensity > 0.0) {
+            vec3 fogHitPos;
+            float fogDepth;
+            int fogMatType;
+            if (!rayMarchSimple(ray, fogHitPos, fogDepth, fogMatType)) {
+                fogDepth = 100.0;
+            }
+            float extinction;
+            color = computeVolumetricFog(ray, fogDepth, color, extinction);
+        }
     } else {
         // ====== CLASSIC RAYTRACING ======
         RayHit hit = rayMarch(ray);

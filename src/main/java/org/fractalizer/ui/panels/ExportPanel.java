@@ -77,6 +77,7 @@ public class ExportPanel extends ScrollPane {
     // Animation export UI
     private Button exportAnimButton;
     private Spinner<Integer> exportSamplesSpinner;
+    private Spinner<Integer> startFrameSpinner;
     private Spinner<Integer> motionBlurSpinner;  // Shutter angle 0-360
     private CheckBox createMP4Checkbox;
     private Spinner<Integer> crfSpinner;
@@ -85,6 +86,7 @@ public class ExportPanel extends ScrollPane {
     private volatile boolean exportCancelled;
     private volatile boolean exportPaused;
     private volatile boolean exporting;
+    private volatile boolean ffmpegCancelled;
 
     // AOV export
     private CheckBox exportDepthCheck;
@@ -313,6 +315,16 @@ public class ExportPanel extends ScrollPane {
         exportSamplesSpinner.setEditable(true);
         samplesBox.getChildren().add(exportSamplesSpinner);
 
+        // Start frame
+        HBox startFrameBox = new HBox(5);
+        startFrameBox.setAlignment(Pos.CENTER_LEFT);
+        startFrameBox.getChildren().add(new Label("Start frame:"));
+        startFrameSpinner = new Spinner<>(0, 99999, 0, 1);
+        startFrameSpinner.setPrefWidth(80);
+        startFrameSpinner.setEditable(true);
+        startFrameSpinner.setTooltip(new Tooltip("Skip to this frame number (for resuming interrupted exports)"));
+        startFrameBox.getChildren().add(startFrameSpinner);
+
         // Motion blur (shutter angle)
         HBox motionBlurBox = new HBox(5);
         motionBlurBox.setAlignment(Pos.CENTER_LEFT);
@@ -353,6 +365,7 @@ public class ExportPanel extends ScrollPane {
         box.getChildren().addAll(
             animInfoLabel,
             samplesBox,
+            startFrameBox,
             motionBlurBox,
             new Separator(),
             mp4Box,
@@ -533,12 +546,18 @@ public class ExportPanel extends ScrollPane {
         File outputDir = chooser.showDialog(getScene().getWindow());
         if (outputDir == null) return;
 
-        // Create subdirectory with timestamp
-        String timestamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
-        File exportDir = new File(outputDir, "fractal_animation_" + timestamp);
-        if (!exportDir.mkdirs()) {
-            showError("Directory Error", "Could not create output directory: " + exportDir.getAbsolutePath());
-            return;
+        // When resuming (startFrame > 0), use the selected directory directly
+        // When starting fresh, create a timestamped subdirectory
+        File exportDir;
+        if (startFrameSpinner.getValue() > 0) {
+            exportDir = outputDir;
+        } else {
+            String timestamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+            exportDir = new File(outputDir, "fractal_animation_" + timestamp);
+            if (!exportDir.mkdirs()) {
+                showError("Directory Error", "Could not create output directory: " + exportDir.getAbsolutePath());
+                return;
+            }
         }
 
         // Get export parameters
@@ -551,6 +570,12 @@ public class ExportPanel extends ScrollPane {
         boolean shouldCreateMP4 = createMP4Checkbox.isSelected() && FFmpegExporter.isFFmpegAvailable();
         int crf = crfSpinner.getValue();
         int fps = (int) timeline.getFrameRate();
+        int startFrame = startFrameSpinner.getValue();
+        if (startFrame >= totalFrames) {
+            showError("Invalid Start Frame", "Start frame (" + startFrame + ") must be less than total frames (" + totalFrames + ").");
+            return;
+        }
+        int framesToRender = totalFrames - startFrame;
         boolean useMotionBlur = shutterAngle > 0 && motionBlurExportCallback != null;
 
         // Detect 360 mode from current params
@@ -582,21 +607,23 @@ public class ExportPanel extends ScrollPane {
         dialog.setOnPauseToggled(paused -> exportPaused = paused);
 
         String motionBlurInfo = useMotionBlur ? ", motion blur " + shutterAngle + "\u00B0" : "";
+        String startInfo = startFrame > 0 ? " (starting at frame " + startFrame + ", " + framesToRender + " remaining)" : "";
         System.out.println("[AnimExport] Starting: " + totalFrames + " frames at " + exportWidth + "x" + exportHeight
-                + ", " + exportSamples + " samples/frame" + motionBlurInfo);
+                + ", " + exportSamples + " samples/frame" + motionBlurInfo + startInfo);
 
         long exportStartTime = System.currentTimeMillis();
 
         Thread exportThread = new Thread(() -> {
             int renderedFrames = 0;
             try {
-                for (int frame = 0; frame < totalFrames && !exportCancelled; frame++) {
-                    waitWhileAnimationPaused(dialog, renderedFrames, totalFrames, exportStartTime);
+                for (int frame = startFrame; frame < totalFrames && !exportCancelled; frame++) {
+                    waitWhileAnimationPaused(dialog, renderedFrames, framesToRender, exportStartTime);
                     if (exportCancelled) {
                         break;
                     }
 
                     final int currentFrame = frame;
+                    final int frameIndex = renderedFrames;
                     double time = frame / timeline.getFrameRate();
                     long frameStartTime = System.currentTimeMillis();
 
@@ -607,7 +634,7 @@ public class ExportPanel extends ScrollPane {
                             timeline.setCurrentTime(time);
                             if (prepareFrameCallback != null) prepareFrameCallback.run();
                             dialog.updateFrameProgress(0,
-                                String.format("Frame %d / %d \u2014 Sample 0/%d", currentFrame + 1, totalFrames, exportSamples));
+                                String.format("Frame %d / %d (abs %d) \u2014 Sample 0/%d", frameIndex + 1, framesToRender, currentFrame + 1, exportSamples));
                         } finally {
                             prepareLatch.countDown();
                         }
@@ -620,8 +647,8 @@ public class ExportPanel extends ScrollPane {
                         int currentSample = (int) Math.round(progress * exportSamples);
                         Platform.runLater(() -> {
                             dialog.updateFrameProgress(progress,
-                                String.format("Frame %d / %d \u2014 Sample %d/%d",
-                                    fCurrentFrame + 1, totalFrames, currentSample, exportSamples));
+                                String.format("Frame %d / %d (abs %d) \u2014 Sample %d/%d",
+                                    frameIndex + 1, framesToRender, fCurrentFrame + 1, currentSample, exportSamples));
                         });
                     };
 
@@ -667,7 +694,7 @@ public class ExportPanel extends ScrollPane {
                     }
 
                     // Step 3: Update progress on FX thread + console log
-                    final double progress = (double) (currentFrame + 1) / totalFrames;
+                    final double progress = (double) renderedFrames / framesToRender;
                     long elapsed = System.currentTimeMillis() - exportStartTime;
                     long frameElapsed = System.currentTimeMillis() - frameStartTime;
                     long estimatedTotal = (long) (elapsed / progress);
@@ -679,11 +706,12 @@ public class ExportPanel extends ScrollPane {
                             frameElapsed / 1000.0, formatDuration(remaining));
 
                     final int fCurrentFrame2 = currentFrame;
+                    final int fRenderedFrames = renderedFrames;
                     Platform.runLater(() -> {
                         dialog.updateFrameProgress(1.0,
                             String.format("Frame %d / %d \u2014 done", fCurrentFrame2 + 1, totalFrames));
                         dialog.updateTotalProgress(progress,
-                            String.format("Total: %d / %d frames", fCurrentFrame2 + 1, totalFrames));
+                            String.format("Total: %d / %d frames", fRenderedFrames, framesToRender));
                         dialog.updateStatus(etaText);
                     });
                 }
@@ -691,37 +719,83 @@ public class ExportPanel extends ScrollPane {
                 // Summary log
                 long totalElapsed = System.currentTimeMillis() - exportStartTime;
                 if (exportCancelled) {
-                    System.out.println("[AnimExport] Cancelled after " + renderedFrames + "/" + totalFrames
+                    System.out.println("[AnimExport] Cancelled after " + renderedFrames + "/" + framesToRender
                             + " frames in " + formatDuration(totalElapsed));
                 } else {
                     double avgFrame = renderedFrames > 0 ? (totalElapsed / 1000.0) / renderedFrames : 0;
                     System.out.printf("[AnimExport] Rendered %d/%d frames in %s (%.1fs avg/frame)%n",
-                            renderedFrames, totalFrames, formatDuration(totalElapsed), avgFrame);
+                            renderedFrames, framesToRender, formatDuration(totalElapsed), avgFrame);
                 }
 
-                // PNG export done - now create MP4 if requested
+                // PNG export done - decide about MP4
+                boolean wantMP4 = false;
                 if (!exportCancelled && shouldCreateMP4) {
+                    // Normal completion → always encode MP4
+                    wantMP4 = true;
+                } else if (exportCancelled && shouldCreateMP4 && renderedFrames > 0) {
+                    // Cancelled → ask user if they want a partial MP4
+                    java.util.concurrent.CountDownLatch askLatch = new java.util.concurrent.CountDownLatch(1);
+                    final boolean[] userAnswer = {false};
+                    final int fRendered = renderedFrames;
+                    Platform.runLater(() -> {
+                        Alert ask = new Alert(Alert.AlertType.CONFIRMATION);
+                        ask.setTitle("Create MP4?");
+                        ask.setHeaderText(null);
+                        ask.setContentText("Export cancelled after " + fRendered + " frames.\nCreate MP4 from rendered frames?");
+                        ask.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
+                        ask.initOwner(dialog.getOwner());
+                        ask.showAndWait().ifPresent(resp -> userAnswer[0] = (resp == ButtonType.YES));
+                        askLatch.countDown();
+                    });
+                    try { askLatch.await(); } catch (InterruptedException ignored) {}
+                    wantMP4 = userAnswer[0];
+                }
+
+                if (wantMP4) {
+                    final int fRenderedFrames = renderedFrames;
+                    final boolean wasCancelled = exportCancelled;
                     System.out.println("[AnimExport] Creating MP4 from " + renderedFrames + " frames...");
+                    ffmpegCancelled = false;
                     exportPaused = false;
+                    final long ffmpegStartTime = System.currentTimeMillis();
                     Platform.runLater(() -> {
                         dialog.setPauseEnabled(false);
                         dialog.setIndeterminate("Encoding MP4...");
+                        dialog.updateStatus("Starting FFmpeg...");
+                        // Re-enable cancel button for FFmpeg cancellation
+                        dialog.enableCancelForFFmpeg(() -> ffmpegCancelled = true);
                     });
 
                     FFmpegExporter.ExportResult result = FFmpegExporter.createMP4InPlace(
                             exportDir, fps, crf, finalIs360,
-                            progress -> Platform.runLater(() -> dialog.updateFrameProgress(progress, "Encoding MP4..."))
+                            progress -> {
+                                long ffElapsed = System.currentTimeMillis() - ffmpegStartTime;
+                                int pct = (int) (progress * 100);
+                                String eta = progress > 0.01 && progress < 1.0
+                                        ? " \u2014 ~" + formatDuration((long)(ffElapsed / progress) - ffElapsed) + " remaining"
+                                        : "";
+                                Platform.runLater(() -> {
+                                    dialog.updateFrameProgress(progress,
+                                            String.format("Encoding MP4... %d%%", pct));
+                                    dialog.updateStatus(formatDuration(ffElapsed) + " elapsed" + eta);
+                                });
+                            },
+                            () -> ffmpegCancelled
                     );
 
-                    final int finalTotalFrames = totalFrames;
-                    final int finalRenderedFrames = renderedFrames;
                     final long finalTotalElapsed = System.currentTimeMillis() - exportStartTime;
                     Platform.runLater(() -> {
                         if (result.success) {
-                            System.out.println("[AnimExport] Done: " + finalRenderedFrames + "/" + finalTotalFrames
-                                    + " frames in " + formatDuration(finalTotalElapsed) + " \u2014 MP4: " + result.outputFile.getAbsolutePath());
-                            dialog.showSuccess(finalTotalFrames + " frames + MP4 in " + formatDuration(finalTotalElapsed)
-                                    + "\n" + result.outputFile.getAbsolutePath());
+                            System.out.println("[AnimExport] Done: " + fRenderedFrames + " frames + MP4 in "
+                                    + formatDuration(finalTotalElapsed) + " \u2014 " + result.outputFile.getAbsolutePath());
+                            String msg = wasCancelled
+                                    ? "MP4 from " + fRenderedFrames + " frames in " + formatDuration(finalTotalElapsed)
+                                    : framesToRender + " frames + MP4 in " + formatDuration(finalTotalElapsed);
+                            if (wasCancelled) {
+                                dialog.showCancelled(msg + "\n" + result.outputFile.getAbsolutePath());
+                            } else {
+                                dialog.showSuccess(msg + "\n" + result.outputFile.getAbsolutePath());
+                            }
 
                             // 360 Metadata Warning (only if not already injected by ExifTool)
                             if (finalIs360 && !result.message.contains("360 Metadata Injected")) {
@@ -742,49 +816,24 @@ public class ExportPanel extends ScrollPane {
 
                             openFile(result.outputFile);
                         } else {
-                            dialog.showCancelled("Frames exported. MP4 failed:\n" + result.message);
-                            openFile(exportDir);
-                        }
-                        finishAnimationExport();
-                    });
-                } else if (exportCancelled && shouldCreateMP4 && renderedFrames > 0) {
-                    // Cancelled but create MP4 from rendered frames
-                    System.out.println("[AnimExport] Creating MP4 from " + renderedFrames + " frames...");
-                    exportPaused = false;
-                    Platform.runLater(() -> {
-                        dialog.setPauseEnabled(false);
-                        dialog.setIndeterminate("Encoding MP4 from rendered frames...");
-                    });
-
-                    FFmpegExporter.ExportResult result = FFmpegExporter.createMP4InPlace(
-                            exportDir, fps, crf, finalIs360,
-                            progress -> Platform.runLater(() -> dialog.updateFrameProgress(progress, "Encoding MP4..."))
-                    );
-
-                    final int finalRenderedFrames2 = renderedFrames;
-                    final long finalTotalElapsed2 = System.currentTimeMillis() - exportStartTime;
-                    Platform.runLater(() -> {
-                        if (result.success) {
-                            System.out.println("[AnimExport] Done: " + finalRenderedFrames2 + "/" + totalFrames
-                                    + " frames in " + formatDuration(finalTotalElapsed2) + " \u2014 MP4: " + result.outputFile.getAbsolutePath());
-                            dialog.showCancelled("Cancelled. MP4 created from " + finalRenderedFrames2 + " frames:\n" + result.outputFile.getAbsolutePath());
-                            openFile(result.outputFile);
-                        } else {
-                            dialog.showCancelled("Cancelled. MP4 failed:\n" + result.message);
+                            if (ffmpegCancelled) {
+                                dialog.showCancelled("FFmpeg encoding cancelled.\nFrames saved in: " + exportDir.getAbsolutePath());
+                            } else {
+                                dialog.showCancelled("Frames exported. MP4 failed:\n" + result.message);
+                            }
                             openFile(exportDir);
                         }
                         finishAnimationExport();
                     });
                 } else {
-                    // Done (PNG only) or cancelled without MP4
-                    final int finalTotalFrames = totalFrames;
+                    // No MP4 requested (or user declined)
                     final int finalRenderedFrames = renderedFrames;
                     final long finalTotalElapsed = System.currentTimeMillis() - exportStartTime;
                     Platform.runLater(() -> {
                         if (exportCancelled) {
-                            dialog.showCancelled("Cancelled after " + finalRenderedFrames + "/" + finalTotalFrames + " frames.\n" + exportDir.getAbsolutePath());
+                            dialog.showCancelled("Cancelled after " + finalRenderedFrames + "/" + framesToRender + " frames.\n" + exportDir.getAbsolutePath());
                         } else {
-                            dialog.showSuccess(finalTotalFrames + " frames exported in " + formatDuration(finalTotalElapsed)
+                            dialog.showSuccess(framesToRender + " frames exported in " + formatDuration(finalTotalElapsed)
                                     + "\n" + exportDir.getAbsolutePath());
                         }
                         openFile(exportDir);

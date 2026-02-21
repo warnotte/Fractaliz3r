@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Utility class for creating video files from PNG sequences using FFmpeg.
@@ -145,6 +146,12 @@ public class FFmpegExporter {
      */
     public static ExportResult createMP4(File inputDir, File outputFile, int frameRate, int crf,
                                           boolean is360, Consumer<Double> progressCallback) {
+        return createMP4(inputDir, outputFile, frameRate, crf, is360, progressCallback, () -> false);
+    }
+
+    public static ExportResult createMP4(File inputDir, File outputFile, int frameRate, int crf,
+                                          boolean is360, Consumer<Double> progressCallback,
+                                          Supplier<Boolean> cancelCheck) {
         log("Starting MP4 export...");
         log("Input directory: " + inputDir.getAbsolutePath());
         log("Output file: " + outputFile.getAbsolutePath());
@@ -238,6 +245,15 @@ public class FFmpegExporter {
                 outputLog.append(line).append("\n");
                 log("FFmpeg: " + line);
 
+                // Check for cancellation
+                if (cancelCheck.get()) {
+                    log("FFmpeg cancelled by user");
+                    process.destroyForcibly();
+                    // Delete incomplete output file
+                    if (outputFile.exists()) outputFile.delete();
+                    return new ExportResult(false, "FFmpeg encoding cancelled", null);
+                }
+
                 // Parse progress from FFmpeg output
                 // FFmpeg outputs lines like "frame=  123 fps=..."
                 if (line.contains("frame=") && progressCallback != null) {
@@ -327,9 +343,15 @@ public class FFmpegExporter {
      */
     public static ExportResult createMP4InPlace(File inputDir, int frameRate, int crf,
                                                  boolean is360, Consumer<Double> progressCallback) {
+        return createMP4InPlace(inputDir, frameRate, crf, is360, progressCallback, () -> false);
+    }
+
+    public static ExportResult createMP4InPlace(File inputDir, int frameRate, int crf,
+                                                 boolean is360, Consumer<Double> progressCallback,
+                                                 Supplier<Boolean> cancelCheck) {
         String outputName = inputDir.getName() + ".mp4";
         File outputFile = new File(inputDir.getParentFile(), outputName);
-        return createMP4(inputDir, outputFile, frameRate, crf, is360, progressCallback);
+        return createMP4(inputDir, outputFile, frameRate, crf, is360, progressCallback, cancelCheck);
     }
 
     /**
