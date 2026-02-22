@@ -724,7 +724,7 @@ vec3 renderSpaceLegacy(vec3 dir) {
     stars += renderStarLayerLegacy(dir, 100.0, 0.95, 0.8, 0.05);
     stars += renderStarLayerLegacy(dir, 300.0, 0.90, 0.3, 0.15) * (1.0 - dust);
 
-    return (nebula + stars);
+    return nebula + stars;
 }
 
 // --- CINEMATIC SPACE (v2.0 - Augmented) ---
@@ -732,26 +732,31 @@ vec3 renderStarLayerV2(vec3 dir, float scale, float threshold, float brightness,
     vec3 sp = (dir + camPos * parallaxFactor * skyParallax) * scale;
     ivec3 ip = ivec3(floor(sp));
     float h = hash3D(ip);
-    
+
     if (h < threshold) return vec3(0.0);
-    
+
     vec3 offset = vec3(hash1(uint(h*1234.0)), hash1(uint(h*5678.0)), hash1(uint(h*9101.0))) - 0.5;
     vec3 fp = fract(sp) - 0.5 - offset;
     float dist = length(fp);
-    
+
     // Core and Natural Halo
     float star = 0.015 / (dist + 0.008);
     star = star * smoothstep(0.5, 0.2, dist);
-    
-    // Cinematic Anamorphic Flare (horizontal streak for bright stars)
-    float flare = max(0.0, 1.0 - abs(fp.y) * 60.0) * max(0.0, 1.0 - abs(fp.x) * 4.0);
-    star = star + flare * pow(h, 20.0) * 2.5; 
-    
+
+    // Cinematic Anamorphic Flare (screen-space horizontal streak)
+    vec3 upRef = abs(dir.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+    vec3 right = normalize(cross(dir, upRef));
+    vec3 up = cross(right, dir);
+    float screenX = dot(fp, right);
+    float screenY = dot(fp, up);
+    float flare = max(0.0, 1.0 - abs(screenY) * 60.0) * max(0.0, 1.0 - abs(screenX) * 4.0);
+    star = star + flare * pow(h, 20.0) * 2.5;
+
     // Spectral Twinkle (Color shifts slightly while flickering)
     float t = skyTime * (1.0 + h * 2.0) + h * 10.0;
     float twinkle = sin(t) * 0.5 + 0.5;
     vec3 color = getStarColor(fract(h + sin(t * 0.5) * 0.05));
-    
+
     return color * star * twinkle * brightness * 0.2;
 }
 
@@ -831,43 +836,48 @@ vec3 renderStudio(vec3 dir) {
 
 // --- ULTRA SPACE (v3.3 - No Clipping & Deep Parallax) ---
 
-vec3 getStarUltra(ivec3 p, vec3 sp, float threshold, float brightness) {
+vec3 getStarUltra(ivec3 p, vec3 sp, vec3 viewDir, float threshold, float brightness) {
     float h = hash3D(p);
     if (h < threshold) return vec3(0.0);
-    
+
     // Limited Jitter (0.2 instead of 0.5) ensures the star stays within the 2x2x2 search bounds
     vec3 offset = (vec3(hash1(uint(h*1234.0)), hash1(uint(h*5678.0)), hash1(uint(h*9101.0))) - 0.5) * 0.4;
     vec3 fp = (vec3(p) + 0.5 + offset) - sp;
     float dist = length(fp);
-    
+
     // Smooth falloff within the 2x2x2 radius (max dist approx 0.8)
     float star = 0.02 / (dist + 0.005);
-    star = star * smoothstep(0.7, 0.2, dist); 
-    
+    star = star * smoothstep(0.7, 0.2, dist);
+
     float t = skyTime * (1.0 + h * 2.0) + h * 10.0;
     float twinkle = sin(t) * 0.4 + 0.6;
-    
-    // Sharp Diffraction Spike
-    float spike = max(0.0, 1.0 - abs(fp.x * fp.y) * 5000.0) * smoothstep(0.4, 0.0, dist);
+
+    // Screen-space diffraction spike (cross pattern aligned to screen axes)
+    vec3 upRef = abs(viewDir.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+    vec3 right = normalize(cross(viewDir, upRef));
+    vec3 up = cross(right, viewDir);
+    float sx = dot(fp, right);
+    float sy = dot(fp, up);
+    float spike = max(0.0, 1.0 - abs(sx * sy) * 5000.0) * smoothstep(0.4, 0.0, dist);
     vec3 color = getStarColor(fract(h + sin(t * 0.4) * 0.1));
-    
+
     return color * (star + spike * pow(h, 15.0) * 15.0) * twinkle * brightness * 0.2;
 }
 
 vec3 renderStarLayerUltra(vec3 dir, float scale, float threshold, float brightness, float parallaxFactor) {
     vec3 sp = (dir + camPos * parallaxFactor * skyParallax) * scale;
     // Centering the grid: sampling -0.5 to +0.5 around sp
-    ivec3 b = ivec3(floor(sp - 0.5)); 
-    
+    ivec3 b = ivec3(floor(sp - 0.5));
+
     vec3 c = vec3(0.0);
-    c = c + getStarUltra(b + ivec3(0,0,0), sp, threshold, brightness);
-    c = c + getStarUltra(b + ivec3(1,0,0), sp, threshold, brightness);
-    c = c + getStarUltra(b + ivec3(0,1,0), sp, threshold, brightness);
-    c = c + getStarUltra(b + ivec3(1,1,0), sp, threshold, brightness);
-    c = c + getStarUltra(b + ivec3(0,0,1), sp, threshold, brightness);
-    c = c + getStarUltra(b + ivec3(1,0,1), sp, threshold, brightness);
-    c = c + getStarUltra(b + ivec3(0,1,1), sp, threshold, brightness);
-    c = c + getStarUltra(b + ivec3(1,1,1), sp, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(0,0,0), sp, dir, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(1,0,0), sp, dir, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(0,1,0), sp, dir, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(1,1,0), sp, dir, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(0,0,1), sp, dir, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(1,0,1), sp, dir, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(0,1,1), sp, dir, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(1,1,1), sp, dir, threshold, brightness);
     return c;
 }
 
@@ -876,13 +886,12 @@ vec3 renderSpaceUltra(vec3 dir) {
     float timeMod = skyTime * 0.03;
     vec3 light = normalize(lightDir);
 
-    // 1. High-Octave Volumetric Gas (8 octaves)
-    // PARALLAX BOOSTED (0.06 -> 0.12)
+    // 1. Volumetric Gas (5 octaves billow noise)
     vec3 pBase = (dir + camPos * 0.12 * skyParallax) * 1.5 * skySpeed;
     vec3 p = pBase;
     float n = 0.0;
     float amp = 0.5;
-    for(int i = 0; i < 8; i++) {
+    for(int i = 0; i < 5; i++) {
         n = n + amp * abs(noise(p + timeMod * 0.1) * 2.0 - 1.0);
         p = p * 1.85 + vec3(10.7, 12.3, 15.1);
         amp = amp * 0.55;
