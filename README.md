@@ -38,7 +38,13 @@
   - Presets: Standard, Cinema, Anamorphic, Vintage, Petzval, Miniature, Dream, Night, Prism
 - **Optics & Lens Effects**: Anamorphic flares, lens dirt, procedural starbursts
 - **Color Grading**: Built-in LUT styles (Cinema, Vintage, Matrix, Neon, Noir)
-- **Procedural Environments**: Clouds, Deep Space, Ocean, Studio - all with spatial parallax
+- **Procedural Environments**: 
+    - **Clouds**: Multi-layered with spatial parallax.
+    - **Deep Space (Legacy)**: The original, fast, and stable starfield.
+    - **Deep Space (Cinematic)**: Enhanced with filamentous nebulae and anamorphic flares.
+    - **Deep Space (Ultra)**: High-fidelity (8-octave) gas clouds, diffraction spikes, and pseudo-scattering.
+    - **Ocean**: Physically-based raymarched water with Gerstner waves and foam.
+    - **Studio**: Clean lighting rig for material testing.
 - **HDRI Environment Maps**: `.hdr`, `.png`, `.jpg` loading with rotation and lighting mix controls
 - **Subsurface Scattering**: Physically-approximated SSS with configurable radius and color
 - **Ray-Marched Reflections**: Real-time reflection bounces for metallic/glass surfaces

@@ -680,57 +680,114 @@ vec3 applyMaterial(vec3 factors) {
 // Star Generation System
 // ============================================================================
 
-vec3 renderStarLayer(vec3 dir, float scale, float threshold, float brightness, float parallaxFactor) {
-    // Scaled parallax based on global skyParallax uniform
-    vec3 sp = (dir + camPos * parallaxFactor * skyParallax) * scale;
-    vec3 ip = floor(sp);
-    vec3 fp = fract(sp);
-    vec3 col = vec3(0.0);
-    for(int z=-1; z<=1; z++)
-    for(int y=-1; y<=1; y++)
-    for(int x=-1; x<=1; x++) {
-        ivec3 offset = ivec3(x, y, z);
-        float h = hash3D(ivec3(ip) + offset);
-        if (h > threshold) {
-            vec3 pos = vec3(offset) + vec3(hash1(uint(h*1234.0)), hash1(uint(h*5678.0)), hash1(uint(h*9101.0)));
-            float dist = length(fp - pos);
-            float core = smoothstep(0.05, 0.0, dist);
-            float glow = smoothstep(0.4, 0.0, dist) * 0.5;
-            float temp = hash1(uint(h*9999.0));
-            vec3 starTint = mix(vec3(0.6, 0.8, 1.0), vec3(1.0, 0.9, 0.6), temp);
-            float mag = pow(h, 20.0); 
-            col += starTint * (core + glow) * mag * brightness;
-        }
-    }
-    return col;
+vec3 getStarColor(float temp) {
+    // Spectral classes: O (blue) to M (red)
+    vec3 c;
+    if (temp < 0.2) c = vec3(0.5, 0.7, 1.0);      // Blue-ish
+    else if (temp < 0.4) c = vec3(0.8, 0.9, 1.0); // White
+    else if (temp < 0.6) c = vec3(1.0, 1.0, 0.8); // Yellow
+    else if (temp < 0.8) c = vec3(1.0, 0.8, 0.5); // Orange
+    else c = vec3(1.0, 0.4, 0.3);                 // Red-ish
+    return c;
 }
 
-// ============================================================================
-// Environments
-// ============================================================================
+// --- LEGACY SPACE (v1.0) ---
+vec3 renderStarLayerLegacy(vec3 dir, float scale, float threshold, float brightness, float parallaxFactor) {
+    vec3 sp = (dir + camPos * parallaxFactor * skyParallax) * scale;
+    ivec3 ip = ivec3(floor(sp));
+    float h = hash3D(ip);
+    if (h > threshold) {
+        vec3 fp = fract(sp) - 0.5;
+        float dist = length(fp);
+        float core = smoothstep(0.05, 0.0, dist);
+        float glow = smoothstep(0.4, 0.0, dist) * 0.5;
+        vec3 starTint = mix(vec3(0.6, 0.8, 1.0), vec3(1.0, 0.9, 0.6), h);
+        return starTint * (core + glow) * pow(h, 20.0) * brightness;
+    }
+    return vec3(0.0);
+}
 
-// Multi-layered Space with Spatial Parallax
-vec3 renderSpace(vec3 dir) {
-    // 1. Deep Nebula Layer
+vec3 renderSpaceLegacy(vec3 dir) {
     vec3 p1 = (dir + camPos * 0.02 * skyParallax) * 1.0 * skySpeed;
     p1.z += skyTime * 0.01;
     float n1 = warpedFbm(p1);
     vec3 nebula = getSmoothPalette(n1 * 1.2 + paletteOffset) * smoothstep(0.2, 0.8, n1) * cloudDensity * 0.4;
     
-    // 2. Dust Layer
     vec3 p2 = (dir + camPos * 0.05 * skyParallax) * 2.0 * skySpeed;
     p2.x += skyTime * 0.02;
     float n2 = fbm(p2);
     float dust = smoothstep(0.4, 0.7, n2);
     nebula *= (1.0 - dust * 0.8);
     
-    // 3. Stars (Multi-Layer)
     vec3 stars = vec3(0.0);
-    stars += renderStarLayer(dir, 40.0, 0.98, 2.0, 0.01);
-    stars += renderStarLayer(dir, 100.0, 0.95, 0.8, 0.05);
-    stars += renderStarLayer(dir, 300.0, 0.90, 0.3, 0.15) * (1.0 - dust);
+    stars += renderStarLayerLegacy(dir, 40.0, 0.98, 2.0, 0.01);
+    stars += renderStarLayerLegacy(dir, 100.0, 0.95, 0.8, 0.05);
+    stars += renderStarLayerLegacy(dir, 300.0, 0.90, 0.3, 0.15) * (1.0 - dust);
 
-    return (nebula + stars) * skyIntensity;
+    return (nebula + stars);
+}
+
+// --- CINEMATIC SPACE (v2.0 - Augmented) ---
+vec3 renderStarLayerV2(vec3 dir, float scale, float threshold, float brightness, float parallaxFactor) {
+    vec3 sp = (dir + camPos * parallaxFactor * skyParallax) * scale;
+    ivec3 ip = ivec3(floor(sp));
+    float h = hash3D(ip);
+    
+    if (h < threshold) return vec3(0.0);
+    
+    vec3 offset = vec3(hash1(uint(h*1234.0)), hash1(uint(h*5678.0)), hash1(uint(h*9101.0))) - 0.5;
+    vec3 fp = fract(sp) - 0.5 - offset;
+    float dist = length(fp);
+    
+    // Core and Natural Halo
+    float star = 0.015 / (dist + 0.008);
+    star = star * smoothstep(0.5, 0.2, dist);
+    
+    // Cinematic Anamorphic Flare (horizontal streak for bright stars)
+    float flare = max(0.0, 1.0 - abs(fp.y) * 60.0) * max(0.0, 1.0 - abs(fp.x) * 4.0);
+    star = star + flare * pow(h, 20.0) * 2.5; 
+    
+    // Spectral Twinkle (Color shifts slightly while flickering)
+    float t = skyTime * (1.0 + h * 2.0) + h * 10.0;
+    float twinkle = sin(t) * 0.5 + 0.5;
+    vec3 color = getStarColor(fract(h + sin(t * 0.5) * 0.05));
+    
+    return color * star * twinkle * brightness * 0.2;
+}
+
+vec3 renderSpaceV2(vec3 dir) {
+    vec3 col = vec3(0.0);
+    float timeMod = skyTime * 0.05;
+    
+    // 1. Distant Galactic Clusters (Large scale diffuse blobs)
+    vec3 p0 = (dir + camPos * 0.005 * skyParallax) * 0.6;
+    float n0 = fbmLow(p0);
+    col = col + getSmoothPalette(n0 * 0.5 + paletteOffset) * pow(n0, 3.0) * 0.15;
+
+    // 2. Deep Background Nebula (Turbulent Warped FBM)
+    vec3 p1 = (dir + camPos * 0.01 * skyParallax) * 1.2 * skySpeed;
+    p1 = p1 + warpedFbm(p1 * 0.5) * 0.25; // Organic distortion
+    float n1 = warpedFbm(p1 + vec3(0, 0, timeMod * 0.1));
+    vec3 nebulaBase = getSmoothPalette(n1 + paletteOffset) * 0.3 * cloudDensity;
+    col = col + nebulaBase * smoothstep(0.1, 0.9, n1);
+    
+    // 3. High-Detail Filament Layer (Warped Billow + Sharpness)
+    vec3 p2 = (dir + camPos * 0.03 * skyParallax) * 2.8 * skySpeed;
+    float n2 = abs(warpedFbm(p2 + vec3(timeMod, 0, 0)) * 2.0 - 1.0);
+    vec3 filaments = getSmoothPalette(n2 * 0.7 + paletteOffset + 0.4);
+    col = col + filaments * pow(1.0 - n2, 6.0) * 1.3 * cloudDensity;
+    
+    // 4. Dark Dust Clouds (Stronger Occlusion)
+    vec3 p3 = (dir + camPos * 0.05 * skyParallax) * 2.2 * skySpeed;
+    float dust = smoothstep(0.4, 0.7, fbm(p3 + vec3(0, timeMod * 0.5, 0)));
+    col = col * (1.0 - dust * 0.98);
+    
+    // 5. Stars (Multi-Layered with flares)
+    col = col + renderStarLayerV2(dir, 45.0, 0.985, 4.0, 0.01);
+    col = col + renderStarLayerV2(dir, 130.0, 0.97, 2.0, 0.04) * (1.0 - dust * 0.6);
+    col = col + renderStarLayerV2(dir, 400.0, 0.94, 0.8, 0.1) * (1.0 - dust);
+
+    return col;
 }
 
 // Multi-layered Clouds with Spatial Parallax
@@ -772,10 +829,99 @@ vec3 renderStudio(vec3 dir) {
     return mix(vec3(0.05), vec3(0.2), g) * cloudDensity;
 }
 
+// --- ULTRA SPACE (v3.3 - No Clipping & Deep Parallax) ---
+
+vec3 getStarUltra(ivec3 p, vec3 sp, float threshold, float brightness) {
+    float h = hash3D(p);
+    if (h < threshold) return vec3(0.0);
+    
+    // Limited Jitter (0.2 instead of 0.5) ensures the star stays within the 2x2x2 search bounds
+    vec3 offset = (vec3(hash1(uint(h*1234.0)), hash1(uint(h*5678.0)), hash1(uint(h*9101.0))) - 0.5) * 0.4;
+    vec3 fp = (vec3(p) + 0.5 + offset) - sp;
+    float dist = length(fp);
+    
+    // Smooth falloff within the 2x2x2 radius (max dist approx 0.8)
+    float star = 0.02 / (dist + 0.005);
+    star = star * smoothstep(0.7, 0.2, dist); 
+    
+    float t = skyTime * (1.0 + h * 2.0) + h * 10.0;
+    float twinkle = sin(t) * 0.4 + 0.6;
+    
+    // Sharp Diffraction Spike
+    float spike = max(0.0, 1.0 - abs(fp.x * fp.y) * 5000.0) * smoothstep(0.4, 0.0, dist);
+    vec3 color = getStarColor(fract(h + sin(t * 0.4) * 0.1));
+    
+    return color * (star + spike * pow(h, 15.0) * 15.0) * twinkle * brightness * 0.2;
+}
+
+vec3 renderStarLayerUltra(vec3 dir, float scale, float threshold, float brightness, float parallaxFactor) {
+    vec3 sp = (dir + camPos * parallaxFactor * skyParallax) * scale;
+    // Centering the grid: sampling -0.5 to +0.5 around sp
+    ivec3 b = ivec3(floor(sp - 0.5)); 
+    
+    vec3 c = vec3(0.0);
+    c = c + getStarUltra(b + ivec3(0,0,0), sp, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(1,0,0), sp, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(0,1,0), sp, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(1,1,0), sp, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(0,0,1), sp, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(1,0,1), sp, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(0,1,1), sp, threshold, brightness);
+    c = c + getStarUltra(b + ivec3(1,1,1), sp, threshold, brightness);
+    return c;
+}
+
+vec3 renderSpaceUltra(vec3 dir) {
+    vec3 col = vec3(0.0);
+    float timeMod = skyTime * 0.03;
+    vec3 light = normalize(lightDir);
+
+    // 1. High-Octave Volumetric Gas (8 octaves)
+    // PARALLAX BOOSTED (0.06 -> 0.12)
+    vec3 pBase = (dir + camPos * 0.12 * skyParallax) * 1.5 * skySpeed;
+    vec3 p = pBase;
+    float n = 0.0;
+    float amp = 0.5;
+    for(int i = 0; i < 8; i++) {
+        n = n + amp * abs(noise(p + timeMod * 0.1) * 2.0 - 1.0);
+        p = p * 1.85 + vec3(10.7, 12.3, 15.1);
+        amp = amp * 0.55;
+    }
+    
+    float gasDensity = pow(max(0.0, 1.0 - n), 3.0);
+    vec3 gasColor = getSmoothPalette(n * 0.8 + paletteOffset);
+    float rim = pow(max(0.0, dot(dir, light)), 6.0) * 1.5;
+    col = col + gasColor * gasDensity * (0.4 + rim) * cloudDensity;
+
+    // 2. Distant Stellar Clusters
+    // PARALLAX BOOSTED (0.02 -> 0.05)
+    vec3 p0 = (dir + camPos * 0.05 * skyParallax) * 1.8;
+    float clusters = pow(fbmLow(p0), 4.0);
+    col = col + vec3(0.7, 0.85, 1.0) * clusters * 0.5;
+
+    // 3. Deep Dust Occlusion
+    vec3 pDust = pBase * 0.5 + vec3(timeMod * 0.2);
+    float dust = smoothstep(0.4, 0.8, fbm(pDust));
+    col = col * (1.0 - dust * 0.95);
+
+    // 4. Stars (Heavy layers with MASSIVE Parallax)
+    // Factors increased for strong 3D depth feeling
+    vec3 s1 = renderStarLayerUltra(dir, 30.0, 0.985, 6.0, 0.08);
+    vec3 s2 = renderStarLayerUltra(dir, 80.0, 0.98, 3.5, 0.25) * (1.0 - dust * 0.7);
+    vec3 s3 = renderStarLayerUltra(dir, 200.0, 0.96, 2.0, 0.50) * (1.0 - dust);
+    vec3 s4 = renderStarLayerUltra(dir, 500.0, 0.93, 1.0, 0.80) * (1.0 - dust);
+    
+    col = col + s1 + s2 + s3 + s4;
+
+    return col;
+}
+
 vec3 proceduralSky(vec3 dir) {
-    if (skyType == 1) return renderSpace(dir);
+    if (skyType == 1) return renderSpaceLegacy(dir);
     if (skyType == 2) return renderOcean(dir);
     if (skyType == 3) return renderStudio(dir);
+    if (skyType == 4) return renderSpaceV2(dir);
+    if (skyType == 5) return renderSpaceUltra(dir);
     return renderClouds(dir);
 }
 

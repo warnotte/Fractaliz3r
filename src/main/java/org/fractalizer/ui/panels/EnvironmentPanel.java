@@ -103,8 +103,8 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
         HBox typeBox = new HBox(10);
         Label typeLabel = new Label("Type:");
         skyTypeCombo = new ComboBox<>();
-        skyTypeCombo.getItems().addAll("Clouds", "Deep Space", "Ocean", "Studio");
-        skyTypeCombo.setValue("Deep Space");
+        skyTypeCombo.getItems().addAll("Clouds", "Deep Space (Legacy)", "Ocean", "Studio", "Deep Space (Cinematic)", "Deep Space (Ultra)");
+        skyTypeCombo.setValue("Deep Space (Legacy)");
         skyTypeCombo.setMaxWidth(Double.MAX_VALUE);
         skyTypeCombo.setOnAction(e -> {
             if (!suppressRender) {
