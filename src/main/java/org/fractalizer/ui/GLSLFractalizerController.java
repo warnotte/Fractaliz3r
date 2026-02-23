@@ -8,6 +8,7 @@ import org.fractalizer.engine.Camera;
 import org.fractalizer.engine.GLSLEngine;
 import org.fractalizer.engine.ShaderPreprocessor;
 import org.fractalizer.fractals.*;
+import org.fractalizer.graph.GraphCompiler;
 import org.fractalizer.render.ProgressiveRenderer;
 import org.fractalizer.util.ImageWriterHelper;
 
@@ -1384,7 +1385,7 @@ public class GLSLFractalizerController implements RenderController {
 
     /**
      * Emit uniforms for the secondary (boolean) fractal with b_ prefix.
-     * Uses default params for the secondary type.
+     * Delegates to {@link GraphCompiler#emitFractalUniforms} for the actual emission.
      */
     private void buildSecondaryUniforms(Map<String, Object> uniforms, String kernelName) {
         FractalType secType = null;
@@ -1392,100 +1393,7 @@ public class GLSLFractalizerController implements RenderController {
             if (ft.getKernelName().equals(kernelName)) { secType = ft; break; }
         }
         if (secType == null) return;
-
-        // Create default params for this type (just for uniform values)
-        AbstractFractalParams p;
-        switch (secType) {
-            case MANDELBULB -> p = new MandelbulbParams();
-            case MANDELBOX -> p = new MandelboxParams();
-            case MENGER_SPONGE -> p = new MengerSpongeParams();
-            case KALEIDOSCOPIC_IFS -> p = new KaleidoscopicIFSParams();
-            case POLYHEDRAL_IFS -> p = new PolyhedralIFSParams();
-            case SIERPINSKI -> p = new SierpinskiParams();
-            case PSEUDO_KLEINIAN -> p = new PseudoKleinianParams();
-            case APOLLONIAN -> p = new ApollonianParams();
-            case BRISTORBROT -> p = new BristorbrotParams();
-            case QUATERNION_JULIA_4D -> p = new QuaternionJulia4DParams();
-            default -> { return; }
-        };
-
-        // Emit all fractal-specific uniforms with b_ prefix
-        switch (secType) {
-            case MANDELBULB -> {
-                MandelbulbParams mb = (MandelbulbParams) p;
-                uniforms.put("b_power", mb.getPower());
-                uniforms.put("b_maxIterations", mb.getMaxIterations());
-                uniforms.put("b_bailout", mb.getBailout());
-            }
-            case MANDELBOX -> {
-                MandelboxParams mb = (MandelboxParams) p;
-                uniforms.put("b_scale", mb.getScale());
-                uniforms.put("b_minRadius", mb.getMinRadius());
-                uniforms.put("b_fixedRadius", mb.getFixedRadius());
-                uniforms.put("b_foldingLimit", mb.getFoldingLimit());
-                uniforms.put("b_maxIterations", mb.getMaxIterations());
-            }
-            case MENGER_SPONGE -> {
-                MengerSpongeParams ms = (MengerSpongeParams) p;
-                uniforms.put("b_maxIterations", ms.getMaxIterations());
-                uniforms.put("b_scale", ms.getScale());
-                uniforms.put("b_offset", new float[]{ms.getOffsetX(), ms.getOffsetY(), ms.getOffsetZ()});
-            }
-            case KALEIDOSCOPIC_IFS -> {
-                KaleidoscopicIFSParams k = (KaleidoscopicIFSParams) p;
-                uniforms.put("b_maxIterations", k.getMaxIterations());
-                uniforms.put("b_scale", k.getScale());
-                uniforms.put("b_foldAngleX", (float) Math.toRadians(k.getFoldAngleX()));
-                uniforms.put("b_foldAngleY", (float) Math.toRadians(k.getFoldAngleY()));
-                uniforms.put("b_ifsOffset", k.getOffsetX());
-            }
-            case POLYHEDRAL_IFS -> {
-                PolyhedralIFSParams pi = (PolyhedralIFSParams) p;
-                uniforms.put("b_polyType", pi.getPolyType().ordinal());
-                uniforms.put("b_maxIterations", pi.getMaxIterations());
-                uniforms.put("b_scale", pi.getScale());
-                uniforms.put("b_offset", new float[]{pi.getOffsetX(), pi.getOffsetY(), pi.getOffsetZ()});
-                uniforms.put("b_shift", new float[]{pi.getShiftX(), pi.getShiftY(), pi.getShiftZ()});
-                uniforms.put("b_fractalRotation1", createRotationMatrix(pi.getRot1X(), pi.getRot1Y(), pi.getRot1Z()));
-                uniforms.put("b_fractalRotation2", createRotationMatrix(pi.getRot2X(), pi.getRot2Y(), pi.getRot2Z()));
-            }
-            case SIERPINSKI -> {
-                SierpinskiParams si = (SierpinskiParams) p;
-                uniforms.put("b_maxIterations", si.getMaxIterations());
-                uniforms.put("b_scale", si.getScale());
-            }
-            case PSEUDO_KLEINIAN -> {
-                PseudoKleinianParams pk = (PseudoKleinianParams) p;
-                uniforms.put("b_maxIterations", pk.getMaxIterations());
-                uniforms.put("b_CSize", new float[]{pk.getCSizeX(), pk.getCSizeY(), pk.getCSizeZ()});
-                uniforms.put("b_Size", pk.getSize());
-                uniforms.put("b_DEoffset", pk.getDEOffset());
-                uniforms.put("b_foldC", new float[]{pk.getFoldCx(), pk.getFoldCy(), pk.getFoldCz()});
-            }
-            case APOLLONIAN -> {
-                ApollonianParams ap = (ApollonianParams) p;
-                uniforms.put("b_maxIterations", ap.getMaxIterations());
-                uniforms.put("b_scale", ap.getScale());
-                uniforms.put("b_foldRadius", ap.getFoldRadius());
-            }
-            case BRISTORBROT -> {
-                BristorbrotParams br = (BristorbrotParams) p;
-                uniforms.put("b_maxIterations", br.getMaxIterations());
-                uniforms.put("b_bailout", br.getBailout());
-                uniforms.put("b_juliaC", new float[]{br.getJuliaCx(), br.getJuliaCy(), br.getJuliaCz()});
-            }
-            case QUATERNION_JULIA_4D -> {
-                QuaternionJulia4DParams qj = (QuaternionJulia4DParams) p;
-                uniforms.put("b_maxIterations", qj.getMaxIterations());
-                uniforms.put("b_bailout", qj.getBailout());
-                uniforms.put("b_juliaC", new float[]{qj.getJuliaCx(), qj.getJuliaCy(), qj.getJuliaCz(), qj.getJuliaCw()});
-                uniforms.put("b_sliceW", qj.getSliceW());
-                uniforms.put("b_rotXW", (float) Math.toRadians(qj.getRotXW()));
-                uniforms.put("b_rotYW", (float) Math.toRadians(qj.getRotYW()));
-                uniforms.put("b_rotZW", (float) Math.toRadians(qj.getRotZW()));
-            }
-            default -> {}
-        }
+        GraphCompiler.emitFractalUniforms(uniforms, secType, "b_");
     }
 
     /**
