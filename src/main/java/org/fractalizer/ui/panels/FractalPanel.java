@@ -164,6 +164,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     private VBox customShaderControls;
     private org.fractalizer.ui.components.CustomShaderEditor customShaderEditor;
 
+    // Node Graph
+    private VBox nodeGraphControls;
+    private org.fractalizer.ui.components.NodeGraphEditor nodeGraphEditor;
+
     // Boolean Operations
     private TitledPane booleanOpsPane;
     private CheckBox boolEnableCheck;
@@ -207,6 +211,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         createQuaternionJulia4DControls();
         createFractalTerrainControls();
         createCustomShaderControls();
+        createNodeGraphControls();
         createTestSceneControls();
         createCornellBoxControls();
         createBooleanOpsPane();
@@ -299,6 +304,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             quaternionJulia4DControls,
             fractalTerrainControls,
             customShaderControls,
+            nodeGraphControls,
             testSceneControls,
             cornellBoxControls
         );
@@ -982,6 +988,13 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         customShaderControls.setManaged(false);
     }
 
+    private void createNodeGraphControls() {
+        nodeGraphEditor = new org.fractalizer.ui.components.NodeGraphEditor(controller, renderCallback);
+        nodeGraphControls = new VBox(nodeGraphEditor);
+        nodeGraphControls.setVisible(false);
+        nodeGraphControls.setManaged(false);
+    }
+
     private void createTestSceneControls() {
         testSceneControls = new VBox(8);
 
@@ -1140,6 +1153,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             fractalTerrainControls.setManaged(false);
             customShaderControls.setVisible(false);
             customShaderControls.setManaged(false);
+            nodeGraphControls.setVisible(false);
+            nodeGraphControls.setManaged(false);
             testSceneControls.setVisible(false);
             testSceneControls.setManaged(false);
             cornellBoxControls.setVisible(false);
@@ -1195,6 +1210,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                     customShaderControls.setVisible(true);
                     customShaderControls.setManaged(true);
                 }
+                case NODE_GRAPH -> {
+                    nodeGraphControls.setVisible(true);
+                    nodeGraphControls.setManaged(true);
+                }
                 case TEST_SCENE -> {
                     testSceneControls.setVisible(true);
                     testSceneControls.setManaged(true);
@@ -1230,7 +1249,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
         boolSecondaryCombo = new ComboBox<>();
         for (FractalType ft : FractalType.values()) {
-            if (ft == FractalType.TEST_SCENE || ft == FractalType.CORNELL_BOX || ft == FractalType.FRACTAL_TERRAIN || ft == FractalType.CUSTOM_SHADER) continue;
+            if (ft == FractalType.TEST_SCENE || ft == FractalType.CORNELL_BOX || ft == FractalType.FRACTAL_TERRAIN || ft == FractalType.CUSTOM_SHADER || ft == FractalType.NODE_GRAPH) continue;
             boolSecondaryCombo.getItems().add(ft.getKernelName());
         }
         boolSecondaryCombo.setMaxWidth(Double.MAX_VALUE);
@@ -1354,6 +1373,8 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             fractalTerrainControls.setManaged(false);
             customShaderControls.setVisible(false);
             customShaderControls.setManaged(false);
+            nodeGraphControls.setVisible(false);
+            nodeGraphControls.setManaged(false);
             testSceneControls.setVisible(false);
             testSceneControls.setManaged(false);
             cornellBoxControls.setVisible(false);
@@ -1464,6 +1485,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
                 customShaderControls.setVisible(true);
                 customShaderControls.setManaged(true);
                 customShaderEditor.loadParams(csp);
+            } else if (params instanceof NodeGraphParams ngp) {
+                nodeGraphControls.setVisible(true);
+                nodeGraphControls.setManaged(true);
+                nodeGraphEditor.loadParams(ngp);
             } else if (params instanceof TestSceneParams ts) {
                 testSceneControls.setVisible(true);
                 testSceneControls.setManaged(true);

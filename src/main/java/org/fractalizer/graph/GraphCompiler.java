@@ -22,9 +22,11 @@ public class GraphCompiler {
     private int csgCounter;
     private final List<LeafInfo> leaves = new ArrayList<>();
     private final List<TransformInfo> transforms = new ArrayList<>();
+    private final List<CSGInfo> csgNodes = new ArrayList<>();
 
     private record LeafInfo(FractalNode node, String prefix) {}
     private record TransformInfo(TransformNode node, String id) {}
+    private record CSGInfo(CSGNode node, String id) {}
 
     /**
      * Compile a node graph into composite GLSL source code.
@@ -39,6 +41,7 @@ public class GraphCompiler {
         csgCounter = 0;
         leaves.clear();
         transforms.clear();
+        csgNodes.clear();
 
         // Phase 1: DFS to assign IDs and collect metadata
         assignIds(root);
@@ -55,9 +58,13 @@ public class GraphCompiler {
             sb.append(preprocessed).append("\n\n");
         }
 
-        // Phase 3: smin/smax helpers (only if CSG nodes exist)
+        // Phase 3: smin/smax helpers + CSG blend uniforms (only if CSG nodes exist)
         if (csgCounter > 0) {
             sb.append(generateHelpers());
+            for (CSGInfo ci : csgNodes) {
+                sb.append("uniform float ").append(ci.id).append("_blend;\n");
+            }
+            sb.append("\n");
         }
 
         // Phase 4: Transform functions
@@ -79,95 +86,82 @@ public class GraphCompiler {
     }
 
     /**
-     * Returns uniform name→value map for the compiled graph.
+     * Returns uniform name->value map for the compiled graph.
      * Must be called after {@link #compile(GraphNode)} (uses assigned IDs).
      */
     public Map<String, Object> getUniforms(GraphNode root) {
         Map<String, Object> uniforms = new LinkedHashMap<>();
-        collectUniforms(root, uniforms);
+        collectUniformsFromNode(root, uniforms);
         return uniforms;
     }
 
     /**
      * Emit fractal-specific uniforms for a given type with a prefix.
-     * Reusable by both the graph system and boolean ops.
+     * Uses default parameter values. For per-node params, use the overload with AbstractFractalParams.
      */
     public static void emitFractalUniforms(Map<String, Object> uniforms, FractalType type, String prefix) {
-        switch (type) {
-            case MANDELBULB -> {
-                MandelbulbParams p = new MandelbulbParams();
-                uniforms.put(prefix + "power", p.getPower());
-                uniforms.put(prefix + "maxIterations", p.getMaxIterations());
-                uniforms.put(prefix + "bailout", p.getBailout());
-            }
-            case MANDELBOX -> {
-                MandelboxParams p = new MandelboxParams();
-                uniforms.put(prefix + "scale", p.getScale());
-                uniforms.put(prefix + "minRadius", p.getMinRadius());
-                uniforms.put(prefix + "fixedRadius", p.getFixedRadius());
-                uniforms.put(prefix + "foldingLimit", p.getFoldingLimit());
-                uniforms.put(prefix + "maxIterations", p.getMaxIterations());
-            }
-            case MENGER_SPONGE -> {
-                MengerSpongeParams p = new MengerSpongeParams();
-                uniforms.put(prefix + "maxIterations", p.getMaxIterations());
-                uniforms.put(prefix + "scale", p.getScale());
-                uniforms.put(prefix + "offset", new float[]{p.getOffsetX(), p.getOffsetY(), p.getOffsetZ()});
-            }
-            case KALEIDOSCOPIC_IFS -> {
-                KaleidoscopicIFSParams p = new KaleidoscopicIFSParams();
-                uniforms.put(prefix + "maxIterations", p.getMaxIterations());
-                uniforms.put(prefix + "scale", p.getScale());
-                uniforms.put(prefix + "foldAngleX", (float) Math.toRadians(p.getFoldAngleX()));
-                uniforms.put(prefix + "foldAngleY", (float) Math.toRadians(p.getFoldAngleY()));
-                uniforms.put(prefix + "ifsOffset", p.getOffsetX());
-            }
-            case POLYHEDRAL_IFS -> {
-                PolyhedralIFSParams p = new PolyhedralIFSParams();
-                uniforms.put(prefix + "polyType", p.getPolyType().ordinal());
-                uniforms.put(prefix + "maxIterations", p.getMaxIterations());
-                uniforms.put(prefix + "scale", p.getScale());
-                uniforms.put(prefix + "offset", new float[]{p.getOffsetX(), p.getOffsetY(), p.getOffsetZ()});
-                uniforms.put(prefix + "shift", new float[]{p.getShiftX(), p.getShiftY(), p.getShiftZ()});
-                uniforms.put(prefix + "fractalRotation1", createRotationMatrix(p.getRot1X(), p.getRot1Y(), p.getRot1Z()));
-                uniforms.put(prefix + "fractalRotation2", createRotationMatrix(p.getRot2X(), p.getRot2Y(), p.getRot2Z()));
-            }
-            case SIERPINSKI -> {
-                SierpinskiParams p = new SierpinskiParams();
-                uniforms.put(prefix + "maxIterations", p.getMaxIterations());
-                uniforms.put(prefix + "scale", p.getScale());
-            }
-            case PSEUDO_KLEINIAN -> {
-                PseudoKleinianParams p = new PseudoKleinianParams();
-                uniforms.put(prefix + "maxIterations", p.getMaxIterations());
-                uniforms.put(prefix + "CSize", new float[]{p.getCSizeX(), p.getCSizeY(), p.getCSizeZ()});
-                uniforms.put(prefix + "Size", p.getSize());
-                uniforms.put(prefix + "DEoffset", p.getDEOffset());
-                uniforms.put(prefix + "foldC", new float[]{p.getFoldCx(), p.getFoldCy(), p.getFoldCz()});
-            }
-            case APOLLONIAN -> {
-                ApollonianParams p = new ApollonianParams();
-                uniforms.put(prefix + "maxIterations", p.getMaxIterations());
-                uniforms.put(prefix + "scale", p.getScale());
-                uniforms.put(prefix + "foldRadius", p.getFoldRadius());
-            }
-            case BRISTORBROT -> {
-                BristorbrotParams p = new BristorbrotParams();
-                uniforms.put(prefix + "maxIterations", p.getMaxIterations());
-                uniforms.put(prefix + "bailout", p.getBailout());
-                uniforms.put(prefix + "juliaC", new float[]{p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz()});
-            }
-            case QUATERNION_JULIA_4D -> {
-                QuaternionJulia4DParams p = new QuaternionJulia4DParams();
-                uniforms.put(prefix + "maxIterations", p.getMaxIterations());
-                uniforms.put(prefix + "bailout", p.getBailout());
-                uniforms.put(prefix + "juliaC", new float[]{p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz(), p.getJuliaCw()});
-                uniforms.put(prefix + "sliceW", p.getSliceW());
-                uniforms.put(prefix + "rotXW", (float) Math.toRadians(p.getRotXW()));
-                uniforms.put(prefix + "rotYW", (float) Math.toRadians(p.getRotYW()));
-                uniforms.put(prefix + "rotZW", (float) Math.toRadians(p.getRotZW()));
-            }
-            default -> {} // TEST_SCENE, CORNELL_BOX, FRACTAL_TERRAIN, CUSTOM_SHADER not supported
+        AbstractFractalParams defaults = FractalNode.createDefaultParams(type);
+        if (defaults != null) emitFractalUniforms(uniforms, prefix, defaults);
+    }
+
+    /**
+     * Emit fractal-specific uniforms from a concrete params instance.
+     * Reads actual values from the provided params object (no defaults created).
+     */
+    public static void emitFractalUniforms(Map<String, Object> uniforms, String prefix, AbstractFractalParams params) {
+        if (params instanceof MandelbulbParams p) {
+            uniforms.put(prefix + "power", p.getPower());
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "bailout", p.getBailout());
+        } else if (params instanceof MandelboxParams p) {
+            uniforms.put(prefix + "scale", p.getScale());
+            uniforms.put(prefix + "minRadius", p.getMinRadius());
+            uniforms.put(prefix + "fixedRadius", p.getFixedRadius());
+            uniforms.put(prefix + "foldingLimit", p.getFoldingLimit());
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+        } else if (params instanceof MengerSpongeParams p) {
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "scale", p.getScale());
+            uniforms.put(prefix + "offset", new float[]{p.getOffsetX(), p.getOffsetY(), p.getOffsetZ()});
+        } else if (params instanceof KaleidoscopicIFSParams p) {
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "scale", p.getScale());
+            uniforms.put(prefix + "foldAngleX", (float) Math.toRadians(p.getFoldAngleX()));
+            uniforms.put(prefix + "foldAngleY", (float) Math.toRadians(p.getFoldAngleY()));
+            uniforms.put(prefix + "ifsOffset", p.getOffsetX());
+        } else if (params instanceof PolyhedralIFSParams p) {
+            uniforms.put(prefix + "polyType", p.getPolyType().ordinal());
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "scale", p.getScale());
+            uniforms.put(prefix + "offset", new float[]{p.getOffsetX(), p.getOffsetY(), p.getOffsetZ()});
+            uniforms.put(prefix + "shift", new float[]{p.getShiftX(), p.getShiftY(), p.getShiftZ()});
+            uniforms.put(prefix + "fractalRotation1", createRotationMatrix(p.getRot1X(), p.getRot1Y(), p.getRot1Z()));
+            uniforms.put(prefix + "fractalRotation2", createRotationMatrix(p.getRot2X(), p.getRot2Y(), p.getRot2Z()));
+        } else if (params instanceof SierpinskiParams p) {
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "scale", p.getScale());
+        } else if (params instanceof PseudoKleinianParams p) {
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "CSize", new float[]{p.getCSizeX(), p.getCSizeY(), p.getCSizeZ()});
+            uniforms.put(prefix + "Size", p.getSize());
+            uniforms.put(prefix + "DEoffset", p.getDEOffset());
+            uniforms.put(prefix + "foldC", new float[]{p.getFoldCx(), p.getFoldCy(), p.getFoldCz()});
+        } else if (params instanceof ApollonianParams p) {
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "scale", p.getScale());
+            uniforms.put(prefix + "foldRadius", p.getFoldRadius());
+        } else if (params instanceof BristorbrotParams p) {
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "bailout", p.getBailout());
+            uniforms.put(prefix + "juliaC", new float[]{p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz()});
+        } else if (params instanceof QuaternionJulia4DParams p) {
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "bailout", p.getBailout());
+            uniforms.put(prefix + "juliaC", new float[]{p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz(), p.getJuliaCw()});
+            uniforms.put(prefix + "sliceW", p.getSliceW());
+            uniforms.put(prefix + "rotXW", (float) Math.toRadians(p.getRotXW()));
+            uniforms.put(prefix + "rotYW", (float) Math.toRadians(p.getRotYW()));
+            uniforms.put(prefix + "rotZW", (float) Math.toRadians(p.getRotZW()));
         }
     }
 
@@ -188,6 +182,7 @@ public class GraphCompiler {
         } else if (node instanceof CSGNode csn) {
             String cid = "c" + csgCounter++;
             csn.id = cid;
+            csgNodes.add(new CSGInfo(csn, cid));
             assignIds(csn.getLeft());
             assignIds(csn.getRight());
         }
@@ -216,25 +211,61 @@ public class GraphCompiler {
         if (transforms.isEmpty()) return "";
         StringBuilder sb = new StringBuilder("// === Transform functions ===\n");
         for (TransformInfo ti : transforms) {
-            String id = ti.id;
-            sb.append("uniform vec3 ").append(id).append("_offset;\n");
-            sb.append("uniform float ").append(id).append("_rotX;\n");
-            sb.append("uniform float ").append(id).append("_rotY;\n");
-            sb.append("uniform float ").append(id).append("_rotZ;\n");
-            sb.append("uniform float ").append(id).append("_scale;\n");
-            sb.append("vec3 applyTransform_").append(id).append("(vec3 pos) {\n");
-            sb.append("    vec3 p = pos - ").append(id).append("_offset;\n");
-            // Euler rotation X→Y→Z
-            sb.append("    float cx = cos(").append(id).append("_rotX), sx = sin(").append(id).append("_rotX);\n");
-            sb.append("    p = vec3(p.x, cx * p.y - sx * p.z, sx * p.y + cx * p.z);\n");
-            sb.append("    float cy = cos(").append(id).append("_rotY), sy = sin(").append(id).append("_rotY);\n");
-            sb.append("    p = vec3(cy * p.x + sy * p.z, p.y, -sy * p.x + cy * p.z);\n");
-            sb.append("    float cz = cos(").append(id).append("_rotZ), sz = sin(").append(id).append("_rotZ);\n");
-            sb.append("    p = vec3(cz * p.x - sz * p.y, sz * p.x + cz * p.y, p.z);\n");
-            sb.append("    return p / ").append(id).append("_scale;\n");
-            sb.append("}\n\n");
+            switch (ti.node.getMode()) {
+                case STANDARD -> emitStandardTransform(sb, ti.id);
+                case MIRROR   -> emitMirrorTransform(sb, ti.id);
+                case TWIST    -> emitTwistTransform(sb, ti.id);
+                case REPETITION -> emitRepetitionTransform(sb, ti.id);
+            }
         }
         return sb.toString();
+    }
+
+    private void emitStandardTransform(StringBuilder sb, String id) {
+        sb.append("uniform vec3 ").append(id).append("_offset;\n");
+        sb.append("uniform float ").append(id).append("_rotX;\n");
+        sb.append("uniform float ").append(id).append("_rotY;\n");
+        sb.append("uniform float ").append(id).append("_rotZ;\n");
+        sb.append("uniform float ").append(id).append("_scale;\n");
+        sb.append("vec3 applyTransform_").append(id).append("(vec3 pos) {\n");
+        sb.append("    vec3 p = pos - ").append(id).append("_offset;\n");
+        sb.append("    float cx = cos(").append(id).append("_rotX), sx = sin(").append(id).append("_rotX);\n");
+        sb.append("    p = vec3(p.x, cx * p.y - sx * p.z, sx * p.y + cx * p.z);\n");
+        sb.append("    float cy = cos(").append(id).append("_rotY), sy = sin(").append(id).append("_rotY);\n");
+        sb.append("    p = vec3(cy * p.x + sy * p.z, p.y, -sy * p.x + cy * p.z);\n");
+        sb.append("    float cz = cos(").append(id).append("_rotZ), sz = sin(").append(id).append("_rotZ);\n");
+        sb.append("    p = vec3(cz * p.x - sz * p.y, sz * p.x + cz * p.y, p.z);\n");
+        sb.append("    return p / ").append(id).append("_scale;\n");
+        sb.append("}\n\n");
+    }
+
+    private void emitMirrorTransform(StringBuilder sb, String id) {
+        sb.append("uniform vec3 ").append(id).append("_mirrorAxis;\n");
+        sb.append("uniform float ").append(id).append("_mirrorOffset;\n");
+        sb.append("vec3 applyTransform_").append(id).append("(vec3 pos) {\n");
+        sb.append("    float comp = dot(pos, ").append(id).append("_mirrorAxis);\n");
+        sb.append("    float mirrored = abs(comp - ").append(id).append("_mirrorOffset) + ").append(id).append("_mirrorOffset;\n");
+        sb.append("    return pos + ").append(id).append("_mirrorAxis * (mirrored - comp);\n");
+        sb.append("}\n\n");
+    }
+
+    private void emitTwistTransform(StringBuilder sb, String id) {
+        sb.append("uniform vec3 ").append(id).append("_twistAxis;\n");
+        sb.append("uniform float ").append(id).append("_twistStrength;\n");
+        sb.append("vec3 applyTransform_").append(id).append("(vec3 pos) {\n");
+        sb.append("    float angle = dot(pos, ").append(id).append("_twistAxis) * ").append(id).append("_twistStrength;\n");
+        sb.append("    float c = cos(angle), s = sin(angle);\n");
+        sb.append("    vec3 k = ").append(id).append("_twistAxis;\n");
+        sb.append("    return pos * c + cross(k, pos) * s + k * dot(k, pos) * (1.0 - c);\n");
+        sb.append("}\n\n");
+    }
+
+    private void emitRepetitionTransform(StringBuilder sb, String id) {
+        sb.append("uniform vec3 ").append(id).append("_period;\n");
+        sb.append("vec3 applyTransform_").append(id).append("(vec3 pos) {\n");
+        sb.append("    vec3 p = max(").append(id).append("_period, vec3(0.001));\n");
+        sb.append("    return mod(pos + p * 0.5, p) - p * 0.5;\n");
+        sb.append("}\n\n");
     }
 
     private String generateOrbitTrap() {
@@ -346,10 +377,15 @@ public class GraphCompiler {
 
         DEResult child = emitDEBody(tn.getChild(), newPos, sb, full);
 
-        // Scale correction: DE(scaled_pos) * scale
         String scaledVar = "d_" + tid;
-        sb.append("    float ").append(scaledVar).append(" = ").append(child.distVar)
-          .append(" * ").append(tid).append("_scale;\n");
+        if (tn.getMode() == TransformNode.Mode.STANDARD) {
+            // Scale correction: DE(scaled_pos) * scale
+            sb.append("    float ").append(scaledVar).append(" = ").append(child.distVar)
+              .append(" * ").append(tid).append("_scale;\n");
+        } else {
+            // Mirror, Twist, Repetition: isometric or approximate — no correction
+            sb.append("    float ").append(scaledVar).append(" = ").append(child.distVar).append(";\n");
+        }
         return new DEResult(scaledVar, child.winnerExpr);
     }
 
@@ -359,7 +395,7 @@ public class GraphCompiler {
 
         String cid = csn.id;
         String dVar = "d_" + cid;
-        String blend = formatFloat(csn.getBlend());
+        String blendUniform = cid + "_blend";
 
         String leftD = left.distVar;
         String rightD = right.distVar;
@@ -367,7 +403,7 @@ public class GraphCompiler {
         switch (csn.getOp()) {
             case UNION -> {
                 sb.append("    float ").append(dVar).append(" = smin_graph(")
-                  .append(leftD).append(", ").append(rightD).append(", ").append(blend).append(");\n");
+                  .append(leftD).append(", ").append(rightD).append(", ").append(blendUniform).append(");\n");
                 if (full) {
                     String wVar = "w_" + cid;
                     sb.append("    int ").append(wVar).append(" = (").append(leftD)
@@ -379,7 +415,7 @@ public class GraphCompiler {
             }
             case INTERSECT -> {
                 sb.append("    float ").append(dVar).append(" = smax_graph(")
-                  .append(leftD).append(", ").append(rightD).append(", ").append(blend).append(");\n");
+                  .append(leftD).append(", ").append(rightD).append(", ").append(blendUniform).append(");\n");
                 if (full) {
                     String wVar = "w_" + cid;
                     sb.append("    int ").append(wVar).append(" = (").append(leftD)
@@ -390,9 +426,8 @@ public class GraphCompiler {
                 return new DEResult(dVar, null);
             }
             case SUBTRACT -> {
-                // max(left, -right)
                 sb.append("    float ").append(dVar).append(" = smax_graph(")
-                  .append(leftD).append(", -").append(rightD).append(", ").append(blend).append(");\n");
+                  .append(leftD).append(", -").append(rightD).append(", ").append(blendUniform).append(");\n");
                 if (full) {
                     String wVar = "w_" + cid;
                     sb.append("    int ").append(wVar).append(" = (").append(leftD)
@@ -410,21 +445,57 @@ public class GraphCompiler {
     // Uniform collection
     // ========================================================================
 
-    private void collectUniforms(GraphNode node, Map<String, Object> uniforms) {
+    private static void collectUniformsFromNode(GraphNode node, Map<String, Object> uniforms) {
         if (node instanceof FractalNode fn) {
-            emitFractalUniforms(uniforms, fn.getFractalType(), fn.id + "_");
+            AbstractFractalParams stored = fn.getFractalParams();
+            if (stored != null) {
+                emitFractalUniforms(uniforms, fn.id + "_", stored);
+            } else {
+                emitFractalUniforms(uniforms, fn.getFractalType(), fn.id + "_");
+            }
         } else if (node instanceof TransformNode tn) {
             String id = tn.id;
-            uniforms.put(id + "_offset", tn.getOffset().clone());
-            uniforms.put(id + "_rotX", (float) Math.toRadians(tn.getRotation()[0]));
-            uniforms.put(id + "_rotY", (float) Math.toRadians(tn.getRotation()[1]));
-            uniforms.put(id + "_rotZ", (float) Math.toRadians(tn.getRotation()[2]));
-            uniforms.put(id + "_scale", tn.getScale());
-            collectUniforms(tn.getChild(), uniforms);
+            switch (tn.getMode()) {
+                case STANDARD -> {
+                    uniforms.put(id + "_offset", tn.getOffset().clone());
+                    uniforms.put(id + "_rotX", (float) Math.toRadians(tn.getRotation()[0]));
+                    uniforms.put(id + "_rotY", (float) Math.toRadians(tn.getRotation()[1]));
+                    uniforms.put(id + "_rotZ", (float) Math.toRadians(tn.getRotation()[2]));
+                    uniforms.put(id + "_scale", tn.getScale());
+                }
+                case MIRROR -> {
+                    float[] axisVec = new float[3];
+                    axisVec[tn.getAxis()] = 1.0f;
+                    uniforms.put(id + "_mirrorAxis", axisVec);
+                    uniforms.put(id + "_mirrorOffset", tn.getOffset()[tn.getAxis()]);
+                }
+                case TWIST -> {
+                    float[] axisVec = new float[3];
+                    axisVec[tn.getAxis()] = 1.0f;
+                    uniforms.put(id + "_twistAxis", axisVec);
+                    uniforms.put(id + "_twistStrength", tn.getScale());
+                }
+                case REPETITION -> {
+                    uniforms.put(id + "_period", tn.getOffset().clone());
+                }
+            }
+            collectUniformsFromNode(tn.getChild(), uniforms);
         } else if (node instanceof CSGNode csn) {
-            collectUniforms(csn.getLeft(), uniforms);
-            collectUniforms(csn.getRight(), uniforms);
+            uniforms.put(csn.id + "_blend", csn.getBlend());
+            collectUniformsFromNode(csn.getLeft(), uniforms);
+            collectUniformsFromNode(csn.getRight(), uniforms);
         }
+    }
+
+    /**
+     * Collect uniform values from an already-ID-assigned graph tree.
+     * Use this for parameter-only updates (no recompilation needed).
+     * Node IDs must have been assigned by a prior {@link #compile(GraphNode)} call.
+     */
+    public static Map<String, Object> collectUniformsStatic(GraphNode root) {
+        Map<String, Object> uniforms = new LinkedHashMap<>();
+        collectUniformsFromNode(root, uniforms);
+        return uniforms;
     }
 
     // ========================================================================
@@ -448,11 +519,6 @@ public class GraphCompiler {
         } catch (Exception e) {
             throw new RuntimeException("Failed to load shader: " + path, e);
         }
-    }
-
-    private static String formatFloat(float v) {
-        if (v == (int) v) return String.valueOf((int) v) + ".0";
-        return String.valueOf(v);
     }
 
     private static float[] createRotationMatrix(double rx, double ry, double rz) {

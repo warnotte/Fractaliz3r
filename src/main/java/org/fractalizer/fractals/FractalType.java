@@ -14,6 +14,7 @@ public enum FractalType {
     APOLLONIAN("Apollonian Gasket", "apollonian"),
     BRISTORBROT("Bristorbrot", "bristorbrot"),
     QUATERNION_JULIA_4D("Quaternion Julia 4D", "quaternionjulia4d"),
+    NODE_GRAPH("Node Graph", "nodegraph"),
     FRACTAL_TERRAIN("Fractal Terrain", "fractalterrain"),
     CUSTOM_SHADER("Custom Shader", "customshader"),
     TEST_SCENE("Test Scene", "testscene"),

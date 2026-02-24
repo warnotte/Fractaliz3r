@@ -1,8 +1,10 @@
 package org.fractalizer.test;
 
 import org.fractalizer.fractals.FractalType;
+import org.fractalizer.fractals.MandelbulbParams;
 import org.fractalizer.graph.*;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -21,6 +23,11 @@ public class GraphCompilerTest {
         testCSGUnion();
         testCSGWithTransform();
         testThreeFractalsNested();
+        testCollectUniformsStatic();
+        testStoredFractalParams();
+        testMirrorTransform();
+        testTwistTransform();
+        testRepetitionTransform();
 
         System.out.println("\n========================================");
         System.out.println("Results: " + passed + " passed, " + failed + " failed");
@@ -84,11 +91,14 @@ public class GraphCompilerTest {
             assertContains(glsl, "smin_graph(", "smin for UNION");
             assertContains(glsl, "n0_getFactors(", "n0 getFactors for coloring");
             assertContains(glsl, "n1_getFactors(", "n1 getFactors for coloring");
-            assertContains(glsl, "0.1", "Blend value in smin call");
+            assertContains(glsl, "c0_blend", "Blend as uniform reference");
+            assertContains(glsl, "uniform float c0_blend", "Blend uniform declaration");
 
             assertTrue(uniforms.containsKey("n0_power"), "Mandelbulb uniform");
             assertTrue(uniforms.containsKey("n1_maxIterations"), "Menger uniform");
             assertTrue(uniforms.containsKey("n1_scale"), "Menger scale uniform");
+            assertTrue(uniforms.containsKey("c0_blend"), "CSG blend uniform");
+            assertTrue(((Number) uniforms.get("c0_blend")).floatValue() == 0.1f, "Blend value is 0.1");
 
             printSummary(glsl, uniforms);
             System.out.println("  PASSED");
@@ -180,6 +190,186 @@ public class GraphCompilerTest {
             assertTrue(uniforms.containsKey("n2_maxIterations"), "Sierpinski uniform");
 
             printSummary(glsl, uniforms);
+            System.out.println("  PASSED");
+            passed++;
+        } catch (Exception e) {
+            System.err.println("  FAILED: " + e.getMessage());
+            e.printStackTrace();
+            failed++;
+        }
+    }
+
+    /**
+     * Test 5: collectUniformsStatic — refresh uniforms without recompiling.
+     */
+    private static void testCollectUniformsStatic() {
+        System.out.println("\n=== Test 5: collectUniformsStatic (parameter-only update) ===");
+        try {
+            CSGNode root = new CSGNode(
+                CSGNode.Op.UNION,
+                new FractalNode(FractalType.MANDELBULB),
+                new TransformNode(
+                    new FractalNode(FractalType.MENGER_SPONGE),
+                    new float[]{2.0f, 0.0f, 0.0f}
+                ),
+                0.1f
+            );
+            GraphCompiler compiler = new GraphCompiler();
+            compiler.compile(root);  // assigns IDs
+
+            // Now change blend without recompiling
+            root.setBlend(0.5f);
+            Map<String, Object> refreshed = GraphCompiler.collectUniformsStatic(root);
+
+            assertTrue(refreshed.containsKey("c0_blend"), "c0_blend in static uniforms");
+            assertTrue(((Number) refreshed.get("c0_blend")).floatValue() == 0.5f,
+                "Updated blend value is 0.5");
+            assertTrue(refreshed.containsKey("n0_power"), "n0_power still present");
+            assertTrue(refreshed.containsKey("t0_offset"), "t0_offset still present");
+
+            System.out.println("  Uniforms after update: " + refreshed.size());
+            System.out.println("  PASSED");
+            passed++;
+        } catch (Exception e) {
+            System.err.println("  FAILED: " + e.getMessage());
+            e.printStackTrace();
+            failed++;
+        }
+    }
+
+    /**
+     * Test 6: Per-node fractal params — changing power on a FractalNode reflects in uniforms.
+     */
+    private static void testStoredFractalParams() {
+        System.out.println("\n=== Test 6: Stored fractal params (per-node power) ===");
+        try {
+            FractalNode fn = new FractalNode(FractalType.MANDELBULB);
+            ((MandelbulbParams) fn.getFractalParams()).setPower(12.0f);
+
+            GraphCompiler compiler = new GraphCompiler();
+            String glsl = compiler.compile(fn);
+            Map<String, Object> uniforms = compiler.getUniforms(fn);
+
+            assertTrue(uniforms.containsKey("n0_power"), "n0_power exists");
+            assertTrue(((Number) uniforms.get("n0_power")).floatValue() == 12.0f,
+                "Power is 12 (not default 8)");
+
+            // Verify collectUniformsStatic also picks up stored params
+            ((MandelbulbParams) fn.getFractalParams()).setPower(5.0f);
+            Map<String, Object> refreshed = GraphCompiler.collectUniformsStatic(fn);
+            assertTrue(((Number) refreshed.get("n0_power")).floatValue() == 5.0f,
+                "Static refresh picks up power=5");
+
+            System.out.println("  PASSED");
+            passed++;
+        } catch (Exception e) {
+            System.err.println("  FAILED: " + e.getMessage());
+            e.printStackTrace();
+            failed++;
+        }
+    }
+
+    /**
+     * Test 7: Mirror transform — generates mirror GLSL and correct uniforms.
+     */
+    private static void testMirrorTransform() {
+        System.out.println("\n=== Test 7: Mirror transform ===");
+        try {
+            TransformNode mirror = new TransformNode(
+                new FractalNode(FractalType.MANDELBULB),
+                new float[]{0.5f, 0, 0}
+            );
+            mirror.setMode(TransformNode.Mode.MIRROR);
+            mirror.setAxis(0); // X axis
+
+            GraphCompiler compiler = new GraphCompiler();
+            String glsl = compiler.compile(mirror);
+            Map<String, Object> uniforms = compiler.getUniforms(mirror);
+
+            assertContains(glsl, "t0_mirrorAxis", "Mirror axis uniform");
+            assertContains(glsl, "t0_mirrorOffset", "Mirror offset uniform");
+            assertContains(glsl, "applyTransform_t0", "Transform function");
+            assertNotContains(glsl, "t0_rotX", "No rotation for mirror");
+
+            assertTrue(uniforms.containsKey("t0_mirrorAxis"), "mirrorAxis uniform");
+            float[] axis = (float[]) uniforms.get("t0_mirrorAxis");
+            assertTrue(axis[0] == 1.0f && axis[1] == 0.0f && axis[2] == 0.0f,
+                "Mirror axis is X (1,0,0)");
+            assertTrue(((Number) uniforms.get("t0_mirrorOffset")).floatValue() == 0.5f,
+                "Mirror offset is 0.5");
+
+            // Mirror has no scale correction
+            assertContains(glsl, "float d_t0 = n0_d;", "No scale correction for mirror");
+
+            printSummary(glsl, uniforms);
+            System.out.println("  PASSED");
+            passed++;
+        } catch (Exception e) {
+            System.err.println("  FAILED: " + e.getMessage());
+            e.printStackTrace();
+            failed++;
+        }
+    }
+
+    /**
+     * Test 8: Twist transform — generates Rodrigues rotation GLSL.
+     */
+    private static void testTwistTransform() {
+        System.out.println("\n=== Test 8: Twist transform ===");
+        try {
+            TransformNode twist = new TransformNode(
+                new FractalNode(FractalType.MENGER_SPONGE),
+                new float[]{0, 0, 0}
+            );
+            twist.setMode(TransformNode.Mode.TWIST);
+            twist.setAxis(1); // Y axis
+            twist.setScale(0.8f); // twist strength
+
+            GraphCompiler compiler = new GraphCompiler();
+            String glsl = compiler.compile(twist);
+            Map<String, Object> uniforms = compiler.getUniforms(twist);
+
+            assertContains(glsl, "t0_twistAxis", "Twist axis uniform");
+            assertContains(glsl, "t0_twistStrength", "Twist strength uniform");
+            assertContains(glsl, "cross(k, pos)", "Rodrigues rotation");
+
+            float[] axis = (float[]) uniforms.get("t0_twistAxis");
+            assertTrue(axis[1] == 1.0f, "Twist axis is Y");
+            assertTrue(((Number) uniforms.get("t0_twistStrength")).floatValue() == 0.8f,
+                "Twist strength is 0.8");
+
+            System.out.println("  PASSED");
+            passed++;
+        } catch (Exception e) {
+            System.err.println("  FAILED: " + e.getMessage());
+            e.printStackTrace();
+            failed++;
+        }
+    }
+
+    /**
+     * Test 9: Repetition transform — generates mod() GLSL.
+     */
+    private static void testRepetitionTransform() {
+        System.out.println("\n=== Test 9: Repetition transform ===");
+        try {
+            TransformNode rep = new TransformNode(
+                new FractalNode(FractalType.SIERPINSKI),
+                new float[]{3, 3, 3}
+            );
+            rep.setMode(TransformNode.Mode.REPETITION);
+
+            GraphCompiler compiler = new GraphCompiler();
+            String glsl = compiler.compile(rep);
+            Map<String, Object> uniforms = compiler.getUniforms(rep);
+
+            assertContains(glsl, "t0_period", "Period uniform");
+            assertContains(glsl, "mod(pos", "mod() for repetition");
+
+            float[] period = (float[]) uniforms.get("t0_period");
+            assertTrue(period[0] == 3.0f && period[1] == 3.0f && period[2] == 3.0f,
+                "Period is (3,3,3)");
+
             System.out.println("  PASSED");
             passed++;
         } catch (Exception e) {

@@ -331,3 +331,8 @@
 .compile-status.pending {
     -fx-text-fill: #ff9800;
 }
+
+/* Node Graph Canvas */
+.node-graph-canvas {
+    -fx-background-color: #1E1E1E;
+}

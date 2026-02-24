@@ -3,6 +3,7 @@ package org.fractalizer.config;
 import javafx.scene.paint.Color;
 import org.fractalizer.engine.Camera;
 import org.fractalizer.fractals.*;
+import org.fractalizer.graph.*;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -704,6 +705,10 @@ public class FractalConfig {
             map.put("warpStrength", ft.getWarpStrength());
             map.put("ridgeSharpness", ft.getRidgeSharpness());
             map.put("terrainOffset", ft.getTerrainOffset());
+        } else if (params instanceof NodeGraphParams ngp) {
+            if (ngp.getGraphRoot() != null) {
+                map.put("graph", serializeGraphNode(ngp.getGraphRoot()));
+            }
         } else if (params instanceof CustomShaderParams csp) {
             map.put("shaderSource", csp.getShaderSource());
             if (!csp.getUniformValues().isEmpty()) {
@@ -813,6 +818,15 @@ public class FractalConfig {
             if (map.containsKey("warpStrength")) ft.setWarpStrength(getFloat(map, "warpStrength"));
             if (map.containsKey("ridgeSharpness")) ft.setRidgeSharpness(getFloat(map, "ridgeSharpness"));
             if (map.containsKey("terrainOffset")) ft.setTerrainOffset(getFloat(map, "terrainOffset"));
+        } else if (params instanceof NodeGraphParams ngp) {
+            if (map.containsKey("graph") && map.get("graph") instanceof Map<?,?> graphMap) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> gm = (Map<String, Object>) graphMap;
+                GraphNode root = deserializeGraphNode(gm);
+                if (root != null) {
+                    ngp.setGraphRoot(root);
+                }
+            }
         } else if (params instanceof CustomShaderParams csp) {
             if (map.containsKey("shaderSource")) csp.setShaderSource((String) map.get("shaderSource"));
             if (map.containsKey("uniformValues") && map.get("uniformValues") instanceof Map<?,?> rawMap) {
@@ -852,6 +866,101 @@ public class FractalConfig {
             if (map.containsKey("lightPanelW")) cb.setLightPanelW(getFloat(map, "lightPanelW"));
             if (map.containsKey("lightPanelD")) cb.setLightPanelD(getFloat(map, "lightPanelD"));
         }
+    }
+
+    // ========================================================================
+    // Graph node serialization
+    // ========================================================================
+
+    private static Map<String, Object> serializeGraphNode(GraphNode node) {
+        Map<String, Object> map = new java.util.LinkedHashMap<>();
+        if (node instanceof FractalNode fn) {
+            map.put("type", "fractal");
+            map.put("fractalType", fn.getFractalType().name());
+            // Serialize per-node fractal params (reuses extractFractalParams)
+            if (fn.getFractalParams() != null) {
+                Map<String, Object> params = new java.util.LinkedHashMap<>();
+                extractFractalParams(fn.getFractalParams(), params);
+                if (!params.isEmpty()) map.put("params", params);
+            }
+        } else if (node instanceof CSGNode csn) {
+            map.put("type", "csg");
+            map.put("op", csn.getOp().name());
+            map.put("blend", (double) csn.getBlend());
+            map.put("left", serializeGraphNode(csn.getLeft()));
+            map.put("right", serializeGraphNode(csn.getRight()));
+        } else if (node instanceof TransformNode tn) {
+            map.put("type", "transform");
+            map.put("mode", tn.getMode().name());
+            map.put("axis", tn.getAxis());
+            float[] off = tn.getOffset();
+            float[] rot = tn.getRotation();
+            map.put("offset", List.of((double) off[0], (double) off[1], (double) off[2]));
+            map.put("rotation", List.of((double) rot[0], (double) rot[1], (double) rot[2]));
+            map.put("scale", (double) tn.getScale());
+            map.put("child", serializeGraphNode(tn.getChild()));
+        }
+        return map;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static GraphNode deserializeGraphNode(Map<String, Object> map) {
+        String type = (String) map.get("type");
+        if (type == null) return null;
+
+        return switch (type) {
+            case "fractal" -> {
+                String ftName = (String) map.get("fractalType");
+                FractalType ft;
+                try { ft = FractalType.valueOf(ftName); }
+                catch (Exception e) { ft = FractalType.MANDELBULB; }
+                FractalNode fn = new FractalNode(ft);
+                // Restore per-node fractal params (reuses applyFractalParams)
+                if (fn.getFractalParams() != null && map.containsKey("params")
+                        && map.get("params") instanceof Map<?,?> pm) {
+                    applyFractalParams(fn.getFractalParams(), (Map<String, Object>) pm);
+                }
+                yield fn;
+            }
+            case "csg" -> {
+                CSGNode.Op op;
+                try { op = CSGNode.Op.valueOf((String) map.get("op")); }
+                catch (Exception e) { op = CSGNode.Op.UNION; }
+                float blend = map.containsKey("blend") ? ((Number) map.get("blend")).floatValue() : 0f;
+                GraphNode left = deserializeGraphNode((Map<String, Object>) map.get("left"));
+                GraphNode right = deserializeGraphNode((Map<String, Object>) map.get("right"));
+                if (left == null) left = new FractalNode(FractalType.MANDELBULB);
+                if (right == null) right = new FractalNode(FractalType.MENGER_SPONGE);
+                yield new CSGNode(op, left, right, blend);
+            }
+            case "transform" -> {
+                float[] offset = extractFloatArray(map.get("offset"), 3);
+                float[] rotation = extractFloatArray(map.get("rotation"), 3);
+                float scale = map.containsKey("scale") ? ((Number) map.get("scale")).floatValue() : 1f;
+                GraphNode child = deserializeGraphNode((Map<String, Object>) map.get("child"));
+                if (child == null) child = new FractalNode(FractalType.MANDELBULB);
+                TransformNode tn = new TransformNode(child, offset, rotation, scale);
+                if (map.containsKey("mode")) {
+                    try { tn.setMode(TransformNode.Mode.valueOf((String) map.get("mode"))); }
+                    catch (Exception ignored) {}
+                }
+                if (map.containsKey("axis")) {
+                    tn.setAxis(((Number) map.get("axis")).intValue());
+                }
+                yield tn;
+            }
+            default -> new FractalNode(FractalType.MANDELBULB);
+        };
+    }
+
+    private static float[] extractFloatArray(Object obj, int size) {
+        float[] result = new float[size];
+        if (obj instanceof List<?> list) {
+            for (int i = 0; i < Math.min(list.size(), size); i++) {
+                if (list.get(i) instanceof Number n) result[i] = n.floatValue();
+            }
+        }
+        return result;
     }
 
     private static float getFloat(Map<String, Object> map, String key) {

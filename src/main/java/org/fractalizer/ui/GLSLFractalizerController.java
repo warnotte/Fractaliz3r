@@ -80,7 +80,7 @@ public class GLSLFractalizerController implements RenderController {
         FractalType[] types = FractalType.values();
         for (int i = 0; i < types.length; i++) {
             FractalType type = types[i];
-            if (type == FractalType.CUSTOM_SHADER) continue; // no resource file
+            if (type == FractalType.CUSTOM_SHADER || type == FractalType.NODE_GRAPH) continue; // no resource file
             String name = type.getKernelName();
             String path = "/shaders/fractals/" + name + ".glsl";
 
@@ -129,7 +129,9 @@ public class GLSLFractalizerController implements RenderController {
                 case APOLLONIAN -> this.currentParams = new ApollonianParams();
                 case BRISTORBROT -> this.currentParams = new BristorbrotParams();
                 case QUATERNION_JULIA_4D -> this.currentParams = new QuaternionJulia4DParams();
+                case FRACTAL_TERRAIN -> this.currentParams = new FractalTerrainParams();
                 case CUSTOM_SHADER -> this.currentParams = new CustomShaderParams();
+                case NODE_GRAPH -> this.currentParams = new NodeGraphParams();
                 case TEST_SCENE -> this.currentParams = new TestSceneParams();
                 case CORNELL_BOX -> this.currentParams = new CornellBoxParams();
             }
@@ -146,6 +148,21 @@ public class GLSLFractalizerController implements RenderController {
      * Activate the correct shader program (boolean or normal).
      */
     private void activateCurrentProgram() {
+        // Node Graph: compile on demand if dirty
+        if (currentFractalType == FractalType.NODE_GRAPH && currentParams instanceof NodeGraphParams ngp) {
+            if (ngp.isDirty() || !engine.hasProgram("nodegraph")) {
+                String glsl = ngp.recompile();
+                if (glsl != null) {
+                    engine.loadCustomFractalShader("nodegraph", glsl);
+                }
+            }
+            if (engine.hasProgram("nodegraph")) {
+                engine.setActiveProgram("nodegraph");
+                currentBooleanProgramKey = null;
+                return;
+            }
+        }
+
         if (currentParams instanceof AbstractFractalParams afp
                 && afp.isBooleanEnabled()
                 && afp.getBoolSecondaryType() != null) {
@@ -184,6 +201,16 @@ public class GLSLFractalizerController implements RenderController {
         String error = engine.loadCustomFractalShader("customshader", source);
         if (error == null) {
             engine.setActiveProgram("customshader");
+            engine.resetAccumulation();
+        }
+        return error;
+    }
+
+    @Override
+    public String compileNodeGraph(String source) {
+        String error = engine.loadCustomFractalShader("nodegraph", source);
+        if (error == null) {
+            engine.setActiveProgram("nodegraph");
             engine.resetAccumulation();
         }
         return error;
@@ -1173,6 +1200,11 @@ public class GLSLFractalizerController implements RenderController {
             case CUSTOM_SHADER -> {
                 if (currentParams instanceof CustomShaderParams csp) {
                     uniforms.putAll(csp.getUniformValues());
+                }
+            }
+            case NODE_GRAPH -> {
+                if (currentParams instanceof NodeGraphParams ngp) {
+                    uniforms.putAll(ngp.getUniformValues());
                 }
             }
             case TEST_SCENE -> {

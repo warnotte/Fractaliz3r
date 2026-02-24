@@ -12,9 +12,9 @@ public class CSGNode extends GraphNode {
         UNION, INTERSECT, SUBTRACT
     }
 
-    private final GraphNode left;
-    private final GraphNode right;
-    private final Op op;
+    private GraphNode left;
+    private GraphNode right;
+    private Op op;
     private float blend;
 
     public CSGNode(Op op, GraphNode left, GraphNode right, float blend) {
@@ -42,6 +42,28 @@ public class CSGNode extends GraphNode {
 
     public float getBlend() {
         return blend;
+    }
+
+    public void setLeft(GraphNode left) {
+        this.left = left;
+    }
+
+    public void setRight(GraphNode right) {
+        this.right = right;
+    }
+
+    public void setOp(Op op) {
+        this.op = op;
+    }
+
+    public void setBlend(float blend) {
+        this.blend = blend;
+    }
+
+    public void swapChildren() {
+        GraphNode tmp = left;
+        left = right;
+        right = tmp;
     }
 
     @Override
