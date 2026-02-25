@@ -173,6 +173,7 @@ public class GLSLEngine implements AutoCloseable {
                 programs.put(name, program);
             } catch (Exception e) {
                 error[0] = e.getMessage();
+                System.err.println("GLSL compilation failed (" + name + "): " + e.getMessage());
             }
         });
         return error[0];

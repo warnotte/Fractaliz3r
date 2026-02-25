@@ -8,6 +8,9 @@ import org.fractalizer.engine.Camera;
 import org.fractalizer.fractals.AbstractFractalParams;
 import org.fractalizer.fractals.AnimatableParameter;
 import org.fractalizer.fractals.FractalType;
+import org.fractalizer.fractals.NodeGraphParams;
+import org.fractalizer.graph.NodeGraphAnimationHelper;
+import org.fractalizer.graph.NodeGraphAnimationHelper.NodeAnimInfo;
 import org.fractalizer.ui.timeline.TimelineWidget;
 
 import java.util.ArrayList;
@@ -36,6 +39,10 @@ public class AnimationManager {
     // Current fractal type and its animatable descriptors
     private FractalType currentFractalType;
     private List<AnimatableParameter> currentFractalDescriptors = List.of();
+
+    // Node graph animation state
+    private NodeGraphParams currentNodeGraphParams;
+    private List<NodeAnimInfo> currentNodeAnimInfos = List.of();
 
     // Playback state
     private long lastPlaybackTime = 0;
@@ -124,6 +131,8 @@ public class AnimationManager {
      */
     public void onFractalTypeChanged(FractalType type, AbstractFractalParams params) {
         this.currentFractalType = type;
+        this.currentNodeGraphParams = null;
+        this.currentNodeAnimInfos = List.of();
         this.currentFractalDescriptors = params.getAnimatableParameters();
 
         String kernelName = params.getKernelName();
@@ -156,6 +165,93 @@ public class AnimationManager {
         }
 
         timelineWidget.updateFractalTracks(type.getDisplayName(), fractalTrackInfos);
+    }
+
+    /**
+     * Called when the node graph changes (structure or type switch to NODE_GRAPH).
+     * Discovers animatable parameters from all nodes and updates timeline tracks.
+     */
+    public void onNodeGraphChanged(NodeGraphParams ngp) {
+        this.currentNodeGraphParams = ngp;
+        this.currentFractalType = FractalType.NODE_GRAPH;
+        this.currentFractalDescriptors = List.of();
+
+        if (ngp == null || ngp.getGraphRoot() == null) {
+            currentNodeAnimInfos = List.of();
+            timelineWidget.updateNodeGraphTracks(List.of());
+            return;
+        }
+
+        currentNodeAnimInfos = NodeGraphAnimationHelper.discoverAnimatableParameters(ngp.getGraphRoot());
+
+        // Ensure timeline tracks exist for each discovered parameter
+        for (NodeAnimInfo info : currentNodeAnimInfos) {
+            for (AnimatableParameter param : info.parameters()) {
+                String trackName = info.nodeName() + "." + param.name();
+                if (timeline.getTrack(trackName) == null) {
+                    Object currentValue = param.getter().get();
+                    if (param.valueType() == Float.class) {
+                        timeline.createTrack(trackName, Float.class, ((Number) currentValue).floatValue());
+                    } else if (param.valueType() == Integer.class) {
+                        timeline.createTrack(trackName, Integer.class, ((Number) currentValue).intValue());
+                    } else if (param.valueType() == Double.class) {
+                        timeline.createTrack(trackName, Double.class, ((Number) currentValue).doubleValue());
+                    }
+                }
+            }
+        }
+
+        // Build TrackInfo list with group headers per node
+        List<TimelineWidget.TrackInfo> trackInfos = new ArrayList<>();
+        for (NodeAnimInfo info : currentNodeAnimInfos) {
+            trackInfos.add(TimelineWidget.TrackInfo.groupHeader(info.nodeName(), info.groupColor()));
+            for (int i = 0; i < info.parameters().size(); i++) {
+                AnimatableParameter param = info.parameters().get(i);
+                String trackName = info.nodeName() + "." + param.name();
+                double hue = (i * 37.0) % 360;
+                Color color = Color.hsb(hue, 0.6, 0.9).interpolate(info.groupColor(), 0.3);
+                trackInfos.add(new TimelineWidget.TrackInfo(trackName, param.displayName(), color));
+            }
+        }
+
+        timelineWidget.updateNodeGraphTracks(trackInfos);
+    }
+
+    /**
+     * Rename animation tracks when a node is renamed in the graph.
+     * Copies keyframes from old track names to new ones.
+     */
+    @SuppressWarnings("unchecked")
+    public void renameNodeTracks(String oldName, String newName) {
+        String oldPrefix = oldName + ".";
+        String newPrefix = newName + ".";
+
+        List<AnimationTrack<?>> tracksToRename = new ArrayList<>();
+        for (AnimationTrack<?> track : timeline.getTracks()) {
+            if (track.getName().startsWith(oldPrefix)) {
+                tracksToRename.add(track);
+            }
+        }
+
+        for (AnimationTrack<?> oldTrack : tracksToRename) {
+            String suffix = oldTrack.getName().substring(oldPrefix.length());
+            String newTrackName = newPrefix + suffix;
+
+            // Create new track with same type and default
+            AnimationTrack<?> newTrack = timeline.getTrack(newTrackName);
+            if (newTrack == null) {
+                newTrack = timeline.createTrack(newTrackName, (Class) oldTrack.getValueType(), oldTrack.getDefaultValue());
+            }
+            newTrack.setSplineInterpolation(oldTrack.isSplineInterpolation());
+
+            // Copy keyframes
+            for (var kf : oldTrack.getKeyframes()) {
+                ((AnimationTrack<Object>) newTrack).setKeyframe(kf.getTime(), kf.getValue(), kf.getEasing());
+            }
+
+            // Remove old track
+            timeline.removeTrack(oldTrack.getName());
+        }
     }
 
     // ========================================================================
@@ -214,8 +310,12 @@ public class AnimationManager {
         addKeyframeForTrack("distortionOffset", time, easing, params);
         addKeyframeForTrack("boolBlend", time, easing, params);
 
-        // Add keyframes for fractal-specific tracks
-        addFractalKeyframes(time, easing, params);
+        // Add keyframes for fractal-specific or node graph tracks
+        if (currentNodeGraphParams != null) {
+            addNodeGraphKeyframes(time, easing);
+        } else {
+            addFractalKeyframes(time, easing, params);
+        }
 
         timelineWidget.refresh();
         if (statusUpdater != null) {
@@ -303,8 +403,12 @@ public class AnimationManager {
             case "distortionOffset" -> timeline.setKeyframe("distortionOffset", time, params.getDistortionOffset(), easing);
             case "boolBlend" -> timeline.setKeyframe("boolBlend", time, params.getBoolBlend(), easing);
             default -> {
-                // Check if it's a fractal-specific track
-                addFractalKeyframeForTrack(trackName, time, easing, params);
+                // Check node graph tracks first, then fractal-specific
+                if (currentNodeGraphParams != null) {
+                    addNodeGraphKeyframeForTrack(trackName, time, easing);
+                } else {
+                    addFractalKeyframeForTrack(trackName, time, easing, params);
+                }
             }
         }
     }
@@ -462,8 +566,12 @@ public class AnimationManager {
             params.setBoolBlend(timeline.getValue("boolBlend"));
         }
 
-        // Apply fractal-specific parameters
-        applyFractalTimelineToParams(params);
+        // Apply fractal-specific or node graph parameters
+        if (currentNodeGraphParams != null) {
+            applyNodeGraphTimelineToParams();
+        } else {
+            applyFractalTimelineToParams(params);
+        }
 
         // Notify UI to refresh sliders
         if (onParamsApplied != null) {
@@ -485,6 +593,55 @@ public class AnimationManager {
                 Object value = timeline.getValue(trackName);
                 desc.setter().accept(value);
             }
+        }
+    }
+
+    /**
+     * Add keyframes for all node graph animatable parameters.
+     */
+    private void addNodeGraphKeyframes(double time, Easing easing) {
+        for (NodeAnimInfo info : currentNodeAnimInfos) {
+            for (AnimatableParameter param : info.parameters()) {
+                String trackName = info.nodeName() + "." + param.name();
+                Object value = param.getter().get();
+                setFractalKeyframeValue(trackName, time, value, param.valueType(), easing);
+            }
+        }
+    }
+
+    /**
+     * Add a keyframe for a single node graph track by name.
+     */
+    private void addNodeGraphKeyframeForTrack(String trackName, double time, Easing easing) {
+        for (NodeAnimInfo info : currentNodeAnimInfos) {
+            for (AnimatableParameter param : info.parameters()) {
+                String tn = info.nodeName() + "." + param.name();
+                if (tn.equals(trackName)) {
+                    Object value = param.getter().get();
+                    setFractalKeyframeValue(trackName, time, value, param.valueType(), easing);
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Apply node graph timeline values to params via discovered descriptors.
+     */
+    private void applyNodeGraphTimelineToParams() {
+        for (NodeAnimInfo info : currentNodeAnimInfos) {
+            for (AnimatableParameter param : info.parameters()) {
+                String trackName = info.nodeName() + "." + param.name();
+                AnimationTrack<?> track = timeline.getTrack(trackName);
+                if (track != null && track.hasKeyframes()) {
+                    Object value = timeline.getValue(trackName);
+                    param.setter().accept(value);
+                }
+            }
+        }
+        // Recollect uniforms from the updated graph tree
+        if (currentNodeGraphParams != null) {
+            currentNodeGraphParams.updateUniforms();
         }
     }
 
@@ -640,7 +797,9 @@ public class AnimationManager {
 
         // Re-sync the fractal tracks display after import
         AbstractFractalParams params = paramsSupplier.get();
-        if (params != null) {
+        if (params instanceof NodeGraphParams ngp) {
+            onNodeGraphChanged(ngp);
+        } else if (params != null) {
             onFractalTypeChanged(params.getType(), params);
         }
 

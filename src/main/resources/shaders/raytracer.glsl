@@ -1561,15 +1561,17 @@ void main() {
         } else {
             color = pathTraceClassic(ray, seed); // Legacy behavior
         }
-        // Apply volumetric fog using the actual DoF ray depth
-        // (Using centerRay here would show sharp fractal edges through DoF blur)
+        // Get surface distance for focus picking + volumetric fog
+        vec3 surfPos;
+        float surfDepth;
+        int surfMatType;
+        bool surfHit = rayMarchSimple(ray, surfPos, surfDepth, surfMatType);
+        if (surfHit) {
+            depth = surfDepth;
+        }
+        // Apply volumetric fog
         if (volumetricFogEnabled != 0 && fogDensity > 0.0) {
-            vec3 fogHitPos;
-            float fogDepth;
-            int fogMatType;
-            if (!rayMarchSimple(ray, fogHitPos, fogDepth, fogMatType)) {
-                fogDepth = 100.0;
-            }
+            float fogDepth = surfHit ? surfDepth : 100.0;
             float extinction;
             color = computeVolumetricFog(ray, fogDepth, color, extinction);
         }

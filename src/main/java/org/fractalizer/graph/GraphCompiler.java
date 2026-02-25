@@ -50,7 +50,13 @@ public class GraphCompiler {
 
         // Phase 2: Load, strip, and preprocess each fractal shader
         for (LeafInfo leaf : leaves) {
-            String source = loadFractalShader(leaf.node.getFractalType().getKernelName());
+            String source;
+            if (leaf.node.getFractalType() == FractalType.CUSTOM_SHADER
+                    && leaf.node.getFractalParams() instanceof CustomShaderParams csp) {
+                source = csp.getShaderSource();
+            } else {
+                source = loadFractalShader(leaf.node.getFractalType().getKernelName());
+            }
             String stripped = source.replaceAll("#version\\s+\\d+\\s*\\w*", "").trim();
             String preprocessed = ShaderPreprocessor.renameLocalSymbols(stripped, leaf.prefix + "_");
             sb.append("// === ").append(leaf.node.getFractalType().getDisplayName())
@@ -123,6 +129,7 @@ public class GraphCompiler {
             uniforms.put(prefix + "maxIterations", p.getMaxIterations());
             uniforms.put(prefix + "scale", p.getScale());
             uniforms.put(prefix + "offset", new float[]{p.getOffsetX(), p.getOffsetY(), p.getOffsetZ()});
+            uniforms.put(prefix + "rotAngle", p.getRotAngle());
         } else if (params instanceof KaleidoscopicIFSParams p) {
             uniforms.put(prefix + "maxIterations", p.getMaxIterations());
             uniforms.put(prefix + "scale", p.getScale());
@@ -162,6 +169,15 @@ public class GraphCompiler {
             uniforms.put(prefix + "rotXW", (float) Math.toRadians(p.getRotXW()));
             uniforms.put(prefix + "rotYW", (float) Math.toRadians(p.getRotYW()));
             uniforms.put(prefix + "rotZW", (float) Math.toRadians(p.getRotZW()));
+        } else if (params instanceof CustomShaderParams csp) {
+            for (Map.Entry<String, Object> entry : csp.getUniformValues().entrySet()) {
+                Object val = entry.getValue();
+                if (val instanceof Number n) {
+                    uniforms.put(prefix + entry.getKey(), n.floatValue());
+                } else if (val instanceof float[] arr) {
+                    uniforms.put(prefix + entry.getKey(), arr.clone());
+                }
+            }
         }
     }
 
@@ -288,9 +304,12 @@ public class GraphCompiler {
 
         DEResult result = emitDEBody(root, "pos", sb, true);
 
-        // Compute coloring factors from the winning leaf
+        // Compute coloring factors from the winning leaf (or blended for morph)
         sb.append("    vec3 _gf;\n");
-        if (leaves.size() == 1) {
+        if (result.factorsExpr() != null) {
+            // Morph at root: use pre-computed blended factors
+            sb.append("    _gf = ").append(result.factorsExpr()).append(";\n");
+        } else if (leaves.size() == 1) {
             LeafInfo leaf = leaves.get(0);
             sb.append("    _gf = ").append(leaf.prefix).append("_getFactors(").append(leaf.prefix).append("_t);\n");
         } else {
@@ -339,7 +358,16 @@ public class GraphCompiler {
     // Recursive DE code emission
     // ========================================================================
 
-    private record DEResult(String distVar, String winnerExpr) {}
+    /**
+     * @param distVar     GLSL variable holding the distance
+     * @param winnerExpr  GLSL int expression selecting winning leaf (null in DE_simple)
+     * @param factorsExpr Optional GLSL vec3 expression for blended factors (morph). Null = use winner.
+     */
+    private record DEResult(String distVar, String winnerExpr, String factorsExpr) {
+        DEResult(String distVar, String winnerExpr) {
+            this(distVar, winnerExpr, null);
+        }
+    }
 
     private DEResult emitDEBody(GraphNode node, String posVar, StringBuilder sb, boolean full) {
         if (node instanceof FractalNode fn) {
@@ -437,6 +465,26 @@ public class GraphCompiler {
                 }
                 return new DEResult(dVar, null);
             }
+            case MORPH -> {
+                // mix(d1, d2, blend) — blend 0 = left, 1 = right
+                sb.append("    float ").append(dVar).append(" = mix(")
+                  .append(leftD).append(", ").append(rightD).append(", clamp(").append(blendUniform).append(", 0.0, 1.0));\n");
+                if (full) {
+                    // Blend coloring factors from both children proportionally
+                    String leftFactors = resolveFactorsExpr(left);
+                    String rightFactors = resolveFactorsExpr(right);
+                    String morphGF = "gf_" + cid;
+                    sb.append("    vec3 ").append(morphGF).append(" = mix(")
+                      .append(leftFactors).append(", ").append(rightFactors)
+                      .append(", clamp(").append(blendUniform).append(", 0.0, 1.0));\n");
+                    // Winner still needed for non-morph ancestor CSG nodes
+                    String wVar = "w_" + cid;
+                    sb.append("    int ").append(wVar).append(" = (").append(blendUniform)
+                      .append(" < 0.5) ? ").append(left.winnerExpr).append(" : ").append(right.winnerExpr).append(";\n");
+                    return new DEResult(dVar, wVar, morphGF);
+                }
+                return new DEResult(dVar, null);
+            }
         }
         throw new IllegalStateException("Unknown CSG op: " + csn.getOp());
     }
@@ -501,6 +549,25 @@ public class GraphCompiler {
     // ========================================================================
     // Utilities
     // ========================================================================
+
+    /**
+     * Resolve a DEResult into a GLSL vec3 expression for coloring factors.
+     * If the result has a factorsExpr (morph), use it directly.
+     * Otherwise, if the result comes from a single leaf, call that leaf's getFactors.
+     */
+    private String resolveFactorsExpr(DEResult result) {
+        if (result.factorsExpr() != null) return result.factorsExpr();
+        // Single leaf: winnerExpr is a literal int index
+        try {
+            int idx = Integer.parseInt(result.winnerExpr());
+            LeafInfo leaf = leaves.get(idx);
+            return leaf.prefix + "_getFactors(" + leaf.prefix + "_t)";
+        } catch (NumberFormatException e) {
+            // winnerExpr is a runtime variable — can't resolve statically.
+            // Fall back to first leaf (shouldn't happen in practice for morph children).
+            return leaves.get(0).prefix + "_getFactors(" + leaves.get(0).prefix + "_t)";
+        }
+    }
 
     private int leafIndex(FractalNode fn) {
         for (int i = 0; i < leaves.size(); i++) {

@@ -638,6 +638,7 @@ public class FractalConfig {
             map.put("offsetX", ms.getOffsetX());
             map.put("offsetY", ms.getOffsetY());
             map.put("offsetZ", ms.getOffsetZ());
+            map.put("rotAngle", ms.getRotAngle());
         } else if (params instanceof KaleidoscopicIFSParams k) {
             map.put("maxIterations", k.getMaxIterations());
             map.put("scale", k.getScale());
@@ -696,15 +697,6 @@ public class FractalConfig {
             map.put("rotXW", qj.getRotXW());
             map.put("rotYW", qj.getRotYW());
             map.put("rotZW", qj.getRotZW());
-        } else if (params instanceof FractalTerrainParams ft) {
-            map.put("terrainHeight", ft.getTerrainHeight());
-            map.put("terrainFrequency", ft.getTerrainFrequency());
-            map.put("octaves", ft.getOctaves());
-            map.put("lacunarity", ft.getLacunarity());
-            map.put("roughness", ft.getRoughness());
-            map.put("warpStrength", ft.getWarpStrength());
-            map.put("ridgeSharpness", ft.getRidgeSharpness());
-            map.put("terrainOffset", ft.getTerrainOffset());
         } else if (params instanceof NodeGraphParams ngp) {
             if (ngp.getGraphRoot() != null) {
                 map.put("graph", serializeGraphNode(ngp.getGraphRoot()));
@@ -714,23 +706,6 @@ public class FractalConfig {
             if (!csp.getUniformValues().isEmpty()) {
                 map.put("uniformValues", new java.util.LinkedHashMap<>(csp.getUniformValues()));
             }
-        } else if (params instanceof TestSceneParams ts) {
-            map.put("sceneScale", ts.getSceneScale());
-        } else if (params instanceof CornellBoxParams cb) {
-            map.put("sceneScale", cb.getSceneScale());
-            map.put("glassSphereX", cb.getGlassSphereX());
-            map.put("glassSphereY", cb.getGlassSphereY());
-            map.put("glassSphereZ", cb.getGlassSphereZ());
-            map.put("glassSphereRadius", cb.getGlassSphereRadius());
-            map.put("metalSphereX", cb.getMetalSphereX());
-            map.put("metalSphereY", cb.getMetalSphereY());
-            map.put("metalSphereZ", cb.getMetalSphereZ());
-            map.put("metalSphereRadius", cb.getMetalSphereRadius());
-            map.put("lightPanelX", cb.getLightPanelX());
-            map.put("lightPanelY", cb.getLightPanelY());
-            map.put("lightPanelZ", cb.getLightPanelZ());
-            map.put("lightPanelW", cb.getLightPanelW());
-            map.put("lightPanelD", cb.getLightPanelD());
         }
     }
 
@@ -751,6 +726,7 @@ public class FractalConfig {
             if (map.containsKey("offsetX") || map.containsKey("offsetY") || map.containsKey("offsetZ")) {
                 ms.setOffset(getFloat(map, "offsetX"), getFloat(map, "offsetY"), getFloat(map, "offsetZ"));
             }
+            if (map.containsKey("rotAngle")) ms.setRotAngle(getFloat(map, "rotAngle"));
         } else if (params instanceof KaleidoscopicIFSParams k) {
             if (map.containsKey("maxIterations")) k.setMaxIterations(getInt(map, "maxIterations"));
             if (map.containsKey("scale")) k.setScale(getFloat(map, "scale"));
@@ -809,23 +785,18 @@ public class FractalConfig {
             if (map.containsKey("rotXW")) qj.setRotXW(getFloat(map, "rotXW"));
             if (map.containsKey("rotYW")) qj.setRotYW(getFloat(map, "rotYW"));
             if (map.containsKey("rotZW")) qj.setRotZW(getFloat(map, "rotZW"));
-        } else if (params instanceof FractalTerrainParams ft) {
-            if (map.containsKey("terrainHeight")) ft.setTerrainHeight(getFloat(map, "terrainHeight"));
-            if (map.containsKey("terrainFrequency")) ft.setTerrainFrequency(getFloat(map, "terrainFrequency"));
-            if (map.containsKey("octaves")) ft.setOctaves(getInt(map, "octaves"));
-            if (map.containsKey("lacunarity")) ft.setLacunarity(getFloat(map, "lacunarity"));
-            if (map.containsKey("roughness")) ft.setRoughness(getFloat(map, "roughness"));
-            if (map.containsKey("warpStrength")) ft.setWarpStrength(getFloat(map, "warpStrength"));
-            if (map.containsKey("ridgeSharpness")) ft.setRidgeSharpness(getFloat(map, "ridgeSharpness"));
-            if (map.containsKey("terrainOffset")) ft.setTerrainOffset(getFloat(map, "terrainOffset"));
         } else if (params instanceof NodeGraphParams ngp) {
             if (map.containsKey("graph") && map.get("graph") instanceof Map<?,?> graphMap) {
+                // New format: deserialize full graph tree
                 @SuppressWarnings("unchecked")
                 Map<String, Object> gm = (Map<String, Object>) graphMap;
                 GraphNode root = deserializeGraphNode(gm);
                 if (root != null) {
                     ngp.setGraphRoot(root);
                 }
+            } else if (ngp.getRootFractalParams() != null) {
+                // Legacy format: apply flat params to the root FractalNode's inner params
+                applyFractalParams(ngp.getRootFractalParams(), map);
             }
         } else if (params instanceof CustomShaderParams csp) {
             if (map.containsKey("shaderSource")) csp.setShaderSource((String) map.get("shaderSource"));
@@ -848,23 +819,6 @@ public class FractalConfig {
                     }
                 }
             }
-        } else if (params instanceof TestSceneParams ts) {
-            if (map.containsKey("sceneScale")) ts.setSceneScale(getFloat(map, "sceneScale"));
-        } else if (params instanceof CornellBoxParams cb) {
-            if (map.containsKey("sceneScale")) cb.setSceneScale(getFloat(map, "sceneScale"));
-            if (map.containsKey("glassSphereX")) cb.setGlassSphereX(getFloat(map, "glassSphereX"));
-            if (map.containsKey("glassSphereY")) cb.setGlassSphereY(getFloat(map, "glassSphereY"));
-            if (map.containsKey("glassSphereZ")) cb.setGlassSphereZ(getFloat(map, "glassSphereZ"));
-            if (map.containsKey("glassSphereRadius")) cb.setGlassSphereRadius(getFloat(map, "glassSphereRadius"));
-            if (map.containsKey("metalSphereX")) cb.setMetalSphereX(getFloat(map, "metalSphereX"));
-            if (map.containsKey("metalSphereY")) cb.setMetalSphereY(getFloat(map, "metalSphereY"));
-            if (map.containsKey("metalSphereZ")) cb.setMetalSphereZ(getFloat(map, "metalSphereZ"));
-            if (map.containsKey("metalSphereRadius")) cb.setMetalSphereRadius(getFloat(map, "metalSphereRadius"));
-            if (map.containsKey("lightPanelX")) cb.setLightPanelX(getFloat(map, "lightPanelX"));
-            if (map.containsKey("lightPanelY")) cb.setLightPanelY(getFloat(map, "lightPanelY"));
-            if (map.containsKey("lightPanelZ")) cb.setLightPanelZ(getFloat(map, "lightPanelZ"));
-            if (map.containsKey("lightPanelW")) cb.setLightPanelW(getFloat(map, "lightPanelW"));
-            if (map.containsKey("lightPanelD")) cb.setLightPanelD(getFloat(map, "lightPanelD"));
         }
     }
 
@@ -872,8 +826,12 @@ public class FractalConfig {
     // Graph node serialization
     // ========================================================================
 
-    private static Map<String, Object> serializeGraphNode(GraphNode node) {
+    public static Map<String, Object> serializeGraphNode(GraphNode node) {
         Map<String, Object> map = new java.util.LinkedHashMap<>();
+        // Persist stable node name for animation track binding
+        if (node.getName() != null) {
+            map.put("name", node.getName());
+        }
         if (node instanceof FractalNode fn) {
             map.put("type", "fractal");
             map.put("fractalType", fn.getFractalType().name());
@@ -904,11 +862,11 @@ public class FractalConfig {
     }
 
     @SuppressWarnings("unchecked")
-    private static GraphNode deserializeGraphNode(Map<String, Object> map) {
+    public static GraphNode deserializeGraphNode(Map<String, Object> map) {
         String type = (String) map.get("type");
         if (type == null) return null;
 
-        return switch (type) {
+        GraphNode result = switch (type) {
             case "fractal" -> {
                 String ftName = (String) map.get("fractalType");
                 FractalType ft;
@@ -951,6 +909,13 @@ public class FractalConfig {
             }
             default -> new FractalNode(FractalType.MANDELBULB);
         };
+
+        // Restore stable node name
+        if (result != null && map.containsKey("name")) {
+            result.setName((String) map.get("name"));
+        }
+
+        return result;
     }
 
     private static float[] extractFloatArray(Object obj, int size) {

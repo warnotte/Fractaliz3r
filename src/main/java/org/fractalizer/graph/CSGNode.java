@@ -9,7 +9,7 @@ import java.util.List;
 public class CSGNode extends GraphNode {
 
     public enum Op {
-        UNION, INTERSECT, SUBTRACT
+        UNION, INTERSECT, SUBTRACT, MORPH
     }
 
     private GraphNode left;

@@ -3,6 +3,7 @@ package org.fractalizer.fractals;
 import org.fractalizer.graph.FractalNode;
 import org.fractalizer.graph.GraphCompiler;
 import org.fractalizer.graph.GraphNode;
+import org.fractalizer.graph.GraphNodeNamer;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -21,7 +22,24 @@ public class NodeGraphParams extends AbstractFractalParams {
     public NodeGraphParams() {
         super();
         this.graphRoot = new FractalNode(FractalType.MANDELBULB);
+        GraphNodeNamer.ensureAllNamed(graphRoot);
         getCamera().setPosition(0, 0, -3.5f);
+    }
+
+    /**
+     * Create a NodeGraphParams wrapping a single FractalNode of the given type.
+     * Used when migrated fractal types are routed through the node graph pipeline.
+     */
+    public NodeGraphParams(FractalType initialType) {
+        super();
+        this.graphRoot = new FractalNode(initialType);
+        GraphNodeNamer.ensureAllNamed(graphRoot);
+        // Copy the camera position from the fractal type's default params
+        AbstractFractalParams defaultParams = FractalNode.createDefaultParams(initialType);
+        if (defaultParams != null) {
+            float[] pos = defaultParams.getCamera().getPosition();
+            getCamera().setPosition(pos[0], pos[1], pos[2]);
+        }
     }
 
     @Override
@@ -47,6 +65,7 @@ public class NodeGraphParams extends AbstractFractalParams {
 
     public void setGraphRoot(GraphNode graphRoot) {
         this.graphRoot = graphRoot;
+        if (graphRoot != null) GraphNodeNamer.ensureAllNamed(graphRoot);
         this.dirty = true;
     }
 
@@ -91,5 +110,23 @@ public class NodeGraphParams extends AbstractFractalParams {
     public void updateUniforms() {
         if (graphRoot == null || compiledGLSL == null) return;
         uniformValues = GraphCompiler.collectUniformsStatic(graphRoot);
+    }
+
+    /**
+     * Get the fractal params of the root node (if it's a FractalNode).
+     * Returns null if the root is a CSG/Transform node or null.
+     */
+    public AbstractFractalParams getRootFractalParams() {
+        if (graphRoot instanceof FractalNode fn) return fn.getFractalParams();
+        return null;
+    }
+
+    /**
+     * Get the fractal type of the root node (if it's a FractalNode).
+     * Returns NODE_GRAPH if the root is not a simple FractalNode.
+     */
+    public FractalType getRootFractalType() {
+        if (graphRoot instanceof FractalNode fn) return fn.getFractalType();
+        return FractalType.NODE_GRAPH;
     }
 }

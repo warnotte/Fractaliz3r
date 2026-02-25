@@ -28,9 +28,9 @@ struct OrbitTrap {
 // ============================================================================
 
 // Dodecahedron constants
-const float _IKVNORM_ = 0.19098593171; // 1.0 / sqrt( (phi*(1+phi))^2 + (phi*phi-1)^2 + (1+phi)^2 )
+const float IKVNORM = 0.19098593171; // 1.0 / sqrt( (phi*(1+phi))^2 + (phi*phi-1)^2 + (1+phi)^2 )
 const vec3 phi3 = vec3(0.5, 0.5 / phi, 0.5 * phi);
-const vec3 c_3  = vec3(phi * (1.0 + phi) * _IKVNORM_, (phi * phi - 1.0) * _IKVNORM_, (1.0 + phi) * _IKVNORM_);
+const vec3 c_3  = vec3(phi * (1.0 + phi) * IKVNORM, (phi * phi - 1.0) * IKVNORM, (1.0 + phi) * IKVNORM);
 
 // Icosahedron constants (pre-normalized: |n1|=2, |n2|=2*phi, |n3|=1)
 const vec3 n1_ico = vec3(-0.80901699437, 0.30901699437, 0.5);
@@ -52,9 +52,10 @@ float polyDE(vec3 p, out OrbitTrap trap) {
         if (polyType == 0) { // Octahedral
             // Box fold (abs) required before sorting for octahedral symmetry
             w = abs(w + shift) - shift;
-            if (w.x < w.y) w.xy = w.yx;
-            if (w.x < w.z) w.xz = w.zx;
-            if (w.y < w.z) w.yz = w.zy;
+            // Explicit swaps (avoid w.xy = w.yx which triggers NVIDIA C9999)
+            if (w.x < w.y) { float tmp = w.x; w = vec3(w.y, tmp, w.z); }
+            if (w.x < w.z) { float tmp = w.x; w = vec3(w.z, w.y, tmp); }
+            if (w.y < w.z) { float tmp = w.y; w = vec3(w.x, w.z, tmp); }
         }
         else if (polyType == 1) { // Dodecahedron
             // 5 reflection fold planes handle symmetry directly (no abs needed)
@@ -85,9 +86,10 @@ float polyDE(vec3 p, out OrbitTrap trap) {
         }
         else if (polyType == 3) { // Tetrahedron
             // Conditional negate-swap folds (NO abs - it would make conditions always false)
-            if (w.x + w.y < 0.0) w.xy = -w.yx;
-            if (w.x + w.z < 0.0) w.xz = -w.zx;
-            if (w.y + w.z < 0.0) w.yz = -w.zy;
+            // Explicit vec3 constructors to avoid NVIDIA C9999 on swizzled assign
+            if (w.x + w.y < 0.0) { float tmp = w.x; w = vec3(-w.y, -tmp, w.z); }
+            if (w.x + w.z < 0.0) { float tmp = w.x; w = vec3(-w.z, w.y, -tmp); }
+            if (w.y + w.z < 0.0) { float tmp = w.y; w = vec3(w.x, -w.z, -tmp); }
         }
 
         w *= fractalRotation2;

@@ -1,7 +1,7 @@
 /**
  * Menger Sponge Distance Estimator
  *
- * Classic IQ algorithm implementation
+ * Classic IQ algorithm with offset and per-iteration rotation.
  */
 
 // ============================================================================
@@ -11,6 +11,7 @@
 uniform int maxIterations;
 uniform float scale;
 uniform vec3 offset;
+uniform float rotAngle;
 
 // ============================================================================
 // Orbit Trap Structure
@@ -52,6 +53,17 @@ float sdCross(vec3 p) {
 }
 
 // ============================================================================
+// Per-iteration rotation (XZ plane)
+// ============================================================================
+
+vec3 iterRotate(vec3 p, float angle) {
+    if (abs(angle) < 0.001) return p;
+    float c = cos(angle);
+    float s = sin(angle);
+    return vec3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z);
+}
+
+// ============================================================================
 // Menger Sponge Distance Estimator (full version with orbit traps)
 // ============================================================================
 
@@ -64,9 +76,11 @@ float DE(vec3 pos, out OrbitTrap trap) {
     trap.iterations = 0;
 
     float s = 1.0;
+    float rad = radians(rotAngle);
 
     for (int m = 0; m < maxIterations; m++) {
-        vec3 a = glsl_mod3(pos * s, 2.0) - vec3(1.0);
+        vec3 rp = iterRotate(pos, rad * float(m + 1));
+        vec3 a = glsl_mod3(rp * s, 2.0) - offset;
         s *= scale;
 
         vec3 r = vec3(1.0) - scale * abs(a);
@@ -74,8 +88,8 @@ float DE(vec3 pos, out OrbitTrap trap) {
         d = max(d, c);
 
         trap.minDist = min(trap.minDist, length(r));
-        trap.plane += abs(r) / s;
-        trap.trap += length(a);
+        trap.plane = trap.plane + abs(r) / s;
+        trap.trap = trap.trap + length(a);
         trap.iterations = m + 1;
     }
 
@@ -91,9 +105,11 @@ float DE(vec3 pos, out OrbitTrap trap) {
 float DE_simple(vec3 pos) {
     float d = sdBox(pos, vec3(1.0));
     float s = 1.0;
+    float rad = radians(rotAngle);
 
     for (int m = 0; m < maxIterations; m++) {
-        vec3 a = glsl_mod3(pos * s, 2.0) - vec3(1.0);
+        vec3 rp = iterRotate(pos, rad * float(m + 1));
+        vec3 a = glsl_mod3(rp * s, 2.0) - offset;
         s *= scale;
         vec3 r = vec3(1.0) - scale * abs(a);
         float c = sdCross(r) / s;

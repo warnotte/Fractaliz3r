@@ -54,6 +54,7 @@ public class FractalNode extends GraphNode {
             case APOLLONIAN -> new ApollonianParams();
             case BRISTORBROT -> new BristorbrotParams();
             case QUATERNION_JULIA_4D -> new QuaternionJulia4DParams();
+            case CUSTOM_SHADER -> new CustomShaderParams();
             default -> null;
         };
     }

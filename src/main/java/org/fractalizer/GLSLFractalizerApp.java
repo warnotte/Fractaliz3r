@@ -149,9 +149,8 @@ public class GLSLFractalizerApp extends Application {
     }
 
     private void setupMainApp() {
-        // Initialize params
-        AbstractFractalParams initialParams = new MandelbulbParams();
-        controller.setParams(initialParams);
+        // Use the params already created by loadAllShaders() → setFractalType()
+        AbstractFractalParams initialParams = (AbstractFractalParams) controller.getParams();
 
         primaryStage.setTitle("Fractaliz3r GLSL - 3D Fractal Renderer");
 
@@ -196,12 +195,16 @@ public class GLSLFractalizerApp extends Application {
         // Bottom: Timeline
         TimelineWidget timelineWidget = createTimelinePanel();
 
-        // Wire fractal type changes to animation manager
-        fractalPanel.setOnFractalTypeChanged((type, params) ->
-            animationManager.onFractalTypeChanged(type, params)
-        );
-        // Initial sync: register the current fractal type with animation manager
-        animationManager.onFractalTypeChanged(initialParams.getType(), initialParams);
+        // Wire node graph structural changes (node add/remove/type change)
+        fractalPanel.getNodeGraphEditor().setOnGraphStructureChanged(() -> {
+            if (controller.getParams() instanceof org.fractalizer.fractals.NodeGraphParams ngp) {
+                animationManager.onNodeGraphChanged(ngp);
+            }
+        });
+        // Initial sync: register with animation manager
+        if (initialParams instanceof org.fractalizer.fractals.NodeGraphParams ngp) {
+            animationManager.onNodeGraphChanged(ngp);
+        }
 
         // Refresh all UI panel sliders when timeline applies values (scrub/playback)
         // Skip during animation export to avoid unnecessary UI updates
@@ -332,6 +335,8 @@ public class GLSLFractalizerApp extends Application {
                 verticalSplit.setDividerPositions(0.85);
                 horizontalSplit.setDividerPositions(0.75);
                 updateViewportSize();
+                // Initial load of NodeGraphEditor (Scene exists now, safe to compile)
+                fractalPanel.refreshFromParams(false);
                 renderPreview();
             });
         });
@@ -632,7 +637,9 @@ public class GLSLFractalizerApp extends Application {
         isHighQualityActive = false; // Stop HQ accumulation
         lastInteractionTime = System.currentTimeMillis();
         controller.cancelRender();
-        primaryStage.getScene().setCursor(null); // Clear busy cursor
+        if (primaryStage.getScene() != null) {
+            primaryStage.getScene().setCursor(null); // Clear busy cursor
+        }
     }
 
     private void startRenderLoop() {
@@ -795,7 +802,11 @@ public class GLSLFractalizerApp extends Application {
 
             // Sync animation manager with loaded fractal type
             if (animationManager != null) {
-                animationManager.onFractalTypeChanged(params.getType(), params);
+                if (params instanceof org.fractalizer.fractals.NodeGraphParams ngp) {
+                    animationManager.onNodeGraphChanged(ngp);
+                } else {
+                    animationManager.onFractalTypeChanged(params.getType(), params);
+                }
 
                 // Import animation if present
                 if (config.animation != null) {

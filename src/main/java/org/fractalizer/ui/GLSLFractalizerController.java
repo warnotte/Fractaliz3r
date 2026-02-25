@@ -119,21 +119,12 @@ public class GLSLFractalizerController implements RenderController {
 
         if (currentParams == null) {
             switch (type) {
-                case MANDELBULB -> this.currentParams = new MandelbulbParams();
-                case MANDELBOX -> this.currentParams = new MandelboxParams();
-                case MENGER_SPONGE -> this.currentParams = new MengerSpongeParams();
-                case KALEIDOSCOPIC_IFS -> this.currentParams = new KaleidoscopicIFSParams();
-                case POLYHEDRAL_IFS -> this.currentParams = new PolyhedralIFSParams();
-                case SIERPINSKI -> this.currentParams = new SierpinskiParams();
-                case PSEUDO_KLEINIAN -> this.currentParams = new PseudoKleinianParams();
-                case APOLLONIAN -> this.currentParams = new ApollonianParams();
-                case BRISTORBROT -> this.currentParams = new BristorbrotParams();
-                case QUATERNION_JULIA_4D -> this.currentParams = new QuaternionJulia4DParams();
-                case FRACTAL_TERRAIN -> this.currentParams = new FractalTerrainParams();
-                case CUSTOM_SHADER -> this.currentParams = new CustomShaderParams();
+                // All types route through NodeGraphParams with single FractalNode
+                case MANDELBULB, MANDELBOX, MENGER_SPONGE, KALEIDOSCOPIC_IFS,
+                     POLYHEDRAL_IFS, SIERPINSKI, PSEUDO_KLEINIAN, APOLLONIAN,
+                     BRISTORBROT, QUATERNION_JULIA_4D, CUSTOM_SHADER ->
+                    this.currentParams = new NodeGraphParams(type);
                 case NODE_GRAPH -> this.currentParams = new NodeGraphParams();
-                case TEST_SCENE -> this.currentParams = new TestSceneParams();
-                case CORNELL_BOX -> this.currentParams = new CornellBoxParams();
             }
             paramsCache.put(type, currentParams);
         }
@@ -148,12 +139,15 @@ public class GLSLFractalizerController implements RenderController {
      * Activate the correct shader program (boolean or normal).
      */
     private void activateCurrentProgram() {
-        // Node Graph: compile on demand if dirty
-        if (currentFractalType == FractalType.NODE_GRAPH && currentParams instanceof NodeGraphParams ngp) {
+        // Node Graph pipeline: compile on demand if dirty (covers all migrated types)
+        if (currentParams instanceof NodeGraphParams ngp) {
             if (ngp.isDirty() || !engine.hasProgram("nodegraph")) {
                 String glsl = ngp.recompile();
                 if (glsl != null) {
-                    engine.loadCustomFractalShader("nodegraph", glsl);
+                    String err = engine.loadCustomFractalShader("nodegraph", glsl);
+                    if (err != null) {
+                        System.err.println("Node graph shader error: " + err);
+                    }
                 }
             }
             if (engine.hasProgram("nodegraph")) {
@@ -1118,115 +1112,14 @@ public class GLSLFractalizerController implements RenderController {
         }
 
         // Fractal-specific parameters
-        switch (currentFractalType) {
-            case MANDELBULB -> {
-                MandelbulbParams p = (MandelbulbParams) currentParams;
-                uniforms.put("power", p.getPower());
-                uniforms.put("maxIterations", p.getMaxIterations());
-                uniforms.put("bailout", p.getBailout());
-            }
-            case MANDELBOX -> {
-                MandelboxParams p = (MandelboxParams) currentParams;
-                uniforms.put("scale", p.getScale());
-                uniforms.put("minRadius", p.getMinRadius());
-                uniforms.put("fixedRadius", p.getFixedRadius());
-                uniforms.put("foldingLimit", p.getFoldingLimit());
-                uniforms.put("maxIterations", p.getMaxIterations());
-            }
-            case MENGER_SPONGE -> {
-                MengerSpongeParams p = (MengerSpongeParams) currentParams;
-                uniforms.put("maxIterations", p.getMaxIterations());
-                uniforms.put("scale", p.getScale());
-                uniforms.put("offset", new float[]{
-                    p.getOffsetX(), p.getOffsetY(), p.getOffsetZ()
-                });
-            }
-            case KALEIDOSCOPIC_IFS -> {
-                KaleidoscopicIFSParams p = (KaleidoscopicIFSParams) currentParams;
-                uniforms.put("maxIterations", p.getMaxIterations());
-                uniforms.put("scale", p.getScale());
-                uniforms.put("foldAngleX", (float) Math.toRadians(p.getFoldAngleX()));
-                uniforms.put("foldAngleY", (float) Math.toRadians(p.getFoldAngleY()));
-                // ifsOffset is a scalar in the shader (classic KIFS uses offsetX only)
-                uniforms.put("ifsOffset", p.getOffsetX());
-            }
-            case POLYHEDRAL_IFS -> {
-                PolyhedralIFSParams p = (PolyhedralIFSParams) currentParams;
-                uniforms.put("polyType", p.getPolyType().ordinal());
-                uniforms.put("maxIterations", p.getMaxIterations());
-                uniforms.put("scale", p.getScale());
-                uniforms.put("offset", new float[]{p.getOffsetX(), p.getOffsetY(), p.getOffsetZ()});
-                uniforms.put("shift", new float[]{p.getShiftX(), p.getShiftY(), p.getShiftZ()});
-
-                // Convert Euler angles to 3x3 matrices
-                uniforms.put("fractalRotation1", createRotationMatrix(p.getRot1X(), p.getRot1Y(), p.getRot1Z()));
-                uniforms.put("fractalRotation2", createRotationMatrix(p.getRot2X(), p.getRot2Y(), p.getRot2Z()));
-            }
-            case SIERPINSKI -> {
-                SierpinskiParams p = (SierpinskiParams) currentParams;
-                uniforms.put("maxIterations", p.getMaxIterations());
-                uniforms.put("scale", p.getScale());
-            }
-            case PSEUDO_KLEINIAN -> {
-                PseudoKleinianParams p = (PseudoKleinianParams) currentParams;
-                uniforms.put("maxIterations", p.getMaxIterations());
-                uniforms.put("CSize", new float[]{p.getCSizeX(), p.getCSizeY(), p.getCSizeZ()});
-                uniforms.put("Size", p.getSize());
-                uniforms.put("DEoffset", p.getDEOffset());
-                uniforms.put("foldC", new float[]{p.getFoldCx(), p.getFoldCy(), p.getFoldCz()});
-            }
-            case APOLLONIAN -> {
-                ApollonianParams p = (ApollonianParams) currentParams;
-                uniforms.put("maxIterations", p.getMaxIterations());
-                uniforms.put("scale", p.getScale());
-                uniforms.put("foldRadius", p.getFoldRadius());
-            }
-            case BRISTORBROT -> {
-                BristorbrotParams p = (BristorbrotParams) currentParams;
-                uniforms.put("maxIterations", p.getMaxIterations());
-                uniforms.put("bailout", p.getBailout());
-                uniforms.put("juliaC", new float[]{p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz()});
-            }
-            case QUATERNION_JULIA_4D -> {
-                QuaternionJulia4DParams p = (QuaternionJulia4DParams) currentParams;
-                uniforms.put("maxIterations", p.getMaxIterations());
-                uniforms.put("bailout", p.getBailout());
-                uniforms.put("juliaC", new float[]{p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz(), p.getJuliaCw()});
-                uniforms.put("sliceW", p.getSliceW());
-                uniforms.put("rotXW", (float) Math.toRadians(p.getRotXW()));
-                uniforms.put("rotYW", (float) Math.toRadians(p.getRotYW()));
-                uniforms.put("rotZW", (float) Math.toRadians(p.getRotZW()));
-            }
-            case CUSTOM_SHADER -> {
-                if (currentParams instanceof CustomShaderParams csp) {
-                    uniforms.putAll(csp.getUniformValues());
-                }
-            }
-            case NODE_GRAPH -> {
-                if (currentParams instanceof NodeGraphParams ngp) {
-                    uniforms.putAll(ngp.getUniformValues());
-                }
-            }
-            case TEST_SCENE -> {
-                TestSceneParams p = (TestSceneParams) currentParams;
-                uniforms.put("sceneScale", p.getSceneScale());
-            }
-            case CORNELL_BOX -> {
-                CornellBoxParams p = (CornellBoxParams) currentParams;
-                uniforms.put("sceneScale", p.getSceneScale());
-                uniforms.put("glassSphereX", p.getGlassSphereX());
-                uniforms.put("glassSphereY", p.getGlassSphereY());
-                uniforms.put("glassSphereZ", p.getGlassSphereZ());
-                uniforms.put("glassSphereRadius", p.getGlassSphereRadius());
-                uniforms.put("metalSphereX", p.getMetalSphereX());
-                uniforms.put("metalSphereY", p.getMetalSphereY());
-                uniforms.put("metalSphereZ", p.getMetalSphereZ());
-                uniforms.put("metalSphereRadius", p.getMetalSphereRadius());
-                uniforms.put("lightPanelX", p.getLightPanelX());
-                uniforms.put("lightPanelY", p.getLightPanelY());
-                uniforms.put("lightPanelZ", p.getLightPanelZ());
-                uniforms.put("lightPanelW", p.getLightPanelW());
-                uniforms.put("lightPanelD", p.getLightPanelD());
+        if (currentParams instanceof NodeGraphParams ngp) {
+            // Always refresh uniforms from current graph tree (picks up slider changes)
+            ngp.updateUniforms();
+            uniforms.putAll(ngp.getUniformValues());
+        } else {
+            // Legacy type: CUSTOM_SHADER only
+            if (currentParams instanceof CustomShaderParams csp) {
+                uniforms.putAll(csp.getUniformValues());
             }
         }
 
@@ -1440,9 +1333,21 @@ public class GLSLFractalizerController implements RenderController {
      * @param morph     User morph amount slider [0..1]
      */
     private void applyAudioMorphing(Map<String, Object> uniforms, float bass, float mid, float beat, float morph) {
-        switch (currentFractalType) {
+        // Extract the actual fractal params (may be inside a NodeGraphParams wrapper)
+        AbstractFractalParams morphTarget;
+        if (currentParams instanceof NodeGraphParams ngp) {
+            morphTarget = ngp.getRootFractalParams();
+        } else if (currentParams instanceof AbstractFractalParams afp) {
+            morphTarget = afp;
+        } else {
+            return;
+        }
+        if (morphTarget == null) return;
+
+        FractalType morphType = morphTarget.getType();
+        switch (morphType) {
             case MANDELBULB -> {
-                MandelbulbParams p = (MandelbulbParams) currentParams;
+                MandelbulbParams p = (MandelbulbParams) morphTarget;
                 // Power: base ± up to 4.0 driven by bass (e.g. 8 → 4..12+)
                 float powerDelta = bass * morph * 4.0f;
                 // Beat adds sharp spikes
@@ -1454,7 +1359,7 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("bailout", p.getBailout() + bass * morph * 1.5f);
             }
             case MANDELBOX -> {
-                MandelboxParams p = (MandelboxParams) currentParams;
+                MandelboxParams p = (MandelboxParams) morphTarget;
                 // Scale: base ± 0.8 driven by bass (very sensitive parameter)
                 float scaleDelta = bass * morph * 0.8f;
                 scaleDelta += beat * morph * 0.3f;
@@ -1464,7 +1369,7 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("foldingLimit", p.getFoldingLimit() + foldDelta);
             }
             case MENGER_SPONGE -> {
-                MengerSpongeParams p = (MengerSpongeParams) currentParams;
+                MengerSpongeParams p = (MengerSpongeParams) morphTarget;
                 // Scale modulation
                 float scaleDelta = bass * morph * 0.5f;
                 uniforms.put("scale", p.getScale() + scaleDelta);
@@ -1477,7 +1382,7 @@ public class GLSLFractalizerController implements RenderController {
                 });
             }
             case KALEIDOSCOPIC_IFS -> {
-                KaleidoscopicIFSParams p = (KaleidoscopicIFSParams) currentParams;
+                KaleidoscopicIFSParams p = (KaleidoscopicIFSParams) morphTarget;
                 // Scale modulation ±0.6
                 float scaleDelta = bass * morph * 0.6f + beat * morph * 0.2f;
                 uniforms.put("scale", p.getScale() + scaleDelta);
@@ -1490,7 +1395,7 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("ifsOffset", p.getOffsetX() + mid * morph * 0.5f);
             }
             case POLYHEDRAL_IFS -> {
-                PolyhedralIFSParams p = (PolyhedralIFSParams) currentParams;
+                PolyhedralIFSParams p = (PolyhedralIFSParams) morphTarget;
 
                 // Scale: ±0.6 — makes structure expand/contract visibly
                 float scaleDelta = bass * morph * 0.6f + beat * morph * 0.25f;
@@ -1530,12 +1435,12 @@ public class GLSLFractalizerController implements RenderController {
                 ));
             }
             case SIERPINSKI -> {
-                SierpinskiParams p = (SierpinskiParams) currentParams;
+                SierpinskiParams p = (SierpinskiParams) morphTarget;
                 float scaleDelta = bass * morph * 0.3f;
                 uniforms.put("scale", p.getScale() + scaleDelta);
             }
             case PSEUDO_KLEINIAN -> {
-                PseudoKleinianParams p = (PseudoKleinianParams) currentParams;
+                PseudoKleinianParams p = (PseudoKleinianParams) morphTarget;
                 // CSize modulation — very responsive to changes
                 float mod = bass * morph * 0.15f;
                 uniforms.put("CSize", new float[]{
@@ -1546,14 +1451,14 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("Size", p.getSize() + bass * morph * 0.1f);
             }
             case APOLLONIAN -> {
-                ApollonianParams p = (ApollonianParams) currentParams;
+                ApollonianParams p = (ApollonianParams) morphTarget;
                 float scaleDelta = bass * morph * 0.3f;
                 uniforms.put("scale", p.getScale() + scaleDelta);
                 float foldDelta = mid * morph * 0.2f;
                 uniforms.put("foldRadius", p.getFoldRadius() + foldDelta);
             }
             case BRISTORBROT -> {
-                BristorbrotParams p = (BristorbrotParams) currentParams;
+                BristorbrotParams p = (BristorbrotParams) morphTarget;
                 float cx = bass * morph * 0.2f;
                 float cy = mid * morph * 0.15f;
                 uniforms.put("juliaC", new float[]{
@@ -1563,7 +1468,7 @@ public class GLSLFractalizerController implements RenderController {
                 });
             }
             case QUATERNION_JULIA_4D -> {
-                QuaternionJulia4DParams p = (QuaternionJulia4DParams) currentParams;
+                QuaternionJulia4DParams p = (QuaternionJulia4DParams) morphTarget;
                 float cxMod = bass * morph * 0.2f;
                 float cyMod = mid * morph * 0.15f;
                 uniforms.put("juliaC", new float[]{
@@ -1578,7 +1483,7 @@ public class GLSLFractalizerController implements RenderController {
                 uniforms.put("rotZW", (float) Math.toRadians(p.getRotZW() + mid * morph * 8.0f));
             }
             default -> {
-                // TEST_SCENE, CORNELL_BOX: no morphing
+                // No morphing for this type
             }
         }
     }

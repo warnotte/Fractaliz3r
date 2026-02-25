@@ -42,6 +42,7 @@ public class CustomShaderEditor extends VBox {
 
     private CustomShaderParams currentParams;
     private boolean suppressSliderEvents = false;
+    private Runnable onCompileSuccess;
 
     public CustomShaderEditor(RenderController controller, RenderCallback renderCallback) {
         super(8);
@@ -126,12 +127,30 @@ public class CustomShaderEditor extends VBox {
         Platform.runLater(this::compileAndRun);
     }
 
+    /**
+     * Set a callback fired on successful compilation.
+     * When set, the editor skips direct controller.compileCustomShader and
+     * instead relies on this callback to trigger graph-level recompilation.
+     */
+    public void setOnCompileSuccess(Runnable callback) {
+        this.onCompileSuccess = callback;
+    }
+
     private void compileAndRun() {
         String source = shaderEditorArea.getText();
         if (currentParams != null) {
             currentParams.setShaderSource(source);
         }
-        // Disable UI during compilation
+
+        // When embedded in NodeGraphEditor, delegate compilation to the graph pipeline
+        if (onCompileSuccess != null) {
+            rebuildSliders(source);
+            setCompileStatus("Source updated", "success");
+            onCompileSuccess.run();
+            return;
+        }
+
+        // Standalone mode: compile directly
         compileBtn.setDisable(true);
         shaderEditorArea.setDisable(true);
         templateCombo.setDisable(true);

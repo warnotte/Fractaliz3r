@@ -18,7 +18,7 @@ public class MengerSpongeParams extends AbstractFractalParams {
     @Animatable(display = "Scale")
     private float scale;
 
-    // Offset for variation
+    // Offset applied per iteration (classic is 1,1,1)
     @Animatable(display = "Offset X")
     private float offsetX;
 
@@ -27,6 +27,10 @@ public class MengerSpongeParams extends AbstractFractalParams {
 
     @Animatable(display = "Offset Z")
     private float offsetZ;
+
+    // Per-iteration rotation angle in degrees (0 = classic, nonzero = twisted Menger)
+    @Animatable(display = "Rotation")
+    private float rotAngle;
 
     public MengerSpongeParams() {
         super();
@@ -37,6 +41,7 @@ public class MengerSpongeParams extends AbstractFractalParams {
         this.offsetX = 1.0f;
         this.offsetY = 1.0f;
         this.offsetZ = 1.0f;
+        this.rotAngle = 0.0f;
 
         // Menger Sponge works well with smaller epsilon
         this.epsilon = 0.0002f;
@@ -62,6 +67,7 @@ public class MengerSpongeParams extends AbstractFractalParams {
         reduced.offsetX = this.offsetX;
         reduced.offsetY = this.offsetY;
         reduced.offsetZ = this.offsetZ;
+        reduced.rotAngle = this.rotAngle;
 
         // Reduce quality
         reduced.maxIterations = Math.max(3, this.maxIterations - reductionFactor);
@@ -88,6 +94,9 @@ public class MengerSpongeParams extends AbstractFractalParams {
         this.offsetY = y;
         this.offsetZ = z;
     }
+
+    public float getRotAngle() { return rotAngle; }
+    public void setRotAngle(float rotAngle) { this.rotAngle = rotAngle; }
 
     // Builder-style setters
     public MengerSpongeParams iterations(int max) {

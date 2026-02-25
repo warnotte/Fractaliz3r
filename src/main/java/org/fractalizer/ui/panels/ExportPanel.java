@@ -954,10 +954,6 @@ public class ExportPanel extends ScrollPane {
             return;
         }
         FractalType type = params.getType();
-        if (type == FractalType.TEST_SCENE || type == FractalType.CORNELL_BOX) {
-            showError("Unsupported", "3D mesh export is only available for fractal types, not " + type.getDisplayName() + ".");
-            return;
-        }
 
         String formatValue = meshFormatCombo.getValue();
         boolean isGlb = formatValue.contains("glb");

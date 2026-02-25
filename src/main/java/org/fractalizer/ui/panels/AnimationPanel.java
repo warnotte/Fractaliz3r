@@ -370,8 +370,6 @@ public class AnimationPanel extends VBox {
     }
 
     private void updateKeyframeList() {
-        keyframeList.getItems().clear();
-
         // Collect all unique keyframe times
         java.util.Set<Double> times = new java.util.TreeSet<>();
         for (String trackName : timeline.getTrackNames()) {
@@ -380,7 +378,9 @@ public class AnimationPanel extends VBox {
             }
         }
 
-        // Build list items
+        // Build new list fully before touching the ListView (avoids intermediate empty state
+        // that causes IndexOutOfBoundsException when a stale cell receives a click)
+        java.util.List<String> newItems = new java.util.ArrayList<>();
         for (double time : times) {
             StringBuilder sb = new StringBuilder();
             sb.append(String.format("%.3fs - ", time));
@@ -392,9 +392,11 @@ public class AnimationPanel extends VBox {
                 }
             }
             sb.append(String.join(", ", tracks));
-
-            keyframeList.getItems().add(sb.toString());
+            newItems.add(sb.toString());
         }
+
+        keyframeList.getSelectionModel().clearSelection();
+        keyframeList.getItems().setAll(newItems);
     }
 
     /**

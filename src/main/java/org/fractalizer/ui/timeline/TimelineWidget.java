@@ -1203,6 +1203,20 @@ public class TimelineWidget extends VBox {
         redraw();
     }
 
+    /**
+     * Update tracks for node graph mode.
+     * The provided list already includes group headers per node.
+     */
+    public void updateNodeGraphTracks(List<TrackInfo> nodeGraphTracks) {
+        visibleTracks.clear();
+        visibleTracks.addAll(GLOBAL_TRACKS);
+        if (nodeGraphTracks != null && !nodeGraphTracks.isEmpty()) {
+            visibleTracks.addAll(nodeGraphTracks);
+        }
+        updateScrollBars();
+        redraw();
+    }
+
     // ========================================================================
     // Inner classes
     // ========================================================================
