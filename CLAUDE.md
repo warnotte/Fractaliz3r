@@ -53,7 +53,16 @@ org.fractalizer
 │   ├── BristorbrotParams.java       # Bristorbrot: iterations, bailout
 │   ├── FractalTerrainParams.java    # Fractal Terrain: fBm heightfield with octaves, lacunarity, warp, ridge
 │   ├── CornellBoxParams.java        # Cornell Box: sceneScale (per-object materials in shader)
-│   └── CustomShaderParams.java      # Custom Shader: user GLSL source + dynamic uniform values
+│   ├── CustomShaderParams.java      # Custom Shader: user GLSL source + dynamic uniform values
+│   └── NodeGraphParams.java        # Node Graph: wraps GraphNode tree as fractal params
+├── graph/
+│   ├── GraphNode.java              # Abstract base for composable fractal operations
+│   ├── FractalNode.java            # Leaf node: wraps FractalType + per-node params
+│   ├── CSGNode.java                # Binary CSG: Union/Intersect/Subtract/Morph
+│   ├── TransformNode.java          # Coordinate transform: 7 modes (Standard/Mirror/Twist/Bend/Taper/Rep/Rep1D)
+│   ├── GraphCompiler.java          # Compiles node tree → composite GLSL shader (8 phases)
+│   ├── GraphNodeNamer.java         # Stable node naming for animation tracks
+│   └── NodeGraphAnimationHelper.java # Bridge: graph nodes → animatable timeline parameters
 ├── audio/
 │   ├── AudioReactiveEngine.java     # Spectrum analysis, beat/onset detection
 │   └── AudioPreAnalyzer.java        # Offline FFT pre-analysis (FFmpeg decode)
@@ -71,7 +80,8 @@ org.fractalizer
     ├── components/
     │   ├── EnhancedSlider.java         # Professional UI slider with mouse wheel & precision control
     │   ├── GradientEditor.java         # Visual gradient editor with draggable color stops
-    │   └── CustomShaderEditor.java     # GLSL editor with @param parsing, dynamic sliders, templates
+    │   ├── CustomShaderEditor.java     # GLSL editor with @param parsing, dynamic sliders, templates
+    │   └── NodeGraphEditor.java      # Visual node graph editor: canvas + detail panel + undo/redo
     ├── panels/
     │   ├── FractalPanel.java           # Fractal type and parameters (uses EnhancedSlider)
     │   ├── MaterialPanel.java          # Material type, physical props, and artistic palettes (uses EnhancedSlider)
@@ -105,6 +115,35 @@ shaders/
     ├── fractalterrain.glsl # Fractal Terrain (fBm noise heightfield)
     └── cornellbox.glsl    # Cornell Box with per-object materials (#define HAS_PER_OBJECT_MATERIAL)
 ```
+
+## Shader Assembly Pipeline
+
+Shaders are assembled at runtime by concatenating GLSL source files. There are 4 assembly modes:
+
+| Mode | Concatenation | Trigger |
+|------|---------------|---------|
+| **Standard** | `#version 430` + `common.glsl` + `fractal.glsl` + `raytracer.glsl` | Single fractal type |
+| **Boolean Ops** | Above + `#define BOOLEAN_OPS` + preprocessed secondary (b_ prefix) | Boolean Operations enabled |
+| **Node Graph** | `#version 430` + `common.glsl` + GraphCompiler output + `raytracer.glsl` | FractalType.NODE_GRAPH |
+| **Custom Shader** | `#version 430` + `common.glsl` + user source + `raytracer.glsl` | FractalType.CUSTOM_SHADER |
+
+Uniform changes never trigger recompilation — only structural changes (different fractal type, different secondary, node graph topology change) require a new shader compile. Compiled programs are cached in `GLSLEngine.programs`.
+
+Full documentation: **[docs/SHADER_PIPELINE.md](docs/SHADER_PIPELINE.md)**
+
+## Node Graph System
+
+Composable fractal trees using a composite pattern. Combine multiple fractals with CSG operations and coordinate transforms, compiled into a single GPU shader.
+
+**Architecture:** `GraphNode` (abstract) → `FractalNode` (leaf: wraps FractalType + per-node params) / `CSGNode` (binary: Union/Intersect/Subtract/Morph) / `TransformNode` (unary: 7 modes).
+
+**GraphCompiler** compiles the tree into a composite GLSL block in 8 phases: ID assignment → shader loading/preprocessing → CSG helpers → transform functions → OrbitTrap struct → composite DE() → composite DE_simple() → getFactors(). Each fractal gets a unique prefix (n0_, n1_, ...) via `ShaderPreprocessor` to avoid symbol conflicts.
+
+**Animation:** `NodeGraphAnimationHelper` discovers animatable parameters via DFS traversal. Tracks named `{nodeName}.{paramName}` (e.g., "Mandelbulb.power"). Stable naming via `GraphNodeNamer`.
+
+**UI:** `NodeGraphEditor` — visual tree canvas (left) + detail panel with auto-discovered sliders (right). Undo/redo (30 snapshots). Context menu for add/delete/wrap/rename operations.
+
+Full documentation: **[docs/NODE_GRAPH.md](docs/NODE_GRAPH.md)**
 
 ## Advanced UI Features
 
@@ -239,29 +278,11 @@ Procedural erosion applied to any fractal distance field, making fractals look l
 - **UI**: QualityPanel "Erosion" TitledPane (enable checkbox, type ComboBox, strength/time/scale sliders).
 - **Zero overhead when OFF**: `erosionEnabled == 0` → early return 0.0 in all erosion functions.
 
-## Domain Distortion (Twist/Bend/Taper/Repetition)
+## Domain Distortion (Legacy — Superseded by Node Graph TransformNode)
 
-Space-warping transformations applied to `pos` BEFORE DE evaluation. Turns any fractal into impossible shapes — twisted Mandelbulbs, infinitely repeated Menger Sponges, tapered Julia sets.
+> **Note:** The global domain distortion system (QualityPanel) still works for single-fractal modes but is functionally superseded by the Node Graph's `TransformNode`, which provides the same 5 transform types (Twist, Bend, Taper, Repetition, Repetition 1D) plus Standard and Mirror — applied per-node with composable stacking. See **[docs/NODE_GRAPH.md](docs/NODE_GRAPH.md)** (TransformNode section).
 
-- **Key difference from erosion**: Erosion adds to DE result (post-DE). Domain distortion modifies pos (pre-DE). Non-isometric transforms (twist, bend, taper) require a DE correction factor to prevent raymarching overshoot.
-- **5 distortion types**:
-  - **Twist** (type 0): Rotate perpendicular plane by `axisCoord * strength`. Correction: `1/(1 + |sf| * perpDist)`
-  - **Bend** (type 1): Rotate along axis plane by `axisCoord * strength`. Correction: `1/(1 + |sf| * |axisCoord|)`
-  - **Taper** (type 2): Scale perpendicular plane by `1 + axisCoord * strength`. Correction: `1/max(|scale|, 0.01)`
-  - **Repetition** (type 3): `mod(pos, period) - period/2` single axis. Correction: 1.0 (exact)
-  - **Repetition 3D** (type 4): `mod(pos, period) - period/2` all axes. Correction: 1.0 (exact)
-- **Axis selector**: X/Y/Z controls which axis the distortion operates along (ignored for Rep 3D).
-- **GLSL**: `applyDomainDistortion(pos, out deCorrection)` in common.glsl. `distortPos(pos)` wrapper for normals/coloring. 8 geometry DE sites + 4 coloring-only DE sites wrapped in raytracer.glsl.
-- **Parameters** (in `AbstractFractalParams`, serialized in `EffectsConfig`):
-  - `distortionEnabled` (bool, default false)
-  - `distortionType` (int, 0-4)
-  - `distortionAxis` (int, 0=X, 1=Y, 2=Z, default Y)
-  - `distortionStrength` (float, -5 to 5, default 0)
-  - `distortionFrequency` (float, 0.1 to 10, default 1) — multiplier for twist/bend, 1/period for repetition
-  - `distortionOffset` (float, -10 to 10, default 0) — shift along axis
-- **Animation**: `distortionStrength`, `distortionFrequency`, `distortionOffset` are global timeline tracks in "Distortion" group (orange).
-- **UI**: QualityPanel "Domain Distortion" TitledPane (enable checkbox, type ComboBox, axis ComboBox, strength/frequency/offset sliders).
-- **Zero overhead when OFF**: Early return in GLSL function, no extra computation.
+The legacy system applies space-warping globally to `pos` BEFORE DE evaluation via `applyDomainDistortion()` in `common.glsl`. Parameters in `AbstractFractalParams` (`distortionEnabled`, `distortionType`, `distortionAxis`, `distortionStrength`, `distortionFrequency`, `distortionOffset`), serialized in `EffectsConfig`. UI in QualityPanel "Domain Distortion" TitledPane.
 
 ## Boolean Operations (CSG)
 
