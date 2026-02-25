@@ -173,14 +173,11 @@ const int MAT_FRACTAL = 0;
 const int MAT_OCEAN = 1;
 
 float sceneDE(vec3 pos, out OrbitTrap trap, out int matType) {
-    float distCorr;
-    vec3 dPos = applyDomainDistortion(pos, distCorr);
-    
     matType = MAT_FRACTAL;
 #ifdef BOOLEAN_OPS
-    float d = boolDE(dPos, trap) * distCorr;
+    float d = boolDE(pos, trap);
 #else
-    float d = DE(dPos, trap) * distCorr;
+    float d = DE(pos, trap);
 #endif
 
     // Apply displacements only to fractal
@@ -198,12 +195,10 @@ float sceneDE(vec3 pos, out OrbitTrap trap, out int matType) {
 }
 
 float sceneDE_simple(vec3 pos) {
-    float distCorr;
-    vec3 dPos = applyDomainDistortion(pos, distCorr);
 #ifdef BOOLEAN_OPS
-    float d = boolDE_simple(dPos) * distCorr;
+    float d = boolDE_simple(pos);
 #else
-    float d = DE_simple(dPos) * distCorr;
+    float d = DE_simple(pos);
 #endif
     if (erosionEnabled != 0 && d < erosionMaxDisplacement() + 0.1) d += getErosionDisplacementLight(pos);
     if (crystalEnabled != 0 && d < crystalMaxDisplacement() + 0.1) d += getCrystalDisplacementLight(pos);
@@ -511,10 +506,10 @@ vec3 shadeSimple(vec3 hitPos, Ray ray, int matType) {
     vec3 light = normalize(lightDir);
 
     OrbitTrap trap;
-    DE(distortPos(hitPos), trap);
+    DE(hitPos, trap);
     vec3 factors = getFactors(trap);
 #ifdef BOOLEAN_OPS
-    factors = morphFactors(distortPos(hitPos), factors);
+    factors = morphFactors(hitPos, factors);
 #endif
     factors = remapTrapFactors(factors, hitPos);
 
@@ -590,7 +585,7 @@ vec3 shade(RayHit hit, Ray ray) {
     // Base color and material properties
     vec3 factors = getFactors(hit.trap);
 #ifdef BOOLEAN_OPS
-    factors = morphFactors(distortPos(hit.pos), factors);
+    factors = morphFactors(hit.pos, factors);
 #endif
     factors = remapTrapFactors(factors, hit.pos);
 
@@ -862,7 +857,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
 
         // Get surface color and material properties
         OrbitTrap trap;
-        DE(distortPos(hitPos), trap);
+        DE(hitPos, trap);
 
         vec3 albedo;
         int localMatType;
@@ -881,7 +876,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
         {
             vec3 mf = getFactors(trap);
 #ifdef BOOLEAN_OPS
-            mf = morphFactors(distortPos(hitPos), mf);
+            mf = morphFactors(hitPos, mf);
 #endif
             albedo = applyMaterial(remapTrapFactors(mf, hitPos));
         }
@@ -914,7 +909,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
 #else
             vec3 emFactorsRaw = getFactors(trap);
 #ifdef BOOLEAN_OPS
-            emFactorsRaw = morphFactors(distortPos(hitPos), emFactorsRaw);
+            emFactorsRaw = morphFactors(hitPos, emFactorsRaw);
 #endif
             vec3 factors = remapTrapFactors(emFactorsRaw, hitPos);
             float structural = factors.x;
@@ -1154,7 +1149,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         vec3 faceNormal = (dot(currentRay.direction, normal) > 0.0) ? -normal : normal;
 
         OrbitTrap trap;
-        DE(distortPos(hitPos), trap);
+        DE(hitPos, trap);
 
         vec3 albedo;
         int localMatType;
@@ -1173,7 +1168,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         {
             vec3 mf = getFactors(trap);
 #ifdef BOOLEAN_OPS
-            mf = morphFactors(distortPos(hitPos), mf);
+            mf = morphFactors(hitPos, mf);
 #endif
             albedo = applyMaterial(remapTrapFactors(mf, hitPos));
         }
@@ -1208,7 +1203,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 #else
             vec3 emFactorsRaw = getFactors(trap);
 #ifdef BOOLEAN_OPS
-            emFactorsRaw = morphFactors(distortPos(hitPos), emFactorsRaw);
+            emFactorsRaw = morphFactors(hitPos, emFactorsRaw);
 #endif
             vec3 factors = remapTrapFactors(emFactorsRaw, hitPos);
             float structural = factors.x;
@@ -1467,7 +1462,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 vec3 renderByMode(RayHit hit, Ray ray, vec3 normal, float shadow, float ao) {
     vec3 factors = getFactors(hit.trap);
 #ifdef BOOLEAN_OPS
-    factors = morphFactors(distortPos(hit.pos), factors);
+    factors = morphFactors(hit.pos, factors);
 #endif
     factors = remapTrapFactors(factors, hit.pos);
     vec3 baseColor = applyMaterial(factors);
@@ -1584,7 +1579,7 @@ void main() {
             // STRICT COLORING:
             // Evaluate fractal exactly at the surface hit point.
             // This ensures perfect alignment between geometry (Normals/AO) and Material Color.
-            DE(distortPos(hit.pos), hit.trap);
+            DE(hit.pos, hit.trap);
             
             vec3 normal = calcNormal(hit.pos); 
             float shadowBias = 0.001 + hit.dist * 0.001;

@@ -12,7 +12,10 @@ public class TransformNode extends GraphNode {
         STANDARD("Transform"),
         MIRROR("Mirror"),
         TWIST("Twist"),
-        REPETITION("Repetition");
+        BEND("Bend"),
+        TAPER("Taper"),
+        REPETITION("Repetition"),
+        REPETITION_1D("Repetition 1D");
 
         private final String displayName;
         Mode(String displayName) { this.displayName = displayName; }
@@ -23,8 +26,9 @@ public class TransformNode extends GraphNode {
     private Mode mode;
     private float[] offset;      // STANDARD: translation, REPETITION: period
     private float[] rotation;    // STANDARD: euler degrees
-    private float scale;         // STANDARD: uniform scale, TWIST: strength
-    private int axis;            // MIRROR/TWIST: 0=X, 1=Y, 2=Z
+    private float scale;         // STANDARD: uniform scale, TWIST/BEND/TAPER: strength
+    private int axis;            // MIRROR/TWIST/BEND/TAPER/REP1D: 0=X, 1=Y, 2=Z
+    private float frequency;     // TWIST/BEND/TAPER: multiplier
 
     public TransformNode(GraphNode child, float[] offset, float[] rotation, float scale) {
         this.child = child;
@@ -33,6 +37,7 @@ public class TransformNode extends GraphNode {
         this.rotation = rotation != null ? rotation : new float[]{0, 0, 0};
         this.scale = scale;
         this.axis = 1;
+        this.frequency = 1.0f;
     }
 
     public TransformNode(GraphNode child, float[] offset) {
@@ -45,11 +50,13 @@ public class TransformNode extends GraphNode {
     public float getScale() { return scale; }
     public Mode getMode() { return mode; }
     public int getAxis() { return axis; }
+    public float getFrequency() { return frequency; }
 
     public void setChild(GraphNode child) { this.child = child; }
     public void setScale(float scale) { this.scale = scale; }
     public void setMode(Mode mode) { this.mode = mode; }
     public void setAxis(int axis) { this.axis = Math.max(0, Math.min(2, axis)); }
+    public void setFrequency(float frequency) { this.frequency = Math.max(0.01f, Math.min(10f, frequency)); }
 
     public void setOffset(float[] offset) {
         this.offset = offset != null ? offset : new float[]{0, 0, 0};

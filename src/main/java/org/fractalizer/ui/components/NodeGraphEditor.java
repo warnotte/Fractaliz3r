@@ -49,7 +49,10 @@ public class NodeGraphEditor extends VBox {
     private static final Color COLOR_TRANSFORM = Color.web("#4CAF50");
     private static final Color COLOR_MIRROR = Color.web("#9C27B0");
     private static final Color COLOR_TWIST = Color.web("#E91E63");
+    private static final Color COLOR_BEND = Color.web("#FF5722");
+    private static final Color COLOR_TAPER = Color.web("#795548");
     private static final Color COLOR_REPETITION = Color.web("#00BCD4");
+    private static final Color COLOR_REPETITION_1D = Color.web("#009688");
     private static final Color COLOR_SELECTED = Color.web("#00BCD4");
     private static final Color COLOR_CONNECTION = Color.web("#9E9E9E", 0.6);
     private static final Color COLOR_TEXT = Color.WHITE;
@@ -808,7 +811,10 @@ public class NodeGraphEditor extends VBox {
             return switch (tn.getMode()) {
                 case MIRROR -> COLOR_MIRROR;
                 case TWIST -> COLOR_TWIST;
+                case BEND -> COLOR_BEND;
+                case TAPER -> COLOR_TAPER;
                 case REPETITION -> COLOR_REPETITION;
+                case REPETITION_1D -> COLOR_REPETITION_1D;
                 default -> COLOR_TRANSFORM;
             };
         }
@@ -1186,7 +1192,10 @@ public class NodeGraphEditor extends VBox {
             case STANDARD -> buildStandardTransformSliders(tn);
             case MIRROR -> buildMirrorSliders(tn);
             case TWIST -> buildTwistSliders(tn);
+            case BEND -> buildBendSliders(tn);
+            case TAPER -> buildTaperSliders(tn);
             case REPETITION -> buildRepetitionSliders(tn);
+            case REPETITION_1D -> buildRepetition1DSliders(tn);
         }
     }
 
@@ -1228,12 +1237,45 @@ public class NodeGraphEditor extends VBox {
     }
 
     private void buildTwistSliders(TransformNode tn) {
+        buildAxisStrengthFreqOffsetSliders(tn);
+    }
+
+    private void buildBendSliders(TransformNode tn) {
+        buildAxisStrengthFreqOffsetSliders(tn);
+    }
+
+    private void buildTaperSliders(TransformNode tn) {
+        buildAxisStrengthFreqOffsetSliders(tn);
+    }
+
+    private void buildAxisStrengthFreqOffsetSliders(TransformNode tn) {
         ComboBox<String> axisCombo = createAxisCombo(tn);
         detailPanel.getChildren().addAll(new Label("Axis:"), axisCombo);
 
         EnhancedSlider strengthSlider = new EnhancedSlider("Strength", -5, 5, tn.getScale(), false);
         strengthSlider.setOnAction(v -> { tn.setScale(v.floatValue()); onParameterChange(); });
-        detailPanel.getChildren().add(strengthSlider);
+
+        EnhancedSlider frequencySlider = new EnhancedSlider("Frequency", 0.1, 10, tn.getFrequency(), false);
+        frequencySlider.setOnAction(v -> { tn.setFrequency(v.floatValue()); onParameterChange(); });
+
+        EnhancedSlider offsetSlider = new EnhancedSlider("Offset", -10, 10, tn.getOffset()[0], false);
+        offsetSlider.setOnAction(v -> { tn.getOffset()[0] = v.floatValue(); onParameterChange(); });
+
+        detailPanel.getChildren().addAll(strengthSlider, frequencySlider, offsetSlider);
+    }
+
+    private void buildRepetition1DSliders(TransformNode tn) {
+        ComboBox<String> axisCombo = createAxisCombo(tn);
+        detailPanel.getChildren().addAll(new Label("Axis:"), axisCombo);
+
+        int ax = tn.getAxis();
+        EnhancedSlider periodSlider = new EnhancedSlider("Period", 0.1, 20,
+            Math.max(0.1f, tn.getOffset()[ax]), false);
+        periodSlider.setOnAction(v -> {
+            tn.getOffset()[tn.getAxis()] = v.floatValue();
+            onParameterChange();
+        });
+        detailPanel.getChildren().add(periodSlider);
     }
 
     private void buildRepetitionSliders(TransformNode tn) {
@@ -1301,9 +1343,20 @@ public class NodeGraphEditor extends VBox {
             case MIRROR -> wrapper = new TransformNode(selectedNode, new float[]{0, 0, 0});
             case TWIST -> {
                 wrapper = new TransformNode(selectedNode, new float[]{0, 0, 0});
-                wrapper.setScale(0.5f); // default twist strength
+                wrapper.setScale(0.5f);
+            }
+            case BEND -> {
+                wrapper = new TransformNode(selectedNode, new float[]{0, 0, 0});
+                wrapper.setScale(0.5f);
+            }
+            case TAPER -> {
+                wrapper = new TransformNode(selectedNode, new float[]{0, 0, 0});
+                wrapper.setScale(0.3f);
             }
             case REPETITION -> wrapper = new TransformNode(selectedNode, new float[]{3, 3, 3});
+            case REPETITION_1D -> {
+                wrapper = new TransformNode(selectedNode, new float[]{3, 3, 3});
+            }
             default -> wrapper = new TransformNode(selectedNode, new float[]{0, 0, 0});
         }
         wrapper.setMode(mode);

@@ -97,14 +97,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider mossNormalThresholdSlider;
     private javafx.scene.control.ColorPicker mossColorPicker;
 
-    // Domain Distortion
-    private CheckBox distortionEnabledCheck;
-    private ComboBox<String> distortionTypeCombo;
-    private ComboBox<String> distortionAxisCombo;
-    private EnhancedSlider distortionStrengthSlider;
-    private EnhancedSlider distortionFrequencySlider;
-    private EnhancedSlider distortionOffsetSlider;
-
     public QualityPanel(Supplier<AbstractFractalParams> paramsSupplier,
                         RenderCallback renderCallback,
                         Consumer<Boolean> autoFullQualityCallback) {
@@ -143,7 +135,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         panel.getChildren().add(createErosionPane());
         panel.getChildren().add(createCrystallizationPane());
         panel.getChildren().add(createMossPane());
-        panel.getChildren().add(createDistortionPane());
         panel.getChildren().add(createPresetsPane());
 
         return panel;
@@ -788,71 +779,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         return pane;
     }
 
-    private TitledPane createDistortionPane() {
-        VBox box = new VBox(5);
-
-        distortionEnabledCheck = new CheckBox("Enable Domain Distortion");
-        distortionEnabledCheck.setOnAction(e -> {
-            if (!suppressRender) {
-                getParams().setDistortionEnabled(distortionEnabledCheck.isSelected());
-                renderCallback.requestRender();
-            }
-        });
-
-        distortionTypeCombo = new ComboBox<>();
-        distortionTypeCombo.getItems().addAll("Twist", "Bend", "Taper", "Repetition", "Repetition 3D");
-        distortionTypeCombo.getSelectionModel().select(0);
-        distortionTypeCombo.setOnAction(e -> {
-            if (!suppressRender) {
-                getParams().setDistortionType(distortionTypeCombo.getSelectionModel().getSelectedIndex());
-                renderCallback.requestRender();
-            }
-        });
-
-        distortionAxisCombo = new ComboBox<>();
-        distortionAxisCombo.getItems().addAll("X", "Y", "Z");
-        distortionAxisCombo.getSelectionModel().select(1);
-        distortionAxisCombo.setOnAction(e -> {
-            if (!suppressRender) {
-                getParams().setDistortionAxis(distortionAxisCombo.getSelectionModel().getSelectedIndex());
-                renderCallback.requestRender();
-            }
-        });
-
-        distortionStrengthSlider = new EnhancedSlider("Strength", -5, 5, 0, false);
-        distortionStrengthSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setDistortionStrength(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        distortionFrequencySlider = new EnhancedSlider("Frequency", 0.1, 10, 1, false);
-        distortionFrequencySlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setDistortionFrequency(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        distortionOffsetSlider = new EnhancedSlider("Offset", -10, 10, 0, false);
-        distortionOffsetSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setDistortionOffset(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        HBox typeBox = new HBox(5, new Label("Type:"), distortionTypeCombo);
-        HBox axisBox = new HBox(5, new Label("Axis:"), distortionAxisCombo);
-        box.getChildren().addAll(distortionEnabledCheck, typeBox, axisBox,
-                distortionStrengthSlider, distortionFrequencySlider, distortionOffsetSlider);
-
-        TitledPane pane = new TitledPane("Domain Distortion", box);
-        pane.setExpanded(false);
-        return pane;
-    }
-
     private TitledPane createPresetsPane() {
         VBox box = new VBox(5);
 
@@ -976,14 +902,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             mossScaleSlider.setValue(p.getMossScale());
             mossNormalThresholdSlider.setValue(p.getMossNormalThreshold());
             mossColorPicker.setValue(javafx.scene.paint.Color.color(p.getMossColorR(), p.getMossColorG(), p.getMossColorB()));
-
-            // Domain Distortion
-            distortionEnabledCheck.setSelected(p.isDistortionEnabled());
-            distortionTypeCombo.getSelectionModel().select(p.getDistortionType());
-            distortionAxisCombo.getSelectionModel().select(p.getDistortionAxis());
-            distortionStrengthSlider.setValue(p.getDistortionStrength());
-            distortionFrequencySlider.setValue(p.getDistortionFrequency());
-            distortionOffsetSlider.setValue(p.getDistortionOffset());
 
         } finally {
             suppressRender = false;

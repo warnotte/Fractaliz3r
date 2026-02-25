@@ -182,13 +182,6 @@ uniform float mossScale;             // 0.1-5, patch size
 uniform vec3 mossColor;              // default (0.15, 0.35, 0.08) = dark green
 uniform float mossNormalThreshold;   // 0-1, default 0.3
 
-// Domain Distortion
-uniform int distortionEnabled;       // 0 = off, 1 = on
-uniform int distortionType;          // 0=Twist, 1=Bend, 2=Taper, 3=Rep1D, 4=Rep3D
-uniform int distortionAxis;          // 0=X, 1=Y, 2=Z
-uniform float distortionStrength;    // -5 to 5
-uniform float distortionFrequency;   // 0.1 to 10
-uniform float distortionOffset;      // -10 to 10
 
 // Ocean & Floor
 uniform int oceanEnabled;
@@ -257,76 +250,6 @@ float fbmLow(vec3 p) {
 float warpedFbm(vec3 p) {
     vec3 q = vec3(fbm(p), fbm(p + vec3(5.2, 1.3, 2.8)), fbm(p + vec3(1.3, 2.8, 5.2)));
     return fbm(p + 1.0 * q);
-}
-
-// ============================================================================
-// Domain Distortion — space-warping transforms applied before DE evaluation
-// ============================================================================
-
-vec3 applyDomainDistortion(vec3 pos, out float deCorrection) {
-    deCorrection = 1.0;
-    if (distortionEnabled == 0) return pos;
-
-    // Extract axis-aligned components generically
-    float axisVal, perpA, perpB;
-    if (distortionAxis == 0)      { axisVal = pos.x; perpA = pos.y; perpB = pos.z; }
-    else if (distortionAxis == 1) { axisVal = pos.y; perpA = pos.x; perpB = pos.z; }
-    else                          { axisVal = pos.z; perpA = pos.x; perpB = pos.y; }
-
-    float sf = distortionStrength * distortionFrequency;
-
-    if (distortionType == 0) {
-        // Twist: rotate perpendicular plane by axisCoord * strength
-        float angle = (axisVal + distortionOffset) * sf;
-        float c = cos(angle);
-        float s = sin(angle);
-        float newA = c * perpA - s * perpB;
-        float newB = s * perpA + c * perpB;
-        perpA = newA;
-        perpB = newB;
-        deCorrection = 1.0 / max(1.0, abs(sf) * length(vec2(perpA, perpB)));
-    }
-    else if (distortionType == 1) {
-        // Bend: rotate along axis plane by axisCoord * strength
-        float angle = (axisVal + distortionOffset) * sf;
-        float c = cos(angle);
-        float s = sin(angle);
-        float newAxis = c * axisVal - s * perpA;
-        float newPerp = s * axisVal + c * perpA;
-        axisVal = newAxis;
-        perpA = newPerp;
-        deCorrection = 1.0 / max(1.0, abs(sf) * abs(axisVal));
-    }
-    else if (distortionType == 2) {
-        // Taper: scale perpendicular plane by 1 + axisCoord * strength
-        float scale = 1.0 + (axisVal + distortionOffset) * sf;
-        scale = max(abs(scale), 0.01);
-        perpA = perpA / scale;
-        perpB = perpB / scale;
-        deCorrection = 1.0 / scale;
-    }
-    else if (distortionType == 3) {
-        // Repetition (single axis)
-        float period = 1.0 / max(distortionFrequency, 0.01);
-        axisVal = mod(axisVal + distortionOffset + period * 0.5, period) - period * 0.5;
-    }
-    else if (distortionType == 4) {
-        // Repetition 3D
-        float period = 1.0 / max(distortionFrequency, 0.01);
-        vec3 p = pos + vec3(distortionOffset);
-        p = mod(p + period * 0.5, vec3(period)) - period * 0.5;
-        return p;
-    }
-
-    // Reassemble position from axis components
-    if (distortionAxis == 0)      return vec3(axisVal, perpA, perpB);
-    else if (distortionAxis == 1) return vec3(perpA, axisVal, perpB);
-    else                          return vec3(perpA, perpB, axisVal);
-}
-
-vec3 distortPos(vec3 pos) {
-    float unused;
-    return applyDomainDistortion(pos, unused);
 }
 
 // Maximum possible erosion displacement magnitude for proximity gating

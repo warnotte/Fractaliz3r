@@ -277,11 +277,6 @@ public class HeadlessRenderer {
         // Ocean
         applyFloatTrack(timeline, "oceanTime", params::setOceanTime);
 
-        // Domain distortion
-        applyFloatTrack(timeline, "distortionStrength", params::setDistortionStrength);
-        applyFloatTrack(timeline, "distortionFrequency", params::setDistortionFrequency);
-        applyFloatTrack(timeline, "distortionOffset", params::setDistortionOffset);
-
         // Boolean/Morph blend
         applyFloatTrack(timeline, "boolBlend", params::setBoolBlend);
 

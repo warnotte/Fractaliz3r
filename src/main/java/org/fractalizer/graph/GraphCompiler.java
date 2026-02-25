@@ -231,7 +231,10 @@ public class GraphCompiler {
                 case STANDARD -> emitStandardTransform(sb, ti.id);
                 case MIRROR   -> emitMirrorTransform(sb, ti.id);
                 case TWIST    -> emitTwistTransform(sb, ti.id);
+                case BEND     -> emitBendTransform(sb, ti.id);
+                case TAPER    -> emitTaperTransform(sb, ti.id);
                 case REPETITION -> emitRepetitionTransform(sb, ti.id);
+                case REPETITION_1D -> emitRepetition1DTransform(sb, ti.id);
             }
         }
         return sb.toString();
@@ -266,13 +269,112 @@ public class GraphCompiler {
     }
 
     private void emitTwistTransform(StringBuilder sb, String id) {
-        sb.append("uniform vec3 ").append(id).append("_twistAxis;\n");
-        sb.append("uniform float ").append(id).append("_twistStrength;\n");
+        sb.append("uniform int ").append(id).append("_axis;\n");
+        sb.append("uniform float ").append(id).append("_strength;\n");
+        sb.append("uniform float ").append(id).append("_frequency;\n");
+        sb.append("uniform float ").append(id).append("_offset;\n");
+        // DE correction function
+        sb.append("float deCorr_").append(id).append("(vec3 pos) {\n");
+        sb.append("    float axisVal;\n");
+        sb.append("    float perpA, perpB;\n");
+        sb.append("    if (").append(id).append("_axis == 0) { axisVal = pos.x; perpA = pos.y; perpB = pos.z; }\n");
+        sb.append("    else if (").append(id).append("_axis == 1) { axisVal = pos.y; perpA = pos.x; perpB = pos.z; }\n");
+        sb.append("    else { axisVal = pos.z; perpA = pos.x; perpB = pos.y; }\n");
+        sb.append("    float sf = ").append(id).append("_strength * ").append(id).append("_frequency;\n");
+        sb.append("    return 1.0 / max(1.0, abs(sf) * length(vec2(perpA, perpB)));\n");
+        sb.append("}\n");
+        // Transform function
         sb.append("vec3 applyTransform_").append(id).append("(vec3 pos) {\n");
-        sb.append("    float angle = dot(pos, ").append(id).append("_twistAxis) * ").append(id).append("_twistStrength;\n");
+        sb.append("    float axisVal;\n");
+        sb.append("    float perpA, perpB;\n");
+        sb.append("    if (").append(id).append("_axis == 0) { axisVal = pos.x; perpA = pos.y; perpB = pos.z; }\n");
+        sb.append("    else if (").append(id).append("_axis == 1) { axisVal = pos.y; perpA = pos.x; perpB = pos.z; }\n");
+        sb.append("    else { axisVal = pos.z; perpA = pos.x; perpB = pos.y; }\n");
+        sb.append("    float sf = ").append(id).append("_strength * ").append(id).append("_frequency;\n");
+        sb.append("    float angle = (axisVal + ").append(id).append("_offset) * sf;\n");
         sb.append("    float c = cos(angle), s = sin(angle);\n");
-        sb.append("    vec3 k = ").append(id).append("_twistAxis;\n");
-        sb.append("    return pos * c + cross(k, pos) * s + k * dot(k, pos) * (1.0 - c);\n");
+        sb.append("    float newA = c * perpA - s * perpB;\n");
+        sb.append("    float newB = s * perpA + c * perpB;\n");
+        sb.append("    if (").append(id).append("_axis == 0) return vec3(axisVal, newA, newB);\n");
+        sb.append("    else if (").append(id).append("_axis == 1) return vec3(newA, axisVal, newB);\n");
+        sb.append("    else return vec3(newA, newB, axisVal);\n");
+        sb.append("}\n\n");
+    }
+
+    private void emitBendTransform(StringBuilder sb, String id) {
+        sb.append("uniform int ").append(id).append("_axis;\n");
+        sb.append("uniform float ").append(id).append("_strength;\n");
+        sb.append("uniform float ").append(id).append("_frequency;\n");
+        sb.append("uniform float ").append(id).append("_offset;\n");
+        // DE correction function
+        sb.append("float deCorr_").append(id).append("(vec3 pos) {\n");
+        sb.append("    float axisVal;\n");
+        sb.append("    if (").append(id).append("_axis == 0) axisVal = pos.x;\n");
+        sb.append("    else if (").append(id).append("_axis == 1) axisVal = pos.y;\n");
+        sb.append("    else axisVal = pos.z;\n");
+        sb.append("    float sf = ").append(id).append("_strength * ").append(id).append("_frequency;\n");
+        sb.append("    return 1.0 / max(1.0, abs(sf) * abs(axisVal));\n");
+        sb.append("}\n");
+        // Transform function: rotate in axis-perpA plane
+        sb.append("vec3 applyTransform_").append(id).append("(vec3 pos) {\n");
+        sb.append("    float axisVal;\n");
+        sb.append("    float perpA, perpB;\n");
+        sb.append("    if (").append(id).append("_axis == 0) { axisVal = pos.x; perpA = pos.y; perpB = pos.z; }\n");
+        sb.append("    else if (").append(id).append("_axis == 1) { axisVal = pos.y; perpA = pos.x; perpB = pos.z; }\n");
+        sb.append("    else { axisVal = pos.z; perpA = pos.x; perpB = pos.y; }\n");
+        sb.append("    float sf = ").append(id).append("_strength * ").append(id).append("_frequency;\n");
+        sb.append("    float angle = (axisVal + ").append(id).append("_offset) * sf;\n");
+        sb.append("    float c = cos(angle), s = sin(angle);\n");
+        sb.append("    float newAxis = c * axisVal - s * perpA;\n");
+        sb.append("    float newPerp = s * axisVal + c * perpA;\n");
+        sb.append("    if (").append(id).append("_axis == 0) return vec3(newAxis, newPerp, perpB);\n");
+        sb.append("    else if (").append(id).append("_axis == 1) return vec3(newPerp, newAxis, perpB);\n");
+        sb.append("    else return vec3(newPerp, perpB, newAxis);\n");
+        sb.append("}\n\n");
+    }
+
+    private void emitTaperTransform(StringBuilder sb, String id) {
+        sb.append("uniform int ").append(id).append("_axis;\n");
+        sb.append("uniform float ").append(id).append("_strength;\n");
+        sb.append("uniform float ").append(id).append("_frequency;\n");
+        sb.append("uniform float ").append(id).append("_offset;\n");
+        // DE correction function
+        sb.append("float deCorr_").append(id).append("(vec3 pos) {\n");
+        sb.append("    float axisVal;\n");
+        sb.append("    if (").append(id).append("_axis == 0) axisVal = pos.x;\n");
+        sb.append("    else if (").append(id).append("_axis == 1) axisVal = pos.y;\n");
+        sb.append("    else axisVal = pos.z;\n");
+        sb.append("    float sf = ").append(id).append("_strength * ").append(id).append("_frequency;\n");
+        sb.append("    float scale = 1.0 + (axisVal + ").append(id).append("_offset) * sf;\n");
+        sb.append("    return 1.0 / max(abs(scale), 0.01);\n");
+        sb.append("}\n");
+        // Transform function: scale perpendicular plane
+        sb.append("vec3 applyTransform_").append(id).append("(vec3 pos) {\n");
+        sb.append("    float axisVal;\n");
+        sb.append("    float perpA, perpB;\n");
+        sb.append("    if (").append(id).append("_axis == 0) { axisVal = pos.x; perpA = pos.y; perpB = pos.z; }\n");
+        sb.append("    else if (").append(id).append("_axis == 1) { axisVal = pos.y; perpA = pos.x; perpB = pos.z; }\n");
+        sb.append("    else { axisVal = pos.z; perpA = pos.x; perpB = pos.y; }\n");
+        sb.append("    float sf = ").append(id).append("_strength * ").append(id).append("_frequency;\n");
+        sb.append("    float scale = 1.0 + (axisVal + ").append(id).append("_offset) * sf;\n");
+        sb.append("    float invScale = 1.0 / max(abs(scale), 0.01);\n");
+        sb.append("    perpA = perpA * invScale;\n");
+        sb.append("    perpB = perpB * invScale;\n");
+        sb.append("    if (").append(id).append("_axis == 0) return vec3(axisVal, perpA, perpB);\n");
+        sb.append("    else if (").append(id).append("_axis == 1) return vec3(perpA, axisVal, perpB);\n");
+        sb.append("    else return vec3(perpA, perpB, axisVal);\n");
+        sb.append("}\n\n");
+    }
+
+    private void emitRepetition1DTransform(StringBuilder sb, String id) {
+        sb.append("uniform int ").append(id).append("_axis;\n");
+        sb.append("uniform float ").append(id).append("_period;\n");
+        sb.append("vec3 applyTransform_").append(id).append("(vec3 pos) {\n");
+        sb.append("    float p = max(").append(id).append("_period, 0.001);\n");
+        sb.append("    if (").append(id).append("_axis == 0) pos.x = mod(pos.x + p * 0.5, p) - p * 0.5;\n");
+        sb.append("    else if (").append(id).append("_axis == 1) pos.y = mod(pos.y + p * 0.5, p) - p * 0.5;\n");
+        sb.append("    else pos.z = mod(pos.z + p * 0.5, p) - p * 0.5;\n");
+        sb.append("    return pos;\n");
         sb.append("}\n\n");
     }
 
@@ -406,13 +508,24 @@ public class GraphCompiler {
         DEResult child = emitDEBody(tn.getChild(), newPos, sb, full);
 
         String scaledVar = "d_" + tid;
-        if (tn.getMode() == TransformNode.Mode.STANDARD) {
-            // Scale correction: DE(scaled_pos) * scale
-            sb.append("    float ").append(scaledVar).append(" = ").append(child.distVar)
-              .append(" * ").append(tid).append("_scale;\n");
-        } else {
-            // Mirror, Twist, Repetition: isometric or approximate — no correction
-            sb.append("    float ").append(scaledVar).append(" = ").append(child.distVar).append(";\n");
+        switch (tn.getMode()) {
+            case STANDARD -> {
+                // Scale correction: DE(scaled_pos) * scale
+                sb.append("    float ").append(scaledVar).append(" = ").append(child.distVar)
+                  .append(" * ").append(tid).append("_scale;\n");
+            }
+            case TWIST, BEND, TAPER -> {
+                // Non-isometric: apply DE correction factor
+                String corrVar = "corr_" + tid;
+                sb.append("    float ").append(corrVar).append(" = deCorr_").append(tid)
+                  .append("(").append(posVar).append(");\n");
+                sb.append("    float ").append(scaledVar).append(" = ").append(child.distVar)
+                  .append(" * ").append(corrVar).append(";\n");
+            }
+            default -> {
+                // Mirror, Repetition, Repetition 1D: isometric — no correction
+                sb.append("    float ").append(scaledVar).append(" = ").append(child.distVar).append(";\n");
+            }
         }
         return new DEResult(scaledVar, child.winnerExpr);
     }
@@ -517,14 +630,18 @@ public class GraphCompiler {
                     uniforms.put(id + "_mirrorAxis", axisVec);
                     uniforms.put(id + "_mirrorOffset", tn.getOffset()[tn.getAxis()]);
                 }
-                case TWIST -> {
-                    float[] axisVec = new float[3];
-                    axisVec[tn.getAxis()] = 1.0f;
-                    uniforms.put(id + "_twistAxis", axisVec);
-                    uniforms.put(id + "_twistStrength", tn.getScale());
+                case TWIST, BEND, TAPER -> {
+                    uniforms.put(id + "_axis", tn.getAxis());
+                    uniforms.put(id + "_strength", tn.getScale());
+                    uniforms.put(id + "_frequency", tn.getFrequency());
+                    uniforms.put(id + "_offset", tn.getOffset()[0]);
                 }
                 case REPETITION -> {
                     uniforms.put(id + "_period", tn.getOffset().clone());
+                }
+                case REPETITION_1D -> {
+                    uniforms.put(id + "_axis", tn.getAxis());
+                    uniforms.put(id + "_period", tn.getOffset()[tn.getAxis()]);
                 }
             }
             collectUniformsFromNode(tn.getChild(), uniforms);

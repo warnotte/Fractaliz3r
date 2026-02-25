@@ -79,11 +79,6 @@ public class TimelineWidget extends VBox {
         // Ocean group
         TrackInfo.groupHeader("Ocean", Color.rgb(60, 140, 200)),
         new TrackInfo("oceanTime", "Wave Time", Color.rgb(60, 140, 200)),
-        // Distortion group
-        TrackInfo.groupHeader("Distortion", Color.rgb(255, 130, 80)),
-        new TrackInfo("distortionStrength", "Strength", Color.rgb(255, 130, 80)),
-        new TrackInfo("distortionFrequency", "Frequency", Color.rgb(235, 110, 60)),
-        new TrackInfo("distortionOffset", "Offset", Color.rgb(215, 100, 50)),
         // Boolean/Morph group
         TrackInfo.groupHeader("Boolean", Color.rgb(200, 160, 100)),
         new TrackInfo("boolBlend", "Blend", Color.rgb(200, 160, 100))

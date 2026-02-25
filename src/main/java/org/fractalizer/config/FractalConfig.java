@@ -211,14 +211,6 @@ public class FractalConfig {
         public float mossColorB = 0.08f;
         public float mossNormalThreshold = 0.3f;
 
-        // Domain Distortion
-        public boolean distortionEnabled = false;
-        public int distortionType = 0;
-        public int distortionAxis = 1;
-        public float distortionStrength = 0.0f;
-        public float distortionFrequency = 1.0f;
-        public float distortionOffset = 0.0f;
-
         // Boolean Operations
         public boolean booleanEnabled = false;
         public int booleanOp = 1;
@@ -397,12 +389,6 @@ public class FractalConfig {
         config.effects.mossColorG = params.getMossColorG();
         config.effects.mossColorB = params.getMossColorB();
         config.effects.mossNormalThreshold = params.getMossNormalThreshold();
-        config.effects.distortionEnabled = params.isDistortionEnabled();
-        config.effects.distortionType = params.getDistortionType();
-        config.effects.distortionAxis = params.getDistortionAxis();
-        config.effects.distortionStrength = params.getDistortionStrength();
-        config.effects.distortionFrequency = params.getDistortionFrequency();
-        config.effects.distortionOffset = params.getDistortionOffset();
         config.effects.booleanEnabled = params.isBooleanEnabled();
         config.effects.booleanOp = params.getBooleanOp();
         config.effects.boolSecondaryType = params.getBoolSecondaryType();
@@ -569,12 +555,6 @@ public class FractalConfig {
         params.setMossScale(effects.mossScale);
         params.setMossColor(effects.mossColorR, effects.mossColorG, effects.mossColorB);
         params.setMossNormalThreshold(effects.mossNormalThreshold);
-        params.setDistortionEnabled(effects.distortionEnabled);
-        params.setDistortionType(effects.distortionType);
-        params.setDistortionAxis(effects.distortionAxis);
-        params.setDistortionStrength(effects.distortionStrength);
-        params.setDistortionFrequency(effects.distortionFrequency);
-        params.setDistortionOffset(effects.distortionOffset);
         params.setBooleanEnabled(effects.booleanEnabled);
         params.setBooleanOp(effects.booleanOp);
         params.setBoolSecondaryType(effects.boolSecondaryType);
@@ -856,6 +836,7 @@ public class FractalConfig {
             map.put("offset", List.of((double) off[0], (double) off[1], (double) off[2]));
             map.put("rotation", List.of((double) rot[0], (double) rot[1], (double) rot[2]));
             map.put("scale", (double) tn.getScale());
+            map.put("frequency", (double) tn.getFrequency());
             map.put("child", serializeGraphNode(tn.getChild()));
         }
         return map;
@@ -904,6 +885,9 @@ public class FractalConfig {
                 }
                 if (map.containsKey("axis")) {
                     tn.setAxis(((Number) map.get("axis")).intValue());
+                }
+                if (map.containsKey("frequency")) {
+                    tn.setFrequency(((Number) map.get("frequency")).floatValue());
                 }
                 yield tn;
             }

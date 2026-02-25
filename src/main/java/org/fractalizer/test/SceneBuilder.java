@@ -345,49 +345,12 @@ public class SceneBuilder {
         return this;
     }
 
-    public SceneBuilder twist(float strength, float frequency) {
-        config.effects.distortionEnabled = true;
-        config.effects.distortionType = 0;
-        config.effects.distortionStrength = strength;
-        config.effects.distortionFrequency = frequency;
-        return this;
-    }
-
-    public SceneBuilder bend(float strength, float frequency) {
-        config.effects.distortionEnabled = true;
-        config.effects.distortionType = 1;
-        config.effects.distortionStrength = strength;
-        config.effects.distortionFrequency = frequency;
-        return this;
-    }
-
-    public SceneBuilder taper(float strength, float frequency) {
-        config.effects.distortionEnabled = true;
-        config.effects.distortionType = 2;
-        config.effects.distortionStrength = strength;
-        config.effects.distortionFrequency = frequency;
-        return this;
-    }
-
-    public SceneBuilder repetition(float frequency) {
-        config.effects.distortionEnabled = true;
-        config.effects.distortionType = 3;
-        config.effects.distortionFrequency = frequency;
-        config.effects.distortionStrength = 1; // unused but must be nonzero? Actually no, rep doesn't use strength
-        return this;
-    }
-
-    public SceneBuilder repetition3D(float frequency) {
-        config.effects.distortionEnabled = true;
-        config.effects.distortionType = 4;
-        config.effects.distortionFrequency = frequency;
-        return this;
-    }
-
-    public SceneBuilder distortionAxis(int axis) {
-        config.effects.distortionAxis = axis;
-        return this;
-    }
+    @Deprecated public SceneBuilder twist(float strength, float frequency) { return this; }
+    @Deprecated public SceneBuilder bend(float strength, float frequency) { return this; }
+    @Deprecated public SceneBuilder taper(float strength, float frequency) { return this; }
+    @Deprecated public SceneBuilder repetition(float frequency) { return this; }
+    @Deprecated public SceneBuilder repetition3D(float frequency) { return this; }
+    @Deprecated public SceneBuilder distortionAxis(int axis) { return this; }
 
     public SceneBuilder morph(String secondaryKernel) {
         config.effects.booleanEnabled = true;

@@ -112,11 +112,6 @@ public class AnimationManager {
         // Ocean
         timeline.createTrack("oceanTime", Float.class, 0.0f);
 
-        // Domain Distortion
-        timeline.createTrack("distortionStrength", Float.class, 0.0f);
-        timeline.createTrack("distortionFrequency", Float.class, 1.0f);
-        timeline.createTrack("distortionOffset", Float.class, 0.0f);
-
         // Boolean/Morph
         timeline.createTrack("boolBlend", Float.class, 0.0f);
     }
@@ -305,9 +300,6 @@ public class AnimationManager {
         addKeyframeForTrack("mossStrength", time, easing, params);
         addKeyframeForTrack("mossScale", time, easing, params);
         addKeyframeForTrack("oceanTime", time, easing, params);
-        addKeyframeForTrack("distortionStrength", time, easing, params);
-        addKeyframeForTrack("distortionFrequency", time, easing, params);
-        addKeyframeForTrack("distortionOffset", time, easing, params);
         addKeyframeForTrack("boolBlend", time, easing, params);
 
         // Add keyframes for fractal-specific or node graph tracks
@@ -398,9 +390,6 @@ public class AnimationManager {
             case "mossStrength" -> timeline.setKeyframe("mossStrength", time, params.getMossStrength(), easing);
             case "mossScale" -> timeline.setKeyframe("mossScale", time, params.getMossScale(), easing);
             case "oceanTime" -> timeline.setKeyframe("oceanTime", time, params.getOceanTime(), easing);
-            case "distortionStrength" -> timeline.setKeyframe("distortionStrength", time, params.getDistortionStrength(), easing);
-            case "distortionFrequency" -> timeline.setKeyframe("distortionFrequency", time, params.getDistortionFrequency(), easing);
-            case "distortionOffset" -> timeline.setKeyframe("distortionOffset", time, params.getDistortionOffset(), easing);
             case "boolBlend" -> timeline.setKeyframe("boolBlend", time, params.getBoolBlend(), easing);
             default -> {
                 // Check node graph tracks first, then fractal-specific
@@ -548,17 +537,6 @@ public class AnimationManager {
         // Apply ocean
         if (timeline.getTrack("oceanTime").hasKeyframes()) {
             params.setOceanTime(timeline.getValue("oceanTime"));
-        }
-
-        // Apply domain distortion
-        if (timeline.getTrack("distortionStrength").hasKeyframes()) {
-            params.setDistortionStrength(timeline.getValue("distortionStrength"));
-        }
-        if (timeline.getTrack("distortionFrequency").hasKeyframes()) {
-            params.setDistortionFrequency(timeline.getValue("distortionFrequency"));
-        }
-        if (timeline.getTrack("distortionOffset").hasKeyframes()) {
-            params.setDistortionOffset(timeline.getValue("distortionOffset"));
         }
 
         // Apply boolean/morph blend

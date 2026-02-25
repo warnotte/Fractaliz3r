@@ -81,7 +81,10 @@ public final class NodeGraphAnimationHelper {
         return switch (tn.getMode()) {
             case MIRROR -> Color.web("#9C27B0");
             case TWIST -> Color.web("#E91E63");
+            case BEND -> Color.web("#FF5722");
+            case TAPER -> Color.web("#795548");
             case REPETITION -> Color.web("#00BCD4");
+            case REPETITION_1D -> Color.web("#009688");
             default -> Color.web("#4CAF50");
         };
     }
@@ -107,12 +110,22 @@ public final class NodeGraphAnimationHelper {
                 int axis = tn.getAxis();
                 params.add(floatArrayParam("mirrorOffset", "Mirror Offset", tn::getOffset, axis));
             }
-            case TWIST -> {
+            case TWIST, BEND, TAPER -> {
+                String prefix = tn.getMode().name().toLowerCase();
                 params.add(new AnimatableParameter(
-                    "twistStrength", "Twist Strength", Float.class,
+                    prefix + "Strength", "Strength", Float.class,
                     () -> tn.getScale(),
                     v -> tn.setScale(((Number) v).floatValue())
                 ));
+                params.add(new AnimatableParameter(
+                    prefix + "Frequency", "Frequency", Float.class,
+                    () -> tn.getFrequency(),
+                    v -> tn.setFrequency(((Number) v).floatValue())
+                ));
+                params.add(floatArrayParam(prefix + "Offset", "Offset", tn::getOffset, 0));
+            }
+            case REPETITION_1D -> {
+                params.add(floatArrayParam("period", "Period", tn::getOffset, tn.getAxis()));
             }
             case REPETITION -> {
                 params.add(floatArrayParam("periodX", "Period X", tn::getOffset, 0));
