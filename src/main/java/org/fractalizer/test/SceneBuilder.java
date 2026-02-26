@@ -2,6 +2,8 @@ package org.fractalizer.test;
 
 import org.fractalizer.config.FractalConfig;
 import org.fractalizer.config.FractalConfigManager;
+import org.fractalizer.fractals.FractalType;
+import org.fractalizer.graph.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -152,6 +154,118 @@ public class SceneBuilder {
 
     public static SceneBuilder create(String fractalType) {
         return new SceneBuilder(fractalType);
+    }
+
+    // ========================================================================
+    // Node Graph factory
+    // ========================================================================
+
+    public static SceneBuilder nodeGraph(GraphNode root) {
+        SceneBuilder b = new SceneBuilder("NODE_GRAPH");
+        b.config.fractalParams.put("graph", FractalConfig.serializeGraphNode(root));
+        return b;
+    }
+
+    // ========================================================================
+    // Node Graph helpers — static builders for graph tree construction
+    // ========================================================================
+
+    /** Leaf node wrapping a built-in fractal type with default params. */
+    public static FractalNode fractal(FractalType type) {
+        return new FractalNode(type);
+    }
+
+    // --- CSG operations ---
+
+    public static CSGNode union(GraphNode left, GraphNode right) {
+        return new CSGNode(CSGNode.Op.UNION, left, right);
+    }
+
+    public static CSGNode union(GraphNode left, GraphNode right, float blend) {
+        return new CSGNode(CSGNode.Op.UNION, left, right, blend);
+    }
+
+    public static CSGNode intersect(GraphNode left, GraphNode right) {
+        return new CSGNode(CSGNode.Op.INTERSECT, left, right);
+    }
+
+    public static CSGNode intersect(GraphNode left, GraphNode right, float blend) {
+        return new CSGNode(CSGNode.Op.INTERSECT, left, right, blend);
+    }
+
+    public static CSGNode subtract(GraphNode left, GraphNode right) {
+        return new CSGNode(CSGNode.Op.SUBTRACT, left, right);
+    }
+
+    public static CSGNode subtract(GraphNode left, GraphNode right, float blend) {
+        return new CSGNode(CSGNode.Op.SUBTRACT, left, right, blend);
+    }
+
+    public static CSGNode morphGraph(GraphNode left, GraphNode right, float blend) {
+        return new CSGNode(CSGNode.Op.MORPH, left, right, blend);
+    }
+
+    // --- Transform wrappers ---
+
+    public static TransformNode translate(GraphNode child, float x, float y, float z) {
+        return new TransformNode(child, new float[]{x, y, z});
+    }
+
+    public static TransformNode rotate(GraphNode child, float rx, float ry, float rz) {
+        return new TransformNode(child, new float[]{0, 0, 0}, new float[]{rx, ry, rz}, 1.0f);
+    }
+
+    public static TransformNode scale(GraphNode child, float s) {
+        return new TransformNode(child, new float[]{0, 0, 0}, new float[]{0, 0, 0}, s);
+    }
+
+    public static TransformNode transform(GraphNode child, float[] offset, float[] rotation, float scale) {
+        return new TransformNode(child, offset, rotation, scale);
+    }
+
+    public static TransformNode twist(GraphNode child, float strength, int axis) {
+        TransformNode tn = new TransformNode(child, new float[]{0, 0, 0});
+        tn.setMode(TransformNode.Mode.TWIST);
+        tn.setScale(strength);
+        tn.setAxis(axis);
+        return tn;
+    }
+
+    public static TransformNode bend(GraphNode child, float strength, int axis) {
+        TransformNode tn = new TransformNode(child, new float[]{0, 0, 0});
+        tn.setMode(TransformNode.Mode.BEND);
+        tn.setScale(strength);
+        tn.setAxis(axis);
+        return tn;
+    }
+
+    public static TransformNode taper(GraphNode child, float strength, int axis) {
+        TransformNode tn = new TransformNode(child, new float[]{0, 0, 0});
+        tn.setMode(TransformNode.Mode.TAPER);
+        tn.setScale(strength);
+        tn.setAxis(axis);
+        return tn;
+    }
+
+    public static TransformNode mirror(GraphNode child, int axis) {
+        TransformNode tn = new TransformNode(child, new float[]{0, 0, 0});
+        tn.setMode(TransformNode.Mode.MIRROR);
+        tn.setAxis(axis);
+        return tn;
+    }
+
+    public static TransformNode repeat(GraphNode child, float px, float py, float pz) {
+        TransformNode tn = new TransformNode(child, new float[]{px, py, pz});
+        tn.setMode(TransformNode.Mode.REPETITION);
+        return tn;
+    }
+
+    public static TransformNode repeat1D(GraphNode child, int axis, float period) {
+        TransformNode tn = new TransformNode(child, new float[]{0, 0, 0});
+        tn.setMode(TransformNode.Mode.REPETITION_1D);
+        tn.setAxis(axis);
+        tn.setFrequency(period);
+        return tn;
     }
 
     // ========================================================================

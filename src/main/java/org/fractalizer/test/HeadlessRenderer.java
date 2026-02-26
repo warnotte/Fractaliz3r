@@ -7,6 +7,8 @@ import org.fractalizer.config.FractalConfig;
 import org.fractalizer.config.FractalConfigManager;
 import org.fractalizer.engine.Camera;
 import org.fractalizer.fractals.*;
+import org.fractalizer.graph.NodeGraphAnimationHelper;
+import org.fractalizer.graph.NodeGraphAnimationHelper.NodeAnimInfo;
 import org.fractalizer.ui.GLSLFractalizerController;
 
 import javafx.application.Platform;
@@ -296,6 +298,24 @@ public class HeadlessRenderer {
                     }
                 }
             }
+        }
+
+        // Node graph parameters (CSG blend, transform strength, per-node fractal params)
+        if (params instanceof NodeGraphParams ngp && ngp.getGraphRoot() != null) {
+            List<NodeAnimInfo> nodeInfos = NodeGraphAnimationHelper.discoverAnimatableParameters(ngp.getGraphRoot());
+            for (NodeAnimInfo info : nodeInfos) {
+                for (AnimatableParameter param : info.parameters()) {
+                    String trackName = info.nodeName() + "." + param.name();
+                    AnimationTrack<?> track = timeline.getTrack(trackName);
+                    if (track != null && track.hasKeyframes()) {
+                        Object value = timeline.getValue(trackName);
+                        if (value instanceof Number num) {
+                            param.setter().accept(num.floatValue());
+                        }
+                    }
+                }
+            }
+            ngp.updateUniforms();
         }
     }
 
