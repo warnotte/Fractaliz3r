@@ -606,6 +606,8 @@ public class FractalConfig {
             map.put("power", mb.getPower());
             map.put("maxIterations", mb.getMaxIterations());
             map.put("bailout", mb.getBailout());
+            map.put("radiolaria", mb.getRadiolaria());
+            map.put("radiolariaFactor", mb.getRadiolariaFactor());
         } else if (params instanceof MandelboxParams mbx) {
             map.put("scale", mbx.getScale());
             map.put("minRadius", mbx.getMinRadius());
@@ -694,6 +696,8 @@ public class FractalConfig {
             if (map.containsKey("power")) mb.power(getFloat(map, "power"));
             if (map.containsKey("maxIterations")) mb.iterations(getInt(map, "maxIterations"));
             if (map.containsKey("bailout")) mb.setBailout(getFloat(map, "bailout"));
+            if (map.containsKey("radiolaria")) mb.setRadiolaria(getFloat(map, "radiolaria"));
+            if (map.containsKey("radiolariaFactor")) mb.setRadiolariaFactor(getFloat(map, "radiolariaFactor"));
         } else if (params instanceof MandelboxParams mbx) {
             if (map.containsKey("scale")) mbx.setScale(getFloat(map, "scale"));
             if (map.containsKey("minRadius")) mbx.setMinRadius(getFloat(map, "minRadius"));

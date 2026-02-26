@@ -17,6 +17,8 @@
 uniform float power;
 uniform int maxIterations;
 uniform float bailout;
+uniform float radiolaria;
+uniform float radiolariaFactor;
 
 // ============================================================================
 // Orbit Trap Structure
@@ -70,6 +72,13 @@ float DE(vec3 pos, out OrbitTrap trap) {
         );
         z += pos;
 
+        // Radiolaria mutation (Tom Beddard): Y-axis clamping for skeletal/hollow structures
+        if (radiolaria > 0.0) {
+            if (z.y > radiolariaFactor) {
+                z.y = radiolariaFactor;
+            }
+        }
+
         // Track orbit traps for coloring (IQ style)
         // Point trap: distance to origin
         trap.minDist = min(trap.minDist, length(z));
@@ -110,6 +119,13 @@ float DE_simple(vec3 pos) {
             cos(theta)
         );
         z += pos;
+
+        // Radiolaria mutation
+        if (radiolaria > 0.0) {
+            if (z.y > radiolariaFactor) {
+                z.y = radiolariaFactor;
+            }
+        }
     }
 
     return 0.5 * log(r) * r / dr;

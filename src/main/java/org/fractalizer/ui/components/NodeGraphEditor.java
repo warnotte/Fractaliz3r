@@ -121,11 +121,13 @@ public class NodeGraphEditor extends VBox {
     private static final Map<FractalType, Map<String, SliderConfig>> FRACTAL_SLIDER_CONFIGS = new EnumMap<>(FractalType.class);
     static {
         // Mandelbulb
-        FRACTAL_SLIDER_CONFIGS.put(FractalType.MANDELBULB, Map.of(
-            "maxIterations", new SliderConfig(5, 30, 5),
-            "power", new SliderConfig(2, 16, 2),
-            "bailout", new SliderConfig(1, 16)
-        ));
+        Map<String, SliderConfig> mbConfigs = new HashMap<>();
+        mbConfigs.put("maxIterations", new SliderConfig(5, 30, 5));
+        mbConfigs.put("power", new SliderConfig(2, 16, 2));
+        mbConfigs.put("bailout", new SliderConfig(1, 16));
+        mbConfigs.put("radiolaria", new SliderConfig(0, 1));
+        mbConfigs.put("radiolariaFactor", new SliderConfig(-2, 2));
+        FRACTAL_SLIDER_CONFIGS.put(FractalType.MANDELBULB, mbConfigs);
         // Mandelbox
         FRACTAL_SLIDER_CONFIGS.put(FractalType.MANDELBOX, Map.of(
             "maxIterations", new SliderConfig(5, 30, 5),
@@ -1014,6 +1016,7 @@ public class NodeGraphEditor extends VBox {
         if (name.startsWith("foldC")) return "foldC";
         if (name.startsWith("CSize")) return "CSize";
         if (name.startsWith("fold")) return "fold";
+        if (name.startsWith("radiolaria")) return "radiolaria";
         return null;
     }
 
@@ -1028,6 +1031,7 @@ public class NodeGraphEditor extends VBox {
             case "foldC" -> "Fold C";
             case "CSize" -> "C Size";
             case "fold" -> "Fold Angles";
+            case "radiolaria" -> "Radiolaria";
             default -> group;
         };
     }

@@ -119,6 +119,8 @@ public class GraphCompiler {
             uniforms.put(prefix + "power", p.getPower());
             uniforms.put(prefix + "maxIterations", p.getMaxIterations());
             uniforms.put(prefix + "bailout", p.getBailout());
+            uniforms.put(prefix + "radiolaria", p.getRadiolaria());
+            uniforms.put(prefix + "radiolariaFactor", p.getRadiolariaFactor());
         } else if (params instanceof MandelboxParams p) {
             uniforms.put(prefix + "scale", p.getScale());
             uniforms.put(prefix + "minRadius", p.getMinRadius());

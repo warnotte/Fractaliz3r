@@ -21,6 +21,12 @@ public class MandelbulbParams extends AbstractFractalParams {
     @Animatable(display = "Bailout")
     private float bailout;
 
+    @Animatable(display = "Radiolaria")
+    private float radiolaria;
+
+    @Animatable(display = "Radiolaria Limit")
+    private float radiolariaFactor;
+
     public MandelbulbParams() {
         super();
 
@@ -28,6 +34,8 @@ public class MandelbulbParams extends AbstractFractalParams {
         this.power = 8f;
         this.maxIterations = 15;
         this.bailout = 2f;
+        this.radiolaria = 0f;
+        this.radiolariaFactor = 0.5f;
     }
 
     @Override
@@ -45,6 +53,8 @@ public class MandelbulbParams extends AbstractFractalParams {
         // Copy Mandelbulb-specific params
         reduced.power = this.power;
         reduced.bailout = this.bailout;
+        reduced.radiolaria = this.radiolaria;
+        reduced.radiolariaFactor = this.radiolariaFactor;
 
         // Reduce quality
         reduced.maxIterations = Math.max(5, this.maxIterations / reductionFactor);
@@ -65,6 +75,12 @@ public class MandelbulbParams extends AbstractFractalParams {
 
     public float getBailout() { return bailout; }
     public void setBailout(float bailout) { this.bailout = bailout; }
+
+    public float getRadiolaria() { return radiolaria; }
+    public void setRadiolaria(float radiolaria) { this.radiolaria = radiolaria; }
+
+    public float getRadiolariaFactor() { return radiolariaFactor; }
+    public void setRadiolariaFactor(float radiolariaFactor) { this.radiolariaFactor = radiolariaFactor; }
 
     // Builder-style setters
     public MandelbulbParams power(float power) {
