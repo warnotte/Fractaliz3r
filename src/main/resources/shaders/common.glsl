@@ -124,6 +124,9 @@ uniform float skyParallax;
 // Gradient Palette (1D texture)
 uniform sampler2D paletteTexture;
 
+// Blue Noise (64x64 RG32F, tiling)
+uniform sampler2D blueNoiseTex;
+
 // Volumetric Fog
 uniform int volumetricFogEnabled;
 uniform float fogDensity;
@@ -1169,7 +1172,7 @@ Ray getCameraRay(vec2 screenUV) {
     return ray;
 }
 
-Ray getCameraRayDOF(vec2 screenUV, inout uint seed) {
+Ray getCameraRayDOF(vec2 screenUV, inout uint seed, vec2 bnDof) {
     dofColorWeight = vec3(1.0);
     if (dofEnabled == 0 || aperture < 0.0001) return getCameraRay(screenUV);
 
@@ -1208,8 +1211,26 @@ Ray getCameraRayDOF(vec2 screenUV, inout uint seed) {
         focalPoint = centerRay.origin + centerRay.direction * effectiveFocalDist;
     }
 
-    // --- Aperture sampling (polygon or circle) ---
-    vec2 diskSample = sampleAperture(seed) * aperture;
+    // --- Aperture sampling: blue noise disk (polygon or circle) ---
+    float bnR = sqrt(bnDof.x);
+    float bnTheta = bnDof.y * TAU;
+    vec2 diskSample = bnR * vec2(cos(bnTheta), sin(bnTheta));
+    // Apply polygon bokeh shaping if blades >= 3
+    if (bokehBlades >= 3) {
+        float r = length(diskSample);
+        if (r > 0.0001) {
+            float theta = atan(diskSample.y, diskSample.x) + bokehRotation;
+            float n = float(bokehBlades);
+            float halfSector = PI / n;
+            float sectorTheta = mod(theta + halfSector, TAU / n) - halfSector;
+            float polyRadius = cos(PI / n) / cos(sectorTheta);
+            r = r * polyRadius;
+            diskSample = r * vec2(cos(theta), sin(theta));
+        }
+    }
+    diskSample = diskSample * aperture;
+    // Advance PCG by 2 to keep downstream chain consistent (replaces randomDisk's 2 calls)
+    random(seed); random(seed);
 
     // --- Anamorphic stretch ---
     diskSample.y *= anamorphicRatio;

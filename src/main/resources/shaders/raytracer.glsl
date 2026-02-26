@@ -1534,8 +1534,16 @@ void main() {
         }
     }
 
-    // Anti-aliasing jitter (scaled to full image resolution for consistent AA across tiles)
-    vec2 jitter = (random2(seed) - 0.5) / fullResolution;
+    // Blue noise: spatially uniform + temporally animated via golden ratio
+    float bnAnim = float(sampleIndex) * 0.6180339887498949;
+    ivec2 bnCoord = ivec2(gl_FragCoord.xy) % 64;
+    vec2 bnJitter = fract(texelFetch(blueNoiseTex, bnCoord, 0).rg + bnAnim);
+    vec2 jitter = (bnJitter - 0.5) / fullResolution;
+    random(seed); random(seed); // advance PCG by 2 to keep downstream chain consistent
+
+    // Blue noise for DoF aperture (offset texel for decorrelation from jitter)
+    ivec2 bnCoordDof = (ivec2(gl_FragCoord.xy) + ivec2(37, 17)) % 64;
+    vec2 bnDof = fract(texelFetch(blueNoiseTex, bnCoordDof, 0).rg + bnAnim);
 
     // Remap tile-local fragCoord to full-image NDC [-1,1]
     vec2 tileUV = fragCoord * 0.5 + 0.5;                          // [0,1] within tile
@@ -1543,7 +1551,7 @@ void main() {
     vec2 screenUV = fullUV * 2.0 - 1.0 + jitter * 2.0;           // [-1,1] NDC + jitter
 
     // Get camera ray (with optional DoF)
-    Ray ray = getCameraRayDOF(screenUV, seed);
+    Ray ray = getCameraRayDOF(screenUV, seed, bnDof);
 
     vec3 color;
     float depth = 100.0; // Default far distance

@@ -25,7 +25,7 @@ public class GLSLEngine implements AutoCloseable {
     private int displayFBO, displayTexture;
     private int currentWidth, currentHeight;
     private int bloomFBO1, bloomFBO2, bloomTexture1, bloomTexture2, bloomWidth, bloomHeight;
-    private int lensDirtTexture, paletteTexture;
+    private int lensDirtTexture, paletteTexture, blueNoiseTexture;
     private int varianceTexture, varianceFBO;
     private boolean adaptiveSamplingEnabled = false;
     private int envMapTexture;
@@ -80,6 +80,7 @@ public class GLSLEngine implements AutoCloseable {
         createDefaultEnvMap();
         createDefaultCDFTextures();
         createDefaultPaletteTexture();
+        createBlueNoiseTexture();
         loadDisplayShader();
         loadPostProcessShaders();
         initialized = true;
@@ -243,6 +244,8 @@ public class GLSLEngine implements AutoCloseable {
             program.setUniform("envRotation", envRotation); program.setUniform("envLightingMix", envLightingMix);
             glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, paletteTexture);
             program.setUniform("paletteTexture", 1);
+            glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, blueNoiseTexture);
+            program.setUniform("blueNoiseTex", 2);
             if (envCDFReady) {
                 glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, envMarginalCDFTexture); program.setUniform("envMarginalCDF", 3);
                 glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, envConditionalCDFTexture); program.setUniform("envConditionalCDF", 4);
@@ -484,6 +487,17 @@ public class GLSLEngine implements AutoCloseable {
         MemoryUtil.memFree(data); glBindTexture(GL_TEXTURE_2D, 0);
     }
 
+    private void createBlueNoiseTexture() {
+        FloatBuffer data = BlueNoiseGenerator.generate();
+        blueNoiseTexture = glGenTextures(); glBindTexture(GL_TEXTURE_2D, blueNoiseTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RG32F, 64, 64, 0, GL_RG, GL_FLOAT, data);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        MemoryUtil.memFree(data); glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
     public void updatePaletteTexture(float[] rgbData, int resolution) {
         runOnGLThread(() -> {
             glBindTexture(GL_TEXTURE_2D, paletteTexture);
@@ -634,7 +648,8 @@ public class GLSLEngine implements AutoCloseable {
             glDeleteFramebuffers(bloomFBO1); glDeleteFramebuffers(bloomFBO2);
             glDeleteTextures(bloomTexture1); glDeleteTextures(bloomTexture2);
             glDeleteTextures(envMapTexture); glDeleteTextures(envMarginalCDFTexture); glDeleteTextures(envConditionalCDFTexture);
-            glDeleteTextures(paletteTexture); glDeleteVertexArrays(quadVAO); glDeleteBuffers(quadVBO); glDeleteBuffers(quadEBO);
+            glDeleteTextures(paletteTexture); glDeleteTextures(blueNoiseTexture);
+            glDeleteVertexArrays(quadVAO); glDeleteBuffers(quadVBO); glDeleteBuffers(quadEBO);
             glfwDestroyWindow(window); glfwTerminate();
         });
         glThread.shutdown();
