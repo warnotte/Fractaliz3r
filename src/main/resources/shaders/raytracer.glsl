@@ -252,8 +252,12 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
         vec3 shadowPos = ro + rd * t;
         float h = sceneDE_simple(shadowPos);
 
-        // Use adaptive epsilon for shadows too
-        float epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
+        float epsilon;
+        if (pixelRadius > 0.0) {
+            epsilon = max(MIN_EPSILON, pixelRadius * t);
+        } else {
+            epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
+        }
 
         if (h < epsilon) return 0.0;
 
