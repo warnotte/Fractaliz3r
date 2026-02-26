@@ -269,6 +269,41 @@ public class SceneBuilder {
     }
 
     // ========================================================================
+    // Effects (per-node surface effects)
+    // ========================================================================
+
+    public static EffectNode erode(GraphNode child, float strength, float time, float scale) {
+        EffectNode en = new EffectNode(child, EffectNode.EffectType.EROSION);
+        en.setStrength(strength);
+        en.setTime(time);
+        en.setScale(scale);
+        return en;
+    }
+
+    public static EffectNode erode(GraphNode child, float strength, float time, float scale, int erosionType) {
+        EffectNode en = erode(child, strength, time, scale);
+        en.setErosionType(erosionType);
+        return en;
+    }
+
+    public static EffectNode crystallize(GraphNode child, float strength, float time, float scale, float sharpness) {
+        EffectNode en = new EffectNode(child, EffectNode.EffectType.CRYSTAL);
+        en.setStrength(strength);
+        en.setTime(time);
+        en.setScale(scale);
+        en.setSharpness(sharpness);
+        return en;
+    }
+
+    public static EffectNode mossify(GraphNode child, float strength, float time, float scale) {
+        EffectNode en = new EffectNode(child, EffectNode.EffectType.MOSS);
+        en.setStrength(strength);
+        en.setTime(time);
+        en.setScale(scale);
+        return en;
+    }
+
+    // ========================================================================
     // Camera
     // ========================================================================
 

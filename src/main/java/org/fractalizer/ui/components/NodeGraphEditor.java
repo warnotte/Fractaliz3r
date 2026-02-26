@@ -53,6 +53,7 @@ public class NodeGraphEditor extends VBox {
     private static final Color COLOR_TAPER = Color.web("#795548");
     private static final Color COLOR_REPETITION = Color.web("#00BCD4");
     private static final Color COLOR_REPETITION_1D = Color.web("#009688");
+    private static final Color COLOR_EFFECT = Color.web("#F44336");
     private static final Color COLOR_SELECTED = Color.web("#00BCD4");
     private static final Color COLOR_CONNECTION = Color.web("#9E9E9E", 0.6);
     private static final Color COLOR_TEXT = Color.WHITE;
@@ -302,6 +303,14 @@ public class NodeGraphEditor extends VBox {
             moreTransforms.getItems().add(mi);
         }
 
+        MenuButton wrapEffectBtn = new MenuButton("Wrap Effect");
+        wrapEffectBtn.setTooltip(new Tooltip("Wrap selected node in a surface effect"));
+        for (EffectNode.EffectType etype : EffectNode.EffectType.values()) {
+            MenuItem mi = new MenuItem(etype.getDisplayName());
+            mi.setOnAction(e -> wrapInEffect(etype));
+            wrapEffectBtn.getItems().add(mi);
+        }
+
         Button deleteBtn = new Button("Delete");
         deleteBtn.setTooltip(new Tooltip("Remove selected node"));
         deleteBtn.setOnAction(e -> deleteSelected());
@@ -323,11 +332,12 @@ public class NodeGraphEditor extends VBox {
         tbSep2.setOrientation(javafx.geometry.Orientation.VERTICAL);
 
         presetCombo = new ComboBox<>();
-        presetCombo.getItems().addAll("Single Fractal", "Union", "Subtract + Transform", "Mirror Symmetry");
+        presetCombo.getItems().addAll("Single Fractal", "Union", "Subtract + Transform", "Mirror Symmetry",
+            "Eroded Mandelbulb", "Crystal Menger", "Mossy Rocks", "Stacked Effects");
         presetCombo.setPromptText("Presets...");
         presetCombo.setOnAction(e -> applyPreset(presetCombo.getValue()));
 
-        HBox toolbar = new HBox(4, addFractalBtn, wrapCSGBtn, wrapTransformBtn, moreTransforms, deleteBtn,
+        HBox toolbar = new HBox(4, addFractalBtn, wrapCSGBtn, wrapTransformBtn, moreTransforms, wrapEffectBtn, deleteBtn,
             tbSep1, undoBtn, redoBtn, tbSep2, presetCombo);
         toolbar.setPadding(new Insets(2));
 
@@ -573,6 +583,14 @@ public class NodeGraphEditor extends VBox {
             wrapTransformMenu.getItems().add(mi);
         }
         contextMenu.getItems().add(wrapTransformMenu);
+
+        Menu wrapEffectMenu = new Menu("Wrap in Effect");
+        for (EffectNode.EffectType etype : EffectNode.EffectType.values()) {
+            MenuItem mi = new MenuItem(etype.getDisplayName());
+            mi.setOnAction(e -> wrapInEffect(etype));
+            wrapEffectMenu.getItems().add(mi);
+        }
+        contextMenu.getItems().add(wrapEffectMenu);
 
         MenuItem duplicateItem = new MenuItem("Duplicate Subtree");
         duplicateItem.setOnAction(e -> duplicateSubtree(node));
@@ -828,6 +846,7 @@ public class NodeGraphEditor extends VBox {
 
     private Color getNodeColor(GraphNode node) {
         if (node instanceof FractalNode) return COLOR_FRACTAL;
+        if (node instanceof EffectNode) return COLOR_EFFECT;
         if (node instanceof CSGNode) return COLOR_CSG;
         if (node instanceof TransformNode tn) {
             return switch (tn.getMode()) {
@@ -846,6 +865,7 @@ public class NodeGraphEditor extends VBox {
     private String getNodeLabel(GraphNode node) {
         if (node.getName() != null) return node.getName();
         if (node instanceof FractalNode fn) return fn.getFractalType().getDisplayName();
+        if (node instanceof EffectNode en) return en.getEffectType().getDisplayName();
         if (node instanceof CSGNode csn) return csn.getOp().name();
         if (node instanceof TransformNode tn) return tn.getMode().getDisplayName();
         return "?";
@@ -878,6 +898,9 @@ public class NodeGraphEditor extends VBox {
             ParentRef r = findParentRecursive(csn.getLeft(), target);
             if (r != null) return r;
             return findParentRecursive(csn.getRight(), target);
+        } else if (current instanceof EffectNode en) {
+            if (en.getChild() == target) return new ParentRef(en, 0);
+            return findParentRecursive(en.getChild(), target);
         } else if (current instanceof TransformNode tn) {
             if (tn.getChild() == target) return new ParentRef(tn, 0);
             return findParentRecursive(tn.getChild(), target);
@@ -890,6 +913,8 @@ public class NodeGraphEditor extends VBox {
             if (parent instanceof CSGNode csn) {
                 if (childIndex == 0) csn.setLeft(newChild);
                 else csn.setRight(newChild);
+            } else if (parent instanceof EffectNode en) {
+                en.setChild(newChild);
             } else if (parent instanceof TransformNode tn) {
                 tn.setChild(newChild);
             }
@@ -906,6 +931,8 @@ public class NodeGraphEditor extends VBox {
 
         if (selectedNode instanceof FractalNode fn) {
             buildFractalDetail(fn);
+        } else if (selectedNode instanceof EffectNode en) {
+            buildEffectDetail(en);
         } else if (selectedNode instanceof CSGNode csn) {
             buildCSGDetail(csn);
         } else if (selectedNode instanceof TransformNode tn) {
@@ -1223,6 +1250,77 @@ public class NodeGraphEditor extends VBox {
         }
     }
 
+    private void buildEffectDetail(EffectNode en) {
+        Label title = new Label(en.getEffectType().getDisplayName() + " Effect");
+        title.getStyleClass().add("bold-label");
+        detailPanel.getChildren().add(title);
+        buildNameField(en);
+
+        // Effect type selector (structural change → recompile)
+        ComboBox<EffectNode.EffectType> typeCombo = new ComboBox<>();
+        typeCombo.getItems().addAll(EffectNode.EffectType.values());
+        typeCombo.setValue(en.getEffectType());
+        typeCombo.setMaxWidth(Double.MAX_VALUE);
+        typeCombo.setOnAction(e -> {
+            pushUndoSnapshot();
+            en.setEffectType(typeCombo.getValue());
+            onStructuralChange();
+        });
+        detailPanel.getChildren().addAll(new Label("Effect Type:"), typeCombo);
+
+        Separator sep = new Separator();
+        sep.setPadding(new Insets(4, 0, 4, 0));
+        detailPanel.getChildren().add(sep);
+
+        // Common sliders: strength, time, scale
+        EnhancedSlider strengthSlider = new EnhancedSlider("Strength", 0, 1, en.getStrength(), false);
+        strengthSlider.setOnAction(v -> {
+            en.setStrength(v.floatValue());
+            onParameterChange();
+        });
+        EnhancedSlider timeSlider = new EnhancedSlider("Time", 0, 20, en.getTime(), false);
+        timeSlider.setOnAction(v -> {
+            en.setTime(v.floatValue());
+            onParameterChange();
+        });
+        EnhancedSlider scaleSlider = new EnhancedSlider("Scale", 0.1, 5, en.getScale(), false);
+        scaleSlider.setOnAction(v -> {
+            en.setScale(v.floatValue());
+            onParameterChange();
+        });
+        detailPanel.getChildren().addAll(strengthSlider, timeSlider, scaleSlider);
+
+        // Type-specific controls
+        switch (en.getEffectType()) {
+            case EROSION -> {
+                ComboBox<String> erosionTypeCombo = new ComboBox<>();
+                erosionTypeCombo.getItems().addAll("All", "Hydraulic", "Thermal", "Cracks");
+                erosionTypeCombo.setValue(erosionTypeCombo.getItems().get(en.getErosionType()));
+                erosionTypeCombo.setMaxWidth(Double.MAX_VALUE);
+                erosionTypeCombo.setOnAction(e -> {
+                    pushUndoSnapshot();
+                    en.setErosionType(erosionTypeCombo.getItems().indexOf(erosionTypeCombo.getValue()));
+                    onStructuralChange();
+                });
+                detailPanel.getChildren().addAll(new Label("Erosion Type:"), erosionTypeCombo);
+            }
+            case CRYSTAL -> {
+                EnhancedSlider sharpSlider = new EnhancedSlider("Sharpness", 0.5, 5, en.getSharpness(), false);
+                sharpSlider.setOnAction(v -> {
+                    en.setSharpness(v.floatValue());
+                    onParameterChange();
+                });
+                detailPanel.getChildren().add(sharpSlider);
+            }
+            case MOSS -> {
+                Label note = new Label("Moss coloring is global (QualityPanel).\nThis node controls geometry only.");
+                note.setWrapText(true);
+                note.setStyle("-fx-text-fill: #888; -fx-font-size: 10px;");
+                detailPanel.getChildren().add(note);
+            }
+        }
+    }
+
     private void buildStandardTransformSliders(TransformNode tn) {
         float[] off = tn.getOffset();
         float[] rot = tn.getRotation();
@@ -1390,6 +1488,16 @@ public class NodeGraphEditor extends VBox {
         onStructuralChange();
     }
 
+    private void wrapInEffect(EffectNode.EffectType effectType) {
+        if (currentParams == null || selectedNode == null) return;
+        pushUndoSnapshot();
+
+        EffectNode wrapper = new EffectNode(selectedNode, effectType);
+        replaceNode(selectedNode, wrapper);
+        selectedNode = wrapper;
+        onStructuralChange();
+    }
+
     private void deleteSelected() {
         if (currentParams == null || selectedNode == null) return;
         pushUndoSnapshot();
@@ -1398,6 +1506,9 @@ public class NodeGraphEditor extends VBox {
             if (selectedNode instanceof CSGNode csn) {
                 currentParams.setGraphRoot(csn.getLeft());
                 selectedNode = csn.getLeft();
+            } else if (selectedNode instanceof EffectNode en) {
+                currentParams.setGraphRoot(en.getChild());
+                selectedNode = en.getChild();
             } else if (selectedNode instanceof TransformNode tn) {
                 currentParams.setGraphRoot(tn.getChild());
                 selectedNode = tn.getChild();
@@ -1486,6 +1597,56 @@ public class NodeGraphEditor extends VBox {
                 mirror.setMode(TransformNode.Mode.MIRROR);
                 mirror.setAxis(0); // mirror on X
                 currentParams.setGraphRoot(mirror);
+            }
+            case "Eroded Mandelbulb" -> {
+                EffectNode erosion = new EffectNode(
+                    new FractalNode(FractalType.MANDELBULB),
+                    EffectNode.EffectType.EROSION
+                );
+                erosion.setStrength(0.5f);
+                erosion.setTime(5f);
+                erosion.setScale(1f);
+                erosion.setErosionType(0); // All
+                currentParams.setGraphRoot(erosion);
+            }
+            case "Crystal Menger" -> {
+                EffectNode crystal = new EffectNode(
+                    new FractalNode(FractalType.MENGER_SPONGE),
+                    EffectNode.EffectType.CRYSTAL
+                );
+                crystal.setStrength(0.6f);
+                crystal.setTime(5f);
+                crystal.setScale(1f);
+                crystal.setSharpness(2.5f);
+                currentParams.setGraphRoot(crystal);
+            }
+            case "Mossy Rocks" -> {
+                EffectNode moss = new EffectNode(
+                    new FractalNode(FractalType.APOLLONIAN),
+                    EffectNode.EffectType.MOSS
+                );
+                moss.setStrength(0.7f);
+                moss.setTime(5f);
+                moss.setScale(1.2f);
+                currentParams.setGraphRoot(moss);
+            }
+            case "Stacked Effects" -> {
+                // Erosion on top of Crystal on a Mandelbulb
+                EffectNode crystal = new EffectNode(
+                    new FractalNode(FractalType.MANDELBULB),
+                    EffectNode.EffectType.CRYSTAL
+                );
+                crystal.setStrength(0.5f);
+                crystal.setTime(4f);
+                crystal.setSharpness(2f);
+                EffectNode erosion = new EffectNode(
+                    crystal,
+                    EffectNode.EffectType.EROSION
+                );
+                erosion.setStrength(0.4f);
+                erosion.setTime(5f);
+                erosion.setErosionType(3); // Cracks
+                currentParams.setGraphRoot(erosion);
             }
         }
 

@@ -863,6 +863,15 @@ public class FractalConfig {
             map.put("blend", (double) csn.getBlend());
             map.put("left", serializeGraphNode(csn.getLeft()));
             map.put("right", serializeGraphNode(csn.getRight()));
+        } else if (node instanceof EffectNode en) {
+            map.put("type", "effect");
+            map.put("effectType", en.getEffectType().name());
+            map.put("strength", (double) en.getStrength());
+            map.put("time", (double) en.getTime());
+            map.put("scale", (double) en.getScale());
+            map.put("erosionType", en.getErosionType());
+            map.put("sharpness", (double) en.getSharpness());
+            map.put("child", serializeGraphNode(en.getChild()));
         } else if (node instanceof TransformNode tn) {
             map.put("type", "transform");
             map.put("mode", tn.getMode().name());
@@ -926,6 +935,21 @@ public class FractalConfig {
                     tn.setFrequency(((Number) map.get("frequency")).floatValue());
                 }
                 yield tn;
+            }
+            case "effect" -> {
+                EffectNode.EffectType effectType;
+                try { effectType = EffectNode.EffectType.valueOf((String) map.get("effectType")); }
+                catch (Exception e) { effectType = EffectNode.EffectType.EROSION; }
+                @SuppressWarnings("unchecked")
+                GraphNode child = deserializeGraphNode((Map<String, Object>) map.get("child"));
+                if (child == null) child = new FractalNode(FractalType.MANDELBULB);
+                EffectNode en = new EffectNode(child, effectType);
+                if (map.containsKey("strength")) en.setStrength(((Number) map.get("strength")).floatValue());
+                if (map.containsKey("time")) en.setTime(((Number) map.get("time")).floatValue());
+                if (map.containsKey("scale")) en.setScale(((Number) map.get("scale")).floatValue());
+                if (map.containsKey("erosionType")) en.setErosionType(((Number) map.get("erosionType")).intValue());
+                if (map.containsKey("sharpness")) en.setSharpness(((Number) map.get("sharpness")).floatValue());
+                yield en;
             }
             default -> new FractalNode(FractalType.MANDELBULB);
         };

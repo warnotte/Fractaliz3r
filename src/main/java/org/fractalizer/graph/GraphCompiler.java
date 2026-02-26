@@ -20,13 +20,16 @@ public class GraphCompiler {
     private int fractalCounter;
     private int transformCounter;
     private int csgCounter;
+    private int effectCounter;
     private final List<LeafInfo> leaves = new ArrayList<>();
     private final List<TransformInfo> transforms = new ArrayList<>();
     private final List<CSGInfo> csgNodes = new ArrayList<>();
+    private final List<EffectInfo> effects = new ArrayList<>();
 
     private record LeafInfo(FractalNode node, String prefix) {}
     private record TransformInfo(TransformNode node, String id) {}
     private record CSGInfo(CSGNode node, String id) {}
+    private record EffectInfo(EffectNode node, String id) {}
 
     /**
      * Compile a node graph into composite GLSL source code.
@@ -39,9 +42,11 @@ public class GraphCompiler {
         fractalCounter = 0;
         transformCounter = 0;
         csgCounter = 0;
+        effectCounter = 0;
         leaves.clear();
         transforms.clear();
         csgNodes.clear();
+        effects.clear();
 
         // Phase 1: DFS to assign IDs and collect metadata
         assignIds(root);
@@ -71,6 +76,11 @@ public class GraphCompiler {
                 sb.append("uniform float ").append(ci.id).append("_blend;\n");
             }
             sb.append("\n");
+        }
+
+        // Phase 3.5: Effect uniforms
+        if (!effects.isEmpty()) {
+            sb.append(generateEffectUniforms());
         }
 
         // Phase 4: Transform functions
@@ -213,6 +223,11 @@ public class GraphCompiler {
             tn.id = tid;
             transforms.add(new TransformInfo(tn, tid));
             assignIds(tn.getChild());
+        } else if (node instanceof EffectNode en) {
+            String eid = "e" + effectCounter++;
+            en.id = eid;
+            effects.add(new EffectInfo(en, eid));
+            assignIds(en.getChild());
         } else if (node instanceof CSGNode csn) {
             String cid = "c" + csgCounter++;
             csn.id = cid;
@@ -492,6 +507,8 @@ public class GraphCompiler {
     private DEResult emitDEBody(GraphNode node, String posVar, StringBuilder sb, boolean full) {
         if (node instanceof FractalNode fn) {
             return emitFractalDE(fn, posVar, sb, full);
+        } else if (node instanceof EffectNode en) {
+            return emitEffectDE(en, posVar, sb, full);
         } else if (node instanceof TransformNode tn) {
             return emitTransformDE(tn, posVar, sb, full);
         } else if (node instanceof CSGNode csn) {
@@ -632,6 +649,17 @@ public class GraphCompiler {
             } else {
                 emitFractalUniforms(uniforms, fn.getFractalType(), fn.id + "_");
             }
+        } else if (node instanceof EffectNode en) {
+            String id = en.getId();
+            uniforms.put(id + "_strength", en.getStrength());
+            uniforms.put(id + "_time", en.getTime());
+            uniforms.put(id + "_scale", en.getScale());
+            switch (en.getEffectType()) {
+                case EROSION -> uniforms.put(id + "_erosionType", en.getErosionType());
+                case CRYSTAL -> uniforms.put(id + "_sharpness", en.getSharpness());
+                default -> {}
+            }
+            collectUniformsFromNode(en.getChild(), uniforms);
         } else if (node instanceof TransformNode tn) {
             String id = tn.id;
             switch (tn.getMode()) {
@@ -679,6 +707,108 @@ public class GraphCompiler {
         Map<String, Object> uniforms = new LinkedHashMap<>();
         collectUniformsFromNode(root, uniforms);
         return uniforms;
+    }
+
+    // ========================================================================
+    // Effect node support
+    // ========================================================================
+
+    private String generateEffectUniforms() {
+        StringBuilder sb = new StringBuilder("// === Effect node uniforms ===\n");
+        for (EffectInfo ei : effects) {
+            String id = ei.id;
+            sb.append("uniform float ").append(id).append("_strength;\n");
+            sb.append("uniform float ").append(id).append("_time;\n");
+            sb.append("uniform float ").append(id).append("_scale;\n");
+            switch (ei.node.getEffectType()) {
+                case EROSION -> sb.append("uniform int ").append(id).append("_erosionType;\n");
+                case CRYSTAL -> sb.append("uniform float ").append(id).append("_sharpness;\n");
+                default -> {}
+            }
+        }
+        sb.append("\n");
+        return sb.toString();
+    }
+
+    private DEResult emitEffectDE(EffectNode en, String posVar, StringBuilder sb, boolean full) {
+        DEResult child = emitDEBody(en.getChild(), posVar, sb, full);
+        String eid = en.id;
+        String dVar = child.distVar();
+
+        // Emit displacement with proximity gating inside a { } scope
+        sb.append("    { // Effect ").append(eid).append(" (").append(en.getEffectType()).append(")\n");
+
+        switch (en.getEffectType()) {
+            case EROSION -> {
+                sb.append("      float _emaxD = erosionMaxDisplacementP(")
+                  .append(eid).append("_strength, ")
+                  .append(eid).append("_time, ")
+                  .append(eid).append("_scale);\n");
+                sb.append("      if (").append(dVar).append(" < _emaxD + 0.1) ");
+                if (full) {
+                    sb.append(dVar).append(" += getErosionDisplacementP(")
+                      .append(posVar).append(", ")
+                      .append(eid).append("_strength, ")
+                      .append(eid).append("_time, ")
+                      .append(eid).append("_scale, ")
+                      .append(eid).append("_erosionType);\n");
+                } else {
+                    sb.append(dVar).append(" += getErosionDisplacementLightP(")
+                      .append(posVar).append(", ")
+                      .append(eid).append("_strength, ")
+                      .append(eid).append("_time, ")
+                      .append(eid).append("_scale, ")
+                      .append(eid).append("_erosionType);\n");
+                }
+            }
+            case CRYSTAL -> {
+                sb.append("      float _cmaxD = crystalMaxDisplacementP(")
+                  .append(eid).append("_strength, ")
+                  .append(eid).append("_time, ")
+                  .append(eid).append("_scale);\n");
+                sb.append("      if (").append(dVar).append(" < _cmaxD + 0.1) ");
+                if (full) {
+                    sb.append(dVar).append(" += getCrystalDisplacementP(")
+                      .append(posVar).append(", ")
+                      .append(eid).append("_strength, ")
+                      .append(eid).append("_time, ")
+                      .append(eid).append("_scale, ")
+                      .append(eid).append("_sharpness);\n");
+                } else {
+                    sb.append(dVar).append(" += getCrystalDisplacementLightP(")
+                      .append(posVar).append(", ")
+                      .append(eid).append("_strength, ")
+                      .append(eid).append("_time, ")
+                      .append(eid).append("_scale, ")
+                      .append(eid).append("_sharpness);\n");
+                }
+            }
+            case MOSS -> {
+                sb.append("      float _mmaxD = mossMaxDisplacementP(")
+                  .append(eid).append("_strength, ")
+                  .append(eid).append("_time, ")
+                  .append(eid).append("_scale);\n");
+                sb.append("      if (").append(dVar).append(" < _mmaxD + 0.1) ");
+                if (full) {
+                    sb.append(dVar).append(" += getMossDisplacementP(")
+                      .append(posVar).append(", ")
+                      .append(eid).append("_strength, ")
+                      .append(eid).append("_time, ")
+                      .append(eid).append("_scale);\n");
+                } else {
+                    sb.append(dVar).append(" += getMossDisplacementLightP(")
+                      .append(posVar).append(", ")
+                      .append(eid).append("_strength, ")
+                      .append(eid).append("_time, ")
+                      .append(eid).append("_scale);\n");
+                }
+            }
+        }
+
+        sb.append("    }\n");
+
+        // Effect doesn't change coloring — pass through child's winner/factors
+        return new DEResult(dVar, child.winnerExpr(), child.factorsExpr());
     }
 
     // ========================================================================

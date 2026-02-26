@@ -75,27 +75,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider varianceThresholdSlider;
     private EnhancedSlider minAdaptiveSamplesSlider;
 
-    // Erosion
-    private CheckBox erosionEnabledCheck;
-    private ComboBox<String> erosionTypeCombo;
-    private EnhancedSlider erosionStrengthSlider;
-    private EnhancedSlider erosionTimeSlider;
-    private EnhancedSlider erosionScaleSlider;
-
-    // Crystallization
-    private CheckBox crystalEnabledCheck;
-    private EnhancedSlider crystalStrengthSlider;
-    private EnhancedSlider crystalTimeSlider;
-    private EnhancedSlider crystalScaleSlider;
-    private EnhancedSlider crystalSharpnessSlider;
-
-    // Moss/Lichen
-    private CheckBox mossEnabledCheck;
-    private EnhancedSlider mossStrengthSlider;
-    private EnhancedSlider mossTimeSlider;
-    private EnhancedSlider mossScaleSlider;
-    private EnhancedSlider mossNormalThresholdSlider;
-    private javafx.scene.control.ColorPicker mossColorPicker;
 
     public QualityPanel(Supplier<AbstractFractalParams> paramsSupplier,
                         RenderCallback renderCallback,
@@ -132,9 +111,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         panel.getChildren().add(createDoFPane());
         panel.getChildren().add(createPathTracingPane());
         panel.getChildren().add(createAdaptiveSamplingPane());
-        panel.getChildren().add(createErosionPane());
-        panel.getChildren().add(createCrystallizationPane());
-        panel.getChildren().add(createMossPane());
+        // Erosion / Crystal / Moss removed — now per-node via EffectNode in Node Graph
         panel.getChildren().add(createPresetsPane());
 
         return panel;
@@ -616,169 +593,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         return pane;
     }
 
-    private TitledPane createErosionPane() {
-        VBox box = new VBox(5);
-
-        erosionEnabledCheck = new CheckBox("Enable Erosion");
-        erosionEnabledCheck.setOnAction(e -> {
-            if (!suppressRender) {
-                getParams().setErosionEnabled(erosionEnabledCheck.isSelected());
-                renderCallback.requestRender();
-            }
-        });
-
-        erosionTypeCombo = new ComboBox<>();
-        erosionTypeCombo.getItems().addAll("All", "Hydraulic", "Thermal", "Cracks");
-        erosionTypeCombo.getSelectionModel().select(0);
-        erosionTypeCombo.setOnAction(e -> {
-            if (!suppressRender) {
-                getParams().setErosionType(erosionTypeCombo.getSelectionModel().getSelectedIndex());
-                renderCallback.requestRender();
-            }
-        });
-
-        erosionStrengthSlider = new EnhancedSlider("Strength", 0, 1, 0.5, false);
-        erosionStrengthSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setErosionStrength(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        erosionTimeSlider = new EnhancedSlider("Time", 0, 20, 0, false);
-        erosionTimeSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setErosionTime(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        erosionScaleSlider = new EnhancedSlider("Scale", 0.1, 5, 1, false);
-        erosionScaleSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setErosionScale(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        HBox typeBox = new HBox(5, new Label("Type:"), erosionTypeCombo);
-        box.getChildren().addAll(erosionEnabledCheck, typeBox, erosionStrengthSlider, erosionTimeSlider, erosionScaleSlider);
-
-        TitledPane pane = new TitledPane("Erosion", box);
-        pane.setExpanded(false);
-        return pane;
-    }
-
-    private TitledPane createCrystallizationPane() {
-        VBox box = new VBox(5);
-
-        crystalEnabledCheck = new CheckBox("Enable Crystallization");
-        crystalEnabledCheck.setOnAction(e -> {
-            if (!suppressRender) {
-                getParams().setCrystalEnabled(crystalEnabledCheck.isSelected());
-                renderCallback.requestRender();
-            }
-        });
-
-        crystalStrengthSlider = new EnhancedSlider("Strength", 0, 1, 0.5, false);
-        crystalStrengthSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setCrystalStrength(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        crystalTimeSlider = new EnhancedSlider("Time", 0, 10, 0, false);
-        crystalTimeSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setCrystalTime(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        crystalScaleSlider = new EnhancedSlider("Scale", 0.1, 5, 1, false);
-        crystalScaleSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setCrystalScale(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        crystalSharpnessSlider = new EnhancedSlider("Sharpness", 0.5, 5, 2, false);
-        crystalSharpnessSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setCrystalSharpness(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        box.getChildren().addAll(crystalEnabledCheck, crystalStrengthSlider, crystalTimeSlider, crystalScaleSlider, crystalSharpnessSlider);
-
-        TitledPane pane = new TitledPane("Crystallization", box);
-        pane.setExpanded(false);
-        return pane;
-    }
-
-    private TitledPane createMossPane() {
-        VBox box = new VBox(5);
-
-        mossEnabledCheck = new CheckBox("Enable Moss/Lichen");
-        mossEnabledCheck.setOnAction(e -> {
-            if (!suppressRender) {
-                getParams().setMossEnabled(mossEnabledCheck.isSelected());
-                renderCallback.requestRender();
-            }
-        });
-
-        mossStrengthSlider = new EnhancedSlider("Strength", 0, 1, 0.5, false);
-        mossStrengthSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setMossStrength(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        mossTimeSlider = new EnhancedSlider("Time", 0, 10, 0, false);
-        mossTimeSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setMossTime(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        mossScaleSlider = new EnhancedSlider("Scale", 0.1, 5, 1, false);
-        mossScaleSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setMossScale(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        mossNormalThresholdSlider = new EnhancedSlider("Surface Angle", 0, 1, 0.3, false);
-        mossNormalThresholdSlider.setOnAction(v -> {
-            if (!suppressRender) {
-                getParams().setMossNormalThreshold(v.floatValue());
-                renderCallback.requestRender();
-            }
-        });
-
-        mossColorPicker = new javafx.scene.control.ColorPicker(javafx.scene.paint.Color.rgb(38, 89, 20));
-        mossColorPicker.setOnAction(e -> {
-            if (!suppressRender) {
-                javafx.scene.paint.Color c = mossColorPicker.getValue();
-                getParams().setMossColor((float) c.getRed(), (float) c.getGreen(), (float) c.getBlue());
-                renderCallback.requestRender();
-            }
-        });
-
-        HBox colorBox = new HBox(5, new Label("Color:"), mossColorPicker);
-        box.getChildren().addAll(mossEnabledCheck, mossStrengthSlider, mossTimeSlider, mossScaleSlider, mossNormalThresholdSlider, colorBox);
-
-        TitledPane pane = new TitledPane("Moss / Lichen", box);
-        pane.setExpanded(false);
-        return pane;
-    }
-
     private TitledPane createPresetsPane() {
         VBox box = new VBox(5);
 
@@ -880,28 +694,6 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             adaptiveSamplingCheck.setSelected(p.isAdaptiveSampling());
             varianceThresholdSlider.setValue(p.getVarianceThreshold());
             minAdaptiveSamplesSlider.setValue(p.getMinAdaptiveSamples());
-
-            // Erosion
-            erosionEnabledCheck.setSelected(p.isErosionEnabled());
-            erosionTypeCombo.getSelectionModel().select(p.getErosionType());
-            erosionStrengthSlider.setValue(p.getErosionStrength());
-            erosionTimeSlider.setValue(p.getErosionTime());
-            erosionScaleSlider.setValue(p.getErosionScale());
-
-            // Crystallization
-            crystalEnabledCheck.setSelected(p.isCrystalEnabled());
-            crystalStrengthSlider.setValue(p.getCrystalStrength());
-            crystalTimeSlider.setValue(p.getCrystalTime());
-            crystalScaleSlider.setValue(p.getCrystalScale());
-            crystalSharpnessSlider.setValue(p.getCrystalSharpness());
-
-            // Moss
-            mossEnabledCheck.setSelected(p.isMossEnabled());
-            mossStrengthSlider.setValue(p.getMossStrength());
-            mossTimeSlider.setValue(p.getMossTime());
-            mossScaleSlider.setValue(p.getMossScale());
-            mossNormalThresholdSlider.setValue(p.getMossNormalThreshold());
-            mossColorPicker.setValue(javafx.scene.paint.Color.color(p.getMossColorR(), p.getMossColorG(), p.getMossColorB()));
 
         } finally {
             suppressRender = false;

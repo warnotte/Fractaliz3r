@@ -252,40 +252,42 @@ float warpedFbm(vec3 p) {
     return fbm(p + 1.0 * q);
 }
 
-// Maximum possible erosion displacement magnitude for proximity gating
-float erosionMaxDisplacement() {
-    return (0.2 + 0.5 + 0.35) * erosionTime * erosionStrength * erosionScale;
+// === Parameterized erosion functions (used by node graph per-node effects) ===
+float erosionMaxDisplacementP(float pStrength, float pTime, float pScale) {
+    return (0.2 + 0.5 + 0.35) * pTime * pStrength * pScale * 0.05;
 }
 
-float getErosionDisplacement(vec3 pos) {
-    if (erosionEnabled == 0) return 0.0;
-
-    vec3 p = pos / erosionScale;
-    float t = erosionTime * erosionStrength;
+float getErosionDisplacementP(vec3 pos, float pStrength, float pTime, float pScale, int pType) {
+    vec3 p = pos / pScale;
+    float t = pTime * pStrength;
 
     float weathering = 0.0, hydraulic = 0.0, thermal = 0.0;
 
-    // Weathering: fine cracks and pits (3 octaves)
-    if (erosionType == 0 || erosionType == 3) {
+    if (pType == 0 || pType == 3) {
         weathering = (fbmLow(p * 8.0 + vec3(42.0)) - 0.4) * 0.2;
     }
-
-    // Hydraulic: vertical flow channels, deeper at lower Y
-    // Cheap warp: single fbm offset instead of 3-component vec3 warp
-    if (erosionType == 0 || erosionType == 1) {
+    if (pType == 0 || pType == 1) {
         vec3 flowP = vec3(p.x, p.y * 0.25, p.z);
         vec3 wp = flowP * 2.5;
         float warp = fbmLow(wp);
         float raw = pow(fbmLow(wp + warp * 1.0), 1.5) * 0.5;
         hydraulic = raw * (1.0 + 0.3 * (1.0 - p.y));
     }
-
-    // Thermal: large-scale rounding/smoothing (3 octaves, low freq = 2 would suffice)
-    if (erosionType == 0 || erosionType == 2) {
+    if (pType == 0 || pType == 2) {
         thermal = fbmLow(p * 1.5 + vec3(13.0, 7.0, 19.0)) * 0.35;
     }
 
-    return (weathering + hydraulic + thermal) * t * erosionScale;
+    return (weathering + hydraulic + thermal) * t * pScale * 0.05;
+}
+
+// Maximum possible erosion displacement magnitude for proximity gating
+float erosionMaxDisplacement() {
+    return erosionMaxDisplacementP(erosionStrength, erosionTime, erosionScale);
+}
+
+float getErosionDisplacement(vec3 pos) {
+    if (erosionEnabled == 0) return 0.0;
+    return getErosionDisplacementP(pos, erosionStrength, erosionTime, erosionScale, erosionType);
 }
 
 // Voronoi / cellular noise — returns vec2(minDist, secondMinDist)
@@ -313,96 +315,122 @@ vec2 voronoi3D(vec3 p) {
 }
 
 // Lighter erosion for shadow/AO (2 octaves, no hydraulic warp)
-float getErosionDisplacementLight(vec3 pos) {
-    if (erosionEnabled == 0) return 0.0;
-
-    vec3 p = pos / erosionScale;
-    float t = erosionTime * erosionStrength;
+float getErosionDisplacementLightP(vec3 pos, float pStrength, float pTime, float pScale, int pType) {
+    vec3 p = pos / pScale;
+    float t = pTime * pStrength;
 
     float weathering = 0.0;
     float hydraulic = 0.0;
     float thermal = 0.0;
 
-    if (erosionType == 0 || erosionType == 3) {
+    if (pType == 0 || pType == 3) {
         float n1 = noise(p * 8.0 + vec3(42.0)) * 0.5;
         float n2 = noise(p * 16.0 + vec3(42.0)) * 0.25;
         weathering = (n1 + n2 - 0.3) * 0.2;
     }
-    if (erosionType == 0 || erosionType == 1) {
+    if (pType == 0 || pType == 1) {
         vec3 flowP = vec3(p.x, p.y * 0.25, p.z);
         float n1 = noise(flowP * 2.5) * 0.5;
         float n2 = noise(flowP * 5.0) * 0.25;
         float raw = pow(max(0.0, n1 + n2), 1.5) * 0.5;
         hydraulic = raw * (1.0 + 0.3 * (1.0 - p.y));
     }
-    if (erosionType == 0 || erosionType == 2) {
+    if (pType == 0 || pType == 2) {
         float n1 = noise(p * 1.5 + vec3(13.0, 7.0, 19.0)) * 0.5;
         float n2 = noise(p * 3.0 + vec3(13.0, 7.0, 19.0)) * 0.25;
         thermal = (n1 + n2) * 0.35;
     }
 
-    return (weathering + hydraulic + thermal) * t * erosionScale;
+    return (weathering + hydraulic + thermal) * t * pScale * 0.05;
+}
+
+float getErosionDisplacementLight(vec3 pos) {
+    if (erosionEnabled == 0) return 0.0;
+    return getErosionDisplacementLightP(pos, erosionStrength, erosionTime, erosionScale, erosionType);
 }
 
 // ============================================================================
 // Crystallization — sharp Voronoi facets growing outward from surface
 // ============================================================================
 
+// === Parameterized crystal functions (used by node graph per-node effects) ===
+float crystalMaxDisplacementP(float pStrength, float pTime, float pScale) {
+    return pTime * pStrength * pScale * 0.3 * 0.1;
+}
+
+float getCrystalDisplacementP(vec3 pos, float pStrength, float pTime, float pScale, float pSharpness) {
+    vec3 p = pos / pScale;
+    float t = pTime * pStrength;
+    vec2 v = voronoi3D(p * 4.0 + vec3(77.0, 33.0, 55.0));
+    float edgeDist = v.y - v.x;
+    float facet = pow(max(0.0, 1.0 - edgeDist * pSharpness), 2.0);
+    vec2 v2 = voronoi3D(p * 12.0 + vec3(11.0, 22.0, 33.0));
+    float fine = pow(max(0.0, 1.0 - (v2.y - v2.x) * pSharpness * 1.5), 3.0);
+    return -(facet * 0.25 + fine * 0.05) * t * pScale * 0.1;
+}
+
+float getCrystalDisplacementLightP(vec3 pos, float pStrength, float pTime, float pScale, float pSharpness) {
+    vec3 p = pos / pScale;
+    float t = pTime * pStrength;
+    vec2 v = voronoi3D(p * 4.0 + vec3(77.0, 33.0, 55.0));
+    float edgeDist = v.y - v.x;
+    float facet = pow(max(0.0, 1.0 - edgeDist * pSharpness), 2.0);
+    return -(facet * 0.25) * t * pScale * 0.1;
+}
+
 float crystalMaxDisplacement() {
-    return crystalTime * crystalStrength * crystalScale * 0.3;
+    return crystalMaxDisplacementP(crystalStrength, crystalTime, crystalScale);
 }
 
 float getCrystalDisplacement(vec3 pos) {
     if (crystalEnabled == 0) return 0.0;
-    vec3 p = pos / crystalScale;
-    float t = crystalTime * crystalStrength;
-    // Voronoi cell edges = crystal facets
-    vec2 v = voronoi3D(p * 4.0 + vec3(77.0, 33.0, 55.0));
-    float edgeDist = v.y - v.x;
-    float facet = pow(max(0.0, 1.0 - edgeDist * crystalSharpness), 2.0);
-    // Fine detail layer
-    vec2 v2 = voronoi3D(p * 12.0 + vec3(11.0, 22.0, 33.0));
-    float fine = pow(max(0.0, 1.0 - (v2.y - v2.x) * crystalSharpness * 1.5), 3.0);
-    // Negative displacement = growth outward
-    return -(facet * 0.25 + fine * 0.05) * t * crystalScale;
+    return getCrystalDisplacementP(pos, crystalStrength, crystalTime, crystalScale, crystalSharpness);
 }
 
 float getCrystalDisplacementLight(vec3 pos) {
     if (crystalEnabled == 0) return 0.0;
-    vec3 p = pos / crystalScale;
-    float t = crystalTime * crystalStrength;
-    vec2 v = voronoi3D(p * 4.0 + vec3(77.0, 33.0, 55.0));
-    float edgeDist = v.y - v.x;
-    float facet = pow(max(0.0, 1.0 - edgeDist * crystalSharpness), 2.0);
-    return -(facet * 0.25) * t * crystalScale;
+    return getCrystalDisplacementLightP(pos, crystalStrength, crystalTime, crystalScale, crystalSharpness);
 }
 
 // ============================================================================
 // Moss/Lichen — organic growth on surfaces
 // ============================================================================
 
+// === Parameterized moss functions (used by node graph per-node effects) ===
+float mossMaxDisplacementP(float pStrength, float pTime, float pScale) {
+    return pTime * pStrength * pScale * 0.05 * 0.2;
+}
+
+float getMossDisplacementP(vec3 pos, float pStrength, float pTime, float pScale) {
+    vec3 p = pos / pScale;
+    float t = pTime * pStrength;
+    float patches = fbmLow(p * 3.0 + vec3(91.0, 17.0, 53.0));
+    float detail = noise(p * 12.0 + vec3(7.0)) * 0.3;
+    float growth = max(0.0, patches + detail - 0.3);
+    return -growth * 0.05 * t * pScale * 0.2;
+}
+
+float getMossDisplacementLightP(vec3 pos, float pStrength, float pTime, float pScale) {
+    vec3 p = pos / pScale;
+    float t = pTime * pStrength;
+    float n1 = noise(p * 3.0 + vec3(91.0, 17.0, 53.0)) * 0.5;
+    float n2 = noise(p * 6.0 + vec3(91.0, 17.0, 53.0)) * 0.25;
+    float growth = max(0.0, n1 + n2 - 0.2);
+    return -growth * 0.05 * t * pScale * 0.2;
+}
+
 float mossMaxDisplacement() {
-    return mossTime * mossStrength * mossScale * 0.05;
+    return mossMaxDisplacementP(mossStrength, mossTime, mossScale);
 }
 
 float getMossDisplacement(vec3 pos) {
     if (mossEnabled == 0) return 0.0;
-    vec3 p = pos / mossScale;
-    float t = mossTime * mossStrength;
-    float patches = fbmLow(p * 3.0 + vec3(91.0, 17.0, 53.0));
-    float detail = noise(p * 12.0 + vec3(7.0)) * 0.3;
-    float growth = max(0.0, patches + detail - 0.3);
-    return -growth * 0.05 * t * mossScale;
+    return getMossDisplacementP(pos, mossStrength, mossTime, mossScale);
 }
 
 float getMossDisplacementLight(vec3 pos) {
     if (mossEnabled == 0) return 0.0;
-    vec3 p = pos / mossScale;
-    float t = mossTime * mossStrength;
-    float n1 = noise(p * 3.0 + vec3(91.0, 17.0, 53.0)) * 0.5;
-    float n2 = noise(p * 6.0 + vec3(91.0, 17.0, 53.0)) * 0.25;
-    float growth = max(0.0, n1 + n2 - 0.2);
-    return -growth * 0.05 * t * mossScale;
+    return getMossDisplacementLightP(pos, mossStrength, mossTime, mossScale);
 }
 
 // Factor for coloring (0 = no moss, 1 = full moss)

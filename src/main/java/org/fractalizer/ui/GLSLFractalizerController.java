@@ -1138,27 +1138,25 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("minAdaptiveSamples", afp.getMinAdaptiveSamples());
             engine.setAdaptiveSamplingEnabled(adaptive);
 
-            // Erosion
-            uniforms.put("erosionEnabled", afp.isErosionEnabled() ? 1 : 0);
-            uniforms.put("erosionStrength", afp.getErosionStrength());
-            uniforms.put("erosionTime", afp.getErosionTime());
-            uniforms.put("erosionScale", afp.getErosionScale());
-            uniforms.put("erosionType", afp.getErosionType());
+            // Erosion / Crystal / Moss — disabled globally, use EffectNode in node graph
+            uniforms.put("erosionEnabled", 0);
+            uniforms.put("erosionStrength", 0f);
+            uniforms.put("erosionTime", 0f);
+            uniforms.put("erosionScale", 1f);
+            uniforms.put("erosionType", 0);
 
-            // Crystallization
-            uniforms.put("crystalEnabled", afp.isCrystalEnabled() ? 1 : 0);
-            uniforms.put("crystalStrength", afp.getCrystalStrength());
-            uniforms.put("crystalTime", afp.getCrystalTime());
-            uniforms.put("crystalScale", afp.getCrystalScale());
-            uniforms.put("crystalSharpness", afp.getCrystalSharpness());
+            uniforms.put("crystalEnabled", 0);
+            uniforms.put("crystalStrength", 0f);
+            uniforms.put("crystalTime", 0f);
+            uniforms.put("crystalScale", 1f);
+            uniforms.put("crystalSharpness", 2f);
 
-            // Moss/Lichen
-            uniforms.put("mossEnabled", afp.isMossEnabled() ? 1 : 0);
-            uniforms.put("mossStrength", afp.getMossStrength());
-            uniforms.put("mossTime", afp.getMossTime());
-            uniforms.put("mossScale", afp.getMossScale());
-            uniforms.put("mossColor", new float[]{afp.getMossColorR(), afp.getMossColorG(), afp.getMossColorB()});
-            uniforms.put("mossNormalThreshold", afp.getMossNormalThreshold());
+            uniforms.put("mossEnabled", 0);
+            uniforms.put("mossStrength", 0f);
+            uniforms.put("mossTime", 0f);
+            uniforms.put("mossScale", 1f);
+            uniforms.put("mossColor", new float[]{0.15f, 0.35f, 0.08f});
+            uniforms.put("mossNormalThreshold", 0.3f);
 
             // Boolean Operations
             if (afp.isBooleanEnabled() && afp.getBoolSecondaryType() != null && currentBooleanProgramKey != null) {

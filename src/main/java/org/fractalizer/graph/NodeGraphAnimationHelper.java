@@ -57,6 +57,9 @@ public final class NodeGraphAnimationHelper {
         } else if (node instanceof TransformNode tn) {
             color = getTransformColor(tn);
             params.addAll(discoverTransformParams(tn));
+        } else if (node instanceof EffectNode en) {
+            color = Color.web("#F44336");
+            params.addAll(discoverEffectParams(en));
         } else if (node instanceof CSGNode csn) {
             color = Color.web("#FF9800");
             params.add(new AnimatableParameter(
@@ -134,6 +137,33 @@ public final class NodeGraphAnimationHelper {
             }
         }
 
+        return params;
+    }
+
+    private static List<AnimatableParameter> discoverEffectParams(EffectNode en) {
+        List<AnimatableParameter> params = new ArrayList<>();
+        params.add(new AnimatableParameter(
+            "strength", "Strength", Float.class,
+            () -> en.getStrength(),
+            v -> en.setStrength(((Number) v).floatValue())
+        ));
+        params.add(new AnimatableParameter(
+            "time", "Time", Float.class,
+            () -> en.getTime(),
+            v -> en.setTime(((Number) v).floatValue())
+        ));
+        params.add(new AnimatableParameter(
+            "scale", "Scale", Float.class,
+            () -> en.getScale(),
+            v -> en.setScale(((Number) v).floatValue())
+        ));
+        if (en.getEffectType() == EffectNode.EffectType.CRYSTAL) {
+            params.add(new AnimatableParameter(
+                "sharpness", "Sharpness", Float.class,
+                () -> en.getSharpness(),
+                v -> en.setSharpness(((Number) v).floatValue())
+            ));
+        }
         return params;
     }
 

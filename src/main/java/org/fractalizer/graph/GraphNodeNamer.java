@@ -19,6 +19,8 @@ public final class GraphNodeNamer {
             return fn.getFractalType().getDisplayName();
         } else if (node instanceof CSGNode) {
             return "CSG";
+        } else if (node instanceof EffectNode en) {
+            return en.getEffectType().getDisplayName();
         } else if (node instanceof TransformNode tn) {
             return tn.getMode().getDisplayName();
         }
