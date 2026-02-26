@@ -450,6 +450,10 @@ public class NodeGraphEditor extends VBox {
         return currentParams != null && currentParams.getGraphRoot() != null;
     }
 
+    public NodeGraphParams getCurrentParams() {
+        return currentParams;
+    }
+
     /**
      * Lightweight refresh: only update slider values in the detail panel.
      * No canvas redraw, no recompile. Used during animation scrub/playback.

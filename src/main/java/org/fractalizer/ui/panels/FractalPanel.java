@@ -99,7 +99,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         suppressRender = suppress;
         try {
             if (params instanceof NodeGraphParams ngp) {
-                if (suppressRender && nodeGraphEditor.isLoaded()) {
+                if (suppressRender && nodeGraphEditor.isLoaded() && nodeGraphEditor.getCurrentParams() == ngp) {
                     nodeGraphEditor.refreshSliders();
                 } else {
                     nodeGraphEditor.loadParams(ngp);
