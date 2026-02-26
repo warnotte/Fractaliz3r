@@ -16,32 +16,34 @@ The node graph uses a **composite pattern** — a tree of `GraphNode` objects co
                     ├── name: String        (stable, for animation tracks)
                     └── getChildren(): List<GraphNode>
                          │
-          ┌──────────────┼──────────────┐
-          │              │              │
-     FractalNode     CSGNode      TransformNode
-     (leaf)          (binary)     (unary)
-     ├── fractalType ├── op       ├── mode (7 types)
-     ├── fractalParams├── blend   ├── child
-     └── (no children)├── left    └── (per-mode params)
+          ┌──────────────┼──────────────┼──────────────┐
+          │              │              │              │
+     FractalNode     CSGNode      TransformNode   EffectNode
+     (leaf)          (binary)     (unary)          (unary)
+     ├── fractalType ├── op       ├── mode (7)     ├── effectType (3)
+     ├── fractalParams├── blend   ├── child        ├── child
+     └── (no children)├── left    └── (per-mode)   └── strength/time/scale
                       └── right
 ```
 
 ### Example Tree
 
-A CSG Union of a Twisted Mandelbulb and a Menger Sponge:
+A CSG Union of a Twisted Mandelbulb and an Eroded Menger Sponge:
 
 ```
     CSGNode (UNION, blend=0.1)
     ├── TransformNode (TWIST, axis=Y, strength=0.3)
     │   └── FractalNode (Mandelbulb, power=8)
-    └── FractalNode (Menger Sponge, iterations=5)
+    └── EffectNode (EROSION, strength=0.5, time=3.0)
+        └── FractalNode (Menger Sponge, iterations=5)
 ```
 
 This compiles into a single GLSL block with:
 - `n0_DE()` / `n0_DE_simple()` — Mandelbulb (prefixed)
 - `n1_DE()` / `n1_DE_simple()` — Menger (prefixed)
 - `applyTransform_t0()` — Twist function
-- `DE()` — Composite: `smin_graph(n0_d * deCorr_t0(pos), n1_d, c0_blend)`
+- `e0_strength/time/scale/erosionType` — Erosion uniforms
+- `DE()` — Composite: `smin_graph(n0_d * deCorr_t0(pos), eroded_n1_d, c0_blend)`
 
 ---
 
@@ -134,6 +136,59 @@ public class TransformNode extends GraphNode {
 
 ---
 
+### EffectNode — Surface Effects
+
+Wraps a single child with a per-node surface effect (Erosion, Crystal, Moss) applied to its distance field.
+
+```java
+public class EffectNode extends GraphNode {
+    public enum EffectType { EROSION("Erosion"), CRYSTAL("Crystal"), MOSS("Moss") }
+    private GraphNode child;
+    private EffectType effectType;
+    private float strength;     // 0-1, default 0.5
+    private float time;         // 0-20, default 3.0
+    private float scale;        // 0.1-5, default 1.0
+    private int erosionType;    // EROSION only: 0=All, 1=Hydraulic, 2=Thermal, 3=Cracks
+    private float sharpness;    // CRYSTAL only: 0.5-5, default 2.0
+}
+```
+
+#### Effect Types
+
+| Type | GLSL Function | Attenuation | Description |
+|------|--------------|-------------|-------------|
+| **EROSION** | `getErosionDisplacementP()` | ×0.05 | Weathering cracks, hydraulic channels, thermal rounding |
+| **CRYSTAL** | `getCrystalDisplacementP()` | ×0.1 | Voronoi-based outward crystal growth |
+| **MOSS** | `getMossDisplacementP()` | ×0.2 | Organic growth in crevices and on horizontal surfaces |
+
+#### GLSL Generation
+
+`GraphCompiler` emits per-node uniforms with `e{N}_` prefix and calls parameterized `*P()` functions from `common.glsl`:
+
+```glsl
+// Uniforms (Phase 3.5)
+uniform float e0_strength;
+uniform float e0_time;
+uniform float e0_scale;
+uniform int e0_erosionType;  // EROSION only
+
+// DE emission (Phase 6/7) — with proximity gating
+float n0_d = n0_DE(pos, n0_t);  // child DE
+{ float _emaxD = erosionMaxDisplacementP(e0_strength, e0_time, e0_scale);
+  if (n0_d < _emaxD + 0.1)
+    n0_d += getErosionDisplacementP(pos, e0_strength, e0_time, e0_scale, e0_erosionType); }
+```
+
+- `DE()` (full) uses full-quality displacement functions
+- `DE_simple()` uses lightweight `*LightP()` variants for shadows/AO
+- Effects can stack: Erosion wrapping Crystal wrapping a FractalNode
+
+#### Coloring
+
+Effects modify geometry only (distance field). Coloring factors pass through from the child unchanged. Moss coloring (`getMossFactor`) remains global in `raytracer.glsl`.
+
+---
+
 ## GraphCompiler — GLSL Code Generation
 
 **File:** `graph/GraphCompiler.java`
@@ -151,6 +206,7 @@ DFS traversal assigns sequential IDs to every node:
 | FractalNode | `n` + counter | `n0`, `n1`, `n2` |
 | TransformNode | `t` + counter | `t0`, `t1` |
 | CSGNode | `c` + counter | `c0`, `c1` |
+| EffectNode | `e` + counter | `e0`, `e1` |
 
 IDs are stored on each node via `node.id` and used as GLSL variable/function prefixes.
 
@@ -170,6 +226,13 @@ CustomShader nodes use the stored `shaderSource` string instead of loading from 
 If any CSG nodes exist, emit:
 - `smin_graph(a, b, k)` and `smax_graph(a, b, k)` helper functions
 - `uniform float {cid}_blend;` for each CSG node
+
+#### Phase 3.5 — Effect Uniforms
+
+For each EffectNode, emit per-node uniforms:
+- Common: `uniform float {eid}_strength; {eid}_time; {eid}_scale;`
+- EROSION: `uniform int {eid}_erosionType;`
+- CRYSTAL: `uniform float {eid}_sharpness;`
 
 #### Phase 4 — Transform Functions
 
@@ -222,6 +285,15 @@ vec3 pos_t0 = applyTransform_t0(pos);
 float d_t0 = child_d * t0_scale;           // STANDARD: multiply by scale
 float d_t0 = child_d * deCorr_t0(pos);     // TWIST/BEND/TAPER: correction factor
 float d_t0 = child_d;                       // MIRROR/REPETITION: no correction
+```
+
+**EffectNode:** Evaluate child, then apply displacement with proximity gating
+```glsl
+// child DE emission → n0_d
+{ float _emaxD = erosionMaxDisplacementP(e0_strength, e0_time, e0_scale);
+  if (n0_d < _emaxD + 0.1)
+    n0_d += getErosionDisplacementP(pos, e0_strength, e0_time, e0_scale, e0_erosionType); }
+// DE_simple uses *LightP() variants instead
 ```
 
 **CSGNode (UNION):**
@@ -321,6 +393,20 @@ t0_mirrorOffset = 0.0
 c0_blend = 0.1
 ```
 
+**Per EffectNode:** Varies by effect type:
+```
+// Common (all types)
+e0_strength = 0.5
+e0_time = 3.0
+e0_scale = 1.0
+
+// EROSION only
+e0_erosionType = 0    (int: 0=All, 1=Hydraulic, 2=Thermal, 3=Cracks)
+
+// CRYSTAL only
+e0_sharpness = 2.0
+```
+
 ### Recompile vs Update
 
 | Change | Action |
@@ -328,6 +414,7 @@ c0_blend = 0.1
 | Add/remove/reorder nodes | `NodeGraphParams.setDirty(true)` → full recompile |
 | Change fractal type on a node | Recompile (different shader source) |
 | Change transform mode | Recompile (different GLSL function) |
+| Change effect type on EffectNode | Recompile (different uniforms/functions) |
 | Adjust slider values | `NodeGraphParams.updateUniforms()` → `collectUniformsStatic()` — uniforms only |
 | Change CSG blend | Uniform update only |
 
@@ -364,6 +451,8 @@ record NodeAnimInfo(
 Color varies by mode (e.g., orange for Standard, purple for Twist).
 
 **CSGNode:** Single `blend` parameter. Color: orange (`#FF9800`).
+
+**EffectNode:** Parameters: `strength`, `time`, `scale` (+ `sharpness` for CRYSTAL). `erosionType` is structural (not animated). Color: red (`#F44336`).
 
 ### Track Naming
 
@@ -430,15 +519,25 @@ The graph tree is serialized as a recursive JSON structure within the `.frac` sa
         }
       },
       "right": {
-        "type": "fractal",
-        "name": "Menger Sponge",
-        "fractalType": "MENGER_SPONGE",
-        "params": {
-          "maxIterations": 5,
-          "scale": 3.0,
-          "offsetX": 1.0,
-          "offsetY": 1.0,
-          "offsetZ": 1.0
+        "type": "effect",
+        "name": "Erosion",
+        "effectType": "EROSION",
+        "strength": 0.5,
+        "time": 3.0,
+        "scale": 1.0,
+        "erosionType": 0,
+        "sharpness": 2.0,
+        "child": {
+          "type": "fractal",
+          "name": "Menger Sponge",
+          "fractalType": "MENGER_SPONGE",
+          "params": {
+            "maxIterations": 5,
+            "scale": 3.0,
+            "offsetX": 1.0,
+            "offsetY": 1.0,
+            "offsetZ": 1.0
+          }
         }
       }
     }
@@ -455,6 +554,7 @@ Recursive serialization:
 | `"fractal"` | `fractalType` (enum name), `params` (fractal-specific map) |
 | `"csg"` | `op` (enum name), `blend`, `left` (recursive), `right` (recursive) |
 | `"transform"` | `mode` (enum name), `axis`, `offset` (3-array), `rotation` (3-array), `scale`, `frequency`, `child` (recursive) |
+| `"effect"` | `effectType` (enum name), `strength`, `time`, `scale`, `erosionType`, `sharpness`, `child` (recursive) |
 
 All nodes store `name` (stable identifier) and `type` (discriminator).
 
@@ -476,7 +576,7 @@ Recursive deserialization with fallback safety:
 
 ```
 ┌─── Toolbar ────────────────────────────────────────────────────────────────┐
-│ [+Fractal] [Wrap CSG] [Wrap Transform ▼] [+] [Delete] [Undo] [Redo]     │
+│ [+Fractal] [Wrap CSG] [Wrap Transform ▼] [Wrap Effect ▼] [+] [Delete] [Undo] [Redo] │
 ├─── Canvas (visual tree) ──────────────┬─── Detail Panel (sliders) ────────┤
 │                                        │                                   │
 │    ┌──────────┐                        │ Name: [Mandelbulb________]       │
@@ -528,7 +628,7 @@ Enum fields (e.g., `PolyhedralIFS.polyType`) get ComboBox controls instead of sl
 
 ### Canvas Rendering
 
-- Nodes drawn as colored rounded rectangles (FractalNode=blue, CSG=orange, Transform=mode-specific color)
+- Nodes drawn as colored rounded rectangles (FractalNode=blue, CSG=orange, Transform=mode-specific color, Effect=red)
 - Connections drawn with Bezier curves from parent to child
 - Depth-first layout: children below parents (`V_GAP=50`), siblings side-by-side (`H_GAP=20`)
 - Selected node highlighted in cyan
@@ -596,7 +696,8 @@ In `discoverTransformParams(TransformNode)`, add parameter discovery for the new
 | `graph/FractalNode.java` | Leaf: `FractalType` + per-node `AbstractFractalParams` |
 | `graph/CSGNode.java` | Binary: 4 operations + blend |
 | `graph/TransformNode.java` | Unary: 7 transform modes |
-| `graph/GraphCompiler.java` | Tree → composite GLSL (8 phases) |
+| `graph/EffectNode.java` | Unary: 3 surface effect types (Erosion/Crystal/Moss) |
+| `graph/GraphCompiler.java` | Tree → composite GLSL (8 phases + Phase 3.5 effects) |
 | `graph/GraphNodeNamer.java` | Stable unique naming for animation tracks |
 | `graph/NodeGraphAnimationHelper.java` | DFS parameter discovery for timeline integration |
 | `fractals/NodeGraphParams.java` | `AbstractFractalParams` wrapper for graph tree |

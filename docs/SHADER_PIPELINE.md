@@ -76,7 +76,7 @@ The node graph tree is compiled into a single GLSL block by `GraphCompiler` and 
 + raytracer.glsl
 ```
 
-`GraphCompiler` produces a self-contained GLSL block that defines `OrbitTrap`, `DE()`, `DE_simple()`, and `getFactors()` — the same contract as any single fractal shader. The raytracer is unaware it's rendering a composite graph.
+`GraphCompiler` produces a self-contained GLSL block that defines `OrbitTrap`, `DE()`, `DE_simple()`, and `getFactors()` — the same contract as any single fractal shader. The raytracer is unaware it's rendering a composite graph. EffectNodes emit calls to parameterized `*P()` functions from `common.glsl` with per-node uniforms (`e0_strength`, `e0_time`, etc.).
 
 **Full documentation:** [NODE_GRAPH.md](NODE_GRAPH.md) (GraphCompiler section)
 
@@ -135,11 +135,11 @@ Prepended to every shader program. Defines:
 | **Quality** | `qualityMultiplier`, `maxRaySteps`, `baseEpsilon`, `shadowSoftness`, `aoSteps` |
 | **Path Tracing** | `pathTracingEnabled`, `materialType`, `roughness`, `metallic`, `ior` |
 | **Textures** | `envMap` (sampler2D, unit 0), `paletteTexture` (sampler2D, unit 1), `varianceImage` (image2D, binding 5) |
-| **Effects** | Erosion, crystallization, moss, cross-section, DoF, fog, bloom params |
+| **Effects** | Erosion, crystallization, moss (global uniforms + parameterized `*P()` functions for per-node effects), cross-section, DoF, fog, bloom params |
 | **Audio** | `audioEnabled`, `audioLevel`, `audioBeat`, `audioOnset`, `audioBands[8]`, react params |
 | **Utilities** | Noise functions (`hash`, `noise3D`, `fbm`, `fbmLow`, `voronoi3D`), rotation helpers |
 | **Materials** | `applyMaterial()`, `getPresetPalette()`, `getSmoothPalette()` |
-| **Erosion/Crystal/Moss** | `getErosionDisplacement()`, `getCrystalDisplacement()`, `getMossFactor()` |
+| **Erosion/Crystal/Moss** | Global: `getErosionDisplacement()`, `getCrystalDisplacement()`, `getMossFactor()`. Per-node parameterized: `*P()` variants (`getErosionDisplacementP()`, `getCrystalDisplacementP()`, `getMossDisplacementP()`, etc.) with attenuation factors (×0.05/×0.1/×0.2) |
 
 ### `raytracer.glsl` — Raymarching & Rendering
 
@@ -271,13 +271,13 @@ Used in two contexts:
 - Quality: `qualityMultiplier`, `maxRaySteps`, `baseEpsilon`
 - Lighting: `lightDir`, `lightColor`, `lightIntensity`, ambient, extra lights
 - Material & Coloring: `baseHue`, `paletteIndex`, `colorStrength`, `coloringMode`
-- Effects: erosion, crystallization, moss, distortion, cross-section
+- Effects: erosion, crystallization, moss (global disabled in node graph mode), distortion, cross-section
 - Boolean ops: `boolOp`, `boolOffset`, `boolScale`, `boolBlend`, `b_`-prefixed secondary uniforms
 - Node graph: per-node prefixed uniforms via `NodeGraphParams.getUniformValues()`
 - Audio: `audioEnabled`, `audioLevel`, bands, react params
 - DoF, fog, bloom, post-processing params
 
-For **Node Graph** mode, `NodeGraphParams.getUniformValues()` returns the map from `GraphCompiler.collectUniformsStatic(root)` which traverses the node tree and collects all per-node prefixed uniforms.
+For **Node Graph** mode, `NodeGraphParams.getUniformValues()` returns the map from `GraphCompiler.collectUniformsStatic(root)` which traverses the node tree and collects all per-node prefixed uniforms (fractal: `n0_`, transform: `t0_`, CSG: `c0_`, effect: `e0_`).
 
 ### 2. Upload
 

@@ -60,6 +60,7 @@ org.fractalizer
 │   ├── FractalNode.java            # Leaf node: wraps FractalType + per-node params
 │   ├── CSGNode.java                # Binary CSG: Union/Intersect/Subtract/Morph
 │   ├── TransformNode.java          # Coordinate transform: 7 modes (Standard/Mirror/Twist/Bend/Taper/Rep/Rep1D)
+│   ├── EffectNode.java             # Surface effects: Erosion/Crystal/Moss (unary, per-node)
 │   ├── GraphCompiler.java          # Compiles node tree → composite GLSL shader (8 phases)
 │   ├── GraphNodeNamer.java         # Stable node naming for animation tracks
 │   └── NodeGraphAnimationHelper.java # Bridge: graph nodes → animatable timeline parameters
@@ -86,7 +87,7 @@ org.fractalizer
     │   ├── FractalPanel.java           # Fractal type and parameters (uses EnhancedSlider)
     │   ├── MaterialPanel.java          # Material type, physical props, and artistic palettes (uses EnhancedSlider)
     │   ├── LightingPanel.java          # Light direction and colors (uses EnhancedSlider)
-    │   ├── QualityPanel.java           # Ray steps, DoF, path tracing, preview samples (uses EnhancedSlider)
+    │   ├── QualityPanel.java           # Ray steps, DoF, path tracing, preview samples, adaptive sampling (uses EnhancedSlider)
     │   ├── PostProcessingPanel.java    # Bloom, tone mapping, color correction (uses EnhancedSlider)
     │   ├── AudioPanel.java             # Audio-reactive controls + offline video export
     │   └── ExportPanel.java            # Image/animation export with motion blur & export samples
@@ -135,13 +136,13 @@ Full documentation: **[docs/SHADER_PIPELINE.md](docs/SHADER_PIPELINE.md)**
 
 Composable fractal trees using a composite pattern. Combine multiple fractals with CSG operations and coordinate transforms, compiled into a single GPU shader.
 
-**Architecture:** `GraphNode` (abstract) → `FractalNode` (leaf: wraps FractalType + per-node params) / `CSGNode` (binary: Union/Intersect/Subtract/Morph) / `TransformNode` (unary: 7 modes).
+**Architecture:** `GraphNode` (abstract) → `FractalNode` (leaf: wraps FractalType + per-node params) / `CSGNode` (binary: Union/Intersect/Subtract/Morph) / `TransformNode` (unary: 7 modes) / `EffectNode` (unary: Erosion/Crystal/Moss).
 
-**GraphCompiler** compiles the tree into a composite GLSL block in 8 phases: ID assignment → shader loading/preprocessing → CSG helpers → transform functions → OrbitTrap struct → composite DE() → composite DE_simple() → getFactors(). Each fractal gets a unique prefix (n0_, n1_, ...) via `ShaderPreprocessor` to avoid symbol conflicts.
+**GraphCompiler** compiles the tree into a composite GLSL block in 8 phases: ID assignment → shader loading/preprocessing → CSG helpers → effect uniforms → transform functions → OrbitTrap struct → composite DE() → composite DE_simple() → getFactors(). Each fractal gets a unique prefix (n0_, n1_, ...) and each effect gets `e0_`, `e1_`, ... via `ShaderPreprocessor` to avoid symbol conflicts.
 
-**Animation:** `NodeGraphAnimationHelper` discovers animatable parameters via DFS traversal. Tracks named `{nodeName}.{paramName}` (e.g., "Mandelbulb.power"). Stable naming via `GraphNodeNamer`.
+**Animation:** `NodeGraphAnimationHelper` discovers animatable parameters via DFS traversal. Tracks named `{nodeName}.{paramName}` (e.g., "Mandelbulb.power", "Erosion.strength"). Stable naming via `GraphNodeNamer`.
 
-**UI:** `NodeGraphEditor` — visual tree canvas (left) + detail panel with auto-discovered sliders (right). Undo/redo (30 snapshots). Context menu for add/delete/wrap/rename operations.
+**UI:** `NodeGraphEditor` — visual tree canvas (left) + detail panel with auto-discovered sliders (right). Undo/redo (30 snapshots). Context menu for add/delete/wrap/rename operations. "Wrap in Effect" submenu for Erosion/Crystal/Moss.
 
 Full documentation: **[docs/NODE_GRAPH.md](docs/NODE_GRAPH.md)**
 
@@ -252,31 +253,54 @@ Variance-based convergence detection that skips already-converged pixels during 
 - **Interaction with sample counts**: Min Adaptive Samples is a floor before checking, Preview/Export Samples is the ceiling. A pixel renders between `minAdaptiveSamples` and `maxSamples` passes.
 - **Render timer**: Status bar shows elapsed time after full quality render completes (e.g., "Rendered 64 samples in 3.2s").
 
-## Erosion Simulation
+## Surface Effects (Per-Node via EffectNode)
 
-Procedural erosion applied to any fractal distance field, making fractals look like weathered rock formations. Purely shader-side: erosion functions in `common.glsl` modify the DE result in `raytracer.glsl`. No compute shaders, no 3D textures, no new shader files.
+Procedural surface effects (Erosion, Crystallization, Moss) applied per-node in the node graph via `EffectNode`. Each effect wraps a child node and modifies its distance field, making effects composable and stackable.
 
-- **Core principle**: After each `DE()` or `DE_simple()` call in geometry-related functions (rayMarch, calcNormal, calcShadow, calcAO, rayMarchSimple, glass interior), add a displacement value: `eroded_d = original_d + getErosionDisplacement(pos)`. Coloring-only DE calls (orbit trap re-evaluation) are NOT modified.
-- **Three erosion layers** (combined in "All" mode):
-  - **Weathering** (type 3): Fine cracks and pits — high-freq `fbmLow` (8x scale), 3 octaves
-  - **Hydraulic** (type 1): Vertical flow channels carved by water — Y-stretched warped `fbmLow`, gravity-biased (deeper at low Y)
-  - **Thermal** (type 2): Large-scale rounding/smoothing — low-freq `fbmLow` (1.5x scale)
-- **Performance optimizations**:
-  - `fbmLow()`: Unrolled 3-octave fbm (no loop, no compound assignments) — ~40% faster than `fbm()`
-  - Cheap hydraulic warp: 2x `fbmLow` instead of 4x `fbm` via `warpedFbm` — ~70% faster
-  - **Proximity gating**: In rayMarch/rayMarchSimple, erosion only computed when `DE < erosionMaxDisplacement() + 0.1` — skips ~80-90% of ray steps in empty space
-  - `getErosionDisplacementLight()`: 2-octave inline noise for shadow/AO (no fbm calls, no warp)
-  - calcNormal keeps full quality `getErosionDisplacement()` (critical for visual fidelity)
-- **NVIDIA GLSL compiler pitfall**: Avoid `+=`/`*=` on swizzled components (e.g., `flowP.y *= 0.25`) and in complex conditional contexts — causes `C9999: Unhandled expr op assign+` fatal error. Use explicit assignments and constructors instead.
-- **Parameters** (in `AbstractFractalParams`, serialized in `EffectsConfig`):
-  - `erosionEnabled` (bool, default false)
-  - `erosionStrength` (float, 0-1, default 0.5)
-  - `erosionTime` (float, 0-20, default 0.0 — the key "how eroded" parameter)
-  - `erosionScale` (float, 0.1-5, default 1.0 — world-space feature scale)
-  - `erosionType` (int, 0=All, 1=Hydraulic, 2=Thermal, 3=Cracks)
-- **Animation**: `erosionTime`, `erosionStrength`, `erosionScale` are global timeline tracks in their own "Erosion" group (not fractal-scoped). Keyframe erosionTime 0→10 to animate a fractal slowly eroding.
-- **UI**: QualityPanel "Erosion" TitledPane (enable checkbox, type ComboBox, strength/time/scale sliders).
-- **Zero overhead when OFF**: `erosionEnabled == 0` → early return 0.0 in all erosion functions.
+> **Note:** Surface effects are exclusively per-node via the node graph system. The global QualityPanel controls have been removed. Global effect uniforms are forced to disabled in `GLSLFractalizerController` when in Node Graph mode.
+
+### Architecture
+
+`EffectNode` is a unary graph node (like `TransformNode`) with 3 effect types:
+
+| EffectType | Displacement | Attenuation | Type-Specific Params |
+|------------|-------------|-------------|---------------------|
+| **EROSION** | Weathering cracks, hydraulic channels, thermal rounding | ×0.05 | `erosionType` (0=All, 1=Hydraulic, 2=Thermal, 3=Cracks) |
+| **CRYSTAL** | Voronoi-based outward crystal growth | ×0.1 | `sharpness` (0.5-5) |
+| **MOSS** | Organic growth in crevices/horizontal surfaces | ×0.2 | (none) |
+
+Common parameters: `strength` (0-1), `time` (0-20), `scale` (0.1-5).
+
+### GLSL Implementation
+
+`common.glsl` provides parameterized functions (`*P()`) that accept parameters instead of reading global uniforms. Global functions are wrappers. `GraphCompiler` emits calls to `*P()` functions with per-node prefixed uniforms (`e0_strength`, `e0_time`, etc.):
+
+```glsl
+// GraphCompiler emits (example: erosion, full DE):
+{ float _emaxD = erosionMaxDisplacementP(e0_strength, e0_time, e0_scale);
+  if (n0_d < _emaxD + 0.1) n0_d += getErosionDisplacementP(pos, e0_strength, e0_time, e0_scale, e0_erosionType); }
+```
+
+- **Proximity gating**: Displacement only computed when `DE < maxDisplacement + 0.1` — skips 80-90% of ray steps
+- **Full vs Light**: `DE()` uses full-quality functions, `DE_simple()` uses lightweight `*LightP()` variants
+- **Stacking**: Effects can wrap other effects (e.g., Erosion wrapping Crystal wrapping Mandelbulb)
+
+### Files
+
+| File | Role |
+|------|------|
+| `graph/EffectNode.java` | Unary node: EffectType enum, strength/time/scale + type-specific params |
+| `shaders/common.glsl` | 9 parameterized `*P()` functions + 9 global wrappers |
+| `graph/GraphCompiler.java` | Phase 3.5 (effect uniforms), `emitEffectDE()`, `collectUniformsFromNode()` |
+| `ui/components/NodeGraphEditor.java` | "Wrap in Effect" menu, `buildEffectDetail()` panel, red color |
+
+### Animation
+
+Animatable per-node: `strength`, `time`, `scale` (+ `sharpness` for CRYSTAL). `erosionType` is structural (not animated). Color: red (`#F44336`) in timeline.
+
+### NVIDIA GLSL Pitfall
+
+Avoid `+=`/`*=` on swizzled components (e.g., `flowP.y *= 0.25`) — causes `C9999: Unhandled expr op assign+` fatal error. Use explicit assignments.
 
 ## Domain Distortion (Legacy — Superseded by Node Graph TransformNode)
 

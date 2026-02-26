@@ -19,6 +19,7 @@ Build complex fractal scenes by composing multiple fractals in a visual node tre
 - **Composable trees**: Combine any number of fractals with CSG operations and coordinate transforms
 - **4 CSG operations**: Union, Intersect, Subtract, Morph — all with smooth blending
 - **7 transform modes**: Standard (translate/rotate/scale), Mirror, Twist, Bend, Taper, Repetition, Repetition 1D
+- **3 surface effects**: Erosion, Crystallization, Moss — per-node, composable, stackable
 - **Per-node parameters**: Each fractal node stores its own independent settings
 - **Visual editor**: Canvas-based tree view with drag, zoom, context menus, and undo/redo
 - **Single-shader compilation**: The entire tree compiles into one GPU shader via `GraphCompiler`
@@ -51,12 +52,13 @@ Build complex fractal scenes by composing multiple fractals in a visual node tre
 - **Color Grading**: Built-in LUT styles (Cinema, Vintage, Matrix, Neon, Noir)
 - **Subsurface Scattering**, reflections, 9 coloring modes, adaptive sampling
 
-### Surface Effects
+### Surface Effects (Per-Node)
 
 - **Erosion Simulation**: Procedural weathering (cracks, hydraulic channels, thermal rounding)
 - **Crystallization**: Voronoi-based crystal growth on fractal surfaces
 - **Moss/Lichen**: Organic growth favoring crevices and horizontal surfaces
-- **Domain Distortion**: Global twist/bend/taper/repetition transforms
+- **Composable**: Effects are per-node via `EffectNode` in the node graph — wrap any subtree, stack multiple effects
+- **Domain Distortion**: Global twist/bend/taper/repetition transforms (also available per-node via TransformNode)
 
 ### Animation System
 
