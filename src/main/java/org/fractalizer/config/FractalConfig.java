@@ -182,6 +182,12 @@ public class FractalConfig {
         // NEE + MIS
         public boolean neeEnabled = true;
 
+        // Raymarcher improvements
+        public boolean coneTracingEnabled = true;
+        public float fudgeFactor = 1.0f;
+        public int refinementSteps = 4;
+        public float stepRelaxation = 0.0f;
+
         // Adaptive Sampling
         public boolean adaptiveSampling = false;
         public float varianceThreshold = 0.0005f;
@@ -368,6 +374,10 @@ public class FractalConfig {
         config.effects.fogSteps = params.getFogSteps();
         config.effects.shutterAngle = params.getShutterAngle();
         config.effects.neeEnabled = params.isNeeEnabled();
+        config.effects.coneTracingEnabled = params.isConeTracingEnabled();
+        config.effects.fudgeFactor = params.getFudgeFactor();
+        config.effects.refinementSteps = params.getRefinementSteps();
+        config.effects.stepRelaxation = params.getStepRelaxation();
         config.effects.adaptiveSampling = params.isAdaptiveSampling();
         config.effects.varianceThreshold = params.getVarianceThreshold();
         config.effects.minAdaptiveSamples = params.getMinAdaptiveSamples();
@@ -536,6 +546,10 @@ public class FractalConfig {
         params.setFogSteps(effects.fogSteps);
         params.setShutterAngle(effects.shutterAngle);
         params.setNeeEnabled(effects.neeEnabled);
+        params.setConeTracingEnabled(effects.coneTracingEnabled);
+        params.setFudgeFactor(effects.fudgeFactor);
+        params.setRefinementSteps(effects.refinementSteps);
+        params.setStepRelaxation(effects.stepRelaxation);
         params.setAdaptiveSampling(effects.adaptiveSampling);
         params.setVarianceThreshold(effects.varianceThreshold);
         params.setMinAdaptiveSamples(effects.minAdaptiveSamples);

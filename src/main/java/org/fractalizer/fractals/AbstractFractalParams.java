@@ -55,6 +55,12 @@ public abstract class AbstractFractalParams implements FractalParams {
     // Quality multiplier for adaptive precision (1.0 = normal, higher = more detail)
     protected float qualityMultiplier;
 
+    // Raymarcher improvements
+    protected boolean coneTracingEnabled = true;
+    protected float fudgeFactor = 1.0f;
+    protected int refinementSteps = 4;
+    protected float stepRelaxation = 0.0f;
+
     // Light direction (will be normalized in kernel)
     protected float lightX, lightY, lightZ;
 
@@ -250,6 +256,12 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.epsilon = 0.00001f;
         this.qualityMultiplier = 1.0f;
 
+        // Raymarcher improvements
+        this.coneTracingEnabled = true;
+        this.fudgeFactor = 1.0f;
+        this.refinementSteps = 4;
+        this.stepRelaxation = 0.0f;
+
         // Default light direction (top-right-front)
         this.lightX = 2f;
         this.lightY = 3f;
@@ -365,6 +377,12 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.maxRaySteps = this.maxRaySteps;
         target.epsilon = this.epsilon;
         target.qualityMultiplier = this.qualityMultiplier;
+
+        // Raymarcher improvements
+        target.coneTracingEnabled = this.coneTracingEnabled;
+        target.fudgeFactor = this.fudgeFactor;
+        target.refinementSteps = this.refinementSteps;
+        target.stepRelaxation = this.stepRelaxation;
 
         // Copy lighting
         target.lightX = this.lightX;
@@ -655,6 +673,16 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setEpsilon(float epsilon) { this.epsilon = epsilon; }
     public float getQualityMultiplier() { return qualityMultiplier; }
     public void setQualityMultiplier(float multiplier) { this.qualityMultiplier = Math.max(0.5f, multiplier); }
+
+    // Raymarcher improvements
+    public boolean isConeTracingEnabled() { return coneTracingEnabled; }
+    public void setConeTracingEnabled(boolean enabled) { this.coneTracingEnabled = enabled; }
+    public float getFudgeFactor() { return fudgeFactor; }
+    public void setFudgeFactor(float f) { this.fudgeFactor = Math.max(0.1f, Math.min(2.0f, f)); }
+    public int getRefinementSteps() { return refinementSteps; }
+    public void setRefinementSteps(int steps) { this.refinementSteps = Math.max(0, Math.min(8, steps)); }
+    public float getStepRelaxation() { return stepRelaxation; }
+    public void setStepRelaxation(float r) { this.stepRelaxation = Math.max(0.0f, Math.min(1.0f, r)); }
 
     // Light direction
     public float getLightX() { return lightX; }

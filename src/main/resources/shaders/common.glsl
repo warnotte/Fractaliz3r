@@ -76,6 +76,10 @@ uniform int trapMode;
 uniform float qualityMultiplier;
 uniform int maxRaySteps;
 uniform float baseEpsilon;
+uniform float pixelRadius;      // Cone tracing: tan(fov/2) / (height/2), 0 = disabled
+uniform float fudgeFactor;      // DE step multiplier (default 1.0)
+uniform int refinementSteps;    // Binary search refinement after hit (0 = disabled)
+uniform float stepRelaxation;   // Over-relaxation factor (0 = disabled, up to 1.0)
 
 uniform float shadowSoftness;
 uniform int shadowSteps;

@@ -218,14 +218,16 @@ vec3 calcNormal(vec3 pos) {
     const vec3 k3 = vec3(-1.0,  1.0, -1.0);
     const vec3 k4 = vec3( 1.0,  1.0,  1.0);
 
-    // RESTORE PRECISION:
-    // Use an epsilon relative to the rendering quality.
-    // High quality = smaller epsilon = sharper details (no fake smoothing).
-    float qualityEpsilon = baseEpsilon / max(1.0, qualityMultiplier);
     float distToCamera = length(pos - camPos);
-    
-    // Adaptive epsilon: prevents artifacts on distant objects while keeping close details sharp
-    float e = max(qualityEpsilon, distToCamera * 0.00005);
+
+    float e;
+    if (pixelRadius > 0.0) {
+        // Cone tracing: gradient epsilon scales with pixel footprint at this distance
+        e = max(MIN_EPSILON, pixelRadius * distToCamera * 0.5);
+    } else {
+        float qualityEpsilon = baseEpsilon / max(1.0, qualityMultiplier);
+        e = max(qualityEpsilon, distToCamera * 0.00005);
+    }
 
     return normalize(
         k1 * sceneDE_simple(pos + k1 * e) +
@@ -259,7 +261,7 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
         
         // Don't clamp min step too aggressively, allows catching fine details
         // but ensure we progress at least epsilon
-        t += max(h, epsilon * 2.0);
+        t += max(h * fudgeFactor, epsilon * 2.0);
     }
 
     return clamp(res, 0.0, 1.0);
@@ -308,6 +310,22 @@ float calcSSS(vec3 pos, vec3 normal, vec3 lightDir) {
 // Ray Marching
 // ============================================================================
 
+// Binary search refinement: bisects the last step interval using DE_simple
+vec3 refineSurface(vec3 ro, vec3 rd, float hitDist, float lastStep) {
+    float lo = hitDist - lastStep;
+    float hi = hitDist;
+    for (int i = 0; i < refinementSteps; i++) {
+        float mid = (lo + hi) * 0.5;
+        float d = sceneDE_simple(ro + rd * mid);
+        if (d < 0.0) {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    return ro + rd * ((lo + hi) * 0.5);
+}
+
 RayHit rayMarch(Ray ray) {
     RayHit result;
     result.hit = false;
@@ -318,6 +336,10 @@ RayHit rayMarch(Ray ray) {
     int effectiveMaxSteps = int(float(maxRaySteps) * qualityMultiplier);
     float qualityEpsilon = baseEpsilon / qualityMultiplier;
 
+    float prevD = 1e10;
+    float omega = 1.0 + stepRelaxation;
+    float lastStep = 0.0;
+
     for (int i = 0; i < effectiveMaxSteps; i++) {
         result.pos = ray.origin + ray.direction * result.dist;
 
@@ -325,17 +347,50 @@ RayHit rayMarch(Ray ray) {
         result.minDist = min(result.minDist, d);
         result.steps = i + 1;
 
-        float epsilon = computeAdaptiveEpsilon(result.dist, qualityEpsilon, qualityMultiplier);
+        // Epsilon: cone tracing (pixel-aware) or legacy adaptive
+        float epsilon;
+        if (pixelRadius > 0.0) {
+            epsilon = max(MIN_EPSILON, pixelRadius * result.dist);
+        } else {
+            epsilon = computeAdaptiveEpsilon(result.dist, qualityEpsilon, qualityMultiplier);
+        }
 
         if (d < epsilon) {
             result.hit = true;
             break;
         }
 
-        float step = computeStep(d, qualityMultiplier, STEP_FACTOR);
+        float baseStep = computeStep(d, qualityMultiplier, STEP_FACTOR) * fudgeFactor;
+
+        // Step relaxation (Keinert 2014): take larger steps, backstep on overshoot
+        float step;
+        if (stepRelaxation > 0.0) {
+            float candidateStep = baseStep * omega;
+            if (prevD + d < candidateStep) {
+                // Overshoot detected: backstep and reset to conservative stepping
+                result.dist -= lastStep;
+                step = baseStep;
+                omega = 1.0;
+            } else {
+                step = candidateStep;
+            }
+        } else {
+            step = baseStep;
+        }
+
+        prevD = d;
+        lastStep = step;
         result.dist += step;
 
         if (result.dist > MAX_DISTANCE) break;
+    }
+
+    // Surface refinement via binary search
+    if (result.hit && refinementSteps > 0 && lastStep > 0.0) {
+        result.pos = refineSurface(ray.origin, ray.direction, result.dist, lastStep);
+        result.dist = length(result.pos - ray.origin);
+        // Re-evaluate orbit traps at refined position
+        sceneDE(result.pos, result.trap, result.matType);
     }
 
     return result;
@@ -788,23 +843,57 @@ vec3 shade(RayHit hit, Ray ray) {
 // Simple ray march for path tracing (no orbit traps needed)
 bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist, out int matType) {
     float t = 0.0;
-    int effectiveMaxSteps = int(float(maxRaySteps) * qualityMultiplier * 1.0); // Full steps for bounces
+    int effectiveMaxSteps = int(float(maxRaySteps) * qualityMultiplier);
     float qualityEpsilon = baseEpsilon / qualityMultiplier;
     OrbitTrap dummyTrap;
+
+    float prevD = 1e10;
+    float omega = 1.0 + stepRelaxation;
+    float lastStep = 0.0;
 
     for (int i = 0; i < effectiveMaxSteps; i++) {
         vec3 pos = ray.origin + ray.direction * t;
         float d = sceneDE(pos, dummyTrap, matType);
 
-        float epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
+        // Epsilon: cone tracing or legacy adaptive
+        float epsilon;
+        if (pixelRadius > 0.0) {
+            epsilon = max(MIN_EPSILON, pixelRadius * t);
+        } else {
+            epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
+        }
 
         if (d < epsilon) {
+            // Surface refinement
+            if (refinementSteps > 0 && lastStep > 0.0) {
+                pos = refineSurface(ray.origin, ray.direction, t, lastStep);
+                t = length(pos - ray.origin);
+            }
             hitPos = pos;
             hitDist = t;
             return true;
         }
 
-        t += d * STEP_FACTOR;
+        float baseStep = d * STEP_FACTOR * fudgeFactor;
+
+        // Step relaxation
+        float step;
+        if (stepRelaxation > 0.0) {
+            float candidateStep = baseStep * omega;
+            if (prevD + d < candidateStep) {
+                t -= lastStep;
+                step = baseStep;
+                omega = 1.0;
+            } else {
+                step = candidateStep;
+            }
+        } else {
+            step = baseStep;
+        }
+
+        prevD = d;
+        lastStep = step;
+        t += step;
 
         if (t > MAX_DISTANCE) break;
     }

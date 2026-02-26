@@ -385,6 +385,10 @@ public class GLSLFractalizerController implements RenderController {
                         uniforms.put("tileOffset", new float[]{tileX / fullWf, (fullH - tileY - tileH) / fullHf});
                         uniforms.put("tileScale", new float[]{tileW / fullWf, tileH / fullHf});
                         uniforms.put("fullResolution", new float[]{fullWf, fullHf});
+                        // Correct pixelRadius for full image height (not tile height)
+                        if (currentParams instanceof AbstractFractalParams afp2 && afp2.isConeTracingEnabled()) {
+                            uniforms.put("pixelRadius", (float) Math.tan(afp2.getFov() * 0.5) / (fullHf * 0.5f));
+                        }
 
                         for (int i = 0; i < exportSamples; i++) {
                             if (cancelCheck.get()) {
@@ -569,6 +573,10 @@ public class GLSLFractalizerController implements RenderController {
                     uniforms.put("tileOffset", new float[]{tileX / fullWf, (height - tileY - tileH) / fullHf});
                     uniforms.put("tileScale", new float[]{tileW / fullWf, tileH / fullHf});
                     uniforms.put("fullResolution", new float[]{fullWf, fullHf});
+                    // Correct pixelRadius for full image height (not tile height)
+                    if (currentParams instanceof AbstractFractalParams afp2 && afp2.isConeTracingEnabled()) {
+                        uniforms.put("pixelRadius", (float) Math.tan(afp2.getFov() * 0.5) / (fullHf * 0.5f));
+                    }
 
                     for (int i = 0; i < samples; i++) {
                         if (cancelCheck != null && cancelCheck.get()) {
@@ -793,6 +801,10 @@ public class GLSLFractalizerController implements RenderController {
                         uniforms.put("tileOffset", new float[]{tileX / fullWf, (height - tileY - tileH) / fullHf});
                         uniforms.put("tileScale", new float[]{tileW / fullWf, tileH / fullHf});
                         uniforms.put("fullResolution", new float[]{fullWf, fullHf});
+                        // Correct pixelRadius for full image height (not tile height)
+                        if (currentParams instanceof AbstractFractalParams afp2 && afp2.isConeTracingEnabled()) {
+                            uniforms.put("pixelRadius", (float) Math.tan(afp2.getFov() * 0.5) / (fullHf * 0.5f));
+                        }
 
                         engine.renderSample(uniforms);
                         engine.glSync();
@@ -939,6 +951,10 @@ public class GLSLFractalizerController implements RenderController {
                     uniforms.put("tileOffset", new float[]{tileX / fullWf, (fullH - tileY - tileH) / fullHf});
                     uniforms.put("tileScale", new float[]{tileW / fullWf, tileH / fullHf});
                     uniforms.put("fullResolution", new float[]{fullWf, fullHf});
+                    // Correct pixelRadius for full image height (not tile height)
+                    if (currentParams instanceof AbstractFractalParams afp2 && afp2.isConeTracingEnabled()) {
+                        uniforms.put("pixelRadius", (float) Math.tan(afp2.getFov() * 0.5) / (fullHf * 0.5f));
+                    }
 
                     engine.renderSample(uniforms);
                     engine.glSync();
@@ -1011,6 +1027,19 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("qualityMultiplier", params.getQualityMultiplier());
             uniforms.put("maxRaySteps", params.getMaxRaySteps());
             uniforms.put("baseEpsilon", params.getEpsilon());
+
+            // Raymarcher improvements
+            // pixelRadius: cone tracing pixel footprint (overridden by tiled export paths with full height)
+            if (params.isConeTracingEnabled()) {
+                float fovRad = params.getFov();
+                float halfHeight = (float) engine.getHeight() * 0.5f;
+                uniforms.put("pixelRadius", (float) Math.tan(fovRad * 0.5) / halfHeight);
+            } else {
+                uniforms.put("pixelRadius", 0.0f);
+            }
+            uniforms.put("fudgeFactor", params.getFudgeFactor());
+            uniforms.put("refinementSteps", params.getRefinementSteps());
+            uniforms.put("stepRelaxation", params.getStepRelaxation());
 
             // Lighting
             uniforms.put("lightDir", new float[]{

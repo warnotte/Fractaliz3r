@@ -70,6 +70,12 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider skyIntensitySlider;
     private EnhancedSlider indirectSlider;
 
+    // Raymarcher
+    private CheckBox coneTracingCheck;
+    private EnhancedSlider fudgeFactorSlider;
+    private EnhancedSlider refinementStepsSlider;
+    private EnhancedSlider stepRelaxationSlider;
+
     // Adaptive sampling
     private CheckBox adaptiveSamplingCheck;
     private EnhancedSlider varianceThresholdSlider;
@@ -110,6 +116,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         panel.getChildren().add(createGlowPane());
         panel.getChildren().add(createDoFPane());
         panel.getChildren().add(createPathTracingPane());
+        panel.getChildren().add(createRaymarcherPane());
         panel.getChildren().add(createAdaptiveSamplingPane());
         // Erosion / Crystal / Moss removed — now per-node via EffectNode in Node Graph
         panel.getChildren().add(createPresetsPane());
@@ -559,6 +566,49 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         return pane;
     }
 
+    private TitledPane createRaymarcherPane() {
+        VBox box = new VBox(5);
+
+        coneTracingCheck = new CheckBox("Cone Tracing");
+        coneTracingCheck.setSelected(true);
+        coneTracingCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setConeTracingEnabled(coneTracingCheck.isSelected());
+                renderCallback.requestRender();
+            }
+        });
+
+        fudgeFactorSlider = new EnhancedSlider("Fudge Factor", 0.1, 2.0, 1.0, false);
+        fudgeFactorSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setFudgeFactor(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        refinementStepsSlider = new EnhancedSlider("Refinement Steps", 0, 8, 4, true);
+        refinementStepsSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setRefinementSteps(v.intValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        stepRelaxationSlider = new EnhancedSlider("Step Relaxation", 0.0, 1.0, 0.0, false);
+        stepRelaxationSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setStepRelaxation(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        box.getChildren().addAll(coneTracingCheck, fudgeFactorSlider, refinementStepsSlider, stepRelaxationSlider);
+
+        TitledPane pane = new TitledPane("Raymarcher", box);
+        pane.setExpanded(false);
+        return pane;
+    }
+
     private TitledPane createAdaptiveSamplingPane() {
         VBox box = new VBox(5);
 
@@ -689,6 +739,12 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             bouncesSlider.setValue(p.getMaxBounces());
             skyIntensitySlider.setValue(p.getSkyIntensity());
             indirectSlider.setValue(p.getIndirectMultiplier() * 100.0);
+
+            // Raymarcher
+            coneTracingCheck.setSelected(p.isConeTracingEnabled());
+            fudgeFactorSlider.setValue(p.getFudgeFactor());
+            refinementStepsSlider.setValue(p.getRefinementSteps());
+            stepRelaxationSlider.setValue(p.getStepRelaxation());
 
             // Adaptive sampling
             adaptiveSamplingCheck.setSelected(p.isAdaptiveSampling());
