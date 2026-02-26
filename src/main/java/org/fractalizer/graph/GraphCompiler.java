@@ -171,6 +171,22 @@ public class GraphCompiler {
             uniforms.put(prefix + "rotXW", (float) Math.toRadians(p.getRotXW()));
             uniforms.put(prefix + "rotYW", (float) Math.toRadians(p.getRotYW()));
             uniforms.put(prefix + "rotZW", (float) Math.toRadians(p.getRotZW()));
+        } else if (params instanceof MengerAdvancedParams p) {
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "scale", p.getScale());
+            uniforms.put(prefix + "offset", p.getOffset());
+            uniforms.put(prefix + "rotX", p.getRotX());
+            uniforms.put(prefix + "rotZ", p.getRotZ());
+            uniforms.put(prefix + "innerFold", p.getInnerFold());
+            uniforms.put(prefix + "zScale", p.getZScale());
+        } else if (params instanceof MengerSpongeTestParams p) {
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "scale", p.getScale());
+            uniforms.put(prefix + "offset", p.getOffset());
+            uniforms.put(prefix + "rotX", p.getRotX());
+            uniforms.put(prefix + "rotZ", p.getRotZ());
+            uniforms.put(prefix + "zShift", p.getZShift());
+            uniforms.put(prefix + "centerZ", p.getCenterZ());
         } else if (params instanceof CustomShaderParams csp) {
             for (Map.Entry<String, Object> entry : csp.getUniformValues().entrySet()) {
                 Object val = entry.getValue();

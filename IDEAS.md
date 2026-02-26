@@ -56,3 +56,8 @@ Previously attempted and rejected — user considers it garbage.
 **Status:** DONE
 
 Continuous blend between two fractal DE functions: `mix(DE_A, DE_B, boolBlend)`. Implemented as `boolOp == 5` in the Boolean Operations system — zero new files, reuses 100% of the compilation pipeline. Color mixing via `morphFactors()` evaluates both fractals' orbit traps and blends the coloring factors. boolBlend 0→1 = primary→secondary. Offset/rotation/scale of secondary work naturally. `boolBlend` is a global timeline track ("Boolean" group) for animated morphing.
+
+## 12. Configurable IFS Base Primitive
+**Status:** TODO
+
+IFS fractals (Menger Advanced, Menger Sponge Test, etc.) use `(length(z) - offset) / dr` as their final DE formula, which defines a **sphere** as the base primitive. When iterations are low or when zooming deep, these spheres become visible as "atomic" building blocks. Allow the user to choose the base primitive shape per fractal: Sphere (`length(z)`), Box (`sdBox(z)`), Octahedron, Torus, or even a secondary fractal DE. This would give radically different aesthetics from the same IFS fold sequence. Could be a ComboBox in the fractal panel or a per-node option in the Node Graph.

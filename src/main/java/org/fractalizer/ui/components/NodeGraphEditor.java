@@ -191,6 +191,26 @@ public class NodeGraphEditor extends VBox {
             "maxIterations", new SliderConfig(4, 20, 4),
             "bailout", new SliderConfig(1, 10)
         ));
+        // Menger Advanced
+        Map<String, SliderConfig> maConfigs = new HashMap<>();
+        maConfigs.put("maxIterations", new SliderConfig(2, 25, 2));
+        maConfigs.put("scale", new SliderConfig(2, 4));
+        maConfigs.put("offset", new SliderConfig(0.5, 2));
+        maConfigs.put("rotX", new SliderConfig(-3.14159, 3.14159));
+        maConfigs.put("rotZ", new SliderConfig(-3.14159, 3.14159));
+        maConfigs.put("innerFold", new SliderConfig(0, 1));
+        maConfigs.put("zScale", new SliderConfig(0.5, 3));
+        FRACTAL_SLIDER_CONFIGS.put(FractalType.MENGER_ADVANCED, maConfigs);
+        // Menger Sponge Test
+        Map<String, SliderConfig> mstConfigs = new HashMap<>();
+        mstConfigs.put("maxIterations", new SliderConfig(2, 25, 2));
+        mstConfigs.put("scale", new SliderConfig(2, 4));
+        mstConfigs.put("offset", new SliderConfig(0.5, 2));
+        mstConfigs.put("rotX", new SliderConfig(-3.14159, 3.14159));
+        mstConfigs.put("rotZ", new SliderConfig(-3.14159, 3.14159));
+        mstConfigs.put("zShift", new SliderConfig(-2, 2));
+        mstConfigs.put("centerZ", new SliderConfig(0, 2));
+        FRACTAL_SLIDER_CONFIGS.put(FractalType.MENGER_SPONGE_TEST, mstConfigs);
     }
 
     private static SliderConfig resolveSliderConfig(FractalType type, String fieldName, boolean isInt) {

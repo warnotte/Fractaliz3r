@@ -679,6 +679,22 @@ public class FractalConfig {
             map.put("rotXW", qj.getRotXW());
             map.put("rotYW", qj.getRotYW());
             map.put("rotZW", qj.getRotZW());
+        } else if (params instanceof MengerAdvancedParams ma) {
+            map.put("maxIterations", ma.getMaxIterations());
+            map.put("scale", ma.getScale());
+            map.put("offset", ma.getOffset());
+            map.put("rotX", ma.getRotX());
+            map.put("rotZ", ma.getRotZ());
+            map.put("innerFold", ma.getInnerFold());
+            map.put("zScale", ma.getZScale());
+        } else if (params instanceof MengerSpongeTestParams mst) {
+            map.put("maxIterations", mst.getMaxIterations());
+            map.put("scale", mst.getScale());
+            map.put("offset", mst.getOffset());
+            map.put("rotX", mst.getRotX());
+            map.put("rotZ", mst.getRotZ());
+            map.put("zShift", mst.getZShift());
+            map.put("centerZ", mst.getCenterZ());
         } else if (params instanceof NodeGraphParams ngp) {
             if (ngp.getGraphRoot() != null) {
                 map.put("graph", serializeGraphNode(ngp.getGraphRoot()));
@@ -769,6 +785,22 @@ public class FractalConfig {
             if (map.containsKey("rotXW")) qj.setRotXW(getFloat(map, "rotXW"));
             if (map.containsKey("rotYW")) qj.setRotYW(getFloat(map, "rotYW"));
             if (map.containsKey("rotZW")) qj.setRotZW(getFloat(map, "rotZW"));
+        } else if (params instanceof MengerAdvancedParams ma) {
+            if (map.containsKey("maxIterations")) ma.setMaxIterations(getInt(map, "maxIterations"));
+            if (map.containsKey("scale")) ma.setScale(getFloat(map, "scale"));
+            if (map.containsKey("offset")) ma.setOffset(getFloat(map, "offset"));
+            if (map.containsKey("rotX")) ma.setRotX(getFloat(map, "rotX"));
+            if (map.containsKey("rotZ")) ma.setRotZ(getFloat(map, "rotZ"));
+            if (map.containsKey("innerFold")) ma.setInnerFold(getFloat(map, "innerFold"));
+            if (map.containsKey("zScale")) ma.setZScale(getFloat(map, "zScale"));
+        } else if (params instanceof MengerSpongeTestParams mst) {
+            if (map.containsKey("maxIterations")) mst.setMaxIterations(getInt(map, "maxIterations"));
+            if (map.containsKey("scale")) mst.setScale(getFloat(map, "scale"));
+            if (map.containsKey("offset")) mst.setOffset(getFloat(map, "offset"));
+            if (map.containsKey("rotX")) mst.setRotX(getFloat(map, "rotX"));
+            if (map.containsKey("rotZ")) mst.setRotZ(getFloat(map, "rotZ"));
+            if (map.containsKey("zShift")) mst.setZShift(getFloat(map, "zShift"));
+            if (map.containsKey("centerZ")) mst.setCenterZ(getFloat(map, "centerZ"));
         } else if (params instanceof NodeGraphParams ngp) {
             if (map.containsKey("graph") && map.get("graph") instanceof Map<?,?> graphMap) {
                 // New format: deserialize full graph tree

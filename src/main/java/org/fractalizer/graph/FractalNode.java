@@ -54,6 +54,8 @@ public class FractalNode extends GraphNode {
             case APOLLONIAN -> new ApollonianParams();
             case BRISTORBROT -> new BristorbrotParams();
             case QUATERNION_JULIA_4D -> new QuaternionJulia4DParams();
+            case MENGER_ADVANCED -> new MengerAdvancedParams();
+            case MENGER_SPONGE_TEST -> new MengerSpongeTestParams();
             case CUSTOM_SHADER -> new CustomShaderParams();
             default -> null;
         };
