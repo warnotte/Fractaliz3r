@@ -18,6 +18,7 @@ import java.util.*;
 public class GraphCompiler {
 
     private int fractalCounter;
+    private int primitiveCounter;
     private int transformCounter;
     private int csgCounter;
     private int effectCounter;
@@ -26,7 +27,7 @@ public class GraphCompiler {
     private final List<CSGInfo> csgNodes = new ArrayList<>();
     private final List<EffectInfo> effects = new ArrayList<>();
 
-    private record LeafInfo(FractalNode node, String prefix) {}
+    private record LeafInfo(GraphNode node, String prefix) {}
     private record TransformInfo(TransformNode node, String id) {}
     private record CSGInfo(CSGNode node, String id) {}
     private record EffectInfo(EffectNode node, String id) {}
@@ -40,6 +41,7 @@ public class GraphCompiler {
      */
     public String compile(GraphNode root) {
         fractalCounter = 0;
+        primitiveCounter = 0;
         transformCounter = 0;
         csgCounter = 0;
         effectCounter = 0;
@@ -53,20 +55,27 @@ public class GraphCompiler {
 
         StringBuilder sb = new StringBuilder();
 
-        // Phase 2: Load, strip, and preprocess each fractal shader
+        // Phase 2: Load, strip, and preprocess each leaf shader
         for (LeafInfo leaf : leaves) {
-            String source;
-            if (leaf.node.getFractalType() == FractalType.CUSTOM_SHADER
-                    && leaf.node.getFractalParams() instanceof CustomShaderParams csp) {
-                source = csp.getShaderSource();
-            } else {
-                source = loadFractalShader(leaf.node.getFractalType().getKernelName());
+            if (leaf.node instanceof PrimitiveNode pn) {
+                // Inline GLSL generation for primitives (no .glsl file)
+                sb.append("// === ").append(pn.getPrimitiveType().getDisplayName())
+                  .append(" Primitive (").append(leaf.prefix).append(") ===\n");
+                sb.append(generatePrimitiveGLSL(pn, leaf.prefix)).append("\n\n");
+            } else if (leaf.node instanceof FractalNode fn) {
+                String source;
+                if (fn.getFractalType() == FractalType.CUSTOM_SHADER
+                        && fn.getFractalParams() instanceof CustomShaderParams csp) {
+                    source = csp.getShaderSource();
+                } else {
+                    source = loadFractalShader(fn.getFractalType().getKernelName());
+                }
+                String stripped = source.replaceAll("#version\\s+\\d+\\s*\\w*", "").trim();
+                String preprocessed = ShaderPreprocessor.renameLocalSymbols(stripped, leaf.prefix + "_");
+                sb.append("// === ").append(fn.getFractalType().getDisplayName())
+                  .append(" (").append(leaf.prefix).append(") ===\n");
+                sb.append(preprocessed).append("\n\n");
             }
-            String stripped = source.replaceAll("#version\\s+\\d+\\s*\\w*", "").trim();
-            String preprocessed = ShaderPreprocessor.renameLocalSymbols(stripped, leaf.prefix + "_");
-            sb.append("// === ").append(leaf.node.getFractalType().getDisplayName())
-              .append(" (").append(leaf.prefix).append(") ===\n");
-            sb.append(preprocessed).append("\n\n");
         }
 
         // Phase 3: smin/smax helpers + CSG blend uniforms (only if CSG nodes exist)
@@ -214,7 +223,11 @@ public class GraphCompiler {
     // ========================================================================
 
     private void assignIds(GraphNode node) {
-        if (node instanceof FractalNode fn) {
+        if (node instanceof PrimitiveNode pn) {
+            String prefix = "p" + primitiveCounter++;
+            pn.id = prefix;
+            leaves.add(new LeafInfo(pn, prefix));
+        } else if (node instanceof FractalNode fn) {
             String prefix = "n" + fractalCounter++;
             fn.id = prefix;
             leaves.add(new LeafInfo(fn, prefix));
@@ -505,7 +518,9 @@ public class GraphCompiler {
     }
 
     private DEResult emitDEBody(GraphNode node, String posVar, StringBuilder sb, boolean full) {
-        if (node instanceof FractalNode fn) {
+        if (node instanceof PrimitiveNode pn) {
+            return emitPrimitiveDE(pn, posVar, sb, full);
+        } else if (node instanceof FractalNode fn) {
             return emitFractalDE(fn, posVar, sb, full);
         } else if (node instanceof EffectNode en) {
             return emitEffectDE(en, posVar, sb, full);
@@ -642,7 +657,14 @@ public class GraphCompiler {
     // ========================================================================
 
     private static void collectUniformsFromNode(GraphNode node, Map<String, Object> uniforms) {
-        if (node instanceof FractalNode fn) {
+        if (node instanceof PrimitiveNode pn) {
+            String id = pn.getId();
+            uniforms.put(id + "_sizeX", pn.getSizeX());
+            uniforms.put(id + "_sizeY", pn.getSizeY());
+            uniforms.put(id + "_sizeZ", pn.getSizeZ());
+            uniforms.put(id + "_rounding", pn.getRounding());
+            uniforms.put(id + "_shell", pn.getShell());
+        } else if (node instanceof FractalNode fn) {
             AbstractFractalParams stored = fn.getFractalParams();
             if (stored != null) {
                 emitFractalUniforms(uniforms, fn.id + "_", stored);
@@ -812,6 +834,163 @@ public class GraphCompiler {
     }
 
     // ========================================================================
+    // Primitive node support
+    // ========================================================================
+
+    private DEResult emitPrimitiveDE(PrimitiveNode pn, String posVar, StringBuilder sb, boolean full) {
+        String prefix = pn.id;
+        int leafIdx = leafIndex(pn);
+        String dVar = prefix + "_d";
+
+        if (full) {
+            String tVar = prefix + "_t";
+            sb.append("    ").append(prefix).append("_OrbitTrap ").append(tVar).append(";\n");
+            sb.append("    float ").append(dVar).append(" = ").append(prefix)
+              .append("_DE(").append(posVar).append(", ").append(tVar).append(");\n");
+        } else {
+            sb.append("    float ").append(dVar).append(" = ").append(prefix)
+              .append("_DE_simple(").append(posVar).append(");\n");
+        }
+        return new DEResult(dVar, String.valueOf(leafIdx));
+    }
+
+    /**
+     * Generate complete inline GLSL for a primitive SDF node.
+     * Emits uniforms, OrbitTrap struct, DE_simple, DE, and getFactors.
+     */
+    private String generatePrimitiveGLSL(PrimitiveNode pn, String p) {
+        StringBuilder sb = new StringBuilder();
+
+        // Uniforms
+        sb.append("uniform float ").append(p).append("_sizeX;\n");
+        sb.append("uniform float ").append(p).append("_sizeY;\n");
+        sb.append("uniform float ").append(p).append("_sizeZ;\n");
+        sb.append("uniform float ").append(p).append("_rounding;\n");
+        sb.append("uniform float ").append(p).append("_shell;\n\n");
+
+        // OrbitTrap struct
+        sb.append("struct ").append(p).append("_OrbitTrap {\n");
+        sb.append("    float minDist;\n");
+        sb.append("    float planeX;\n");
+        sb.append("    float planeY;\n");
+        sb.append("    float planeZ;\n");
+        sb.append("    int iterations;\n");
+        sb.append("};\n\n");
+
+        // DE_simple
+        sb.append("float ").append(p).append("_DE_simple(vec3 pos) {\n");
+        sb.append(getSdfBody(pn.getPrimitiveType(), p));
+        sb.append("    if (").append(p).append("_shell > 0.0) d = abs(d) - ").append(p).append("_shell;\n");
+        sb.append("    d -= ").append(p).append("_rounding;\n");
+        sb.append("    return d;\n");
+        sb.append("}\n\n");
+
+        // DE (full, with orbit trap)
+        sb.append("float ").append(p).append("_DE(vec3 pos, out ").append(p).append("_OrbitTrap trap) {\n");
+        sb.append("    float d = ").append(p).append("_DE_simple(pos);\n");
+        sb.append("    trap.minDist = abs(d);\n");
+        sb.append("    trap.planeX = abs(pos.x);\n");
+        sb.append("    trap.planeY = abs(pos.y);\n");
+        sb.append("    trap.planeZ = abs(pos.z);\n");
+        sb.append("    trap.iterations = 1;\n");
+        sb.append("    return d;\n");
+        sb.append("}\n\n");
+
+        // getFactors
+        sb.append("vec3 ").append(p).append("_getFactors(").append(p).append("_OrbitTrap trap) {\n");
+        sb.append("    float structural = exp(-trap.minDist * 2.0);\n");
+        sb.append("    float flowX = exp(-trap.planeX * 1.5);\n");
+        sb.append("    float flowY = exp(-trap.planeY * 1.5);\n");
+        sb.append("    float flowZ = exp(-trap.planeZ * 1.5);\n");
+        sb.append("    return vec3(structural, (flowX + flowY) * 0.5, flowZ);\n");
+        sb.append("}\n");
+
+        return sb.toString();
+    }
+
+    private static String getSdfBody(PrimitiveNode.PrimitiveType type, String p) {
+        return switch (type) {
+            case SPHERE ->
+                "    float d = length(pos) - " + p + "_sizeX;\n";
+            case BOX ->
+                "    vec3 _q = abs(pos) - vec3(" + p + "_sizeX, " + p + "_sizeY, " + p + "_sizeZ);\n" +
+                "    float d = length(max(_q, 0.0)) + min(max(_q.x, max(_q.y, _q.z)), 0.0);\n";
+            case ROUNDED_BOX ->
+                "    vec3 _q = abs(pos) - vec3(" + p + "_sizeX, " + p + "_sizeY, " + p + "_sizeZ);\n" +
+                "    float d = length(max(_q, 0.0)) + min(max(_q.x, max(_q.y, _q.z)), 0.0);\n";
+            case PLANE ->
+                "    float d = pos.y - " + p + "_sizeX;\n";
+            case TORUS ->
+                "    vec2 _q = vec2(length(pos.xz) - " + p + "_sizeX, pos.y);\n" +
+                "    float d = length(_q) - " + p + "_sizeY;\n";
+            case CYLINDER ->
+                "    vec2 _dh = abs(vec2(length(pos.xz), pos.y)) - vec2(" + p + "_sizeX, " + p + "_sizeY);\n" +
+                "    float d = min(max(_dh.x, _dh.y), 0.0) + length(max(_dh, 0.0));\n";
+            case CAPSULE ->
+                "    float _clampedY = clamp(pos.y, -" + p + "_sizeY, " + p + "_sizeY);\n" +
+                "    float d = length(pos - vec3(0.0, _clampedY, 0.0)) - " + p + "_sizeX;\n";
+            case CONE -> {
+                // Capped cone with height (sizeX), bottom radius (sizeY), top radius (sizeZ)
+                // Based on IQ sdCappedCone
+                yield "    float _h = " + p + "_sizeX;\n" +
+                    "    float _r1 = " + p + "_sizeY;\n" +
+                    "    float _r2 = " + p + "_sizeZ;\n" +
+                    "    vec2 _q = vec2(length(pos.xz), pos.y);\n" +
+                    "    vec2 _k1 = vec2(_r2, _h);\n" +
+                    "    vec2 _k2 = vec2(_r2 - _r1, 2.0 * _h);\n" +
+                    "    vec2 _ca = vec2(_q.x - min(_q.x, (_q.y < 0.0) ? _r1 : _r2), abs(_q.y) - _h);\n" +
+                    "    vec2 _cb = _q - _k1 + _k2 * clamp(dot(_k1 - _q, _k2) / dot(_k2, _k2), 0.0, 1.0);\n" +
+                    "    float _s = (_cb.x < 0.0 && _ca.y < 0.0) ? -1.0 : 1.0;\n" +
+                    "    float d = _s * sqrt(min(dot(_ca, _ca), dot(_cb, _cb)));\n";
+            }
+            case OCTAHEDRON -> {
+                // IQ exact sdOctahedron (restructured to avoid early return)
+                yield "    float _os = " + p + "_sizeX;\n" +
+                    "    vec3 _op = abs(pos);\n" +
+                    "    float _om = _op.x + _op.y + _op.z - _os;\n" +
+                    "    vec3 _oq;\n" +
+                    "    float d;\n" +
+                    "    if (3.0 * _op.x < _om) _oq = _op.xyz;\n" +
+                    "    else if (3.0 * _op.y < _om) _oq = _op.yzx;\n" +
+                    "    else if (3.0 * _op.z < _om) _oq = _op.zxy;\n" +
+                    "    else { d = _om * 0.57735027;\n" +
+                    "           if (" + p + "_shell > 0.0) d = abs(d) - " + p + "_shell;\n" +
+                    "           d -= " + p + "_rounding;\n" +
+                    "           return d; }\n" +
+                    "    float _ok = clamp(0.5 * (_oq.z - _oq.y + _os), 0.0, _os);\n" +
+                    "    d = length(vec3(_oq.x, _oq.y - _os + _ok, _oq.z - _ok));\n";
+            }
+            case PYRAMID -> {
+                // IQ sdPyramid (4-sided pyramid, base = 1, height = sizeX)
+                yield "    float _h = " + p + "_sizeX;\n" +
+                    "    float _m2 = _h * _h + 0.25;\n" +
+                    "    vec3 _p = pos;\n" +
+                    "    _p.xz = abs(_p.xz);\n" +
+                    "    _p.xz = (_p.z > _p.x) ? _p.zx : _p.xz;\n" +
+                    "    _p.xz -= 0.5;\n" +
+                    "    vec3 _q = vec3(_p.z, _h * _p.y - 0.5 * _p.x, _h * _p.x + 0.5 * _p.y);\n" +
+                    "    float _s = max(-_q.x, 0.0);\n" +
+                    "    float _t = clamp((_q.y - 0.5 * _p.z) / (_m2 + 0.25), 0.0, 1.0);\n" +
+                    "    float _a = _m2 * (_q.x + _s) * (_q.x + _s) + _q.y * _q.y;\n" +
+                    "    float _b = _m2 * (_q.x + 0.5 * _t) * (_q.x + 0.5 * _t) + (_q.y - _m2 * _t) * (_q.y - _m2 * _t);\n" +
+                    "    float d = min(_a, _b);\n" +
+                    "    d = sqrt((d + _q.z * _q.z) / _m2) * sign(max(_q.z, -_p.y));\n";
+            }
+            case HEX_PRISM -> {
+                // IQ sdHexPrism — hex cross-section in XZ, height in Y
+                yield "    float _hr = " + p + "_sizeX;\n" +
+                    "    float _hh = " + p + "_sizeY;\n" +
+                    "    vec3 _hp = abs(pos);\n" +
+                    "    float _hk = -0.8660254;\n" +  // -sqrt(3)/2
+                    "    vec2 _hxz = vec2(_hp.x, _hp.z);\n" +
+                    "    _hxz -= 2.0 * min(dot(vec2(_hk, 0.5), _hxz), 0.0) * vec2(_hk, 0.5);\n" +
+                    "    vec2 _hd = vec2(length(_hxz - vec2(clamp(_hxz.x, -_hk * _hr, _hk * _hr), _hr)) * sign(_hxz.y - _hr), _hp.y - _hh);\n" +
+                    "    float d = min(max(_hd.x, _hd.y), 0.0) + length(max(_hd, 0.0));\n";
+            }
+        };
+    }
+
+    // ========================================================================
     // Utilities
     // ========================================================================
 
@@ -834,11 +1013,11 @@ public class GraphCompiler {
         }
     }
 
-    private int leafIndex(FractalNode fn) {
+    private int leafIndex(GraphNode node) {
         for (int i = 0; i < leaves.size(); i++) {
-            if (leaves.get(i).node == fn) return i;
+            if (leaves.get(i).node == node) return i;
         }
-        throw new IllegalStateException("FractalNode not found in leaves: " + fn.getFractalType());
+        throw new IllegalStateException("Leaf node not found in leaves: " + node.getClass().getSimpleName());
     }
 
     private String loadFractalShader(String kernelName) {

@@ -47,7 +47,38 @@ public final class NodeGraphAnimationHelper {
         List<AnimatableParameter> params = new ArrayList<>();
         Color color;
 
-        if (node instanceof FractalNode fn) {
+        if (node instanceof PrimitiveNode pn) {
+            color = Color.web("#8BC34A");
+            params.add(new AnimatableParameter(
+                "sizeX", PrimitiveNode.getSizeXLabel(pn.getPrimitiveType()), Float.class,
+                () -> pn.getSizeX(),
+                v -> pn.setSizeX(((Number) v).floatValue())
+            ));
+            if (PrimitiveNode.usesSizeY(pn.getPrimitiveType())) {
+                params.add(new AnimatableParameter(
+                    "sizeY", PrimitiveNode.getSizeYLabel(pn.getPrimitiveType()), Float.class,
+                    () -> pn.getSizeY(),
+                    v -> pn.setSizeY(((Number) v).floatValue())
+                ));
+            }
+            if (PrimitiveNode.usesSizeZ(pn.getPrimitiveType())) {
+                params.add(new AnimatableParameter(
+                    "sizeZ", PrimitiveNode.getSizeZLabel(pn.getPrimitiveType()), Float.class,
+                    () -> pn.getSizeZ(),
+                    v -> pn.setSizeZ(((Number) v).floatValue())
+                ));
+            }
+            params.add(new AnimatableParameter(
+                "rounding", "Rounding", Float.class,
+                () -> pn.getRounding(),
+                v -> pn.setRounding(((Number) v).floatValue())
+            ));
+            params.add(new AnimatableParameter(
+                "shell", "Shell", Float.class,
+                () -> pn.getShell(),
+                v -> pn.setShell(((Number) v).floatValue())
+            ));
+        } else if (node instanceof FractalNode fn) {
             color = Color.web("#2196F3");
             AbstractFractalParams fp = fn.getFractalParams();
             if (fp != null) {

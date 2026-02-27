@@ -862,7 +862,15 @@ public class FractalConfig {
         if (node.getName() != null) {
             map.put("name", node.getName());
         }
-        if (node instanceof FractalNode fn) {
+        if (node instanceof PrimitiveNode pn) {
+            map.put("type", "primitive");
+            map.put("primitiveType", pn.getPrimitiveType().name());
+            map.put("sizeX", (double) pn.getSizeX());
+            map.put("sizeY", (double) pn.getSizeY());
+            map.put("sizeZ", (double) pn.getSizeZ());
+            map.put("rounding", (double) pn.getRounding());
+            map.put("shell", (double) pn.getShell());
+        } else if (node instanceof FractalNode fn) {
             map.put("type", "fractal");
             map.put("fractalType", fn.getFractalType().name());
             // Serialize per-node fractal params (reuses extractFractalParams)
@@ -907,6 +915,18 @@ public class FractalConfig {
         if (type == null) return null;
 
         GraphNode result = switch (type) {
+            case "primitive" -> {
+                PrimitiveNode.PrimitiveType pt;
+                try { pt = PrimitiveNode.PrimitiveType.valueOf((String) map.get("primitiveType")); }
+                catch (Exception e) { pt = PrimitiveNode.PrimitiveType.SPHERE; }
+                PrimitiveNode pn = new PrimitiveNode(pt);
+                if (map.containsKey("sizeX")) pn.setSizeX(((Number) map.get("sizeX")).floatValue());
+                if (map.containsKey("sizeY")) pn.setSizeY(((Number) map.get("sizeY")).floatValue());
+                if (map.containsKey("sizeZ")) pn.setSizeZ(((Number) map.get("sizeZ")).floatValue());
+                if (map.containsKey("rounding")) pn.setRounding(((Number) map.get("rounding")).floatValue());
+                if (map.containsKey("shell")) pn.setShell(((Number) map.get("shell")).floatValue());
+                yield pn;
+            }
             case "fractal" -> {
                 String ftName = (String) map.get("fractalType");
                 FractalType ft;
