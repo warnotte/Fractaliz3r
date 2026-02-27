@@ -22,15 +22,18 @@ public class GraphCompiler {
     private int transformCounter;
     private int csgCounter;
     private int effectCounter;
+    private int materialCounter;
     private final List<LeafInfo> leaves = new ArrayList<>();
     private final List<TransformInfo> transforms = new ArrayList<>();
     private final List<CSGInfo> csgNodes = new ArrayList<>();
     private final List<EffectInfo> effects = new ArrayList<>();
+    private final List<MaterialInfo> materials = new ArrayList<>();
 
     private record LeafInfo(GraphNode node, String prefix) {}
     private record TransformInfo(TransformNode node, String id) {}
     private record CSGInfo(CSGNode node, String id) {}
     private record EffectInfo(EffectNode node, String id) {}
+    private record MaterialInfo(MaterialNode node, String id) {}
 
     /**
      * Compile a node graph into composite GLSL source code.
@@ -45,15 +48,22 @@ public class GraphCompiler {
         transformCounter = 0;
         csgCounter = 0;
         effectCounter = 0;
+        materialCounter = 0;
         leaves.clear();
         transforms.clear();
         csgNodes.clear();
         effects.clear();
+        materials.clear();
 
         // Phase 1: DFS to assign IDs and collect metadata
         assignIds(root);
 
         StringBuilder sb = new StringBuilder();
+
+        // Emit material define if any MaterialNode present
+        if (hasMaterialNodes()) {
+            sb.append("#define NODE_GRAPH_MATERIALS\n\n");
+        }
 
         // Phase 2: Load, strip, and preprocess each leaf shader
         for (LeafInfo leaf : leaves) {
@@ -90,6 +100,11 @@ public class GraphCompiler {
         // Phase 3.5: Effect uniforms
         if (!effects.isEmpty()) {
             sb.append(generateEffectUniforms());
+        }
+
+        // Phase 3.6: Material node uniforms
+        if (!materials.isEmpty()) {
+            sb.append(generateMaterialUniforms());
         }
 
         // Phase 4: Transform functions
@@ -241,6 +256,11 @@ public class GraphCompiler {
             en.id = eid;
             effects.add(new EffectInfo(en, eid));
             assignIds(en.getChild());
+        } else if (node instanceof MaterialNode mn) {
+            String mid = "m" + materialCounter++;
+            mn.id = mid;
+            materials.add(new MaterialInfo(mn, mid));
+            assignIds(mn.getChild());
         } else if (node instanceof CSGNode csn) {
             String cid = "c" + csgCounter++;
             csn.id = cid;
@@ -432,7 +452,30 @@ public class GraphCompiler {
         sb.append("}\n\n");
     }
 
+    private boolean hasMaterialNodes() {
+        return !materials.isEmpty();
+    }
+
     private String generateOrbitTrap() {
+        if (hasMaterialNodes()) {
+            return """
+                // === Composite OrbitTrap ===
+                struct OrbitTrap {
+                    float factorX;
+                    float factorY;
+                    float factorZ;
+                    float reserved;
+                    int iterations;
+                    int matType;
+                    vec3 matColor;
+                    float matRoughness;
+                    float matMetallic;
+                    float matIor;
+                    float matEmission;
+                };
+
+                """;
+        }
         return """
             // === Composite OrbitTrap ===
             struct OrbitTrap {
@@ -449,6 +492,16 @@ public class GraphCompiler {
     private String generateDE(GraphNode root) {
         StringBuilder sb = new StringBuilder("// === Composite DE ===\n");
         sb.append("float DE(vec3 pos, out OrbitTrap trap) {\n");
+
+        // Declare material locals with sentinel defaults (used by MaterialNode overrides)
+        if (hasMaterialNodes()) {
+            sb.append("    int _matType = -1;\n");
+            sb.append("    vec3 _matColor = vec3(1.0);\n");
+            sb.append("    float _matRoughness = -1.0;\n");
+            sb.append("    float _matMetallic = -1.0;\n");
+            sb.append("    float _matIor = -1.0;\n");
+            sb.append("    float _matEmission = -1.0;\n");
+        }
 
         DEResult result = emitDEBody(root, "pos", sb, true);
 
@@ -475,7 +528,12 @@ public class GraphCompiler {
             }
         }
 
-        sb.append("    trap = OrbitTrap(_gf.x, _gf.y, _gf.z, ").append(result.distVar).append(", 0);\n");
+        if (hasMaterialNodes()) {
+            sb.append("    trap = OrbitTrap(_gf.x, _gf.y, _gf.z, ").append(result.distVar)
+              .append(", 0, _matType, _matColor, _matRoughness, _matMetallic, _matIor, _matEmission);\n");
+        } else {
+            sb.append("    trap = OrbitTrap(_gf.x, _gf.y, _gf.z, ").append(result.distVar).append(", 0);\n");
+        }
         sb.append("    return ").append(result.distVar).append(";\n");
         sb.append("}\n\n");
         return sb.toString();
@@ -522,6 +580,8 @@ public class GraphCompiler {
             return emitPrimitiveDE(pn, posVar, sb, full);
         } else if (node instanceof FractalNode fn) {
             return emitFractalDE(fn, posVar, sb, full);
+        } else if (node instanceof MaterialNode mn) {
+            return emitMaterialDE(mn, posVar, sb, full);
         } else if (node instanceof EffectNode en) {
             return emitEffectDE(en, posVar, sb, full);
         } else if (node instanceof TransformNode tn) {
@@ -581,10 +641,30 @@ public class GraphCompiler {
     }
 
     private DEResult emitCSGDE(CSGNode csn, String posVar, StringBuilder sb, boolean full) {
+        String cid = csn.id;
+        boolean matNodes = full && hasMaterialNodes();
+
         DEResult left = emitDEBody(csn.getLeft(), posVar, sb, full);
+
+        // Save left-side material locals before right subtree overwrites them
+        if (matNodes) {
+            sb.append("    int _matType_L_").append(cid).append(" = _matType;\n");
+            sb.append("    vec3 _matColor_L_").append(cid).append(" = _matColor;\n");
+            sb.append("    float _matRoughness_L_").append(cid).append(" = _matRoughness;\n");
+            sb.append("    float _matMetallic_L_").append(cid).append(" = _matMetallic;\n");
+            sb.append("    float _matIor_L_").append(cid).append(" = _matIor;\n");
+            sb.append("    float _matEmission_L_").append(cid).append(" = _matEmission;\n");
+            // Reset to defaults before right subtree — prevents left material leaking
+            sb.append("    _matType = -1;\n");
+            sb.append("    _matColor = vec3(1.0);\n");
+            sb.append("    _matRoughness = -1.0;\n");
+            sb.append("    _matMetallic = -1.0;\n");
+            sb.append("    _matIor = -1.0;\n");
+            sb.append("    _matEmission = -1.0;\n");
+        }
+
         DEResult right = emitDEBody(csn.getRight(), posVar, sb, full);
 
-        String cid = csn.id;
         String dVar = "d_" + cid;
         String blendUniform = cid + "_blend";
 
@@ -600,6 +680,7 @@ public class GraphCompiler {
                     sb.append("    int ").append(wVar).append(" = (").append(leftD)
                       .append(" <= ").append(rightD).append(") ? ")
                       .append(left.winnerExpr).append(" : ").append(right.winnerExpr).append(";\n");
+                    if (matNodes) emitCSGMaterialPick(sb, cid, leftD + " <= " + rightD);
                     return new DEResult(dVar, wVar);
                 }
                 return new DEResult(dVar, null);
@@ -612,6 +693,7 @@ public class GraphCompiler {
                     sb.append("    int ").append(wVar).append(" = (").append(leftD)
                       .append(" >= ").append(rightD).append(") ? ")
                       .append(left.winnerExpr).append(" : ").append(right.winnerExpr).append(";\n");
+                    if (matNodes) emitCSGMaterialPick(sb, cid, leftD + " >= " + rightD);
                     return new DEResult(dVar, wVar);
                 }
                 return new DEResult(dVar, null);
@@ -624,6 +706,7 @@ public class GraphCompiler {
                     sb.append("    int ").append(wVar).append(" = (").append(leftD)
                       .append(" >= -").append(rightD).append(") ? ")
                       .append(left.winnerExpr).append(" : ").append(right.winnerExpr).append(";\n");
+                    if (matNodes) emitCSGMaterialPick(sb, cid, leftD + " >= -" + rightD);
                     return new DEResult(dVar, wVar);
                 }
                 return new DEResult(dVar, null);
@@ -644,6 +727,8 @@ public class GraphCompiler {
                     String wVar = "w_" + cid;
                     sb.append("    int ").append(wVar).append(" = (").append(blendUniform)
                       .append(" < 0.5) ? ").append(left.winnerExpr).append(" : ").append(right.winnerExpr).append(";\n");
+                    // Blend material properties for morph (smooth interpolation)
+                    if (matNodes) emitCSGMaterialMorph(sb, cid, blendUniform);
                     return new DEResult(dVar, wVar, morphGF);
                 }
                 return new DEResult(dVar, null);
@@ -713,6 +798,15 @@ public class GraphCompiler {
                 }
             }
             collectUniformsFromNode(tn.getChild(), uniforms);
+        } else if (node instanceof MaterialNode mn) {
+            String id = mn.getId();
+            uniforms.put(id + "_matType", mn.getMaterialType());
+            uniforms.put(id + "_matColor", new float[]{mn.getColorR(), mn.getColorG(), mn.getColorB()});
+            uniforms.put(id + "_roughness", mn.getRoughness());
+            uniforms.put(id + "_metallic", mn.getMetallic());
+            uniforms.put(id + "_ior", mn.getIor());
+            uniforms.put(id + "_emission", mn.getEmission());
+            collectUniformsFromNode(mn.getChild(), uniforms);
         } else if (node instanceof CSGNode csn) {
             uniforms.put(csn.id + "_blend", csn.getBlend());
             collectUniformsFromNode(csn.getLeft(), uniforms);
@@ -831,6 +925,71 @@ public class GraphCompiler {
 
         // Effect doesn't change coloring — pass through child's winner/factors
         return new DEResult(dVar, child.winnerExpr(), child.factorsExpr());
+    }
+
+    // ========================================================================
+    // Material node support
+    // ========================================================================
+
+    private String generateMaterialUniforms() {
+        StringBuilder sb = new StringBuilder("// === Material node uniforms ===\n");
+        for (MaterialInfo mi : materials) {
+            String id = mi.id;
+            sb.append("uniform int ").append(id).append("_matType;\n");
+            sb.append("uniform vec3 ").append(id).append("_matColor;\n");
+            sb.append("uniform float ").append(id).append("_roughness;\n");
+            sb.append("uniform float ").append(id).append("_metallic;\n");
+            sb.append("uniform float ").append(id).append("_ior;\n");
+            sb.append("uniform float ").append(id).append("_emission;\n");
+        }
+        sb.append("\n");
+        return sb.toString();
+    }
+
+    private DEResult emitMaterialDE(MaterialNode mn, String posVar, StringBuilder sb, boolean full) {
+        DEResult child = emitDEBody(mn.getChild(), posVar, sb, full);
+        if (full) {
+            String mid = mn.id;
+            sb.append("    { // Material override ").append(mid).append("\n");
+            sb.append("      _matType = ").append(mid).append("_matType;\n");
+            sb.append("      _matColor = ").append(mid).append("_matColor;\n");
+            sb.append("      _matRoughness = ").append(mid).append("_roughness;\n");
+            sb.append("      _matMetallic = ").append(mid).append("_metallic;\n");
+            sb.append("      _matIor = ").append(mid).append("_ior;\n");
+            sb.append("      _matEmission = ").append(mid).append("_emission;\n");
+            sb.append("    }\n");
+        }
+        return new DEResult(child.distVar(), child.winnerExpr(), child.factorsExpr());
+    }
+
+    /**
+     * Emit material pick for Union/Intersect/Subtract CSG: winner takes all.
+     * Left-side values were saved before right subtree ran. Current _mat* holds right side.
+     */
+    private void emitCSGMaterialPick(StringBuilder sb, String cid, String leftWinsCond) {
+        sb.append("    if (").append(leftWinsCond).append(") {\n");
+        sb.append("      _matType = _matType_L_").append(cid).append(";\n");
+        sb.append("      _matColor = _matColor_L_").append(cid).append(";\n");
+        sb.append("      _matRoughness = _matRoughness_L_").append(cid).append(";\n");
+        sb.append("      _matMetallic = _matMetallic_L_").append(cid).append(";\n");
+        sb.append("      _matIor = _matIor_L_").append(cid).append(";\n");
+        sb.append("      _matEmission = _matEmission_L_").append(cid).append(";\n");
+        sb.append("    }\n");
+    }
+
+    /**
+     * Emit material blend for Morph CSG: mix all material fields by blend factor.
+     * Left-side values were saved before right subtree ran. Current _mat* holds right side.
+     */
+    private void emitCSGMaterialMorph(StringBuilder sb, String cid, String blendUniform) {
+        String b = "clamp(" + blendUniform + ", 0.0, 1.0)";
+        // matType is int — snap at 0.5 instead of mix
+        sb.append("    _matType = (").append(blendUniform).append(" < 0.5) ? _matType_L_").append(cid).append(" : _matType;\n");
+        sb.append("    _matColor = mix(_matColor_L_").append(cid).append(", _matColor, ").append(b).append(");\n");
+        sb.append("    _matRoughness = mix(_matRoughness_L_").append(cid).append(", _matRoughness, ").append(b).append(");\n");
+        sb.append("    _matMetallic = mix(_matMetallic_L_").append(cid).append(", _matMetallic, ").append(b).append(");\n");
+        sb.append("    _matIor = mix(_matIor_L_").append(cid).append(", _matIor, ").append(b).append(");\n");
+        sb.append("    _matEmission = mix(_matEmission_L_").append(cid).append(", _matEmission, ").append(b).append(");\n");
     }
 
     // ========================================================================

@@ -582,6 +582,10 @@ vec3 shadeSimple(vec3 hitPos, Ray ray, int matType) {
 #else
     baseColor = applyMaterial(factors);
     localEmissive = emissiveIntensity;
+#ifdef NODE_GRAPH_MATERIALS
+    baseColor *= trap.matColor;
+    if (trap.matEmission >= 0.0) localEmissive = trap.matEmission;
+#endif
 #endif
 
     float NdotL = max(dot(normal, light), 0.0);
@@ -665,6 +669,13 @@ vec3 shade(RayHit hit, Ray ray) {
     localIor = ior;
     localMetalness = metalness;
     localEmissive = emissiveIntensity;
+#ifdef NODE_GRAPH_MATERIALS
+    if (hit.trap.matType >= 0) localMatType = hit.trap.matType;
+    baseColor *= hit.trap.matColor;
+    if (hit.trap.matMetallic >= 0.0) localMetalness = hit.trap.matMetallic;
+    if (hit.trap.matIor >= 0.0) localIor = hit.trap.matIor;
+    if (hit.trap.matEmission >= 0.0) localEmissive = hit.trap.matEmission;
+#endif
 #endif
 
     // Diffuse (Lambert)
@@ -978,6 +989,14 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
         localMetalness = metalness;
         safeRoughness = max(roughness, 0.02);
         localEmissive = emissiveIntensity;
+#ifdef NODE_GRAPH_MATERIALS
+        if (trap.matType >= 0) localMatType = trap.matType;
+        albedo *= trap.matColor;
+        if (trap.matRoughness >= 0.0) safeRoughness = max(trap.matRoughness, 0.02);
+        if (trap.matMetallic >= 0.0) localMetalness = trap.matMetallic;
+        if (trap.matIor >= 0.0) localIor = trap.matIor;
+        if (trap.matEmission >= 0.0) localEmissive = trap.matEmission;
+#endif
 #endif
 
         // Moss coloring
@@ -1270,6 +1289,14 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         localMetalness = metalness;
         safeRoughness = max(roughness, 0.02);
         localEmissive = emissiveIntensity;
+#ifdef NODE_GRAPH_MATERIALS
+        if (trap.matType >= 0) localMatType = trap.matType;
+        albedo *= trap.matColor;
+        if (trap.matRoughness >= 0.0) safeRoughness = max(trap.matRoughness, 0.02);
+        if (trap.matMetallic >= 0.0) localMetalness = trap.matMetallic;
+        if (trap.matIor >= 0.0) localIor = trap.matIor;
+        if (trap.matEmission >= 0.0) localEmissive = trap.matEmission;
+#endif
 #endif
 
         // Moss coloring
@@ -1559,6 +1586,9 @@ vec3 renderByMode(RayHit hit, Ray ray, vec3 normal, float shadow, float ao) {
 #endif
     factors = remapTrapFactors(factors, hit.pos);
     vec3 baseColor = applyMaterial(factors);
+#ifdef NODE_GRAPH_MATERIALS
+    baseColor *= hit.trap.matColor;
+#endif
 
     // Moss coloring — applied here so ALL render modes see it
     if (mossEnabled != 0) {

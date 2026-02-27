@@ -55,6 +55,7 @@ public class NodeGraphEditor extends VBox {
     private static final Color COLOR_REPETITION_1D = Color.web("#009688");
     private static final Color COLOR_PRIMITIVE = Color.web("#8BC34A");
     private static final Color COLOR_EFFECT = Color.web("#F44336");
+    private static final Color COLOR_MATERIAL = Color.web("#9C27B0");
     private static final Color COLOR_SELECTED = Color.web("#00BCD4");
     private static final Color COLOR_CONNECTION = Color.web("#9E9E9E", 0.6);
     private static final Color COLOR_TEXT = Color.WHITE;
@@ -320,6 +321,10 @@ public class NodeGraphEditor extends VBox {
             wrapEffectBtn.getItems().add(mi);
         }
 
+        Button wrapMaterialBtn = new Button("Wrap Material");
+        wrapMaterialBtn.setTooltip(new Tooltip("Wrap selected node in a material override"));
+        wrapMaterialBtn.setOnAction(e -> wrapInMaterial());
+
         Button deleteBtn = new Button("Delete");
         deleteBtn.setTooltip(new Tooltip("Remove selected node"));
         deleteBtn.setOnAction(e -> deleteSelected());
@@ -347,7 +352,8 @@ public class NodeGraphEditor extends VBox {
         presetCombo.setPromptText("Presets...");
         presetCombo.setOnAction(e -> applyPreset(presetCombo.getValue()));
 
-        HBox toolbar = new HBox(4, addFractalBtn, addPrimitiveBtn, wrapCSGBtn, wrapTransformBtn, moreTransforms, wrapEffectBtn, deleteBtn,
+        HBox toolbar = new HBox(4, addFractalBtn, addPrimitiveBtn, wrapCSGBtn, wrapTransformBtn, moreTransforms,
+            wrapEffectBtn, wrapMaterialBtn, deleteBtn,
             tbSep1, undoBtn, redoBtn, tbSep2, presetCombo);
         toolbar.setPadding(new Insets(2));
 
@@ -605,6 +611,10 @@ public class NodeGraphEditor extends VBox {
             wrapEffectMenu.getItems().add(mi);
         }
         contextMenu.getItems().add(wrapEffectMenu);
+
+        MenuItem wrapMaterialItem = new MenuItem("Wrap in Material");
+        wrapMaterialItem.setOnAction(e -> wrapInMaterial());
+        contextMenu.getItems().add(wrapMaterialItem);
 
         MenuItem duplicateItem = new MenuItem("Duplicate Subtree");
         duplicateItem.setOnAction(e -> duplicateSubtree(node));
@@ -885,6 +895,7 @@ public class NodeGraphEditor extends VBox {
     private Color getNodeColor(GraphNode node) {
         if (node instanceof PrimitiveNode) return COLOR_PRIMITIVE;
         if (node instanceof FractalNode) return COLOR_FRACTAL;
+        if (node instanceof MaterialNode) return COLOR_MATERIAL;
         if (node instanceof EffectNode) return COLOR_EFFECT;
         if (node instanceof CSGNode) return COLOR_CSG;
         if (node instanceof TransformNode tn) {
@@ -905,6 +916,7 @@ public class NodeGraphEditor extends VBox {
         if (node.getName() != null) return node.getName();
         if (node instanceof PrimitiveNode pn) return pn.getPrimitiveType().getDisplayName();
         if (node instanceof FractalNode fn) return fn.getFractalType().getDisplayName();
+        if (node instanceof MaterialNode) return "Material";
         if (node instanceof EffectNode en) return en.getEffectType().getDisplayName();
         if (node instanceof CSGNode csn) return csn.getOp().name();
         if (node instanceof TransformNode tn) return tn.getMode().getDisplayName();
@@ -938,6 +950,9 @@ public class NodeGraphEditor extends VBox {
             ParentRef r = findParentRecursive(csn.getLeft(), target);
             if (r != null) return r;
             return findParentRecursive(csn.getRight(), target);
+        } else if (current instanceof MaterialNode mn) {
+            if (mn.getChild() == target) return new ParentRef(mn, 0);
+            return findParentRecursive(mn.getChild(), target);
         } else if (current instanceof EffectNode en) {
             if (en.getChild() == target) return new ParentRef(en, 0);
             return findParentRecursive(en.getChild(), target);
@@ -953,6 +968,8 @@ public class NodeGraphEditor extends VBox {
             if (parent instanceof CSGNode csn) {
                 if (childIndex == 0) csn.setLeft(newChild);
                 else csn.setRight(newChild);
+            } else if (parent instanceof MaterialNode mn) {
+                mn.setChild(newChild);
             } else if (parent instanceof EffectNode en) {
                 en.setChild(newChild);
             } else if (parent instanceof TransformNode tn) {
@@ -973,6 +990,8 @@ public class NodeGraphEditor extends VBox {
             buildPrimitiveDetail(pn);
         } else if (selectedNode instanceof FractalNode fn) {
             buildFractalDetail(fn);
+        } else if (selectedNode instanceof MaterialNode mn) {
+            buildMaterialDetail(mn);
         } else if (selectedNode instanceof EffectNode en) {
             buildEffectDetail(en);
         } else if (selectedNode instanceof CSGNode csn) {
@@ -1443,6 +1462,86 @@ public class NodeGraphEditor extends VBox {
         }
     }
 
+    private void buildMaterialDetail(MaterialNode mn) {
+        Label title = new Label("Material Override");
+        title.getStyleClass().add("bold-label");
+        detailPanel.getChildren().add(title);
+        buildNameField(mn);
+
+        // Material type selector (structural change → recompile)
+        ComboBox<String> typeCombo = new ComboBox<>();
+        typeCombo.getItems().addAll("Global (inherit)", "Lambertian", "Metallic", "Glass");
+        typeCombo.setValue(typeCombo.getItems().get(mn.getMaterialType() + 1));
+        typeCombo.setMaxWidth(Double.MAX_VALUE);
+        typeCombo.setOnAction(e -> {
+            int idx = typeCombo.getItems().indexOf(typeCombo.getValue()) - 1;
+            mn.setMaterialType(idx);
+            onParameterChange();
+        });
+        detailPanel.getChildren().addAll(new Label("Material Type:"), typeCombo);
+
+        Separator sep = new Separator();
+        sep.setPadding(new Insets(4, 0, 4, 0));
+        detailPanel.getChildren().add(sep);
+
+        // Color tint picker
+        ColorPicker colorPicker = new ColorPicker(Color.color(mn.getColorR(), mn.getColorG(), mn.getColorB()));
+        colorPicker.setMaxWidth(Double.MAX_VALUE);
+        colorPicker.setOnAction(e -> {
+            Color c = colorPicker.getValue();
+            mn.setColorR((float) c.getRed());
+            mn.setColorG((float) c.getGreen());
+            mn.setColorB((float) c.getBlue());
+            onParameterChange();
+        });
+        detailPanel.getChildren().addAll(new Label("Color Tint:"), colorPicker);
+
+        // Material property overrides (checkbox + slider, unchecked = use global)
+        detailPanel.getChildren().add(buildMaterialOverride("Roughness", 0, 1, 0.5f,
+            mn.getRoughness(), mn::setRoughness));
+        detailPanel.getChildren().add(buildMaterialOverride("Metallic", 0, 1, 0.8f,
+            mn.getMetallic(), mn::setMetallic));
+        detailPanel.getChildren().add(buildMaterialOverride("IOR", 1, 3, 1.5f,
+            mn.getIor(), mn::setIor));
+        detailPanel.getChildren().add(buildMaterialOverride("Emission", 0, 50, 5.0f,
+            mn.getEmission(), mn::setEmission));
+    }
+
+    /**
+     * Build a checkbox + slider pair for a material property.
+     * Unchecked = sentinel -1 (use global). Checked = slider value in [min, max].
+     */
+    private VBox buildMaterialOverride(String label, double min, double max, float defaultVal,
+                                       float currentValue, java.util.function.Consumer<Float> setter) {
+        boolean overridden = currentValue >= 0;
+        CheckBox cb = new CheckBox(label);
+        cb.setSelected(overridden);
+
+        EnhancedSlider slider = new EnhancedSlider(label, min, max, overridden ? currentValue : defaultVal, false);
+        slider.setVisible(overridden);
+        slider.setManaged(overridden);
+        slider.setOnAction(v -> {
+            setter.accept(v.floatValue());
+            onParameterChange();
+        });
+
+        cb.setOnAction(e -> {
+            if (cb.isSelected()) {
+                slider.setVisible(true);
+                slider.setManaged(true);
+                setter.accept((float) slider.getValue());
+            } else {
+                slider.setVisible(false);
+                slider.setManaged(false);
+                setter.accept(-1.0f);
+            }
+            onParameterChange();
+        });
+
+        VBox box = new VBox(2, cb, slider);
+        return box;
+    }
+
     private void buildStandardTransformSliders(TransformNode tn) {
         float[] off = tn.getOffset();
         float[] rot = tn.getRotation();
@@ -1636,6 +1735,16 @@ public class NodeGraphEditor extends VBox {
         onStructuralChange();
     }
 
+    private void wrapInMaterial() {
+        if (currentParams == null || selectedNode == null) return;
+        pushUndoSnapshot();
+
+        MaterialNode wrapper = new MaterialNode(selectedNode);
+        replaceNode(selectedNode, wrapper);
+        selectedNode = wrapper;
+        onStructuralChange();
+    }
+
     private void deleteSelected() {
         if (currentParams == null || selectedNode == null) return;
         pushUndoSnapshot();
@@ -1794,6 +1903,16 @@ public class NodeGraphEditor extends VBox {
                 room.setSizeZ(1.5f);
                 room.setShell(0.05f);
 
+                // Ceiling light (flat box at top, emissive)
+                PrimitiveNode lightBox = new PrimitiveNode(PrimitiveNode.PrimitiveType.BOX);
+                lightBox.setSizeX(0.4f);
+                lightBox.setSizeY(0.02f);
+                lightBox.setSizeZ(0.4f);
+                TransformNode lightT = new TransformNode(lightBox, new float[]{0f, 1.43f, 0f});
+                MaterialNode lightMat = new MaterialNode(lightT);
+                lightMat.setMaterialType(MaterialNode.TYPE_LAMBERTIAN);
+                lightMat.setEmission(15.0f);
+
                 // Tall box (right-back)
                 PrimitiveNode tallBox = new PrimitiveNode(PrimitiveNode.PrimitiveType.BOX);
                 tallBox.setSizeX(0.35f);
@@ -1814,10 +1933,11 @@ public class NodeGraphEditor extends VBox {
                 TransformNode mandelbulbT = new TransformNode(mandelbulb,
                     new float[]{0f, -0.7f, -0.3f}, new float[]{0, 0, 0}, 0.35f);
 
-                // Assemble: room + (tallBox + (sphere + mandelbulb))
+                // Assemble: room + light + (tallBox + (sphere + mandelbulb))
                 CSGNode sphereAndBulb = new CSGNode(CSGNode.Op.UNION, sphereT, mandelbulbT, 0f);
                 CSGNode objects = new CSGNode(CSGNode.Op.UNION, tallBoxT, sphereAndBulb, 0f);
-                CSGNode scene = new CSGNode(CSGNode.Op.UNION, room, objects, 0f);
+                CSGNode roomAndLight = new CSGNode(CSGNode.Op.UNION, room, lightMat, 0f);
+                CSGNode scene = new CSGNode(CSGNode.Op.UNION, roomAndLight, objects, 0f);
                 currentParams.setGraphRoot(scene);
             }
             case "Fractal + Primitive" -> {

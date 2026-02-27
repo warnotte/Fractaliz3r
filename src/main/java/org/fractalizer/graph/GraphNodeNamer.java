@@ -25,6 +25,8 @@ public final class GraphNodeNamer {
             return en.getEffectType().getDisplayName();
         } else if (node instanceof TransformNode tn) {
             return tn.getMode().getDisplayName();
+        } else if (node instanceof MaterialNode) {
+            return "Material";
         }
         return "Node";
     }

@@ -62,6 +62,7 @@ org.fractalizer
 │   ├── CSGNode.java                # Binary CSG: Union/Intersect/Subtract/Morph
 │   ├── TransformNode.java          # Coordinate transform: 7 modes (Standard/Mirror/Twist/Bend/Taper/Rep/Rep1D)
 │   ├── EffectNode.java             # Surface effects: Erosion/Crystal/Moss (unary, per-node)
+│   ├── MaterialNode.java           # Per-node material overrides: type/color/roughness/metallic/ior/emission (unary)
 │   ├── GraphCompiler.java          # Compiles node tree → composite GLSL shader (8 phases)
 │   ├── GraphNodeNamer.java         # Stable node naming for animation tracks
 │   └── NodeGraphAnimationHelper.java # Bridge: graph nodes → animatable timeline parameters
@@ -137,7 +138,7 @@ Full documentation: **[docs/SHADER_PIPELINE.md](docs/SHADER_PIPELINE.md)**
 
 Composable fractal trees using a composite pattern. Combine multiple fractals with CSG operations and coordinate transforms, compiled into a single GPU shader.
 
-**Architecture:** `GraphNode` (abstract) → `FractalNode` (leaf: wraps FractalType + per-node params) / `CSGNode` (binary: Union/Intersect/Subtract/Morph) / `TransformNode` (unary: 7 modes) / `EffectNode` (unary: Erosion/Crystal/Moss).
+**Architecture:** `GraphNode` (abstract) → `FractalNode` (leaf: wraps FractalType + per-node params) / `PrimitiveNode` (leaf: 11 SDF shapes) / `CSGNode` (binary: Union/Intersect/Subtract/Morph) / `TransformNode` (unary: 7 modes) / `EffectNode` (unary: Erosion/Crystal/Moss) / `MaterialNode` (unary: per-node material overrides).
 
 **GraphCompiler** compiles the tree into a composite GLSL block in 8 phases: ID assignment → shader loading/preprocessing → CSG helpers → effect uniforms → transform functions → OrbitTrap struct → composite DE() → composite DE_simple() → getFactors(). Each fractal gets a unique prefix (n0_, n1_, ...) and each effect gets `e0_`, `e1_`, ... via `ShaderPreprocessor` to avoid symbol conflicts.
 
@@ -338,8 +339,9 @@ The legacy system applies space-warping globally to `pos` BEFORE DE evaluation v
 - **5 CSG operations**: Union, Intersect, Subtract, Morph, Nesting.
 - **7 transform modes**: Standard, Mirror, Twist, Bend, Taper, Repetition, Repetition 1D.
 - **Surface effects**: Erosion, Crystallization, Moss (available per-node via `EffectNode`).
+- **Per-node materials**: MaterialNode assigns material type (Lambertian/Metallic/Glass), color tint, roughness, metallic, IOR, emission per subtree. Sentinel `-1` = use global. Carried via fat OrbitTrap, gated by `#define NODE_GRAPH_MATERIALS`.
 - **Primitive nodes**: Analytic SDF shapes (Sphere, Box, Torus, etc.) can be mixed with fractals.
-- **Shader assembly**: `GraphCompiler.java` renames symbols with `n0_`, `t0_` etc. prefixes to avoid conflicts.
+- **Shader assembly**: `GraphCompiler.java` renames symbols with `n0_`, `t0_`, `m0_` etc. prefixes to avoid conflicts.
 
 ## Cinematic Rendering & Cone Tracing
 

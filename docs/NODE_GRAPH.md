@@ -12,18 +12,19 @@ The node graph uses a **composite pattern** — a tree of `GraphNode` objects co
 
 ```
                     GraphNode (abstract)
-                    ├── id: String          (compile-time: n0, t0, c0)
+                    ├── id: String          (compile-time: n0, t0, c0, m0)
                     ├── name: String        (stable, for animation tracks)
                     └── getChildren(): List<GraphNode>
                          │
-          ┌──────────────┼──────────────┼──────────────┼──────────────┐
-          │              │              │              │              │
-     FractalNode     CSGNode      TransformNode   EffectNode    PrimitiveNode
-     (leaf)          (binary)     (unary)          (unary)       (leaf)
-     ├── fractalType ├── op       ├── mode (7)     ├── effectType├── type (11)
-     ├── fractalParams├── blend   ├── child        ├── child     └── size/shell
-     └── (no children)├── left    └── (per-mode)   └── params    └── (no children)
-                      └── right
+          ┌──────────┼──────────┼──────────┼──────────┼──────────┐
+          │          │          │          │          │          │
+     FractalNode  CSGNode  TransformNode EffectNode MaterialNode PrimitiveNode
+     (leaf)       (binary) (unary)       (unary)    (unary)      (leaf)
+     ├── type     ├── op   ├── mode (7)  ├── effect ├── matType  ├── type (11)
+     ├── params   ├── blend├── child     ├── child  ├── color    └── size/shell
+     └── (leaf)   ├── left └── (per-mode)└── params ├── rough/met└── (leaf)
+                  └── right                         ├── ior/emit
+                                                    └── child
 ```
 
 ### Example Tree
@@ -154,6 +155,78 @@ public class TransformNode extends GraphNode {
 
 ---
 
+### MaterialNode — Per-Node Material Overrides
+
+Wraps a single child with per-node material properties. Properties use sentinel value `-1` to fall back to global material uniforms.
+
+```java
+public class MaterialNode extends GraphNode {
+    public static final int TYPE_GLOBAL = -1;   // Use global material
+    public static final int TYPE_LAMBERTIAN = 0;
+    public static final int TYPE_METALLIC = 1;
+    public static final int TYPE_GLASS = 2;
+
+    private GraphNode child;
+    private int materialType;   // -1 = global, 0-2 = override
+    private float colorR, colorG, colorB;  // Multiplicative tint (default 1,1,1)
+    private float roughness;    // -1 = global, 0-1 = override
+    private float metallic;     // -1 = global, 0-1 = override
+    private float ior;          // -1 = global, 1-3 = override
+    private float emission;     // -1 = global, 0-50 = override
+}
+```
+
+#### How It Works
+
+MaterialNode introduces **per-node material locals** (`_matType`, `_matColor`, `_matRoughness`, `_matMetallic`, `_matIor`, `_matEmission`) in the generated `DE()` function. These are initialized to sentinel defaults and overwritten by each MaterialNode encountered during tree evaluation.
+
+The composite `OrbitTrap` struct is expanded with material fields (only when at least one MaterialNode exists in the graph):
+
+```glsl
+struct OrbitTrap {
+    float factorX, factorY, factorZ, reserved;
+    int iterations;
+    // --- Material fields (conditional on #define NODE_GRAPH_MATERIALS) ---
+    int matType;
+    vec3 matColor;
+    float matRoughness, matMetallic, matIor, matEmission;
+};
+```
+
+**CSG material propagation:**
+- Before evaluating the right subtree, left-side material locals are saved into temporary variables (`_matType_L_c0`, etc.), then **reset to defaults**. This ensures the right subtree starts clean — no leaking from the left side.
+- After both subtrees are evaluated:
+  - **Union/Intersect/Subtract:** Winner-takes-all — the material locals of the losing side are overwritten with the winner's saved values.
+  - **Morph:** All float material properties are `mix()`-blended. `matType` (int) snaps at blend = 0.5.
+
+**Shader injection:** `raytracer.glsl` uses `#ifdef NODE_GRAPH_MATERIALS` blocks in 5 shading functions (shade, shadeSimple, pathTrace, pathTraceClassic, renderByMode) to override local material variables from the trap:
+
+```glsl
+#ifdef NODE_GRAPH_MATERIALS
+    if (trap.matType >= 0) localMatType = trap.matType;
+    baseColor *= trap.matColor;
+    if (trap.matRoughness >= 0.0) localRoughness = trap.matRoughness;
+    if (trap.matMetallic >= 0.0) localMetalness = trap.matMetallic;
+    if (trap.matIor >= 0.0) localIor = trap.matIor;
+    if (trap.matEmission >= 0.0) localEmissive = trap.matEmission;
+#endif
+```
+
+**Zero overhead when unused:** The `#define NODE_GRAPH_MATERIALS` is only emitted when at least one MaterialNode exists. Without it, OrbitTrap stays slim and no material branching occurs.
+
+#### UI
+
+- **Color:** Purple (`#9C27B0`) in tree canvas
+- **Detail panel:** Material Type ComboBox (Global/Lambertian/Metallic/Glass), ColorPicker for tint, CheckBox+Slider pairs for roughness/metallic/ior/emission (unchecked = use global)
+- **Toolbar:** "Wrap Material" button
+- **Context menu:** "Wrap in Material" option
+
+#### Animation
+
+7 animatable parameters: `colorR`, `colorG`, `colorB`, `roughness`, `metallic`, `ior`, `emission`. Color: purple in timeline.
+
+---
+
 ### EffectNode — Surface Effects
 
 Wraps a single child with a per-node surface effect (Erosion, Crystal, Moss) applied to its distance field.
@@ -222,9 +295,11 @@ DFS traversal assigns sequential IDs to every node:
 | Node Type | ID Pattern | Example |
 |-----------|-----------|---------|
 | FractalNode | `n` + counter | `n0`, `n1`, `n2` |
+| PrimitiveNode | `p` + counter | `p0`, `p1` |
 | TransformNode | `t` + counter | `t0`, `t1` |
 | CSGNode | `c` + counter | `c0`, `c1` |
 | EffectNode | `e` + counter | `e0`, `e1` |
+| MaterialNode | `m` + counter | `m0`, `m1` |
 
 IDs are stored on each node via `node.id` and used as GLSL variable/function prefixes.
 
@@ -252,6 +327,20 @@ For each EffectNode, emit per-node uniforms:
 - EROSION: `uniform int {eid}_erosionType;`
 - CRYSTAL: `uniform float {eid}_sharpness;`
 
+#### Phase 3.6 — Material Uniforms
+
+For each MaterialNode, emit per-node uniforms:
+```glsl
+uniform int m0_matType;
+uniform vec3 m0_matColor;
+uniform float m0_roughness;
+uniform float m0_metallic;
+uniform float m0_ior;
+uniform float m0_emission;
+```
+
+Also emits `#define NODE_GRAPH_MATERIALS` at the top of the generated code when any MaterialNode exists.
+
 #### Phase 4 — Transform Functions
 
 For each TransformNode, emit:
@@ -261,7 +350,7 @@ For each TransformNode, emit:
 
 #### Phase 5 — Composite OrbitTrap
 
-A unified struct that carries coloring factors (not per-fractal orbit traps):
+A unified struct that carries coloring factors (not per-fractal orbit traps). When MaterialNodes exist, also carries per-node material overrides:
 
 ```glsl
 struct OrbitTrap {
@@ -270,6 +359,13 @@ struct OrbitTrap {
     float factorZ;
     float reserved;  // Stores final distance
     int iterations;
+    // --- Only when #define NODE_GRAPH_MATERIALS ---
+    int matType;           // -1 = use global
+    vec3 matColor;         // Multiplicative tint
+    float matRoughness;    // -1 = use global
+    float matMetallic;     // -1 = use global
+    float matIor;          // -1 = use global
+    float matEmission;     // -1 = use global
 };
 ```
 
@@ -425,6 +521,16 @@ e0_erosionType = 0    (int: 0=All, 1=Hydraulic, 2=Thermal, 3=Cracks)
 e0_sharpness = 2.0
 ```
 
+**Per MaterialNode:**
+```
+m0_matType = -1         (int: -1=global, 0=Lambertian, 1=Metallic, 2=Glass)
+m0_matColor = [1,1,1]   (vec3: multiplicative tint)
+m0_roughness = -1.0     (-1 = use global, 0-1 = override)
+m0_metallic = -1.0      (-1 = use global, 0-1 = override)
+m0_ior = -1.0           (-1 = use global, 1-3 = override)
+m0_emission = -1.0      (-1 = use global, 0-50 = override)
+```
+
 ### Recompile vs Update
 
 | Change | Action |
@@ -471,6 +577,8 @@ Color varies by mode (e.g., orange for Standard, purple for Twist).
 **CSGNode:** Single `blend` parameter. Color: orange (`#FF9800`).
 
 **EffectNode:** Parameters: `strength`, `time`, `scale` (+ `sharpness` for CRYSTAL). `erosionType` is structural (not animated). Color: red (`#F44336`).
+
+**MaterialNode:** Parameters: `colorR`, `colorG`, `colorB`, `roughness`, `metallic`, `ior`, `emission`. `materialType` is structural (not animated). Color: purple (`#9C27B0`).
 
 ### Track Naming
 
@@ -570,9 +678,11 @@ Recursive serialization:
 | Node Type | Fields Stored |
 |-----------|--------------|
 | `"fractal"` | `fractalType` (enum name), `params` (fractal-specific map) |
+| `"primitive"` | `primitiveType` (enum name), `sizeX`, `sizeY`, `sizeZ`, `rounding`, `shell` |
 | `"csg"` | `op` (enum name), `blend`, `left` (recursive), `right` (recursive) |
 | `"transform"` | `mode` (enum name), `axis`, `offset` (3-array), `rotation` (3-array), `scale`, `frequency`, `child` (recursive) |
 | `"effect"` | `effectType` (enum name), `strength`, `time`, `scale`, `erosionType`, `sharpness`, `child` (recursive) |
+| `"material"` | `materialType` (int), `colorR`, `colorG`, `colorB`, `roughness`, `metallic`, `ior`, `emission`, `child` (recursive) |
 
 All nodes store `name` (stable identifier) and `type` (discriminator).
 
@@ -593,8 +703,8 @@ Recursive deserialization with fallback safety:
 ### Layout
 
 ```
-┌─── Toolbar ────────────────────────────────────────────────────────────────┐
-│ [+Fractal] [Wrap CSG] [Wrap Transform ▼] [Wrap Effect ▼] [+] [Delete] [Undo] [Redo] │
+┌─── Toolbar ──────────────────────────────────────────────────────────────────────────────────┐
+│ [+Fractal] [Wrap CSG] [Wrap Transform ▼] [Wrap Effect ▼] [Wrap Material] [+] [Delete] [Undo] [Redo] │
 ├─── Canvas (visual tree) ──────────────┬─── Detail Panel (sliders) ────────┤
 │                                        │                                   │
 │    ┌──────────┐                        │ Name: [Mandelbulb________]       │
@@ -646,7 +756,7 @@ Enum fields (e.g., `PolyhedralIFS.polyType`) get ComboBox controls instead of sl
 
 ### Canvas Rendering
 
-- Nodes drawn as colored rounded rectangles (FractalNode=blue, CSG=orange, Transform=mode-specific color, Effect=red)
+- Nodes drawn as colored rounded rectangles (FractalNode=blue, CSG=orange, Transform=mode-specific color, Effect=red, Material=purple, Primitive=teal)
 - Connections drawn with Bezier curves from parent to child
 - Depth-first layout: children below parents (`V_GAP=50`), siblings side-by-side (`H_GAP=20`)
 - Selected node highlighted in cyan
@@ -712,12 +822,65 @@ In `discoverTransformParams(TransformNode)`, add parameter discovery for the new
 |------|------|
 | `graph/GraphNode.java` | Abstract base: `id`, `name`, `getChildren()` |
 | `graph/FractalNode.java` | Leaf: `FractalType` + per-node `AbstractFractalParams` |
+| `graph/PrimitiveNode.java` | Leaf: 11 analytic SDF shapes |
 | `graph/CSGNode.java` | Binary: 4 operations + blend |
 | `graph/TransformNode.java` | Unary: 7 transform modes |
 | `graph/EffectNode.java` | Unary: 3 surface effect types (Erosion/Crystal/Moss) |
-| `graph/GraphCompiler.java` | Tree → composite GLSL (8 phases + Phase 3.5 effects) |
+| `graph/MaterialNode.java` | Unary: per-node material overrides (type, color, roughness, metallic, ior, emission) |
+| `graph/GraphCompiler.java` | Tree → composite GLSL (8 phases + Phase 3.5 effects + Phase 3.6 materials) |
 | `graph/GraphNodeNamer.java` | Stable unique naming for animation tracks |
 | `graph/NodeGraphAnimationHelper.java` | DFS parameter discovery for timeline integration |
 | `fractals/NodeGraphParams.java` | `AbstractFractalParams` wrapper for graph tree |
 | `ui/components/NodeGraphEditor.java` | Visual tree editor + detail panel |
 | `config/FractalConfig.java` | `serializeGraphNode()` / `deserializeGraphNode()` |
+
+---
+
+## Architecture Notes & Future Direction
+
+### Current Approach: Fat OrbitTrap
+
+The current material system propagates per-node material properties through **GLSL local variables** (`_matType`, `_matColor`, `_matRoughness`, etc.) during tree evaluation, then packs them into the composite `OrbitTrap` struct. CSG nodes must **save** left-side locals before evaluating the right subtree, **reset** to defaults, then **pick** or **blend** based on the CSG operation.
+
+**Strengths:**
+- Zero overhead when no MaterialNode exists (`#define NODE_GRAPH_MATERIALS`)
+- Simple sentinel pattern (`-1` = use global) is clean and familiar
+- No additional GPU resources (no buffers, no textures)
+- Works correctly for arbitrary tree depths
+
+**Weaknesses:**
+- Each new per-node property adds fields to OrbitTrap + save/restore/pick/morph code in every CSG node
+- The save/reset/pick pattern is error-prone (the material leak bug was caused by a missing reset)
+- GraphCompiler complexity grows linearly with the number of material properties
+- StringBuilder-based GLSL generation is hard to read and debug
+
+### Future Alternative: Material ID + SSBO
+
+If more per-node material properties are needed (textures, subsurface scattering, anisotropy, etc.), a cleaner approach would be:
+
+1. Each leaf/MaterialNode gets a unique `int materialId` at compile time
+2. OrbitTrap carries only `int matId` (1 field instead of 6+)
+3. Material properties stored in a **Shader Storage Buffer Object (SSBO)** indexed by ID:
+
+```glsl
+struct MaterialData {
+    int matType;
+    vec3 color;
+    float roughness, metallic, ior, emission;
+    // Easy to extend with new properties
+};
+
+layout(std430, binding = X) buffer MaterialBuffer {
+    MaterialData materials[];
+};
+
+// In shading:
+MaterialData mat = materials[trap.matId];
+```
+
+4. CSG propagation reduces to picking/blending a single `int` — no save/restore of 6+ fields
+5. Adding a new property = add a field to the SSBO struct + update the Java buffer. No GraphCompiler changes.
+
+**Trade-off:** Requires SSBO management (create/update/bind), adds a GPU buffer resource, and needs GL 4.3+. The current approach is simpler for the current feature set.
+
+**Recommendation:** The current system is adequate for the existing material properties. Consider the SSBO refactor only if adding 3+ new per-node properties (at which point the save/restore complexity becomes unsustainable).

@@ -91,6 +91,43 @@ public final class NodeGraphAnimationHelper {
         } else if (node instanceof EffectNode en) {
             color = Color.web("#F44336");
             params.addAll(discoverEffectParams(en));
+        } else if (node instanceof MaterialNode mn) {
+            color = Color.web("#9C27B0"); // purple
+            params.add(new AnimatableParameter(
+                "colorR", "Color R", Float.class,
+                () -> mn.getColorR(),
+                v -> mn.setColorR(((Number) v).floatValue())
+            ));
+            params.add(new AnimatableParameter(
+                "colorG", "Color G", Float.class,
+                () -> mn.getColorG(),
+                v -> mn.setColorG(((Number) v).floatValue())
+            ));
+            params.add(new AnimatableParameter(
+                "colorB", "Color B", Float.class,
+                () -> mn.getColorB(),
+                v -> mn.setColorB(((Number) v).floatValue())
+            ));
+            params.add(new AnimatableParameter(
+                "roughness", "Roughness", Float.class,
+                () -> mn.getRoughness(),
+                v -> mn.setRoughness(((Number) v).floatValue())
+            ));
+            params.add(new AnimatableParameter(
+                "metallic", "Metallic", Float.class,
+                () -> mn.getMetallic(),
+                v -> mn.setMetallic(((Number) v).floatValue())
+            ));
+            params.add(new AnimatableParameter(
+                "ior", "IOR", Float.class,
+                () -> mn.getIor(),
+                v -> mn.setIor(((Number) v).floatValue())
+            ));
+            params.add(new AnimatableParameter(
+                "emission", "Emission", Float.class,
+                () -> mn.getEmission(),
+                v -> mn.setEmission(((Number) v).floatValue())
+            ));
         } else if (node instanceof CSGNode csn) {
             color = Color.web("#FF9800");
             params.add(new AnimatableParameter(
