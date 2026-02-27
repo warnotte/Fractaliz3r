@@ -15,7 +15,9 @@ public final class GraphNodeNamer {
      * Generate a base name for a node based on its type.
      */
     public static String generateBaseName(GraphNode node) {
-        if (node instanceof FractalNode fn) {
+        if (node instanceof PrimitiveNode pn) {
+            return pn.getPrimitiveType().getDisplayName();
+        } else if (node instanceof FractalNode fn) {
             return fn.getFractalType().getDisplayName();
         } else if (node instanceof CSGNode) {
             return "CSG";

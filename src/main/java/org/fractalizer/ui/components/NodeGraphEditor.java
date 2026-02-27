@@ -53,6 +53,7 @@ public class NodeGraphEditor extends VBox {
     private static final Color COLOR_TAPER = Color.web("#795548");
     private static final Color COLOR_REPETITION = Color.web("#00BCD4");
     private static final Color COLOR_REPETITION_1D = Color.web("#009688");
+    private static final Color COLOR_PRIMITIVE = Color.web("#8BC34A");
     private static final Color COLOR_EFFECT = Color.web("#F44336");
     private static final Color COLOR_SELECTED = Color.web("#00BCD4");
     private static final Color COLOR_CONNECTION = Color.web("#9E9E9E", 0.6);
@@ -286,6 +287,14 @@ public class NodeGraphEditor extends VBox {
         addFractalBtn.setTooltip(new Tooltip("Add a fractal leaf node"));
         addFractalBtn.setOnAction(e -> addFractalNode());
 
+        MenuButton addPrimitiveBtn = new MenuButton("+ Primitive");
+        addPrimitiveBtn.setTooltip(new Tooltip("Add a primitive SDF node"));
+        for (PrimitiveNode.PrimitiveType pt : PrimitiveNode.PrimitiveType.values()) {
+            MenuItem mi = new MenuItem(pt.getDisplayName());
+            mi.setOnAction(e -> addPrimitiveNode(pt));
+            addPrimitiveBtn.getItems().add(mi);
+        }
+
         Button wrapCSGBtn = new Button("Wrap CSG");
         wrapCSGBtn.setTooltip(new Tooltip("Wrap selected node in a CSG operation"));
         wrapCSGBtn.setOnAction(e -> wrapInCSG());
@@ -333,11 +342,12 @@ public class NodeGraphEditor extends VBox {
 
         presetCombo = new ComboBox<>();
         presetCombo.getItems().addAll("Single Fractal", "Union", "Subtract + Transform", "Mirror Symmetry",
-            "Eroded Mandelbulb", "Crystal Menger", "Mossy Rocks", "Stacked Effects");
+            "Eroded Mandelbulb", "Crystal Menger", "Mossy Rocks", "Stacked Effects",
+            "Cornell Box", "Fractal + Primitive");
         presetCombo.setPromptText("Presets...");
         presetCombo.setOnAction(e -> applyPreset(presetCombo.getValue()));
 
-        HBox toolbar = new HBox(4, addFractalBtn, wrapCSGBtn, wrapTransformBtn, moreTransforms, wrapEffectBtn, deleteBtn,
+        HBox toolbar = new HBox(4, addFractalBtn, addPrimitiveBtn, wrapCSGBtn, wrapTransformBtn, moreTransforms, wrapEffectBtn, deleteBtn,
             tbSep1, undoBtn, redoBtn, tbSep2, presetCombo);
         toolbar.setPadding(new Insets(2));
 
@@ -613,6 +623,22 @@ public class NodeGraphEditor extends VBox {
             contextMenu.getItems().add(swapItem);
         }
 
+        // Primitive-specific: change type submenu
+        if (node instanceof PrimitiveNode primNode) {
+            Menu changeTypeMenu = new Menu("Change Primitive Type");
+            for (PrimitiveNode.PrimitiveType pt : PrimitiveNode.PrimitiveType.values()) {
+                MenuItem mi = new MenuItem(pt.getDisplayName());
+                if (pt == primNode.getPrimitiveType()) mi.setDisable(true);
+                mi.setOnAction(e -> {
+                    pushUndoSnapshot();
+                    primNode.setPrimitiveType(pt);
+                    onStructuralChange();
+                });
+                changeTypeMenu.getItems().add(mi);
+            }
+            contextMenu.getItems().add(changeTypeMenu);
+        }
+
         // Fractal-specific: change type submenu
         if (node instanceof FractalNode fn) {
             Menu changeTypeMenu = new Menu("Change Type");
@@ -639,6 +665,14 @@ public class NodeGraphEditor extends VBox {
         MenuItem addFractalItem = new MenuItem("Add Fractal");
         addFractalItem.setOnAction(e -> addFractalNode());
         contextMenu.getItems().add(addFractalItem);
+
+        Menu addPrimitiveMenu = new Menu("Add Primitive");
+        for (PrimitiveNode.PrimitiveType pt : PrimitiveNode.PrimitiveType.values()) {
+            MenuItem mi = new MenuItem(pt.getDisplayName());
+            mi.setOnAction(e -> addPrimitiveNode(pt));
+            addPrimitiveMenu.getItems().add(mi);
+        }
+        contextMenu.getItems().add(addPrimitiveMenu);
 
         contextMenu.getItems().add(new SeparatorMenuItem());
 
@@ -849,6 +883,7 @@ public class NodeGraphEditor extends VBox {
     }
 
     private Color getNodeColor(GraphNode node) {
+        if (node instanceof PrimitiveNode) return COLOR_PRIMITIVE;
         if (node instanceof FractalNode) return COLOR_FRACTAL;
         if (node instanceof EffectNode) return COLOR_EFFECT;
         if (node instanceof CSGNode) return COLOR_CSG;
@@ -868,6 +903,7 @@ public class NodeGraphEditor extends VBox {
 
     private String getNodeLabel(GraphNode node) {
         if (node.getName() != null) return node.getName();
+        if (node instanceof PrimitiveNode pn) return pn.getPrimitiveType().getDisplayName();
         if (node instanceof FractalNode fn) return fn.getFractalType().getDisplayName();
         if (node instanceof EffectNode en) return en.getEffectType().getDisplayName();
         if (node instanceof CSGNode csn) return csn.getOp().name();
@@ -933,7 +969,9 @@ public class NodeGraphEditor extends VBox {
         detailPanel.getChildren().clear();
         if (selectedNode == null) return;
 
-        if (selectedNode instanceof FractalNode fn) {
+        if (selectedNode instanceof PrimitiveNode pn) {
+            buildPrimitiveDetail(pn);
+        } else if (selectedNode instanceof FractalNode fn) {
             buildFractalDetail(fn);
         } else if (selectedNode instanceof EffectNode en) {
             buildEffectDetail(en);
@@ -969,6 +1007,86 @@ public class NodeGraphEditor extends VBox {
             // Revert to current name on failure
             nameField.setText(node.getName() != null ? node.getName() : "");
         }
+    }
+
+    private void buildPrimitiveDetail(PrimitiveNode pn) {
+        Label title = new Label("Primitive Node");
+        title.getStyleClass().add("bold-label");
+        detailPanel.getChildren().add(title);
+        buildNameField(pn);
+
+        // Primitive type combo (structural change)
+        ComboBox<PrimitiveNode.PrimitiveType> typeCombo = new ComboBox<>();
+        typeCombo.getItems().addAll(PrimitiveNode.PrimitiveType.values());
+        typeCombo.setValue(pn.getPrimitiveType());
+        typeCombo.setMaxWidth(Double.MAX_VALUE);
+        typeCombo.setOnAction(e -> {
+            pushUndoSnapshot();
+            pn.setPrimitiveType(typeCombo.getValue());
+            onStructuralChange();
+        });
+        detailPanel.getChildren().addAll(new Label("Type:"), typeCombo);
+
+        Separator sep = new Separator();
+        sep.setPadding(new Insets(4, 0, 4, 0));
+        detailPanel.getChildren().add(sep);
+
+        // Dimensions section
+        Label dimLabel = new Label("Dimensions");
+        dimLabel.getStyleClass().add("small-label");
+        dimLabel.setStyle("-fx-text-fill: #8BC34A; -fx-font-size: 10;");
+        detailPanel.getChildren().add(dimLabel);
+
+        PrimitiveNode.PrimitiveType pt = pn.getPrimitiveType();
+
+        EnhancedSlider sizeXSlider = new EnhancedSlider(PrimitiveNode.getSizeXLabel(pt), 0.01, 10, pn.getSizeX(), false);
+        sizeXSlider.setOnAction(v -> {
+            pn.setSizeX(v.floatValue());
+            onParameterChange();
+        });
+        detailPanel.getChildren().add(sizeXSlider);
+
+        if (PrimitiveNode.usesSizeY(pt)) {
+            EnhancedSlider sizeYSlider = new EnhancedSlider(PrimitiveNode.getSizeYLabel(pt), 0.01, 10, pn.getSizeY(), false);
+            sizeYSlider.setOnAction(v -> {
+                pn.setSizeY(v.floatValue());
+                onParameterChange();
+            });
+            detailPanel.getChildren().add(sizeYSlider);
+        }
+
+        if (PrimitiveNode.usesSizeZ(pt)) {
+            EnhancedSlider sizeZSlider = new EnhancedSlider(PrimitiveNode.getSizeZLabel(pt), 0.01, 10, pn.getSizeZ(), false);
+            sizeZSlider.setOnAction(v -> {
+                pn.setSizeZ(v.floatValue());
+                onParameterChange();
+            });
+            detailPanel.getChildren().add(sizeZSlider);
+        }
+
+        // Modifiers section
+        Separator modSep = new Separator();
+        modSep.setPadding(new Insets(4, 0, 4, 0));
+        detailPanel.getChildren().add(modSep);
+
+        Label modLabel = new Label("Modifiers");
+        modLabel.getStyleClass().add("small-label");
+        modLabel.setStyle("-fx-text-fill: #8BC34A; -fx-font-size: 10;");
+        detailPanel.getChildren().add(modLabel);
+
+        EnhancedSlider roundingSlider = new EnhancedSlider("Rounding", 0, 1, pn.getRounding(), false);
+        roundingSlider.setOnAction(v -> {
+            pn.setRounding(v.floatValue());
+            onParameterChange();
+        });
+        detailPanel.getChildren().add(roundingSlider);
+
+        EnhancedSlider shellSlider = new EnhancedSlider("Shell", 0, 0.5, pn.getShell(), false);
+        shellSlider.setOnAction(v -> {
+            pn.setShell(v.floatValue());
+            onParameterChange();
+        });
+        detailPanel.getChildren().add(shellSlider);
     }
 
     private void buildFractalDetail(FractalNode fn) {
@@ -1448,6 +1566,22 @@ public class NodeGraphEditor extends VBox {
         onStructuralChange();
     }
 
+    private void addPrimitiveNode(PrimitiveNode.PrimitiveType primitiveType) {
+        if (currentParams == null) return;
+        pushUndoSnapshot();
+
+        PrimitiveNode newPrimitive = new PrimitiveNode(primitiveType);
+        if (selectedNode instanceof CSGNode csn) {
+            CSGNode newCSG = new CSGNode(CSGNode.Op.UNION, csn.getRight(), newPrimitive);
+            csn.setRight(newCSG);
+        } else {
+            GraphNode oldRoot = currentParams.getGraphRoot();
+            CSGNode newRoot = new CSGNode(CSGNode.Op.UNION, oldRoot, newPrimitive);
+            currentParams.setGraphRoot(newRoot);
+        }
+        onStructuralChange();
+    }
+
     private void wrapInCSG() {
         if (currentParams == null || selectedNode == null) return;
         pushUndoSnapshot();
@@ -1651,6 +1785,52 @@ public class NodeGraphEditor extends VBox {
                 erosion.setTime(5f);
                 erosion.setErosionType(3); // Cracks
                 currentParams.setGraphRoot(erosion);
+            }
+            case "Cornell Box" -> {
+                // Room shell (hollow box)
+                PrimitiveNode room = new PrimitiveNode(PrimitiveNode.PrimitiveType.BOX);
+                room.setSizeX(1.5f);
+                room.setSizeY(1.5f);
+                room.setSizeZ(1.5f);
+                room.setShell(0.05f);
+
+                // Tall box (right-back)
+                PrimitiveNode tallBox = new PrimitiveNode(PrimitiveNode.PrimitiveType.BOX);
+                tallBox.setSizeX(0.35f);
+                tallBox.setSizeY(0.65f);
+                tallBox.setSizeZ(0.35f);
+                tallBox.setRounding(0.02f);
+                TransformNode tallBoxT = new TransformNode(tallBox, new float[]{0.55f, -0.85f, 0.4f});
+                // Slight rotation
+                tallBoxT.getRotation()[1] = 18f;
+
+                // Sphere (left-front)
+                PrimitiveNode sphere = new PrimitiveNode(PrimitiveNode.PrimitiveType.SPHERE);
+                sphere.setSizeX(0.4f);
+                TransformNode sphereT = new TransformNode(sphere, new float[]{-0.55f, -1.1f, -0.2f});
+
+                // Mandelbulb (center, scaled down)
+                FractalNode mandelbulb = new FractalNode(FractalType.MANDELBULB);
+                TransformNode mandelbulbT = new TransformNode(mandelbulb,
+                    new float[]{0f, -0.7f, -0.3f}, new float[]{0, 0, 0}, 0.35f);
+
+                // Assemble: room + (tallBox + (sphere + mandelbulb))
+                CSGNode sphereAndBulb = new CSGNode(CSGNode.Op.UNION, sphereT, mandelbulbT, 0f);
+                CSGNode objects = new CSGNode(CSGNode.Op.UNION, tallBoxT, sphereAndBulb, 0f);
+                CSGNode scene = new CSGNode(CSGNode.Op.UNION, room, objects, 0f);
+                currentParams.setGraphRoot(scene);
+            }
+            case "Fractal + Primitive" -> {
+                // Torus subtracted from Mandelbulb — carves a ring through the fractal
+                PrimitiveNode torus = new PrimitiveNode(PrimitiveNode.PrimitiveType.TORUS);
+                torus.setSizeX(0.9f);  // major radius
+                torus.setSizeY(0.25f); // minor radius (tube thickness)
+                currentParams.setGraphRoot(new CSGNode(
+                    CSGNode.Op.SUBTRACT,
+                    new FractalNode(FractalType.MANDELBULB),
+                    torus,
+                    0.05f
+                ));
             }
         }
 
