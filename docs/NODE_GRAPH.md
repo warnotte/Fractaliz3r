@@ -16,26 +16,26 @@ The node graph uses a **composite pattern** — a tree of `GraphNode` objects co
                     ├── name: String        (stable, for animation tracks)
                     └── getChildren(): List<GraphNode>
                          │
-          ┌──────────────┼──────────────┼──────────────┐
-          │              │              │              │
-     FractalNode     CSGNode      TransformNode   EffectNode
-     (leaf)          (binary)     (unary)          (unary)
-     ├── fractalType ├── op       ├── mode (7)     ├── effectType (3)
-     ├── fractalParams├── blend   ├── child        ├── child
-     └── (no children)├── left    └── (per-mode)   └── strength/time/scale
+          ┌──────────────┼──────────────┼──────────────┼──────────────┐
+          │              │              │              │              │
+     FractalNode     CSGNode      TransformNode   EffectNode    PrimitiveNode
+     (leaf)          (binary)     (unary)          (unary)       (leaf)
+     ├── fractalType ├── op       ├── mode (7)     ├── effectType├── type (11)
+     ├── fractalParams├── blend   ├── child        ├── child     └── size/shell
+     └── (no children)├── left    └── (per-mode)   └── params    └── (no children)
                       └── right
 ```
 
 ### Example Tree
 
-A CSG Union of a Twisted Mandelbulb and an Eroded Menger Sponge:
+A CSG Union of a Twisted Mandelbulb and a Primitive Sphere with Moss:
 
 ```
     CSGNode (UNION, blend=0.1)
     ├── TransformNode (TWIST, axis=Y, strength=0.3)
     │   └── FractalNode (Mandelbulb, power=8)
-    └── EffectNode (EROSION, strength=0.5, time=3.0)
-        └── FractalNode (Menger Sponge, iterations=5)
+    └── EffectNode (MOSS, strength=0.5, time=3.0)
+        └── PrimitiveNode (SPHERE, size=1.5)
 ```
 
 This compiles into a single GLSL block with:
@@ -49,9 +49,9 @@ This compiles into a single GLSL block with:
 
 ## Node Types
 
-### FractalNode — Leaf
+### FractalNode — Leaf (Resource-based)
 
-Wraps a `FractalType` + per-node `AbstractFractalParams`.
+Wraps a `FractalType` + per-node `AbstractFractalParams`. Loads distance field logic from external `.glsl` files.
 
 ```java
 public class FractalNode extends GraphNode {
@@ -64,7 +64,25 @@ public class FractalNode extends GraphNode {
 
 **`createDefaultParams(FractalType)`** — Factory supporting 10 fractal types + CustomShader. Returns `null` for non-composable types (NODE_GRAPH, FRACTAL_TERRAIN, CORNELL_BOX, TEST_SCENE).
 
-**Per-node parameters:** Each FractalNode in the graph stores its own complete fractal parameter set. Changing `power` on one Mandelbulb node doesn't affect another.
+**Per-node parameters:** Each FractalNode in the graph stores its own complete fractal parameter set.
+
+---
+
+### PrimitiveNode — Leaf (Inline)
+
+Analytic SDF geometric primitives. Unlike `FractalNode`, these generate their own inline GLSL distance functions in `GraphCompiler`.
+
+```java
+public class PrimitiveNode extends GraphNode {
+    public enum PrimitiveType { SPHERE, BOX, ROUNDED_BOX, PLANE, TORUS, CYLINDER, CAPSULE, CONE, OCTAHEDRON, PYRAMID, HEX_PRISM }
+    private PrimitiveType primitiveType;
+    private float sizeX, sizeY, sizeZ;
+    private float rounding;  // For rounded corners
+    private float shell;     // For hollow shell (abs(d) - shell)
+}
+```
+
+**GLSL Generation:** `GraphCompiler` emits a full fractal-contract block (`OrbitTrap`, `DE`, `DE_simple`, `getFactors`) for each primitive node using standardized SDF formulas. Supporting coloring factors are computed from the primitive's distance field.
 
 ---
 
