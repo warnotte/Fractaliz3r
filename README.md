@@ -14,10 +14,10 @@
 
 ### Node Graph Compositor
 
-Build complex fractal scenes by composing multiple fractals in a visual node tree:
+**The primary user interface for fractal exploration.** Build complex fractal scenes by composing multiple fractals in a visual node tree:
 
 - **Composable trees**: Combine any number of fractals with CSG operations and coordinate transforms
-- **4 CSG operations**: Union, Intersect, Subtract, Morph — all with smooth blending
+- **5 CSG operations**: Union, Intersect, Subtract, Morph, Nesting (micro-geometry tiling) — all with smooth blending
 - **7 transform modes**: Standard (translate/rotate/scale), Mirror, Twist, Bend, Taper, Repetition, Repetition 1D
 - **3 surface effects**: Erosion, Crystallization, Moss — per-node, composable, stackable
 - **Per-node parameters**: Each fractal node stores its own independent settings
@@ -42,8 +42,10 @@ Build complex fractal scenes by composing multiple fractals in a visual node tre
 
 ### Cinematic Rendering
 
+- **Cone Tracing Rendering**: Pixel-aware adaptive epsilon based on pixel footprint. Ensures structural stability, eliminates flickering on distant details, and maintains consistent sharpness across resolutions.
 - **Monte Carlo Path Tracing** with NEE + MIS, GGX microfacet BRDF
 - **Physical Materials**: Lambertian, Metallic, Glass (two-surface refraction)
+- **Advanced Lighting**: Additional light with **Spot mode** (configurable Cone Angle and Edge Softness), area radius for soft penumbras, and tight range attenuation.
 - **Volumetric Fog & God Rays**: Henyey-Greenstein scattering
 - **Depth of Field**: 9 bokeh presets (Standard, Cinema, Anamorphic, Vintage, Petzval, Miniature, Dream, Night, Prism)
 - **Procedural Environments**: Clouds, Deep Space (Legacy/Cinematic/Ultra), Ocean, Studio
@@ -76,7 +78,7 @@ Build complex fractal scenes by composing multiple fractals in a visual node tre
 
 ### Export Pipeline
 
-- **Tiled Rendering**: Automatic tile-based rendering for exports up to 16K (15360x8640)
+- **Tiled Rendering**: Automatic tile-based rendering for exports up to 16K (15360x8640). **Pixel-radius is automatically corrected for full resolution, ensuring high-fidelity cone tracing even on ultra-large images.**
 - **Image Export**: PNG and JPEG with optional 360 metadata
 - **Depth/Normal AOV Export**: 16-bit depth, 8-bit normals for compositing
 - **Video Export**: H.265 HEVC via FFmpeg

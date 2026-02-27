@@ -331,24 +331,26 @@ Avoid `+=`/`*=` on swizzled components (e.g., `flowP.y *= 0.25`) — causes `C99
 
 The legacy system applies space-warping globally to `pos` BEFORE DE evaluation via `applyDomainDistortion()` in `common.glsl`. Parameters in `AbstractFractalParams` (`distortionEnabled`, `distortionType`, `distortionAxis`, `distortionStrength`, `distortionFrequency`, `distortionOffset`), serialized in `EffectsConfig`. UI in QualityPanel "Domain Distortion" TitledPane.
 
-## Boolean Operations (CSG)
+## Unified Node Graph Architecture
 
-Constructive Solid Geometry between two fractal distance fields: Union, Intersect, Subtract, Nesting, or Morph. Combines any two fractal types (excluding Fractal Terrain, Cornell Box, Test Scene) with optional smooth blending.
+**The Node Graph is now the primary user interface for all fractal editing and composition.** The previous `FractalPanel` sliders have been replaced by a visual tree system compiled into a single GPU shader.
 
-- **GLSL symbol conflict solution**: `ShaderPreprocessor.java` renames all local symbols (uniforms, structs, functions, consts) in the secondary fractal shader with a `b_` prefix before concatenation. Zero changes to existing fractal shaders.
-- **Shader assembly**: `GLSLEngine.loadBooleanFractalShader()` compiles `#version 430` + `#define BOOLEAN_OPS` + `common.glsl` + primary fractal + preprocessed secondary + `raytracer.glsl`. On-demand compilation with caching (avoids combinatorial explosion at startup).
-- **raytracer.glsl**: `#ifdef BOOLEAN_OPS` block defines `boolDE(pos, trap)` and `boolDE_simple(pos)` — evaluate both DEs, transform secondary by offset/scale, combine via `boolCombine()`. 8 geometry DE call sites wrapped with `#ifdef` (calcNormal, calcShadow, calcAO, calcSSS, rayMarch, rayMarchSimple, 2× glass interior). Coloring-only DE calls use primary only.
-- **Smooth boolean**: `smin_bool(a,b,k)` / `smax_bool(a,b,k)` with polynomial smooth min/max. `boolBlend=0` = hard boolean, `boolBlend>0` = organic transitions.
-- **Morph** (`boolOp == 5`): `mix(d1, d2, boolBlend)` continuous DE blend. `morphFactors()` evaluates both fractals' orbit traps (`DE` + `b_DE`) and blends coloring factors at all 6 shading sites. `boolBlend` 0→1 = primary→secondary. Offset/rotation/scale of secondary work naturally.
-- **Controller**: `activateCurrentProgram()` replaces all 11 `setActiveProgram()` calls — transparently switches between boolean and normal shader programs. `buildSecondaryUniforms()` emits `b_`-prefixed uniforms for the secondary fractal using default params.
-- **Parameters** (in `AbstractFractalParams`, serialized in `EffectsConfig`):
-  - `booleanEnabled` (bool), `booleanOp` (1=Union, 2=Intersect, 3=Subtract, 4=Nesting, 5=Morph)
-  - `boolSecondaryType` (String, kernelName of secondary fractal)
-  - `boolOffsetX/Y/Z` (float, -5 to 5), `boolRotX/Y/Z` (float, -180 to 180°), `boolScale` (float, 0.01 to 10), `boolBlend` (float, 0 to 2)
-- **Secondary rotation**: Euler XYZ rotation applied to secondary position via `boolRotateSecondary()` (3× Rodrigues). Available in Union/Intersect/Subtract modes.
-- **UI**: FractalPanel "Boolean Operations" TitledPane (enable checkbox, secondary fractal combo, operation combo, offset/rotation/scale/blend sliders).
-- **Foundation for custom shaders**: The runtime GLSL compilation pipeline (`ShaderPreprocessor` + `loadBooleanFractalShader`) can be extended to compile user-written DE shaders on the fly.
-- **Zero overhead when OFF**: Without `#define BOOLEAN_OPS`, all `#ifdef` blocks compile away — identical code to before.
+- **5 CSG operations**: Union, Intersect, Subtract, Morph, Nesting.
+- **7 transform modes**: Standard, Mirror, Twist, Bend, Taper, Repetition, Repetition 1D.
+- **Surface effects**: Erosion, Crystallization, Moss (available per-node via `EffectNode`).
+- **Primitive nodes**: Analytic SDF shapes (Sphere, Box, Torus, etc.) can be mixed with fractals.
+- **Shader assembly**: `GraphCompiler.java` renames symbols with `n0_`, `t0_` etc. prefixes to avoid conflicts.
+
+## Cinematic Rendering & Cone Tracing
+
+- **Cone Tracing** (`pixelRadius`): Pixel-aware adaptive epsilon. `epsilon = max(MIN_EPSILON, pixelRadius * distance)` where `pixelRadius = tan(fov/2) / (height/2)`.
+- **Implementation**: Used in `rayMarch`, `calcNormal`, and `calcShadow` to ensure perfect structural stability and eliminate flickering on distant details.
+- **Tiled Export**: `pixelRadius` is automatically corrected for full image height during 4K/8K/16K exports.
+- **Advanced Lighting**: Spot light with configurable cone angle and edge softness.
+- **Monte Carlo Path Tracing**: NEE + MIS, GGX microfacet BRDF.
+
+## Boolean Operations (Legacy/Core)
+Constructive Solid Geometry between fractal distance fields. This logic now powers the `CSGNode` in the node graph.
 
 ## Custom Shader Editor
 
