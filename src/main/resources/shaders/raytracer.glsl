@@ -572,16 +572,17 @@ vec3 shadeSimple(vec3 hitPos, Ray ray, int matType) {
 #endif
     factors = remapTrapFactors(factors, hitPos);
 
-    vec3 baseColor;
-    float localEmissive;
+    vec3 baseColor = applyMaterial(factors);
+    float localEmissive = emissiveIntensity;
 
-#ifdef HAS_PER_OBJECT_MATERIAL
-    ObjectMaterial objMat = getObjectMaterial(trap);
-    baseColor = objMat.albedo;
-    localEmissive = objMat.emissive;
-#else
-    baseColor = applyMaterial(factors);
-    localEmissive = emissiveIntensity;
+#ifdef HAS_MATERIALS
+    if (trap.matId >= 0) {
+        MaterialData mat = materials[trap.matId];
+        int mColorMode = int(mat.colorMode);
+        if (mColorMode == 1) baseColor = vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+        else if (mColorMode == 2) baseColor *= vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+        if (mat.emission >= 0.0) localEmissive = mat.emission;
+    }
 #endif
 
     float NdotL = max(dot(normal, light), 0.0);
@@ -606,15 +607,14 @@ vec3 shadeSimple(vec3 hitPos, Ray ray, int matType) {
 
     // Emission on reflected surface
     if (localEmissive > 0.0) {
-#ifdef HAS_PER_OBJECT_MATERIAL
-        color += baseColor;
-#else
         float structural = factors.x;
         float depth = factors.z;
         float emFactor = mix(structural, 1.0 - depth, 0.5);
         emFactor = pow(clamp(emFactor, 0.0, 1.0), 2.0);
-        color += baseColor * localEmissive * emFactor;
+#ifdef HAS_MATERIALS
+        if (trap.matId >= 0) emFactor = 1.0;
 #endif
+        color += baseColor * localEmissive * emFactor;
     }
 
     return color;
@@ -648,23 +648,26 @@ vec3 shade(RayHit hit, Ray ray) {
 #endif
     factors = remapTrapFactors(factors, hit.pos);
 
-    vec3 baseColor;
-    int localMatType;
-    float localIor, localMetalness, localEmissive;
+    vec3 baseColor = applyMaterial(factors);
+    int localMatType = materialType;
+    float localIor = ior;
+    float localMetalness = metalness;
+    float localEmissive = emissiveIntensity;
+    float safeRoughness = max(roughness, 0.02);
 
-#ifdef HAS_PER_OBJECT_MATERIAL
-    ObjectMaterial objMat = getObjectMaterial(hit.trap);
-    baseColor = objMat.albedo;
-    localMatType = objMat.type;
-    localIor = objMat.ior;
-    localMetalness = objMat.metalness;
-    localEmissive = objMat.emissive;
-#else
-    baseColor = applyMaterial(factors);
-    localMatType = materialType;
-    localIor = ior;
-    localMetalness = metalness;
-    localEmissive = emissiveIntensity;
+#ifdef HAS_MATERIALS
+    if (hit.trap.matId >= 0) {
+        MaterialData mat = materials[hit.trap.matId];
+        int mType = int(mat.type);
+        int mColorMode = int(mat.colorMode);
+        if (mColorMode == 1) baseColor = vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+        else if (mColorMode == 2) baseColor *= vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+        if (mType >= 0) localMatType = mType;
+        if (mat.roughness >= 0.0) safeRoughness = max(mat.roughness, 0.02);
+        if (mat.metallic >= 0.0) localMetalness = mat.metallic;
+        if (mat.ior >= 0.0) localIor = mat.ior;
+        if (mat.emission >= 0.0) localEmissive = mat.emission;
+    }
 #endif
 
     // Diffuse (Lambert)
@@ -768,15 +771,14 @@ vec3 shade(RayHit hit, Ray ray) {
         effectiveEmissive += audioOnset * audioReactOnset * 3.0;
     }
     if (effectiveEmissive > 0.0) {
-#ifdef HAS_PER_OBJECT_MATERIAL
-        color += baseColor * effectiveEmissive;
-#else
         float structural = factors.x;
         float depth = factors.z;
         float emFactor = mix(structural, 1.0 - depth, 0.5);
         emFactor = pow(clamp(emFactor, 0.0, 1.0), 2.0);
-        color += baseColor * effectiveEmissive * emFactor;
+#ifdef HAS_MATERIALS
+        if (hit.trap.matId >= 0) emFactor = 1.0;
 #endif
+        color += baseColor * effectiveEmissive * emFactor;
     }
 
     // ====== SUBSURFACE SCATTERING ======
@@ -957,15 +959,6 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
         float localIor, localMetalness, localEmissive;
         float safeRoughness;
 
-#ifdef HAS_PER_OBJECT_MATERIAL
-        ObjectMaterial objMat = getObjectMaterial(trap);
-        albedo = objMat.albedo;
-        localMatType = objMat.type;
-        localIor = objMat.ior;
-        localMetalness = objMat.metalness;
-        safeRoughness = max(objMat.roughness, 0.02);
-        localEmissive = objMat.emissive;
-#else
         {
             vec3 mf = getFactors(trap);
 #ifdef BOOLEAN_OPS
@@ -978,6 +971,20 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
         localMetalness = metalness;
         safeRoughness = max(roughness, 0.02);
         localEmissive = emissiveIntensity;
+
+#ifdef HAS_MATERIALS
+        if (trap.matId >= 0) {
+            MaterialData mat = materials[trap.matId];
+            int mType = int(mat.type);
+            int mColorMode = int(mat.colorMode);
+            if (mColorMode == 1) albedo = vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+            else if (mColorMode == 2) albedo *= vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+            if (mType >= 0) localMatType = mType;
+            if (mat.roughness >= 0.0) safeRoughness = max(mat.roughness, 0.02);
+            if (mat.metallic >= 0.0) localMetalness = mat.metallic;
+            if (mat.ior >= 0.0) localIor = mat.ior;
+            if (mat.emission >= 0.0) localEmissive = mat.emission;
+        }
 #endif
 
         // Moss coloring
@@ -995,11 +1002,12 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
 
         // Emissive contribution at hit point (additive, unaffected by shadows)
         if (localEmissive > 0.0) {
-#ifdef HAS_PER_OBJECT_MATERIAL
-            // Per-object: emissive is direct (light panel emits uniformly)
-            radiance += clamp(throughput * albedo, 0.0, FIREFLY_CLAMP);
-            break; // Light source reached — stop bouncing
-#else
+#ifdef HAS_MATERIALS
+            if (trap.matId >= 0) {
+                radiance += clamp(throughput * albedo * localEmissive, 0.0, FIREFLY_CLAMP);
+                break;
+            }
+#endif
             vec3 emFactorsRaw = getFactors(trap);
 #ifdef BOOLEAN_OPS
             emFactorsRaw = morphFactors(hitPos, emFactorsRaw);
@@ -1010,7 +1018,6 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
             float emFactor = mix(structural, 1.0 - depth, 0.5);
             emFactor = pow(clamp(emFactor, 0.0, 1.0), 2.0);
             radiance += clamp(throughput * albedo * localEmissive * emFactor, 0.0, FIREFLY_CLAMP);
-#endif
         }
 
         if (localMatType == MATERIAL_GLASS) {
@@ -1249,15 +1256,6 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         float localIor, localMetalness, localEmissive;
         float safeRoughness;
 
-#ifdef HAS_PER_OBJECT_MATERIAL
-        ObjectMaterial objMat = getObjectMaterial(trap);
-        albedo = objMat.albedo;
-        localMatType = objMat.type;
-        localIor = objMat.ior;
-        localMetalness = objMat.metalness;
-        safeRoughness = max(objMat.roughness, 0.02);
-        localEmissive = objMat.emissive;
-#else
         {
             vec3 mf = getFactors(trap);
 #ifdef BOOLEAN_OPS
@@ -1270,6 +1268,20 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         localMetalness = metalness;
         safeRoughness = max(roughness, 0.02);
         localEmissive = emissiveIntensity;
+
+#ifdef HAS_MATERIALS
+        if (trap.matId >= 0) {
+            MaterialData mat = materials[trap.matId];
+            int mType = int(mat.type);
+            int mColorMode = int(mat.colorMode);
+            if (mColorMode == 1) albedo = vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+            else if (mColorMode == 2) albedo *= vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+            if (mType >= 0) localMatType = mType;
+            if (mat.roughness >= 0.0) safeRoughness = max(mat.roughness, 0.02);
+            if (mat.metallic >= 0.0) localMetalness = mat.metallic;
+            if (mat.ior >= 0.0) localIor = mat.ior;
+            if (mat.emission >= 0.0) localEmissive = mat.emission;
+        }
 #endif
 
         // Moss coloring
@@ -1290,10 +1302,12 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 
         // Emissive
         if (localEmissive > 0.0) {
-#ifdef HAS_PER_OBJECT_MATERIAL
-            radiance += clamp(throughput * albedo, 0.0, FIREFLY_CLAMP);
-            break;
-#else
+#ifdef HAS_MATERIALS
+            if (trap.matId >= 0) {
+                radiance += clamp(throughput * albedo * localEmissive, 0.0, FIREFLY_CLAMP);
+                break;
+            }
+#endif
             vec3 emFactorsRaw = getFactors(trap);
 #ifdef BOOLEAN_OPS
             emFactorsRaw = morphFactors(hitPos, emFactorsRaw);
@@ -1304,7 +1318,6 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             float emFactor = mix(structural, 1.0 - depth, 0.5);
             emFactor = pow(clamp(emFactor, 0.0, 1.0), 2.0);
             radiance += clamp(throughput * albedo * localEmissive * emFactor, 0.0, FIREFLY_CLAMP);
-#endif
         }
 
         if (localMatType == MATERIAL_GLASS) {
@@ -1559,6 +1572,14 @@ vec3 renderByMode(RayHit hit, Ray ray, vec3 normal, float shadow, float ao) {
 #endif
     factors = remapTrapFactors(factors, hit.pos);
     vec3 baseColor = applyMaterial(factors);
+#ifdef HAS_MATERIALS
+    if (hit.trap.matId >= 0) {
+        MaterialData mat = materials[hit.trap.matId];
+        int mColorMode = int(mat.colorMode);
+        if (mColorMode == 1) baseColor = vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+        else if (mColorMode == 2) baseColor *= vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+    }
+#endif
 
     // Moss coloring — applied here so ALL render modes see it
     if (mossEnabled != 0) {

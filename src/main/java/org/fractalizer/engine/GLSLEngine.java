@@ -34,6 +34,7 @@ public class GLSLEngine implements AutoCloseable {
     private int envMarginalCDFTexture, envConditionalCDFTexture, envMapWidth, envMapHeight;
     private float envTotalLuminance;
     private boolean envCDFReady = false;
+    private int materialSSBO = 0;
     private int quadVAO, quadVBO, quadEBO;
     private final Map<String, ShaderProgram> programs = new HashMap<>();
     private String activeProgram;
@@ -226,6 +227,19 @@ public class GLSLEngine implements AutoCloseable {
 
     public void resetAccumulation() { needsReset = true; }
 
+    public void updateMaterialSSBO(float[] data) {
+        runOnGLThread(() -> {
+            if (data == null || data.length == 0) {
+                if (materialSSBO != 0) { glDeleteBuffers(materialSSBO); materialSSBO = 0; }
+                return;
+            }
+            if (materialSSBO == 0) materialSSBO = glGenBuffers();
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialSSBO);
+            glBufferData(GL_SHADER_STORAGE_BUFFER, data, GL_DYNAMIC_DRAW);
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        });
+    }
+
     public void renderSample(Map<String, Object> uniforms) {
         runOnGLThread(() -> {
             if (activeProgram == null) throw new IllegalStateException();
@@ -255,6 +269,7 @@ public class GLSLEngine implements AutoCloseable {
                 program.setUniform("envMapWidth", 0); program.setUniform("envMapHeight", 0); program.setUniform("envTotalLuminance", 0.0f);
             }
             if (adaptiveSamplingEnabled) glBindImageTexture(5, varianceTexture, 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+            if (materialSSBO != 0) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, materialSSBO);
             for (Map.Entry<String, Object> entry : uniforms.entrySet()) { setUniformValue(program, entry.getKey(), entry.getValue()); }
             glBindVertexArray(quadVAO); glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             if (adaptiveSamplingEnabled) glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
@@ -649,6 +664,7 @@ public class GLSLEngine implements AutoCloseable {
             glDeleteTextures(bloomTexture1); glDeleteTextures(bloomTexture2);
             glDeleteTextures(envMapTexture); glDeleteTextures(envMarginalCDFTexture); glDeleteTextures(envConditionalCDFTexture);
             glDeleteTextures(paletteTexture); glDeleteTextures(blueNoiseTexture);
+            if (materialSSBO != 0) glDeleteBuffers(materialSSBO);
             glDeleteVertexArrays(quadVAO); glDeleteBuffers(quadVBO); glDeleteBuffers(quadEBO);
             glfwDestroyWindow(window); glfwTerminate();
         });
