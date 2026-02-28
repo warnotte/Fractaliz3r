@@ -12,6 +12,8 @@ public class SierpinskiParams extends AbstractFractalParams {
     @Animatable(display = "Scale")
     private float scale;
 
+    private BasePrimitive basePrimitive = BasePrimitive.SPHERE;
+
     public SierpinskiParams() {
         super();
         this.maxIterations = 15;
@@ -30,6 +32,7 @@ public class SierpinskiParams extends AbstractFractalParams {
         SierpinskiParams reduced = new SierpinskiParams();
         copyCommonParams(reduced);
         reduced.scale = this.scale;
+        reduced.basePrimitive = this.basePrimitive;
         reduced.maxIterations = Math.max(5, this.maxIterations / reductionFactor);
         applyReducedQuality(reduced, reductionFactor);
         return reduced;
@@ -40,4 +43,7 @@ public class SierpinskiParams extends AbstractFractalParams {
 
     public float getScale() { return scale; }
     public void setScale(float scale) { this.scale = scale; }
+
+    public BasePrimitive getBasePrimitive() { return basePrimitive; }
+    public void setBasePrimitive(BasePrimitive basePrimitive) { this.basePrimitive = basePrimitive; }
 }

@@ -14,6 +14,19 @@ uniform float scale;
 uniform float ifsOffset;  // Classic KIFS uses scalar offset
 uniform float foldAngleX;
 uniform float foldAngleY;
+uniform int basePrimitive;
+
+// ============================================================================
+// IFS base primitive selector (0=Sphere, 1=Box, 2=Octahedron, 3=Torus, 4=Rounded Box)
+// ============================================================================
+
+float ifsBasePrimitive(vec3 p, int type) {
+    if (type == 1) { vec3 d = abs(p) - vec3(1.0); return length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0); }
+    if (type == 2) { vec3 ap = abs(p); return (ap.x + ap.y + ap.z - 1.0) * 0.57735027; }
+    if (type == 3) { return length(vec2(length(p.xz) - 0.7, p.y)) - 0.3; }
+    if (type == 4) { vec3 q = abs(p) - vec3(0.9); return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - 0.1; }
+    return length(p);
+}
 
 // ============================================================================
 // Orbit Trap Structure
@@ -78,7 +91,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
         z = z * scale - ifsOffset * (scale - 1.0);
 
         // Track orbit traps for coloring
-        float dist = length(z);
+        float dist = ifsBasePrimitive(z, basePrimitive);
         trap.minDist = min(trap.minDist, dist);
         trap.sumDist += dist;
     }
@@ -87,7 +100,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
     trap.avgFold = foldSum / float(n);
 
     // Distance estimation formula for KIFS
-    return length(z) * pow(scale, -float(n));
+    return ifsBasePrimitive(z, basePrimitive) * pow(scale, -float(n));
 }
 
 // ============================================================================
@@ -122,7 +135,7 @@ float DE_simple(vec3 pos) {
         z = z * scale - ifsOffset * (scale - 1.0);
     }
 
-    return length(z) * pow(scale, -float(n));
+    return ifsBasePrimitive(z, basePrimitive) * pow(scale, -float(n));
 }
 
 // ============================================================================

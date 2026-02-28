@@ -16,6 +16,8 @@ public class ApollonianParams extends AbstractFractalParams {
     @Animatable(display = "Fold Radius")
     private float foldRadius;
 
+    private BasePrimitive basePrimitive = BasePrimitive.SPHERE;
+
     public ApollonianParams() {
         super();
         this.maxIterations = 15;
@@ -36,6 +38,7 @@ public class ApollonianParams extends AbstractFractalParams {
         copyCommonParams(reduced);
         reduced.scale = this.scale;
         reduced.foldRadius = this.foldRadius;
+        reduced.basePrimitive = this.basePrimitive;
         reduced.maxIterations = Math.max(5, this.maxIterations / reductionFactor);
         applyReducedQuality(reduced, reductionFactor);
         return reduced;
@@ -49,4 +52,7 @@ public class ApollonianParams extends AbstractFractalParams {
 
     public float getFoldRadius() { return foldRadius; }
     public void setFoldRadius(float radius) { this.foldRadius = radius; }
+
+    public BasePrimitive getBasePrimitive() { return basePrimitive; }
+    public void setBasePrimitive(BasePrimitive basePrimitive) { this.basePrimitive = basePrimitive; }
 }

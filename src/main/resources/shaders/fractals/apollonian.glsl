@@ -13,6 +13,19 @@
 uniform int maxIterations;
 uniform float scale;
 uniform float foldRadius;
+uniform int basePrimitive;
+
+// ============================================================================
+// IFS base primitive selector (0=Sphere, 1=Box, 2=Octahedron, 3=Torus, 4=Rounded Box)
+// ============================================================================
+
+float ifsBasePrimitive(vec3 p, int type) {
+    if (type == 1) { vec3 d = abs(p) - vec3(1.0); return length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0); }
+    if (type == 2) { vec3 ap = abs(p); return (ap.x + ap.y + ap.z - 1.0) * 0.57735027; }
+    if (type == 3) { return length(vec2(length(p.xz) - 0.7, p.y)) - 0.3; }
+    if (type == 4) { vec3 q = abs(p) - vec3(0.9); return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - 0.1; }
+    return length(p);
+}
 
 // ============================================================================
 // Orbit Trap Structure
@@ -61,14 +74,14 @@ float DE(vec3 pos, out OrbitTrap trap) {
         }
 
         // Track orbit traps
-        trap.minDist = min(trap.minDist, length(z));
+        trap.minDist = min(trap.minDist, ifsBasePrimitive(z, basePrimitive));
         trap.planeX = min(trap.planeX, abs(z.x));
         trap.planeY = min(trap.planeY, abs(z.y));
         trap.planeZ = min(trap.planeZ, abs(z.z));
         trap.iterations = i + 1;
     }
 
-    return (length(z) - 2.0) / s;
+    return (ifsBasePrimitive(z, basePrimitive) - 2.0) / s;
 }
 
 // ============================================================================
@@ -97,7 +110,7 @@ float DE_simple(vec3 pos) {
         }
     }
 
-    return (length(z) - 2.0) / s;
+    return (ifsBasePrimitive(z, basePrimitive) - 2.0) / s;
 }
 
 // ============================================================================

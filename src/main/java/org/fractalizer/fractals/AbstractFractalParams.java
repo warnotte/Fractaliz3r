@@ -20,6 +20,22 @@ public abstract class AbstractFractalParams implements FractalParams {
     /** Internal record to cache field reflection info without binding to a specific instance. */
     private record AnimatableFieldInfo(Field field, String name, String displayName, Class<?> valueType) {}
 
+    // Base primitive shapes for IFS fractal DE formulas (must match common.glsl ifsBasePrimitive)
+    public enum BasePrimitive {
+        SPHERE, BOX, OCTAHEDRON, TORUS, ROUNDED_BOX;
+
+        @Override
+        public String toString() {
+            return switch (this) {
+                case SPHERE -> "Sphere";
+                case BOX -> "Box";
+                case OCTAHEDRON -> "Octahedron";
+                case TORUS -> "Torus";
+                case ROUNDED_BOX -> "Rounded Box";
+            };
+        }
+    }
+
     // Render mode constants (must match shaders/common.glsl RENDER_MODE_* defines)
     public static final int RENDER_FINAL = 0;
     public static final int RENDER_NORMALS = 1;

@@ -643,6 +643,7 @@ public class FractalConfig {
             map.put("offsetX", k.getOffsetX());
             map.put("offsetY", k.getOffsetY());
             map.put("offsetZ", k.getOffsetZ());
+            map.put("basePrimitive", k.getBasePrimitive().name());
         } else if (params instanceof PolyhedralIFSParams p) {
             map.put("polyType", p.getPolyType().name());
             map.put("maxIterations", p.getMaxIterations());
@@ -659,9 +660,11 @@ public class FractalConfig {
             map.put("rot2X", p.getRot2X());
             map.put("rot2Y", p.getRot2Y());
             map.put("rot2Z", p.getRot2Z());
+            map.put("basePrimitive", p.getBasePrimitive().name());
         } else if (params instanceof SierpinskiParams si) {
             map.put("maxIterations", si.getMaxIterations());
             map.put("scale", si.getScale());
+            map.put("basePrimitive", si.getBasePrimitive().name());
         } else if (params instanceof PseudoKleinianParams pk) {
             map.put("maxIterations", pk.getMaxIterations());
             map.put("cSizeX", pk.getCSizeX());
@@ -676,6 +679,7 @@ public class FractalConfig {
             map.put("maxIterations", ap.getMaxIterations());
             map.put("scale", ap.getScale());
             map.put("foldRadius", ap.getFoldRadius());
+            map.put("basePrimitive", ap.getBasePrimitive().name());
         } else if (params instanceof BristorbrotParams br) {
             map.put("maxIterations", br.getMaxIterations());
             map.put("bailout", br.getBailout());
@@ -749,6 +753,8 @@ public class FractalConfig {
             if (map.containsKey("offsetX")) k.setOffset(getFloat(map, "offsetX"),
                                                         getFloat(map, "offsetY"),
                                                         getFloat(map, "offsetZ"));
+            if (map.containsKey("basePrimitive"))
+                k.setBasePrimitive(AbstractFractalParams.BasePrimitive.valueOf((String) map.get("basePrimitive")));
         } else if (params instanceof PolyhedralIFSParams p) {
             if (map.containsKey("polyType")) p.setPolyType(PolyhedralIFSParams.PolyType.valueOf((String)map.get("polyType")));
             if (map.containsKey("maxIterations")) p.setMaxIterations(getInt(map, "maxIterations"));
@@ -765,9 +771,13 @@ public class FractalConfig {
             if (map.containsKey("rot2X")) p.setRot2X(getFloat(map, "rot2X"));
             if (map.containsKey("rot2Y")) p.setRot2Y(getFloat(map, "rot2Y"));
             if (map.containsKey("rot2Z")) p.setRot2Z(getFloat(map, "rot2Z"));
+            if (map.containsKey("basePrimitive"))
+                p.setBasePrimitive(AbstractFractalParams.BasePrimitive.valueOf((String) map.get("basePrimitive")));
         } else if (params instanceof SierpinskiParams si) {
             if (map.containsKey("maxIterations")) si.setMaxIterations(getInt(map, "maxIterations"));
             if (map.containsKey("scale")) si.setScale(getFloat(map, "scale"));
+            if (map.containsKey("basePrimitive"))
+                si.setBasePrimitive(AbstractFractalParams.BasePrimitive.valueOf((String) map.get("basePrimitive")));
         } else if (params instanceof PseudoKleinianParams pk) {
             if (map.containsKey("maxIterations")) pk.setMaxIterations(getInt(map, "maxIterations"));
             if (map.containsKey("cSizeX")) pk.setCSizeX(getFloat(map, "cSizeX"));
@@ -782,6 +792,8 @@ public class FractalConfig {
             if (map.containsKey("maxIterations")) ap.setMaxIterations(getInt(map, "maxIterations"));
             if (map.containsKey("scale")) ap.setScale(getFloat(map, "scale"));
             if (map.containsKey("foldRadius")) ap.setFoldRadius(getFloat(map, "foldRadius"));
+            if (map.containsKey("basePrimitive"))
+                ap.setBasePrimitive(AbstractFractalParams.BasePrimitive.valueOf((String) map.get("basePrimitive")));
         } else if (params instanceof BristorbrotParams br) {
             if (map.containsKey("maxIterations")) br.setMaxIterations(getInt(map, "maxIterations"));
             if (map.containsKey("bailout")) br.setBailout(getFloat(map, "bailout"));

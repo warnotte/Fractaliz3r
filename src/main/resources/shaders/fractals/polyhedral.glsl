@@ -6,6 +6,7 @@
 
 uniform int polyType; // 0: Octa, 1: Dodeca, 2: Icosa, 3: Tetra
 uniform int maxIterations;
+uniform int basePrimitive;
 uniform float scale;
 uniform vec3 offset;
 uniform vec3 shift;
@@ -15,6 +16,15 @@ uniform mat3 fractalRotation1;
 uniform mat3 fractalRotation2;
 
 const float phi = 1.61803398875;
+
+// IFS base primitive selector (0=Sphere, 1=Box, 2=Octahedron, 3=Torus, 4=Rounded Box)
+float ifsBasePrimitive(vec3 p, int type) {
+    if (type == 1) { vec3 d = abs(p) - vec3(1.0); return length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0); }
+    if (type == 2) { vec3 ap = abs(p); return (ap.x + ap.y + ap.z - 1.0) * 0.57735027; }
+    if (type == 3) { return length(vec2(length(p.xz) - 0.7, p.y)) - 0.3; }
+    if (type == 4) { vec3 q = abs(p) - vec3(0.9); return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - 0.1; }
+    return length(p);
+}
 
 struct OrbitTrap {
     float minDist;
@@ -108,7 +118,7 @@ float polyDE(vec3 p, out OrbitTrap trap) {
     trap.iterations = i;
     
     // Generic Polyhedral DE
-    return (length(w) - 2.0) * pow(scale, -float(i));
+    return (ifsBasePrimitive(w, basePrimitive) - 2.0) * pow(scale, -float(i));
 }
 
 // ============================================================================

@@ -443,7 +443,7 @@ public class NodeGraphEditor extends VBox {
      */
     public void loadParams(NodeGraphParams params) {
         this.currentParams = params;
-        selectedNode = (params != null) ? params.getGraphRoot() : null;
+        selectedNode = null;
 
         // Reset undo history
         graphHistory.clear();
@@ -1241,6 +1241,16 @@ public class NodeGraphEditor extends VBox {
             });
             detailPanel.getChildren().addAll(new Label("Symmetry:"), polyCombo);
 
+            ComboBox<AbstractFractalParams.BasePrimitive> basePrimCombo = new ComboBox<>();
+            basePrimCombo.getItems().addAll(AbstractFractalParams.BasePrimitive.values());
+            basePrimCombo.setValue(poly.getBasePrimitive());
+            basePrimCombo.setMaxWidth(Double.MAX_VALUE);
+            basePrimCombo.setOnAction(e -> {
+                poly.setBasePrimitive(basePrimCombo.getValue());
+                onParameterChange();
+            });
+            detailPanel.getChildren().addAll(new Label("Base Primitive:"), basePrimCombo);
+
             Label presetLabel = new Label("Presets:");
             presetLabel.getStyleClass().add("bold-label");
             detailPanel.getChildren().add(presetLabel);
@@ -1269,12 +1279,54 @@ public class NodeGraphEditor extends VBox {
             addQJ4DPresetButton(fn, "Hypersphere", QuaternionJulia4DParams.hyperspherePreset());
         }
 
-        // --- Kaleidoscopic IFS: hint ---
-        if (params instanceof KaleidoscopicIFSParams) {
+        // --- Kaleidoscopic IFS: base primitive + hint ---
+        if (params instanceof KaleidoscopicIFSParams kifs) {
+            detailPanel.getChildren().add(new Separator());
+
+            ComboBox<AbstractFractalParams.BasePrimitive> kifsBasePrimCombo = new ComboBox<>();
+            kifsBasePrimCombo.getItems().addAll(AbstractFractalParams.BasePrimitive.values());
+            kifsBasePrimCombo.setValue(kifs.getBasePrimitive());
+            kifsBasePrimCombo.setMaxWidth(Double.MAX_VALUE);
+            kifsBasePrimCombo.setOnAction(e -> {
+                kifs.setBasePrimitive(kifsBasePrimCombo.getValue());
+                onParameterChange();
+            });
+            detailPanel.getChildren().addAll(new Label("Base Primitive:"), kifsBasePrimCombo);
+
             Label hint = new Label("Classic Sierpinski: Scale=2, Offset=3");
             hint.getStyleClass().add("hint-label");
             hint.setWrapText(true);
-            detailPanel.getChildren().addAll(new Separator(), hint);
+            detailPanel.getChildren().add(hint);
+        }
+
+        // --- Sierpinski: base primitive ---
+        if (params instanceof SierpinskiParams sierp) {
+            detailPanel.getChildren().add(new Separator());
+
+            ComboBox<AbstractFractalParams.BasePrimitive> sierpBasePrimCombo = new ComboBox<>();
+            sierpBasePrimCombo.getItems().addAll(AbstractFractalParams.BasePrimitive.values());
+            sierpBasePrimCombo.setValue(sierp.getBasePrimitive());
+            sierpBasePrimCombo.setMaxWidth(Double.MAX_VALUE);
+            sierpBasePrimCombo.setOnAction(e -> {
+                sierp.setBasePrimitive(sierpBasePrimCombo.getValue());
+                onParameterChange();
+            });
+            detailPanel.getChildren().addAll(new Label("Base Primitive:"), sierpBasePrimCombo);
+        }
+
+        // --- Apollonian: base primitive ---
+        if (params instanceof ApollonianParams apoll) {
+            detailPanel.getChildren().add(new Separator());
+
+            ComboBox<AbstractFractalParams.BasePrimitive> apollBasePrimCombo = new ComboBox<>();
+            apollBasePrimCombo.getItems().addAll(AbstractFractalParams.BasePrimitive.values());
+            apollBasePrimCombo.setValue(apoll.getBasePrimitive());
+            apollBasePrimCombo.setMaxWidth(Double.MAX_VALUE);
+            apollBasePrimCombo.setOnAction(e -> {
+                apoll.setBasePrimitive(apollBasePrimCombo.getValue());
+                onParameterChange();
+            });
+            detailPanel.getChildren().addAll(new Label("Base Primitive:"), apollBasePrimCombo);
         }
     }
 

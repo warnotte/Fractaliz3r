@@ -36,6 +36,9 @@ public class KaleidoscopicIFSParams extends AbstractFractalParams {
     // Minimum radius (unused in this algorithm but kept for signature compatibility)
     private float minRadius;
 
+    // Base primitive for DE formula (sphere, box, octahedron, torus, rounded box)
+    private BasePrimitive basePrimitive = BasePrimitive.SPHERE;
+
     public KaleidoscopicIFSParams() {
         super();
 
@@ -84,6 +87,7 @@ public class KaleidoscopicIFSParams extends AbstractFractalParams {
         reduced.offsetY = this.offsetY;
         reduced.offsetZ = this.offsetZ;
         reduced.minRadius = this.minRadius;
+        reduced.basePrimitive = this.basePrimitive;
 
         // Reduce quality
         reduced.maxIterations = Math.max(6, this.maxIterations / reductionFactor);
@@ -146,4 +150,7 @@ public class KaleidoscopicIFSParams extends AbstractFractalParams {
         this.minRadius = radius;
         return this;
     }
+
+    public BasePrimitive getBasePrimitive() { return basePrimitive; }
+    public void setBasePrimitive(BasePrimitive basePrimitive) { this.basePrimitive = basePrimitive; }
 }

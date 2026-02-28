@@ -168,6 +168,7 @@ public class GraphCompiler {
             uniforms.put(prefix + "foldAngleX", (float) Math.toRadians(p.getFoldAngleX()));
             uniforms.put(prefix + "foldAngleY", (float) Math.toRadians(p.getFoldAngleY()));
             uniforms.put(prefix + "ifsOffset", p.getOffsetX());
+            uniforms.put(prefix + "basePrimitive", p.getBasePrimitive().ordinal());
         } else if (params instanceof PolyhedralIFSParams p) {
             uniforms.put(prefix + "polyType", p.getPolyType().ordinal());
             uniforms.put(prefix + "maxIterations", p.getMaxIterations());
@@ -176,9 +177,11 @@ public class GraphCompiler {
             uniforms.put(prefix + "shift", new float[]{p.getShiftX(), p.getShiftY(), p.getShiftZ()});
             uniforms.put(prefix + "fractalRotation1", createRotationMatrix(p.getRot1X(), p.getRot1Y(), p.getRot1Z()));
             uniforms.put(prefix + "fractalRotation2", createRotationMatrix(p.getRot2X(), p.getRot2Y(), p.getRot2Z()));
+            uniforms.put(prefix + "basePrimitive", p.getBasePrimitive().ordinal());
         } else if (params instanceof SierpinskiParams p) {
             uniforms.put(prefix + "maxIterations", p.getMaxIterations());
             uniforms.put(prefix + "scale", p.getScale());
+            uniforms.put(prefix + "basePrimitive", p.getBasePrimitive().ordinal());
         } else if (params instanceof PseudoKleinianParams p) {
             uniforms.put(prefix + "maxIterations", p.getMaxIterations());
             uniforms.put(prefix + "CSize", new float[]{p.getCSizeX(), p.getCSizeY(), p.getCSizeZ()});
@@ -189,6 +192,7 @@ public class GraphCompiler {
             uniforms.put(prefix + "maxIterations", p.getMaxIterations());
             uniforms.put(prefix + "scale", p.getScale());
             uniforms.put(prefix + "foldRadius", p.getFoldRadius());
+            uniforms.put(prefix + "basePrimitive", p.getBasePrimitive().ordinal());
         } else if (params instanceof BristorbrotParams p) {
             uniforms.put(prefix + "maxIterations", p.getMaxIterations());
             uniforms.put(prefix + "bailout", p.getBailout());

@@ -19,6 +19,7 @@ public class PolyhedralIFSParams extends AbstractFractalParams {
     }
 
     private PolyType polyType = PolyType.OCTAHEDRAL;
+    private BasePrimitive basePrimitive = BasePrimitive.SPHERE;
 
     @Animatable(display = "Iterations")
     private int maxIterations = 15;
@@ -81,6 +82,7 @@ public class PolyhedralIFSParams extends AbstractFractalParams {
         PolyhedralIFSParams reduced = new PolyhedralIFSParams();
         copyCommonParams(reduced);
         reduced.polyType = this.polyType;
+        reduced.basePrimitive = this.basePrimitive;
         reduced.scale = this.scale;
         reduced.maxIterations = Math.max(5, this.maxIterations / reductionFactor);
         reduced.offsetX = this.offsetX;
@@ -132,4 +134,7 @@ public class PolyhedralIFSParams extends AbstractFractalParams {
     public void setRot2Y(float rot2Y) { this.rot2Y = rot2Y; }
     public float getRot2Z() { return rot2Z; }
     public void setRot2Z(float rot2Z) { this.rot2Z = rot2Z; }
+
+    public BasePrimitive getBasePrimitive() { return basePrimitive; }
+    public void setBasePrimitive(BasePrimitive basePrimitive) { this.basePrimitive = basePrimitive; }
 }
