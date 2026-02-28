@@ -897,6 +897,7 @@ public class FractalConfig {
         } else if (node instanceof MaterialNode mn) {
             map.put("type", "material");
             map.put("materialType", mn.getMaterialType());
+            map.put("colorMode", mn.getColorMode());
             map.put("colorR", (double) mn.getColorR());
             map.put("colorG", (double) mn.getColorG());
             map.put("colorB", (double) mn.getColorB());
@@ -1002,6 +1003,8 @@ public class FractalConfig {
                 if (child == null) child = new FractalNode(FractalType.MANDELBULB);
                 MaterialNode mn = new MaterialNode(child);
                 if (map.containsKey("materialType")) mn.setMaterialType(((Number) map.get("materialType")).intValue());
+                if (map.containsKey("colorMode")) mn.setColorMode(((Number) map.get("colorMode")).intValue());
+                else mn.setColorMode(MaterialNode.COLOR_TINT);  // backward compat: old saves used multiplicative
                 if (map.containsKey("colorR")) mn.setColorR(((Number) map.get("colorR")).floatValue());
                 if (map.containsKey("colorG")) mn.setColorG(((Number) map.get("colorG")).floatValue());
                 if (map.containsKey("colorB")) mn.setColorB(((Number) map.get("colorB")).floatValue());

@@ -151,6 +151,8 @@ public class GLSLFractalizerController implements RenderController {
                     }
                 }
             }
+            // Update material SSBO (tiny data, safe to call every activation)
+            engine.updateMaterialSSBO(ngp.getMaterialSSBOData());
             if (engine.hasProgram("nodegraph")) {
                 engine.setActiveProgram("nodegraph");
                 currentBooleanProgramKey = null;

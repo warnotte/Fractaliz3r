@@ -17,6 +17,7 @@ public class NodeGraphParams extends AbstractFractalParams {
     private GraphNode graphRoot;
     private String compiledGLSL;
     private Map<String, Object> uniformValues = new LinkedHashMap<>();
+    private float[] materialSSBOData;
     private boolean dirty = true;
 
     public NodeGraphParams() {
@@ -54,6 +55,7 @@ public class NodeGraphParams extends AbstractFractalParams {
         reduced.graphRoot = this.graphRoot;
         reduced.compiledGLSL = this.compiledGLSL;
         reduced.uniformValues = new LinkedHashMap<>(this.uniformValues);
+        reduced.materialSSBOData = this.materialSSBOData;
         reduced.dirty = false;
         applyReducedQuality(reduced, reductionFactor);
         return reduced;
@@ -87,6 +89,7 @@ public class NodeGraphParams extends AbstractFractalParams {
             GraphCompiler compiler = new GraphCompiler();
             compiledGLSL = compiler.compile(graphRoot);
             uniformValues = compiler.getUniforms(graphRoot);
+            materialSSBOData = GraphCompiler.collectMaterialSSBOData(graphRoot);
             dirty = false;
             return compiledGLSL;
         } catch (Exception e) {
@@ -110,6 +113,11 @@ public class NodeGraphParams extends AbstractFractalParams {
     public void updateUniforms() {
         if (graphRoot == null || compiledGLSL == null) return;
         uniformValues = GraphCompiler.collectUniformsStatic(graphRoot);
+        materialSSBOData = GraphCompiler.collectMaterialSSBOData(graphRoot);
+    }
+
+    public float[] getMaterialSSBOData() {
+        return materialSSBOData;
     }
 
     /**

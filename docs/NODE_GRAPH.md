@@ -21,8 +21,8 @@ The node graph uses a **composite pattern** — a tree of `GraphNode` objects co
      FractalNode  CSGNode  TransformNode EffectNode MaterialNode PrimitiveNode
      (leaf)       (binary) (unary)       (unary)    (unary)      (leaf)
      ├── type     ├── op   ├── mode (7)  ├── effect ├── matType  ├── type (11)
-     ├── params   ├── blend├── child     ├── child  ├── color    └── size/shell
-     └── (leaf)   ├── left └── (per-mode)└── params ├── rough/met└── (leaf)
+     ├── params   ├── blend├── child     ├── child  ├── colorMode└── size/shell
+     └── (leaf)   ├── left └── (per-mode)└── params ├── color    └── (leaf)
                   └── right                         ├── ior/emit
                                                     └── child
 ```
@@ -157,7 +157,7 @@ public class TransformNode extends GraphNode {
 
 ### MaterialNode — Per-Node Material Overrides
 
-Wraps a single child with per-node material properties. Properties use sentinel value `-1` to fall back to global material uniforms.
+Wraps a single child with per-node material properties. Uses SSBO-based material lookup: each MaterialNode gets a unique index at compile time. Material data is stored in a Shader Storage Buffer Object (binding 6), indexed by `matId` in the OrbitTrap.
 
 ```java
 public class MaterialNode extends GraphNode {
@@ -166,9 +166,14 @@ public class MaterialNode extends GraphNode {
     public static final int TYPE_METALLIC = 1;
     public static final int TYPE_GLASS = 2;
 
+    public static final int COLOR_PALETTE = 0;  // Keep fractal palette colors (default)
+    public static final int COLOR_SOLID = 1;    // Replace with solid albedo color
+    public static final int COLOR_TINT = 2;     // Multiply palette by tint color
+
     private GraphNode child;
     private int materialType;   // -1 = global, 0-2 = override
-    private float colorR, colorG, colorB;  // Multiplicative tint (default 1,1,1)
+    private int colorMode;      // 0 = palette, 1 = solid, 2 = tint
+    private float colorR, colorG, colorB;  // Albedo color (used by solid/tint modes)
     private float roughness;    // -1 = global, 0-1 = override
     private float metallic;     // -1 = global, 0-1 = override
     private float ior;          // -1 = global, 1-3 = override
@@ -178,46 +183,67 @@ public class MaterialNode extends GraphNode {
 
 #### How It Works
 
-MaterialNode introduces **per-node material locals** (`_matType`, `_matColor`, `_matRoughness`, `_matMetallic`, `_matIor`, `_matEmission`) in the generated `DE()` function. These are initialized to sentinel defaults and overwritten by each MaterialNode encountered during tree evaluation.
-
-The composite `OrbitTrap` struct is expanded with material fields (only when at least one MaterialNode exists in the graph):
+Each MaterialNode is assigned a unique `int matId` (SSBO index) during compilation. The generated `DE()` function tracks a single `int _matId = -1` local variable. When a MaterialNode is encountered, it sets `_matId` to its index. The OrbitTrap carries this single ID:
 
 ```glsl
 struct OrbitTrap {
     float factorX, factorY, factorZ, reserved;
     int iterations;
-    // --- Material fields (conditional on #define NODE_GRAPH_MATERIALS) ---
-    int matType;
-    vec3 matColor;
-    float matRoughness, matMetallic, matIor, matEmission;
+    int matId;  // -1 = use global, >= 0 = SSBO index
+};
+```
+
+Material properties are stored in an SSBO (binding 6):
+
+```glsl
+struct MaterialData {
+    float type;       // -1=global, 0=Lambertian, 1=Metallic, 2=Glass
+    float colorMode;  // 0=palette, 1=solid, 2=tint
+    float albedoR, albedoG, albedoB;
+    float roughness, metallic, ior, emission;
+    float _pad0, _pad1, _pad2;  // std430 alignment (12 floats = 48 bytes)
+};
+layout(std430, binding = 6) readonly buffer MaterialBuffer {
+    MaterialData materials[];
 };
 ```
 
 **CSG material propagation:**
-- Before evaluating the right subtree, left-side material locals are saved into temporary variables (`_matType_L_c0`, etc.), then **reset to defaults**. This ensures the right subtree starts clean — no leaking from the left side.
+- Before evaluating the right subtree, left-side `_matId` is saved, then reset to `-1`.
 - After both subtrees are evaluated:
-  - **Union/Intersect/Subtract:** Winner-takes-all — the material locals of the losing side are overwritten with the winner's saved values.
-  - **Morph:** All float material properties are `mix()`-blended. `matType` (int) snaps at blend = 0.5.
+  - **Union/Intersect/Subtract:** Winner-takes-all — `_matId` picks from the winning side.
+  - **Morph:** `_matId` snaps at blend = 0.5.
 
-**Shader injection:** `raytracer.glsl` uses `#ifdef NODE_GRAPH_MATERIALS` blocks in 5 shading functions (shade, shadeSimple, pathTrace, pathTraceClassic, renderByMode) to override local material variables from the trap:
+**Shader injection:** `raytracer.glsl` uses `#ifdef HAS_MATERIALS` blocks in 5 shading functions (shade, shadeSimple, pathTrace, pathTraceClassic, renderByMode) to look up the SSBO:
 
 ```glsl
-#ifdef NODE_GRAPH_MATERIALS
-    if (trap.matType >= 0) localMatType = trap.matType;
-    baseColor *= trap.matColor;
-    if (trap.matRoughness >= 0.0) localRoughness = trap.matRoughness;
-    if (trap.matMetallic >= 0.0) localMetalness = trap.matMetallic;
-    if (trap.matIor >= 0.0) localIor = trap.matIor;
-    if (trap.matEmission >= 0.0) localEmissive = trap.matEmission;
+#ifdef HAS_MATERIALS
+    if (trap.matId >= 0) {
+        MaterialData mat = materials[trap.matId];
+        int mColorMode = int(mat.colorMode);
+        if (mColorMode == 1) baseColor = vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+        else if (mColorMode == 2) baseColor *= vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+        if (int(mat.type) >= 0) localMatType = int(mat.type);
+        if (mat.roughness >= 0.0) safeRoughness = max(mat.roughness, 0.02);
+        // ... etc
+    }
 #endif
 ```
 
-**Zero overhead when unused:** The `#define NODE_GRAPH_MATERIALS` is only emitted when at least one MaterialNode exists. Without it, OrbitTrap stays slim and no material branching occurs.
+**Zero overhead when unused:** `#define HAS_MATERIALS` is only emitted when at least one MaterialNode exists. Without it, OrbitTrap stays slim (5 fields) and no SSBO is created.
+
+#### Color Modes
+
+| Mode | Value | Behavior |
+|------|-------|----------|
+| `COLOR_PALETTE` | 0 | Keep fractal palette colors (default for new nodes) |
+| `COLOR_SOLID` | 1 | Replace color with solid albedo from `colorR/G/B` |
+| `COLOR_TINT` | 2 | Multiply palette color by `colorR/G/B` tint |
 
 #### UI
 
 - **Color:** Purple (`#9C27B0`) in tree canvas
-- **Detail panel:** Material Type ComboBox (Global/Lambertian/Metallic/Glass), ColorPicker for tint, CheckBox+Slider pairs for roughness/metallic/ior/emission (unchecked = use global)
+- **Detail panel:** Material Type ComboBox, Color Mode ComboBox (Fractal Colors/Solid Color/Color Tint), ColorPicker, CheckBox+Slider pairs for roughness/metallic/ior/emission
 - **Toolbar:** "Wrap Material" button
 - **Context menu:** "Wrap in Material" option
 
@@ -327,19 +353,9 @@ For each EffectNode, emit per-node uniforms:
 - EROSION: `uniform int {eid}_erosionType;`
 - CRYSTAL: `uniform float {eid}_sharpness;`
 
-#### Phase 3.6 — Material Uniforms
+#### Phase 0 (top of generated code) — Material SSBO Declaration
 
-For each MaterialNode, emit per-node uniforms:
-```glsl
-uniform int m0_matType;
-uniform vec3 m0_matColor;
-uniform float m0_roughness;
-uniform float m0_metallic;
-uniform float m0_ior;
-uniform float m0_emission;
-```
-
-Also emits `#define NODE_GRAPH_MATERIALS` at the top of the generated code when any MaterialNode exists.
+When any MaterialNode exists, emits `#define HAS_MATERIALS` and the SSBO struct/buffer declaration at the very top. Material data flows through the SSBO (binding 6), not per-node uniforms.
 
 #### Phase 4 — Transform Functions
 
@@ -350,7 +366,7 @@ For each TransformNode, emit:
 
 #### Phase 5 — Composite OrbitTrap
 
-A unified struct that carries coloring factors (not per-fractal orbit traps). When MaterialNodes exist, also carries per-node material overrides:
+A unified struct that carries coloring factors (not per-fractal orbit traps). When MaterialNodes exist, also carries a material ID for SSBO lookup:
 
 ```glsl
 struct OrbitTrap {
@@ -359,13 +375,8 @@ struct OrbitTrap {
     float factorZ;
     float reserved;  // Stores final distance
     int iterations;
-    // --- Only when #define NODE_GRAPH_MATERIALS ---
-    int matType;           // -1 = use global
-    vec3 matColor;         // Multiplicative tint
-    float matRoughness;    // -1 = use global
-    float matMetallic;     // -1 = use global
-    float matIor;          // -1 = use global
-    float matEmission;     // -1 = use global
+    // --- Only when #define HAS_MATERIALS ---
+    int matId;             // -1 = use global, >= 0 = SSBO index
 };
 ```
 
@@ -521,15 +532,7 @@ e0_erosionType = 0    (int: 0=All, 1=Hydraulic, 2=Thermal, 3=Cracks)
 e0_sharpness = 2.0
 ```
 
-**Per MaterialNode:**
-```
-m0_matType = -1         (int: -1=global, 0=Lambertian, 1=Metallic, 2=Glass)
-m0_matColor = [1,1,1]   (vec3: multiplicative tint)
-m0_roughness = -1.0     (-1 = use global, 0-1 = override)
-m0_metallic = -1.0      (-1 = use global, 0-1 = override)
-m0_ior = -1.0           (-1 = use global, 1-3 = override)
-m0_emission = -1.0      (-1 = use global, 0-50 = override)
-```
+**MaterialNode:** No per-node uniforms. Material data flows through an SSBO (binding 6). Each MaterialNode gets a unique index assigned during compilation. The SSBO buffer is updated via `GLSLEngine.updateMaterialSSBO()` with 12 floats per material (type, colorMode, albedoRGB, roughness, metallic, ior, emission, 3x padding).
 
 ### Recompile vs Update
 
@@ -826,8 +829,8 @@ In `discoverTransformParams(TransformNode)`, add parameter discovery for the new
 | `graph/CSGNode.java` | Binary: 4 operations + blend |
 | `graph/TransformNode.java` | Unary: 7 transform modes |
 | `graph/EffectNode.java` | Unary: 3 surface effect types (Erosion/Crystal/Moss) |
-| `graph/MaterialNode.java` | Unary: per-node material overrides (type, color, roughness, metallic, ior, emission) |
-| `graph/GraphCompiler.java` | Tree → composite GLSL (8 phases + Phase 3.5 effects + Phase 3.6 materials) |
+| `graph/MaterialNode.java` | Unary: per-node material overrides (type, colorMode, color, roughness, metallic, ior, emission) via SSBO |
+| `graph/GraphCompiler.java` | Tree → composite GLSL (8 phases + Phase 3.5 effects + SSBO material declaration) |
 | `graph/GraphNodeNamer.java` | Stable unique naming for animation tracks |
 | `graph/NodeGraphAnimationHelper.java` | DFS parameter discovery for timeline integration |
 | `fractals/NodeGraphParams.java` | `AbstractFractalParams` wrapper for graph tree |
@@ -838,49 +841,14 @@ In `discoverTransformParams(TransformNode)`, add parameter discovery for the new
 
 ## Architecture Notes & Future Direction
 
-### Current Approach: Fat OrbitTrap
+### Current Approach: Material ID + SSBO
 
-The current material system propagates per-node material properties through **GLSL local variables** (`_matType`, `_matColor`, `_matRoughness`, etc.) during tree evaluation, then packs them into the composite `OrbitTrap` struct. CSG nodes must **save** left-side locals before evaluating the right subtree, **reset** to defaults, then **pick** or **blend** based on the CSG operation.
+The material system uses an SSBO-based lookup. Each MaterialNode gets a unique `int matId` at compile time. OrbitTrap carries only `int matId` (1 field). Material properties are stored in a Shader Storage Buffer Object (binding 6) indexed by ID.
 
-**Strengths:**
-- Zero overhead when no MaterialNode exists (`#define NODE_GRAPH_MATERIALS`)
-- Simple sentinel pattern (`-1` = use global) is clean and familiar
-- No additional GPU resources (no buffers, no textures)
-- Works correctly for arbitrary tree depths
-
-**Weaknesses:**
-- Each new per-node property adds fields to OrbitTrap + save/restore/pick/morph code in every CSG node
-- The save/reset/pick pattern is error-prone (the material leak bug was caused by a missing reset)
-- GraphCompiler complexity grows linearly with the number of material properties
-- StringBuilder-based GLSL generation is hard to read and debug
-
-### Future Alternative: Material ID + SSBO
-
-If more per-node material properties are needed (textures, subsurface scattering, anisotropy, etc.), a cleaner approach would be:
-
-1. Each leaf/MaterialNode gets a unique `int materialId` at compile time
-2. OrbitTrap carries only `int matId` (1 field instead of 6+)
-3. Material properties stored in a **Shader Storage Buffer Object (SSBO)** indexed by ID:
-
-```glsl
-struct MaterialData {
-    int matType;
-    vec3 color;
-    float roughness, metallic, ior, emission;
-    // Easy to extend with new properties
-};
-
-layout(std430, binding = X) buffer MaterialBuffer {
-    MaterialData materials[];
-};
-
-// In shading:
-MaterialData mat = materials[trap.matId];
-```
-
-4. CSG propagation reduces to picking/blending a single `int` — no save/restore of 6+ fields
-5. Adding a new property = add a field to the SSBO struct + update the Java buffer. No GraphCompiler changes.
-
-**Trade-off:** Requires SSBO management (create/update/bind), adds a GPU buffer resource, and needs GL 4.3+. The current approach is simpler for the current feature set.
-
-**Recommendation:** The current system is adequate for the existing material properties. Consider the SSBO refactor only if adding 3+ new per-node properties (at which point the save/restore complexity becomes unsustainable).
+**Key design points:**
+- Zero overhead when no MaterialNode exists (`#define HAS_MATERIALS` only emitted when needed)
+- OrbitTrap stays slim: 6 fields with materials (vs 12+ in the previous fat-trap approach)
+- CSG propagation: save/reset/pick operates on a single `int _matId` — no save/restore of 6+ fields
+- Adding a new property = add a field to the SSBO struct + update the Java buffer. No GraphCompiler changes.
+- `colorMode` supports 3 modes: palette (keep fractal colors), solid (replace), tint (multiply)
+- SSBO binding point 6 (0-4 are textures, 5 is variance image)

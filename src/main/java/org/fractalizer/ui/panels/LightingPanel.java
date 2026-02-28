@@ -30,6 +30,10 @@ public class LightingPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider lightIntensitySlider;
     private EnhancedSlider ambientIntensitySlider;
 
+    // Directional light toggle
+    private CheckBox directionalLightToggle;
+    private float savedLightIntensity = 1.2f;
+
     // Color pickers
     private ColorPicker lightColorPicker;
     private ColorPicker ambientColorPicker;
@@ -60,6 +64,24 @@ public class LightingPanel extends ScrollPane implements Refreshable {
     private VBox createContent() {
         VBox panel = new VBox(8);
         panel.setPadding(new Insets(10));
+
+        directionalLightToggle = new CheckBox("Directional Light");
+        directionalLightToggle.setSelected(true);
+        directionalLightToggle.setOnAction(e -> {
+            if (!suppressRender) {
+                if (directionalLightToggle.isSelected()) {
+                    getParams().lightIntensity(savedLightIntensity);
+                    lightIntensitySlider.setValue(savedLightIntensity);
+                } else {
+                    savedLightIntensity = getParams().getLightIntensity();
+                    if (savedLightIntensity <= 0) savedLightIntensity = 1.2f;
+                    getParams().lightIntensity(0f);
+                    lightIntensitySlider.setValue(0);
+                }
+                lightIntensitySlider.setDisable(!directionalLightToggle.isSelected());
+                renderCallback.requestRender();
+            }
+        });
 
         lightXSlider = new EnhancedSlider("X", -5, 5, 2, false);
         lightXSlider.setPrecision(1);
@@ -247,8 +269,8 @@ public class LightingPanel extends ScrollPane implements Refreshable {
         });
 
         // Collapsible sections
-        VBox dirBox = new VBox(5, lightXSlider, lightYSlider, lightZSlider);
-        TitledPane dirPane = new TitledPane("Light Direction", dirBox);
+        VBox dirBox = new VBox(5, directionalLightToggle, lightXSlider, lightYSlider, lightZSlider);
+        TitledPane dirPane = new TitledPane("Directional Light", dirBox);
         dirPane.setExpanded(true);
 
         VBox colBox = new VBox(5, lightColorPicker, lightIntensitySlider);
@@ -337,6 +359,10 @@ public class LightingPanel extends ScrollPane implements Refreshable {
             // Light color and intensity
             lightColorPicker.setValue(Color.color(p.getLightR(), p.getLightG(), p.getLightB()));
             lightIntensitySlider.setValue(p.getLightIntensity());
+            boolean lightOn = p.getLightIntensity() > 0;
+            directionalLightToggle.setSelected(lightOn);
+            lightIntensitySlider.setDisable(!lightOn);
+            if (lightOn) savedLightIntensity = p.getLightIntensity();
 
             // Ambient
             ambientColorPicker.setValue(Color.color(p.getAmbientR(), p.getAmbientG(), p.getAmbientB()));

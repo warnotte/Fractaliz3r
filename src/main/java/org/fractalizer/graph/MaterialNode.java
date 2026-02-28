@@ -15,8 +15,14 @@ public class MaterialNode extends GraphNode {
     public static final int TYPE_METALLIC = 1;
     public static final int TYPE_GLASS = 2;
 
+    /** Color mode: how matColor interacts with fractal palette colors */
+    public static final int COLOR_PALETTE = 0;  // Keep fractal palette colors (default)
+    public static final int COLOR_SOLID = 1;    // Replace with solid albedo color
+    public static final int COLOR_TINT = 2;     // Multiply palette by tint color
+
     private GraphNode child;
     private int materialType;
+    private int colorMode;
     private float colorR;
     private float colorG;
     private float colorB;
@@ -32,6 +38,7 @@ public class MaterialNode extends GraphNode {
 
     private void applyDefaults() {
         materialType = TYPE_GLOBAL;
+        colorMode = COLOR_PALETTE;
         colorR = 1.0f;
         colorG = 1.0f;
         colorB = 1.0f;
@@ -46,6 +53,9 @@ public class MaterialNode extends GraphNode {
 
     public int getMaterialType() { return materialType; }
     public void setMaterialType(int materialType) { this.materialType = Math.max(-1, Math.min(2, materialType)); }
+
+    public int getColorMode() { return colorMode; }
+    public void setColorMode(int colorMode) { this.colorMode = Math.max(0, Math.min(2, colorMode)); }
 
     public float getColorR() { return colorR; }
     public void setColorR(float colorR) { this.colorR = Math.max(0f, Math.min(1f, colorR)); }
