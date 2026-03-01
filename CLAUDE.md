@@ -17,9 +17,10 @@ mvn clean install        # Clean rebuild
 mvn clean javafx:jlink package -DskipTests  # Release (jlink)
 ```
 
-**Visual regression test** (run after shader/rendering changes):
+**Visual regression tests** (run after shader/rendering changes):
 ```bash
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.TiledRenderTest"
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.TiledRenderTest"   # Tiled export
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ZoomOutTest"       # Zoom-out rendering
 ```
 
 ## Project Architecture
