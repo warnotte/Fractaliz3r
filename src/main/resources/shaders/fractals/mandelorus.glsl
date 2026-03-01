@@ -89,7 +89,10 @@ float DE(vec3 pos, out OrbitTrap trap) {
     }
 
     float r = length(z);
-    return 0.5 * log(r) * r / max(abs(dr), 1e-6);
+    float de = 0.5 * log(r) * r / max(abs(dr), 1e-6);
+    float rPos = length(pos);
+    if (rPos > 2.0 * (bailout + ringRadius)) de = min(de, rPos - bailout - ringRadius);
+    return de;
 }
 
 float DE_simple(vec3 pos) {
@@ -130,7 +133,10 @@ float DE_simple(vec3 pos) {
     }
 
     float r = length(z);
-    return 0.5 * log(r) * r / max(abs(dr), 1e-6);
+    float de = 0.5 * log(r) * r / max(abs(dr), 1e-6);
+    float rPos = length(pos);
+    if (rPos > 2.0 * (bailout + ringRadius)) de = min(de, rPos - bailout - ringRadius);
+    return de;
 }
 
 vec3 getFactors(OrbitTrap trap) {

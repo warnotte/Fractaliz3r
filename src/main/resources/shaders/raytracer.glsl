@@ -1702,8 +1702,8 @@ void main() {
             // Evaluate fractal exactly at the surface hit point.
             // This ensures perfect alignment between geometry (Normals/AO) and Material Color.
             DE(hit.pos, hit.trap);
-            
-            vec3 normal = calcNormal(hit.pos); 
+
+            vec3 normal = calcNormal(hit.pos);
             float shadowBias = 0.001 + hit.dist * 0.001;
             float shadow = calcShadow(hit.pos + normal * shadowBias, normalize(lightDir), shadowBias, 15.0);
             float ao = calcAO(hit.pos, normal);

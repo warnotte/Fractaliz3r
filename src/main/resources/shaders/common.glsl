@@ -1259,7 +1259,9 @@ float fresnel(vec3 viewDir, vec3 normal, float power) { return pow(1.0 - max(dot
 
 float computeAdaptiveEpsilon(float totalDist, float baseEps, float quality) {
     float scaled = baseEps / max(quality, 0.5);
-    return max(MIN_EPSILON, scaled * (1.0 + totalDist * 0.1));
+    // Gentle log growth: epsilon stays tight at distance (log(1+30)~3.4 vs linear 30*0.1=3.0)
+    // but grows much slower at large distances (log(1+100)~4.6 vs linear 100*0.1=10.0)
+    return max(MIN_EPSILON, scaled * (1.0 + log(1.0 + totalDist) * 0.02));
 }
 
 float computeStep(float dist, float quality, float stepFactor) {

@@ -89,7 +89,13 @@ float DE(vec3 pos, out OrbitTrap trap) {
         trap.iterations = i + 1;
     }
 
-    return 0.5 * log(r) * r / dr;
+    float de = 0.5 * log(r) * r / dr;
+    // Bounding sphere clamp: the fractal is contained within r < bailout.
+    // Only activate far from the fractal (r > 2*bailout) to avoid creating
+    // a false surface at the bailout boundary.
+    float rPos = length(pos);
+    if (rPos > 2.0 * bailout) de = min(de, rPos - bailout);
+    return de;
 }
 
 // ============================================================================
@@ -128,7 +134,10 @@ float DE_simple(vec3 pos) {
         }
     }
 
-    return 0.5 * log(r) * r / dr;
+    float de = 0.5 * log(r) * r / dr;
+    float rPos = length(pos);
+    if (rPos > 2.0 * bailout) de = min(de, rPos - bailout);
+    return de;
 }
 
 // ============================================================================
