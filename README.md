@@ -17,14 +17,16 @@
 **The primary user interface for fractal exploration.** Build complex fractal scenes by composing multiple fractals in a visual node tree:
 
 - **Composable trees**: Combine any number of fractals with CSG operations and coordinate transforms
-- **5 CSG operations**: Union, Intersect, Subtract, Morph, Nesting (micro-geometry tiling) — all with smooth blending
+- **4 CSG operations**: Union, Intersect, Subtract, Morph — all with smooth blending
 - **7 transform modes**: Standard (translate/rotate/scale), Mirror, Twist, Bend, Taper, Repetition, Repetition 1D
+- **11 SDF primitives**: Sphere, Box, Rounded Box, Plane, Torus, Cylinder, Capsule, Cone, Octahedron, Pyramid, Hex Prism
 - **3 surface effects**: Erosion, Crystallization, Moss — per-node, composable, stackable
+- **Per-node materials**: SSBO-based material overrides (color mode, roughness, metallic, IOR, emission) on any subtree
 - **Per-node parameters**: Each fractal node stores its own independent settings
 - **Visual editor**: Canvas-based tree view with drag, zoom, context menus, and undo/redo
 - **Single-shader compilation**: The entire tree compiles into one GPU shader via `GraphCompiler`
 
-### Fractal Library (13 Types)
+### Fractal Library (14 Types)
 
 - **Mandelbulb** — Power-based 3D Mandelbrot with configurable iterations/bailout
 - **Mandelbox** — Box/sphere fold hybrid with scale, radius, and folding controls
@@ -36,9 +38,12 @@
 - **Pseudo-Kleinian** — Box/sphere fold with space repetition (tubular caves)
 - **Apollonian Gasket** — Tetrahedral fold + sphere inversion
 - **Bristorbrot** — Component-wise 3D Mandelbrot with Julia mode
-- **Fractal Terrain** — fBm noise heightfield with configurable octaves
-- **Cornell Box** — Classic rendering test scene with per-object materials
+- **Mandelorus** — Mandelbrot on torus topology with ring/cross-section power and twist
+- **Menger Advanced** — Extended Menger sponge with additional fold controls
+- **Menger Sponge Test** — Experimental Menger variant
 - **Custom Shader** — Write your own GLSL distance estimator with `@param` annotations for auto-generated sliders
+
+IFS fractals (Kaleidoscopic, Polyhedral, Sierpinski, Apollonian) support a **configurable base primitive** (Sphere, Box, Octahedron, Torus, Rounded Box).
 
 ### Cinematic Rendering
 
@@ -166,6 +171,9 @@ The rendering pipeline assembles GLSL shaders at runtime from modular source fil
 
 - **[docs/SHADER_PIPELINE.md](docs/SHADER_PIPELINE.md)** — How GLSL shaders are assembled and sent to the GPU
 - **[docs/NODE_GRAPH.md](docs/NODE_GRAPH.md)** — Node graph system: architecture, compiler, animation, serialization
+- **[docs/RENDERING.md](docs/RENDERING.md)** — Blue noise, cone tracing, adaptive sampling, cinematic pipeline, effects, coloring
+- **[docs/FEATURES.md](docs/FEATURES.md)** — EnhancedSlider, dice randomizer, morph crossfade, custom shader editor, boolean ops
+- **[docs/EXPORT.md](docs/EXPORT.md)** — VR/360, tiled rendering, AOV export, mesh export, video encoding, jlink release
 - **[docs/AUDIO_REACTIVE.md](docs/AUDIO_REACTIVE.md)** — Audio-reactive fractals: spectrum analysis, beat detection, offline export
 
 ---
