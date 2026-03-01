@@ -197,6 +197,15 @@ public class GraphCompiler {
             uniforms.put(prefix + "maxIterations", p.getMaxIterations());
             uniforms.put(prefix + "bailout", p.getBailout());
             uniforms.put(prefix + "juliaC", new float[]{p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz()});
+        } else if (params instanceof MandelorusParams p) {
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "bailout", p.getBailout());
+            uniforms.put(prefix + "ringRadius", p.getRingRadius());
+            uniforms.put(prefix + "torusTwist", p.getTorusTwist());
+            uniforms.put(prefix + "power", p.getPower());
+            uniforms.put(prefix + "ringPhase", (float) Math.toRadians(p.getRingPhase()));
+            uniforms.put(prefix + "crossPhase", (float) Math.toRadians(p.getCrossPhase()));
+            uniforms.put(prefix + "vertScale", p.getVertScale());
         } else if (params instanceof QuaternionJulia4DParams p) {
             uniforms.put(prefix + "maxIterations", p.getMaxIterations());
             uniforms.put(prefix + "bailout", p.getBailout());

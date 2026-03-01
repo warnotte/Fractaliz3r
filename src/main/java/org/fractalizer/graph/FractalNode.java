@@ -53,6 +53,7 @@ public class FractalNode extends GraphNode {
             case PSEUDO_KLEINIAN -> new PseudoKleinianParams();
             case APOLLONIAN -> new ApollonianParams();
             case BRISTORBROT -> new BristorbrotParams();
+            case MANDELORUS -> new MandelorusParams();
             case QUATERNION_JULIA_4D -> new QuaternionJulia4DParams();
             case MENGER_ADVANCED -> new MengerAdvancedParams();
             case MENGER_SPONGE_TEST -> new MengerSpongeTestParams();

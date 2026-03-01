@@ -13,6 +13,7 @@ public enum FractalType {
     PSEUDO_KLEINIAN("Pseudo-Kleinian", "pseudokleinian"),
     APOLLONIAN("Apollonian Gasket", "apollonian"),
     BRISTORBROT("Bristorbrot", "bristorbrot"),
+    MANDELORUS("Mandelorus", "mandelorus"),
     QUATERNION_JULIA_4D("Quaternion Julia 4D", "quaternionjulia4d"),
     MENGER_ADVANCED("Menger Advanced", "mengeradvanced"),
     MENGER_SPONGE_TEST("Menger Sponge Test", "mengerspongetest"),

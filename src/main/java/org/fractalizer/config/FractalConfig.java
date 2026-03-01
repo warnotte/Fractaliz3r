@@ -686,6 +686,15 @@ public class FractalConfig {
             map.put("juliaCx", br.getJuliaCx());
             map.put("juliaCy", br.getJuliaCy());
             map.put("juliaCz", br.getJuliaCz());
+        } else if (params instanceof MandelorusParams ml) {
+            map.put("maxIterations", ml.getMaxIterations());
+            map.put("bailout", ml.getBailout());
+            map.put("ringRadius", ml.getRingRadius());
+            map.put("torusTwist", ml.getTorusTwist());
+            map.put("power", ml.getPower());
+            map.put("ringPhase", ml.getRingPhase());
+            map.put("crossPhase", ml.getCrossPhase());
+            map.put("vertScale", ml.getVertScale());
         } else if (params instanceof QuaternionJulia4DParams qj) {
             map.put("maxIterations", qj.getMaxIterations());
             map.put("bailout", qj.getBailout());
@@ -800,6 +809,15 @@ public class FractalConfig {
             if (map.containsKey("juliaCx")) br.setJuliaCx(getFloat(map, "juliaCx"));
             if (map.containsKey("juliaCy")) br.setJuliaCy(getFloat(map, "juliaCy"));
             if (map.containsKey("juliaCz")) br.setJuliaCz(getFloat(map, "juliaCz"));
+        } else if (params instanceof MandelorusParams ml) {
+            if (map.containsKey("maxIterations")) ml.setMaxIterations(getInt(map, "maxIterations"));
+            if (map.containsKey("bailout")) ml.setBailout(getFloat(map, "bailout"));
+            if (map.containsKey("ringRadius")) ml.setRingRadius(getFloat(map, "ringRadius"));
+            if (map.containsKey("torusTwist")) ml.setTorusTwist(getFloat(map, "torusTwist"));
+            if (map.containsKey("power")) ml.setPower(getFloat(map, "power"));
+            if (map.containsKey("ringPhase")) ml.setRingPhase(getFloat(map, "ringPhase"));
+            if (map.containsKey("crossPhase")) ml.setCrossPhase(getFloat(map, "crossPhase"));
+            if (map.containsKey("vertScale")) ml.setVertScale(getFloat(map, "vertScale"));
         } else if (params instanceof QuaternionJulia4DParams qj) {
             if (map.containsKey("maxIterations")) qj.setMaxIterations(getInt(map, "maxIterations"));
             if (map.containsKey("bailout")) qj.setBailout(getFloat(map, "bailout"));

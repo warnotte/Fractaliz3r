@@ -122,7 +122,7 @@ public class GLSLFractalizerController implements RenderController {
                 // All types route through NodeGraphParams with single FractalNode
                 case MANDELBULB, MANDELBOX, MENGER_SPONGE, KALEIDOSCOPIC_IFS,
                      POLYHEDRAL_IFS, SIERPINSKI, PSEUDO_KLEINIAN, APOLLONIAN,
-                     BRISTORBROT, QUATERNION_JULIA_4D, MENGER_ADVANCED,
+                     BRISTORBROT, MANDELORUS, QUATERNION_JULIA_4D, MENGER_ADVANCED,
                      MENGER_SPONGE_TEST, CUSTOM_SHADER ->
                     this.currentParams = new NodeGraphParams(type);
                 case NODE_GRAPH -> this.currentParams = new NodeGraphParams();
