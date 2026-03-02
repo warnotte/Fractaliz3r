@@ -25,7 +25,7 @@ void main() {
     if (isnan(d) || isinf(d)) d = 1e10;
 
     vec3 factors = getFactors(trap);
-    vec3 color = clamp(applyMaterial(factors), 0.0, 1.0);
+    vec3 color = clamp(applyMaterial(factors, pos, vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, -1.0)), 0.0, 1.0);
 
     // RGB = Vertex color (LDR clamped), A = Distance
     FragColor = vec4(color, d);

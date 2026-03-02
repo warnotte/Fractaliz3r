@@ -572,7 +572,7 @@ vec3 shadeSimple(vec3 hitPos, Ray ray, int matType) {
 #endif
     factors = remapTrapFactors(factors, hitPos);
 
-    vec3 baseColor = applyMaterial(factors);
+    vec3 baseColor = applyMaterial(factors, hitPos, normal, ray.direction);
     float localEmissive = emissiveIntensity;
 
 #ifdef HAS_MATERIALS
@@ -648,7 +648,7 @@ vec3 shade(RayHit hit, Ray ray) {
 #endif
     factors = remapTrapFactors(factors, hit.pos);
 
-    vec3 baseColor = applyMaterial(factors);
+    vec3 baseColor = applyMaterial(factors, hit.pos, normal, ray.direction);
     int localMatType = materialType;
     float localIor = ior;
     float localMetalness = metalness;
@@ -964,7 +964,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
 #ifdef BOOLEAN_OPS
             mf = morphFactors(hitPos, mf);
 #endif
-            albedo = applyMaterial(remapTrapFactors(mf, hitPos));
+            albedo = applyMaterial(remapTrapFactors(mf, hitPos), hitPos, normal, currentRay.direction);
         }
         localMatType = materialType;
         localIor = ior;
@@ -1261,7 +1261,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 #ifdef BOOLEAN_OPS
             mf = morphFactors(hitPos, mf);
 #endif
-            albedo = applyMaterial(remapTrapFactors(mf, hitPos));
+            albedo = applyMaterial(remapTrapFactors(mf, hitPos), hitPos, normal, currentRay.direction);
         }
         localMatType = materialType;
         localIor = ior;
@@ -1571,7 +1571,7 @@ vec3 renderByMode(RayHit hit, Ray ray, vec3 normal, float shadow, float ao) {
     factors = morphFactors(hit.pos, factors);
 #endif
     factors = remapTrapFactors(factors, hit.pos);
-    vec3 baseColor = applyMaterial(factors);
+    vec3 baseColor = applyMaterial(factors, hit.pos, normal, ray.direction);
 #ifdef HAS_MATERIALS
     if (hit.trap.matId >= 0) {
         MaterialData mat = materials[hit.trap.matId];

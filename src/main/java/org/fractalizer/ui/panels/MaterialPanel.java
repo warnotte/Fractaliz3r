@@ -93,7 +93,11 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             "Contour",         // 5: high-frequency stripes (topographic)
             "HSV Direct",      // 6: factors → H/S/V independently (no palette)
             "Dual Palette",    // 7: two palette lookups blended by depth
-            "Neon"             // 8: sharp hue bands, high saturation glow
+            "Neon",            // 8: sharp hue bands, high saturation glow
+            "Normal Map",      // 9: surface orientation → palette (scale-invariant)
+            "Triplanar",       // 10: 3D noise via triplanar projection (scale-invariant)
+            "Curvature",       // 11: Laplacian concave/convex → palette (scale-invariant)
+            "Fresnel"          // 12: view-dependent rim lighting (scale-invariant)
         );
         coloringModeCombo.getSelectionModel().select(0);
         coloringModeCombo.setMaxWidth(Double.MAX_VALUE);

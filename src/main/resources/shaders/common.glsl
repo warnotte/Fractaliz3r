@@ -259,6 +259,16 @@ float warpedFbm(vec3 p) {
     return fbm(p + 1.0 * q);
 }
 
+// Triplanar noise: blend 3 projected noise lookups weighted by surface normal
+float triplanarNoise(vec3 pos, vec3 normal, float freq) {
+    vec3 w = abs(normal);
+    w = w / (w.x + w.y + w.z + 1e-6);
+    float nx = noise(vec3(pos.yz * freq, 7.3));
+    float ny = noise(vec3(pos.xz * freq, 3.7));
+    float nz = noise(vec3(pos.xy * freq, 5.1));
+    return w.x * nx + w.y * ny + w.z * nz;
+}
+
 // === Parameterized erosion functions (used by node graph per-node effects) ===
 float erosionMaxDisplacementP(float pStrength, float pTime, float pScale) {
     return (0.2 + 0.5 + 0.35) * pTime * pStrength * pScale * 0.05;
@@ -563,10 +573,53 @@ vec3 remapTrapFactors(vec3 factors, vec3 hitPos) {
     return factors;
 }
 
-vec3 applyMaterial(vec3 factors) {
+// Forward declaration: DE_simple is defined in fractal shader (included after common.glsl)
+float DE_simple(vec3 pos);
+
+vec3 applyMaterial(vec3 factors, vec3 hitPos, vec3 normal, vec3 rayDir) {
     float structural = factors.x;
     float flow = factors.y;
     float depth = factors.z;
+
+    // Modes 9-12: geometry-based (scale-invariant, bypass orbit traps)
+    if (coloringMode == 9) {
+        // Normal Map: surface orientation → palette lookup
+        float t = dot(normal, normalize(vec3(1.0, 0.8, 0.6))) * 0.5 + 0.5;
+        t = t * colorStrength + paletteOffset;
+        return getPresetPalette(t);
+    }
+    if (coloringMode == 10) {
+        // Triplanar: 3D noise projected via triplanar mapping
+        float freq = colorStrength * 5.0;
+        float n1 = triplanarNoise(hitPos, normal, freq);
+        float n2 = triplanarNoise(hitPos, normal, freq * 2.7 + 3.1);
+        float t = n1 * 0.7 + n2 * 0.3;
+        t = t * colorStrength + paletteOffset;
+        vec3 color = getPresetPalette(t);
+        // Edge darkening from normal curvature
+        float edge = 1.0 - pow(abs(dot(normal, rayDir)), 0.5);
+        color *= 1.0 - edge * 0.3;
+        return color;
+    }
+    if (coloringMode == 11) {
+        // Curvature: Laplacian of DE → concave/convex → palette
+        float eps = max(length(hitPos - camPos) * 0.001, 0.0001);
+        float d0 = DE_simple(hitPos);
+        float dx = DE_simple(hitPos + vec3(eps, 0.0, 0.0)) + DE_simple(hitPos - vec3(eps, 0.0, 0.0));
+        float dy = DE_simple(hitPos + vec3(0.0, eps, 0.0)) + DE_simple(hitPos - vec3(0.0, eps, 0.0));
+        float dz = DE_simple(hitPos + vec3(0.0, 0.0, eps)) + DE_simple(hitPos - vec3(0.0, 0.0, eps));
+        float laplacian = (dx + dy + dz - 6.0 * d0) / (eps * eps);
+        // Normalize: positive = convex, negative = concave
+        float t = laplacian * eps * colorStrength * 0.5;
+        t = clamp(t * 0.5 + 0.5, 0.0, 1.0) + paletteOffset;
+        return getPresetPalette(t);
+    }
+    if (coloringMode == 12) {
+        // Fresnel: view-dependent rim lighting → palette
+        float fr = pow(1.0 - abs(dot(normal, rayDir)), 2.0);
+        float t = fr * colorStrength + paletteOffset;
+        return getPresetPalette(t);
+    }
 
     // Modes 6-8 bypass the palette entirely
     if (coloringMode == 6) {
