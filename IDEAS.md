@@ -2,108 +2,81 @@
 
 Creative feature ideas for Fractaliz3r. Status: IDEA (not started), IN PROGRESS, DONE, REJECTED.
 
-## 1. Unified Node Graph UI
-**Status:** DONE
+---
 
-The Node Graph has replaced the traditional slider-heavy `FractalPanel` as the primary interface. All fractal editing, boolean composition (CSG), and coordinate transforms happen in a visual tree view. Sliders are dynamically generated in a detail panel for the selected node.
+## Completed
 
-## 2. Fractal Portals — Non-Euclidean Geometry
-**Status:** REJECTED
+| # | Feature | Notes |
+|---|---------|-------|
+| 1 | Unified Node Graph UI | Primary interface, replaced FractalPanel sliders |
+| 3 | Erosion Simulation | Per-node via EffectNode (cracks, hydraulic, thermal) |
+| 4 | Boolean Operations (CSG) | Union/Intersect/Subtract/Morph in CSGNode |
+| 5 | Moss / Lichen Growth | Per-node via EffectNode |
+| 6 | Multi-Fractal Nesting | CSG operation in CSGNode |
+| 7 | Crystallization | Per-node via EffectNode (Voronoi) |
+| 8 | Primitive SDF Nodes | 11 primitives as PrimitiveNode in graph |
+| 9 | Domain Distortions | 7 modes in TransformNode |
+| 10 | Cone Tracing | Pixel-aware adaptive epsilon |
+| 11 | Per-Node Materials | MaterialNode with SSBO, per-node PBR overrides (color, roughness, metallic, IOR, emission) |
+| 12 | IFS Base Primitive | 5 shapes (Sphere, Box, Octahedron, Torus, Rounded Box) |
 
-Visually uninteresting. Implemented and reverted.
+## Rejected
 
-## 3. Erosion Simulation
-**Status:** DONE (Per-Node)
+| # | Feature | Reason |
+|---|---------|--------|
+| 2 | Fractal Portals | Implemented and reverted — visually uninteresting |
+| 20 | Raymarched Reflections | Already covered by path tracing |
 
-Procedural erosion applied to any fractal DE via `EffectNode`. Three layers (weathering cracks, hydraulic channels, thermal rounding) with proximity gating and lightweight shadow/AO variant.
+---
 
-## 4. Boolean Operations Between Fractals
-**Status:** DONE (Unified in Graph)
+## Open Ideas
 
-CSG union/intersection/subtraction/morph of two fractal distance fields. Integrated as `CSGNode` in the node graph.
-
-## 5. Moss / Lichen Growth
-**Status:** DONE (Per-Node)
-
-Organic growth favoring crevices (high AO regions) and horizontal surfaces. Available as an effect type in `EffectNode`.
-
-## 6. Multi-Fractal Nesting
-**Status:** DONE (Unified in Graph)
-
-Tiles a secondary fractal as micro-geometry on the primary fractal's surface. Integrated as a special CSG operation in `CSGNode`.
-
-## 7. Crystallization
-**Status:** DONE (Per-Node)
-
-Outward crystalline growth via Voronoi-based noise. Available as an effect type in `EffectNode`.
-
-## 8. Primitive SDF Nodes
-**Status:** DONE
-
-Analytic geometric primitives (Sphere, Box, Torus, etc.) can be added to the node graph and mixed with fractals via CSG.
-
-## 9. Domain Distortions (Twist/Bend/Taper/Repetition)
-**Status:** DONE (Unified in Graph)
-
-Space-warping transforms available per-node via `TransformNode`. 7 modes: Standard, Mirror, Twist, Bend, Taper, Repetition, Repetition 1D.
-
-## 10. Cone Tracing (Pixel-Aware Epsilon)
-**Status:** DONE
-
-Major rendering improvement that stabilizes geometry by scaling the distance estimator epsilon with the pixel's world-space footprint. Eliminates flickering and flickering at distance.
-
-## 12. Configurable IFS Base Primitive
-**Status:** DONE
-
-IFS fractals now support 5 base primitive shapes (Sphere, Box, Octahedron, Torus, Rounded Box) via uniform-gated switch. No shader recompilation.
-
-## 13. Fractal Portals — Non-Euclidean Geometry
-**Status:** REJECTED
-
-Spherical ray teleportation. Implemented and tested — visually uninteresting.
-
-## 14. New Fractal Formulas (from GMT-fractals)
-**Status:** IDEA
+### 14. New Fractal Formulas
+**Status:** IDEA (Mandelorus done)
 
 Exotic fractal types to expand the formula library:
-- **Mandelorus** — Mandelbrot on a torus topology, solenoid structures with twist/vertical scaling
-- **MandelBolic** — Hyperbolic 3-space extension (Poincaré-Ahlfors), perfect spherical bulbs
-- **Appell** — Appell Polynomials / Clifford Analysis, skeleton-like interference patterns
-- **Borromean** — 3 interlocking complex planes in cyclic feedback, tetrahedral symmetries
-- **JuliaMorph** — 2D Julia sets stacked along Z-axis with twist/bend deformations
-- **Tetrabrot** — 4D pseudo-quaternion set, diamond-like geometric symmetries
+- ~~Mandelorus~~ — DONE
 - **Buffalo** — Mandelbulb with absolute-value folds, furry plate-like textures
-- **MarbleMarcher** — Dynamic Menger IFS with rotation/shifting from the game
 - **BoxBulb** — Mandelbox + Mandelbulb hybrid
+- **Tetrabrot** — 4D pseudo-quaternion set, diamond-like geometric symmetries
 - **Phoenix** — Phoenix Julia set in 3D
-- **MakinBrot, AmazingSurf, Dodecahedron, MandelMap, Modular...**
+- **MarbleMarcher** — Dynamic Menger IFS with rotation/shifting
+- **MandelBolic** — Hyperbolic 3-space extension (Poincaré-Ahlfors)
+- **Appell** — Appell Polynomials / Clifford Analysis, skeleton-like patterns
+- **Borromean** — 3 interlocking complex planes, tetrahedral symmetries
+- **JuliaMorph** — 2D Julia sets stacked along Z with twist/bend
 
-## 15. Droste Effect
+### 15. Droste Effect
 **Status:** IDEA
 
-Recursive self-referential spiral — the rendered image contains itself in a spiral zoom. Parameters: tiling, inner/outer radius, periodicity, strands, twist.
+Post-process recursive spiral — the rendered image contains itself in a spiral zoom. Parameters: tiling, inner/outer radius, periodicity, strands, twist. Could be a post-process pass on the final framebuffer.
 
-## 16. Procedural Texturing
+### 16. Procedural Texturing
 **Status:** IDEA
 
-UV mapping for fractals with multiple modes: Orbit Trap, Iterations, Radial, Z-Depth, Angle, Normal, Decomposition, Potential Log-Log, Green's Flow. Multiple layers with blend modes.
+UV mapping for fractals with multiple modes: Orbit Trap, Iterations, Radial, Z-Depth, Angle, Normal, Decomposition, Potential Log-Log, Green's Flow. Multiple layers with blend modes. Big scope — would replace the current coloring system.
 
-## 17. Sonification
+### 17. Sonification
 **Status:** IDEA
 
-Generate sound from fractal geometry. Logarithmic spiral probe sampling, maps distance field to frequency/harmonics.
+Generate sound from fractal geometry. Logarithmic spiral probe sampling, maps distance field to frequency/harmonics. Niche — inverse of the existing audio-reactive system.
 
-## 18. Parameter Modulation (LFOs)
+### 18. Parameter Modulation (LFOs)
 **Status:** IDEA
 
-Internal LFOs to modulate any parameter in real-time. Sine/triangle/square/noise waveforms with rate, gain, offset. Independent from audio-reactive system.
+Internal LFOs to modulate any parameter in real-time. Sine/triangle/square/noise waveforms with rate, gain, offset. Independent from audio-reactive system. Relatively simple — similar to existing animation track system but free-running.
 
-## 19. Drawing / Measurement Tools
+### 19. Drawing / Measurement Tools
 **Status:** IDEA
 
-2D overlay for measuring distances, circles, rectangles on the fractal surface. Useful for understanding scale and structure.
+2D overlay for measuring distances, circles, rectangles on the fractal surface. Useful for understanding scale and structure. Niche.
 
-## 20. Reflections (Raymarched)
+### 21. Camera Collision (Surface Avoidance)
 **Status:** IDEA
 
-GPU raytraced reflections with 1-3 bounces, roughness threshold cutoff, blend between raymarched and environment map. Separate from path tracing.
+Prevent the camera from entering the fractal surface during navigation. Evaluate DE at the camera position each frame (GPU readback or CPU-side approximation) and clamp movement so the camera stays outside the surface. Could work as a toggle: "Collision Mode" checkbox. Useful for cinematic fly-throughs where accidentally going inside the fractal breaks the view.
+
+Approaches:
+- **GPU readback**: Render a 1-pixel DE query at camera pos, read back with `glReadPixels` — accurate but 1-frame latency
+- **CPU-side DE**: Re-implement a simplified DE on CPU — fast but must stay in sync with GPU shader
+- **Raycast ahead**: March a short ray in the movement direction, stop before hitting surface — natural "sliding" along the surface
