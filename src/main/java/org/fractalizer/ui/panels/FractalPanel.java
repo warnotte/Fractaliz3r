@@ -136,7 +136,9 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     public void setParams(AbstractFractalParams newParams) {
         this.params = newParams;
         this.camera = newParams.getCamera();
-        refreshFromParams(true);
+        // Force full reload (suppress=false) so NodeGraphEditor rebuilds from
+        // the deserialized graph tree, not just refreshes sliders.
+        refreshFromParams(false);
     }
 
     public void setOnFractalTypeChanged(java.util.function.BiConsumer<FractalType, AbstractFractalParams> callback) {
