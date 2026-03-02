@@ -415,11 +415,28 @@ RayHit rayMarch(Ray ray) {
         if (result.dist > MAX_DISTANCE) break;
     }
 
-    // Surface refinement via binary search
+    // Surface refinement via binary/ternary search
     if (result.hit && refinementSteps > 0 && lastStep > 0.0) {
         result.pos = refineSurface(ray.origin, ray.direction, result.dist, lastStep);
         result.dist = length(result.pos - ray.origin);
-        // Re-evaluate orbit traps at refined position
+    }
+
+    // Cone tracing converges to true surface: the cone epsilon is large
+    // (pixelRadius * dist), so the march stops far from the surface.
+    // A few sphere-tracing steps close the gap for accurate orbit traps.
+    // Each step reduces distance by ~10x (STEP_FACTOR=0.9), so 6 steps
+    // go from DE≈0.003 to DE≈3e-9.
+    if (result.hit && pixelRadius > 0.0) {
+        for (int i = 0; i < 6; i++) {
+            float d = sceneDE_simple(result.pos);
+            if (d < MIN_EPSILON) break;
+            result.pos += ray.direction * d * STEP_FACTOR;
+        }
+        result.dist = length(result.pos - ray.origin);
+    }
+
+    // Re-evaluate orbit traps at final position
+    if (result.hit && (refinementSteps > 0 || pixelRadius > 0.0)) {
         sceneDE(result.pos, result.trap, result.matType);
     }
 
@@ -899,6 +916,15 @@ bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist, out int matType
             // Surface refinement
             if (refinementSteps > 0 && lastStep > 0.0) {
                 pos = refineSurface(ray.origin, ray.direction, t, lastStep);
+                t = length(pos - ray.origin);
+            }
+            // Cone tracing: converge to true surface (see rayMarch for rationale)
+            if (pixelRadius > 0.0) {
+                for (int j = 0; j < 6; j++) {
+                    float ds = sceneDE_simple(pos);
+                    if (ds < MIN_EPSILON) break;
+                    pos += ray.direction * ds * STEP_FACTOR;
+                }
                 t = length(pos - ray.origin);
             }
             hitPos = pos;
