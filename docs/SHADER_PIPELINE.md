@@ -137,8 +137,8 @@ Prepended to every shader program. Defines:
 | **Textures** | `envMap` (sampler2D, unit 0), `paletteTexture` (sampler2D, unit 1), `varianceImage` (image2D, binding 5) |
 | **Effects** | Erosion, crystallization, moss (global uniforms + parameterized `*P()` functions for per-node effects), cross-section, DoF, fog, bloom params |
 | **Audio** | `audioEnabled`, `audioLevel`, `audioBeat`, `audioOnset`, `audioBands[8]`, react params |
-| **Utilities** | Noise functions (`hash`, `noise3D`, `fbm`, `fbmLow`, `voronoi3D`), rotation helpers |
-| **Materials** | `applyMaterial()`, `getPresetPalette()`, `getSmoothPalette()` |
+| **Utilities** | Noise functions (`hash`, `noise3D`, `fbm`, `fbmLow`, `voronoi3D`, `triplanarNoise`), rotation helpers, `DE_simple()` forward declaration |
+| **Materials** | `applyMaterial(factors, hitPos, normal, rayDir)`, `getPresetPalette()`, `getSmoothPalette()`, 13 coloring modes (0–8 orbit-trap, 9–12 geometry-based) |
 | **Erosion/Crystal/Moss** | Global: `getErosionDisplacement()`, `getCrystalDisplacement()`, `getMossFactor()`. Per-node parameterized: `*P()` variants (`getErosionDisplacementP()`, `getCrystalDisplacementP()`, `getMossDisplacementP()`, etc.) with attenuation factors (×0.05/×0.1/×0.2) |
 
 ### `raytracer.glsl` — Raymarching & Rendering

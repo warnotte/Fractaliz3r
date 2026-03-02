@@ -42,7 +42,7 @@ Export auxiliary render passes (AOVs) for compositing in After Effects, Nuke, et
 
 Export fractal geometry as 3D meshes (OBJ, glTF/GLB, PLY) using GPU-accelerated distance field evaluation. Uses the same GLSL fractal shaders as the renderer — 100% fidelity, zero CPU DE code.
 
-- **Architecture**: `evaluator.glsl` renders each Z-slice as a fullscreen quad, outputting `vec4(color, distance)` per grid point. Colors are computed GPU-side via `applyMaterial(getFactors(trap))` — same palette/coloring pipeline as the renderer. `MarchingCubes.java` processes slices via a `SliceProvider` functional interface.
+- **Architecture**: `evaluator.glsl` renders each Z-slice as a fullscreen quad, outputting `vec4(color, distance)` per grid point. Colors are computed GPU-side via `applyMaterial(factors, pos, normal, rayDir)` — same palette/coloring pipeline as the renderer (all 13 coloring modes available; geometry-based modes 9–12 use dummy normal/ray in evaluator context). `MarchingCubes.java` processes slices via a `SliceProvider` functional interface.
 - **Grid alignment**: `evaluator.glsl` uses `gl_FragCoord` integer coordinates with a `gridResolution` uniform to map pixels to exact grid positions (`i/(gridResolution-1)`), matching the Marching Cubes grid formula.
 - **Normals from distance grid**: Computed via central differences on already-evaluated distance values (4-slice sliding window: z-1, z, z+1, z+2). No CPU DE calls.
 - **Colors**: Vertex colors computed entirely GPU-side (palette lookup + coloring modes in `evaluator.glsl`). Interpolated between cube corners in `MarchingCubes.java`. Zero CPU coloring code.

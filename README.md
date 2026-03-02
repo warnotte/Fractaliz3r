@@ -57,7 +57,7 @@ IFS fractals (Kaleidoscopic, Polyhedral, Sierpinski, Apollonian) support a **con
 - **HDRI Environment Maps**: `.hdr`/`.png`/`.jpg` with rotation and lighting mix
 - **Optics**: Anamorphic flares, lens dirt, procedural starbursts
 - **Color Grading**: Built-in LUT styles (Cinema, Vintage, Matrix, Neon, Noir)
-- **Subsurface Scattering**, reflections, 9 coloring modes, adaptive sampling
+- **Subsurface Scattering**, reflections, 13 coloring modes (9 orbit-trap + 4 scale-invariant geometry-based), adaptive sampling
 
 ### Surface Effects (Per-Node)
 

@@ -16,6 +16,37 @@ The coloring system uses a GPU-based 1D texture (256x1, RGB32F) driven by a visu
 - `Color Strength`: Multiplier for color intensity and contrast.
 - `Palette Shift`: Global offset to slide colors across the fractal structure.
 
+## Coloring Modes
+
+13 coloring modes in `applyMaterial()` (MaterialPanel "Coloring" ComboBox). Modes 0–8 are orbit-trap-based; modes 9–12 are **geometry-based** (scale-invariant — colors derive from surface properties, not iteration history).
+
+### Orbit-Trap Modes (0–8)
+
+| Mode | Name | Description |
+|------|------|-------------|
+| 0 | **Standard** | Flow + depth (default) |
+| 1 | **Iteration Bands** | Sharp discrete color bands by iteration count |
+| 2 | **Distance** | Structural/proximity based |
+| 3 | **Angular** | atan2 spiral patterns |
+| 4 | **Blend** | Equal mix of structural + flow + depth |
+| 5 | **Contour** | High-frequency sine stripes (topographic) |
+| 6 | **HSV Direct** | Factors → H/S/V independently (no palette) |
+| 7 | **Dual Palette** | Two palette lookups blended by depth |
+| 8 | **Neon** | Sharp hue bands, high saturation glow |
+
+### Scale-Invariant Modes (9–12)
+
+These bypass orbit traps entirely. `applyMaterial()` receives `hitPos`, `normal`, and `rayDir` to compute colors from geometry.
+
+| Mode | Name | How It Works | Why Scale-Invariant |
+|------|------|-------------|---------------------|
+| 9 | **Normal Map** | `dot(normal, lightVec) * 0.5 + 0.5` → palette | Normals are unit vectors, always [0,1] |
+| 10 | **Triplanar** | Dual-octave `triplanarNoise()` blended by normal weights → palette + edge darkening | Position-proportional detail at every scale |
+| 11 | **Curvature** | Laplacian of DE via 6 `DE_simple` samples, eps scaled by camera distance → palette | Normalized by adaptive epsilon |
+| 12 | **Fresnel** | `pow(1 - abs(dot(normal, rayDir)), 2)` → palette | Dot product always [0,1] |
+
+**Parameters**: `Color Strength` adjusts intensity for all modes (also controls noise frequency for Triplanar). `Palette Shift` offsets the palette lookup.
+
 ## Improved Orbit Traps
 
 Major fractals use cumulative "Plane Traps" (weighted sum of absolute coordinates) to ensure rich, non-uniform coloring that reacts dynamically to fractal parameters.
@@ -48,7 +79,7 @@ Four independently toggleable raymarcher enhancements in QualityPanel "Raymarche
 
 - **Cone Tracing** (`pixelRadius`): Pixel-aware adaptive epsilon. `epsilon = max(MIN_EPSILON, pixelRadius * distance)` where `pixelRadius = tan(fov/2) / (height/2)`. Replaces legacy `computeAdaptiveEpsilon()` in `rayMarch`, `rayMarchSimple`, and `calcNormal`. Tiled export paths override `pixelRadius` using full image height (not tile height).
 - **Fudge Factor** (0.1–2.0, default 1.0): DE step multiplier. `step *= fudgeFactor`. Applied in `rayMarch`, `rayMarchSimple`, and `calcShadow`. Values >1 = faster but riskier, <1 = more conservative.
-- **Surface Refinement** (0–8 steps, default 4): Binary search bisection of the last step interval after hit. `refineSurface()` uses `DE_simple` to avoid overwriting orbit traps. Re-evaluates full `sceneDE` at refined position for correct coloring.
+- **Surface Refinement** (0–8 steps, default 4): Bisection of the last step interval after hit. `refineSurface()` detects **SDF vs fractal DE** at the hit point: for true SDFs (negative distance inside), binary search for zero-crossing; for fractal DEs (always non-negative), **ternary search** to minimize DE along the ray (converges to the true surface). After refinement, when cone tracing is active, **6 extra sphere-tracing steps** converge from the cone epsilon (~0.003) to `MIN_EPSILON` — each step reduces DE by ~10x. Re-evaluates full `sceneDE` at the final position for correct orbit traps and coloring.
 - **Step Relaxation** (0.0–1.0, default 0.0): Keinert 2014 over-relaxation. `omega = 1 + stepRelaxation`. On overshoot (`prevD + d < candidateStep`): backstep, reset to conservative stepping. Applied in `rayMarch` and `rayMarchSimple`.
 
 **Parameters** (in `AbstractFractalParams`, serialized in `EffectsConfig`): `coneTracingEnabled` (bool, default true), `fudgeFactor` (float), `refinementSteps` (int), `stepRelaxation` (float).
