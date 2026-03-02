@@ -314,19 +314,45 @@ float calcSSS(vec3 pos, vec3 normal, vec3 lightDir) {
 // Ray Marching
 // ============================================================================
 
-// Binary search refinement: bisects the last step interval using DE_simple
+// Surface refinement: bisects the last step interval to find precise surface
+// Uses two strategies depending on whether the DE is a true SDF (goes negative
+// inside) or a fractal DE (always non-negative). Without this distinction,
+// fractal DEs never satisfy d < 0, so the binary search does nothing.
 vec3 refineSurface(vec3 ro, vec3 rd, float hitDist, float lastStep) {
     float lo = hitDist - lastStep;
     float hi = hitDist;
-    for (int i = 0; i < refinementSteps; i++) {
-        float mid = (lo + hi) * 0.5;
-        float d = sceneDE_simple(ro + rd * mid);
-        if (d < 0.0) {
-            hi = mid;
-        } else {
-            lo = mid;
+
+    // Detect true SDF vs fractal DE: check sign at the hit point
+    float dHi = sceneDE_simple(ro + rd * hi);
+
+    if (dHi < 0.0) {
+        // True SDF: binary search for zero crossing
+        for (int i = 0; i < refinementSteps; i++) {
+            float mid = (lo + hi) * 0.5;
+            float d = sceneDE_simple(ro + rd * mid);
+            if (d < 0.0) {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+    } else {
+        // Non-negative DE (fractal): ternary search to minimize DE
+        // The DE is ~V-shaped along the ray (decreases toward surface, increases past it).
+        // Ternary search converges to the minimum, i.e. the true surface.
+        for (int i = 0; i < refinementSteps; i++) {
+            float m1 = lo + (hi - lo) / 3.0;
+            float m2 = hi - (hi - lo) / 3.0;
+            float d1 = sceneDE_simple(ro + rd * m1);
+            float d2 = sceneDE_simple(ro + rd * m2);
+            if (d1 < d2) {
+                hi = m2;
+            } else {
+                lo = m1;
+            }
         }
     }
+
     return ro + rd * ((lo + hi) * 0.5);
 }
 
