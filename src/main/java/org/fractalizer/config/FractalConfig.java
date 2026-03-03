@@ -665,6 +665,16 @@ public class FractalConfig {
             map.put("maxIterations", si.getMaxIterations());
             map.put("scale", si.getScale());
             map.put("basePrimitive", si.getBasePrimitive().name());
+        } else if (params instanceof SphereflakeParams sf) {
+            map.put("maxIterations", sf.getMaxIterations());
+            map.put("childScale", sf.getChildScale());
+            map.put("spacing", sf.getSpacing());
+            map.put("rotAngleX", sf.getRotAngleX());
+            map.put("rotAngleY", sf.getRotAngleY());
+            map.put("rotAngleZ", sf.getRotAngleZ());
+            map.put("offsetY", sf.getOffsetY());
+            map.put("offsetZ", sf.getOffsetZ());
+            map.put("basePrimitive", sf.getBasePrimitive().name());
         } else if (params instanceof PseudoKleinianParams pk) {
             map.put("maxIterations", pk.getMaxIterations());
             map.put("cSizeX", pk.getCSizeX());
@@ -787,6 +797,18 @@ public class FractalConfig {
             if (map.containsKey("scale")) si.setScale(getFloat(map, "scale"));
             if (map.containsKey("basePrimitive"))
                 si.setBasePrimitive(AbstractFractalParams.BasePrimitive.valueOf((String) map.get("basePrimitive")));
+        } else if (params instanceof SphereflakeParams sf) {
+            if (map.containsKey("maxIterations")) sf.setMaxIterations(getInt(map, "maxIterations"));
+            if (map.containsKey("childScale")) sf.setChildScale(getFloat(map, "childScale"));
+            if (map.containsKey("spacing")) sf.setSpacing(getFloat(map, "spacing"));
+            if (map.containsKey("rotAngleX")) sf.setRotAngleX(getFloat(map, "rotAngleX"));
+            if (map.containsKey("rotAngleY")) sf.setRotAngleY(getFloat(map, "rotAngleY"));
+            if (map.containsKey("rotAngleZ")) sf.setRotAngleZ(getFloat(map, "rotAngleZ"));
+            if (map.containsKey("rotAngle")) sf.setRotAngleX(getFloat(map, "rotAngle")); // legacy compat
+            if (map.containsKey("offsetY")) sf.setOffsetY(getFloat(map, "offsetY"));
+            if (map.containsKey("offsetZ")) sf.setOffsetZ(getFloat(map, "offsetZ"));
+            if (map.containsKey("basePrimitive"))
+                sf.setBasePrimitive(AbstractFractalParams.BasePrimitive.valueOf((String) map.get("basePrimitive")));
         } else if (params instanceof PseudoKleinianParams pk) {
             if (map.containsKey("maxIterations")) pk.setMaxIterations(getInt(map, "maxIterations"));
             if (map.containsKey("cSizeX")) pk.setCSizeX(getFloat(map, "cSizeX"));

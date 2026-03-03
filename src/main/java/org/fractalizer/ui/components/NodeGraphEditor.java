@@ -115,6 +115,11 @@ public class NodeGraphEditor extends VBox {
         DEFAULT_SLIDER_CONFIG.put("juliaCw", new SliderConfig(-2, 2));
         DEFAULT_SLIDER_CONFIG.put("sliceW", new SliderConfig(-2, 2));
         DEFAULT_SLIDER_CONFIG.put("rotAngle", new SliderConfig(-45, 45, 15));
+        DEFAULT_SLIDER_CONFIG.put("rotAngleX", new SliderConfig(-180, 180, 45));
+        DEFAULT_SLIDER_CONFIG.put("rotAngleY", new SliderConfig(-180, 180, 45));
+        DEFAULT_SLIDER_CONFIG.put("rotAngleZ", new SliderConfig(-180, 180, 45));
+        DEFAULT_SLIDER_CONFIG.put("offsetY", new SliderConfig(-1, 1));
+        DEFAULT_SLIDER_CONFIG.put("offsetZ", new SliderConfig(-1, 1));
         DEFAULT_SLIDER_CONFIG.put("rotXW", new SliderConfig(-180, 180, 45));
         DEFAULT_SLIDER_CONFIG.put("rotYW", new SliderConfig(-180, 180, 45));
         DEFAULT_SLIDER_CONFIG.put("rotZW", new SliderConfig(-180, 180, 45));
@@ -184,6 +189,17 @@ public class NodeGraphEditor extends VBox {
             "scale", new SliderConfig(1.5, 4),
             "foldRadius", new SliderConfig(0.5, 2)
         ));
+        // Sphereflake
+        Map<String, SliderConfig> sfConfigs = new HashMap<>();
+        sfConfigs.put("maxIterations", new SliderConfig(3, 15, 3));
+        sfConfigs.put("childScale", new SliderConfig(0.1, 0.5));
+        sfConfigs.put("spacing", new SliderConfig(0.5, 1.5));
+        sfConfigs.put("rotAngleX", new SliderConfig(-180, 180, 45));
+        sfConfigs.put("rotAngleY", new SliderConfig(-180, 180, 45));
+        sfConfigs.put("rotAngleZ", new SliderConfig(-180, 180, 45));
+        sfConfigs.put("offsetY", new SliderConfig(-1, 1));
+        sfConfigs.put("offsetZ", new SliderConfig(-1, 1));
+        FRACTAL_SLIDER_CONFIGS.put(FractalType.SPHEREFLAKE, sfConfigs);
         // Bristorbrot
         FRACTAL_SLIDER_CONFIGS.put(FractalType.BRISTORBROT, Map.of(
             "maxIterations", new SliderConfig(5, 30, 5),
@@ -1328,6 +1344,59 @@ public class NodeGraphEditor extends VBox {
             });
             detailPanel.getChildren().addAll(new Label("Base Primitive:"), apollBasePrimCombo);
         }
+
+        // --- Sphereflake: base primitive + presets ---
+        if (params instanceof SphereflakeParams sfp) {
+            detailPanel.getChildren().add(new Separator());
+
+            ComboBox<AbstractFractalParams.BasePrimitive> sfBasePrimCombo = new ComboBox<>();
+            sfBasePrimCombo.getItems().addAll(AbstractFractalParams.BasePrimitive.values());
+            sfBasePrimCombo.setValue(sfp.getBasePrimitive());
+            sfBasePrimCombo.setMaxWidth(Double.MAX_VALUE);
+            sfBasePrimCombo.setOnAction(e -> {
+                sfp.setBasePrimitive(sfBasePrimCombo.getValue());
+                onParameterChange();
+            });
+            detailPanel.getChildren().addAll(new Label("Base Primitive:"), sfBasePrimCombo);
+
+            Label presetLabel = new Label("Presets:");
+            presetLabel.getStyleClass().add("bold-label");
+            detailPanel.getChildren().add(presetLabel);
+
+            addSphereflakePresetButton(fn, "Classic",        8, 0.333, 1.0,  AbstractFractalParams.BasePrimitive.SPHERE,      0,    0,    0,    0,     0);
+            addSphereflakePresetButton(fn, "Cube Flake",     8, 0.333, 1.0,  AbstractFractalParams.BasePrimitive.BOX,          0,    0,    0,    0,     0);
+            addSphereflakePresetButton(fn, "Crystal Growth", 10, 0.3,  1.05, AbstractFractalParams.BasePrimitive.OCTAHEDRON,   0.2,  0,    0,    0,     0);
+            addSphereflakePresetButton(fn, "Twisted Vine",   10, 0.28, 1.0,  AbstractFractalParams.BasePrimitive.SPHERE,       0.4,  0.3,  0,    0.1,   0);
+            addSphereflakePresetButton(fn, "Coral Reef",     9, 0.35,  0.95, AbstractFractalParams.BasePrimitive.ROUNDED_BOX,  0.15, 0.1,  0.05, 0.05, -0.05);
+            addSphereflakePresetButton(fn, "Alien Spore",    8, 0.4,   0.85, AbstractFractalParams.BasePrimitive.TORUS,        0.5,  0,    0.3,  0,     0);
+            addSphereflakePresetButton(fn, "Snowflake",      12, 0.25, 1.1,  AbstractFractalParams.BasePrimitive.SPHERE,       0,    0,    0,    0,     0);
+            addSphereflakePresetButton(fn, "Fractal Tower",  10, 0.3,  1.0,  AbstractFractalParams.BasePrimitive.BOX,          0,    0.5,  0,    0.15,  0);
+        }
+    }
+
+    private void addSphereflakePresetButton(FractalNode fn, String name,
+                                             int iter, double childScale, double spacing,
+                                             AbstractFractalParams.BasePrimitive prim,
+                                             double rotX, double rotY, double rotZ,
+                                             double offY, double offZ) {
+        Button btn = new Button(name);
+        btn.setMaxWidth(Double.MAX_VALUE);
+        btn.setOnAction(e -> {
+            if (fn.getFractalParams() instanceof SphereflakeParams p) {
+                p.setMaxIterations(iter);
+                p.setChildScale((float) childScale);
+                p.setSpacing((float) spacing);
+                p.setBasePrimitive(prim);
+                p.setRotAngleX((float) rotX);
+                p.setRotAngleY((float) rotY);
+                p.setRotAngleZ((float) rotZ);
+                p.setOffsetY((float) offY);
+                p.setOffsetZ((float) offZ);
+                refreshDetailPanel();
+                onParameterChange();
+            }
+        });
+        detailPanel.getChildren().add(btn);
     }
 
     private void addPolyPresetButton(FractalNode fn, String name,

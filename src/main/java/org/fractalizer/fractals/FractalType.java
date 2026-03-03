@@ -17,6 +17,7 @@ public enum FractalType {
     QUATERNION_JULIA_4D("Quaternion Julia 4D", "quaternionjulia4d"),
     MENGER_ADVANCED("Menger Advanced", "mengeradvanced"),
     MENGER_SPONGE_TEST("Menger Sponge Test", "mengerspongetest"),
+    SPHEREFLAKE("Sphereflake", "sphereflake"),
     NODE_GRAPH("Node Graph", "nodegraph"),
     CUSTOM_SHADER("Custom Shader", "customshader");
 

@@ -123,7 +123,7 @@ public class GLSLFractalizerController implements RenderController {
                 case MANDELBULB, MANDELBOX, MENGER_SPONGE, KALEIDOSCOPIC_IFS,
                      POLYHEDRAL_IFS, SIERPINSKI, PSEUDO_KLEINIAN, APOLLONIAN,
                      BRISTORBROT, MANDELORUS, QUATERNION_JULIA_4D, MENGER_ADVANCED,
-                     MENGER_SPONGE_TEST, CUSTOM_SHADER ->
+                     MENGER_SPONGE_TEST, SPHEREFLAKE, CUSTOM_SHADER ->
                     this.currentParams = new NodeGraphParams(type);
                 case NODE_GRAPH -> this.currentParams = new NodeGraphParams();
             }

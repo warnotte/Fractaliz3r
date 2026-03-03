@@ -619,4 +619,5 @@ public class CustomShaderEditor extends VBox {
         "    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));\n" +
         "    return vec3(structural, flow, iterNorm);\n" +
         "}\n";
+
 }
