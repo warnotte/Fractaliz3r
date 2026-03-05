@@ -58,6 +58,7 @@ public class FractalNode extends GraphNode {
             case MENGER_ADVANCED -> new MengerAdvancedParams();
             case MENGER_SPONGE_TEST -> new MengerSpongeTestParams();
             case SPHEREFLAKE -> new SphereflakeParams();
+            case KOCH_SURFACE -> new KochSurfaceParams();
             case CUSTOM_SHADER -> new CustomShaderParams();
             default -> null;
         };

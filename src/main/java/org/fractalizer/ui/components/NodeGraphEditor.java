@@ -174,6 +174,11 @@ public class NodeGraphEditor extends VBox {
             "maxIterations", new SliderConfig(5, 30, 5),
             "scale", new SliderConfig(1.5, 3)
         ));
+        // Koch Surface
+        FRACTAL_SLIDER_CONFIGS.put(FractalType.KOCH_SURFACE, Map.of(
+            "maxIterations", new SliderConfig(2, 12, 3),
+            "scale", new SliderConfig(3, 7, 3)
+        ));
         // Pseudo-Kleinian
         Map<String, SliderConfig> pkConfigs = new HashMap<>();
         pkConfigs.put("maxIterations", new SliderConfig(5, 30, 5));
@@ -1371,6 +1376,21 @@ public class NodeGraphEditor extends VBox {
             addSphereflakePresetButton(fn, "Alien Spore",    8, 0.4,   0.85, AbstractFractalParams.BasePrimitive.TORUS,        0.5,  0,    0.3,  0,     0);
             addSphereflakePresetButton(fn, "Snowflake",      12, 0.25, 1.1,  AbstractFractalParams.BasePrimitive.SPHERE,       0,    0,    0,    0,     0);
             addSphereflakePresetButton(fn, "Fractal Tower",  10, 0.3,  1.0,  AbstractFractalParams.BasePrimitive.BOX,          0,    0.5,  0,    0.15,  0);
+        }
+
+        // --- Koch Surface: base primitive ---
+        if (params instanceof KochSurfaceParams ksp) {
+            detailPanel.getChildren().add(new Separator());
+
+            ComboBox<AbstractFractalParams.BasePrimitive> ksBasePrimCombo = new ComboBox<>();
+            ksBasePrimCombo.getItems().addAll(AbstractFractalParams.BasePrimitive.values());
+            ksBasePrimCombo.setValue(ksp.getBasePrimitive());
+            ksBasePrimCombo.setMaxWidth(Double.MAX_VALUE);
+            ksBasePrimCombo.setOnAction(e -> {
+                ksp.setBasePrimitive(ksBasePrimCombo.getValue());
+                onParameterChange();
+            });
+            detailPanel.getChildren().addAll(new Label("Base Primitive:"), ksBasePrimCombo);
         }
     }
 

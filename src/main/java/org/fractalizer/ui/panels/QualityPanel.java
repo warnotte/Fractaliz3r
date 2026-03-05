@@ -227,8 +227,10 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private TitledPane createShadowsPane() {
         VBox box = new VBox(5);
 
-        shadowSoftnessSlider = new EnhancedSlider("Shadow Softness", 1, 64, 16, false);
+        shadowSoftnessSlider = new EnhancedSlider("Shadow Softness", 0, 64, 16, false);
         shadowSoftnessSlider.setPrecision(0);
+        Tooltip.install(shadowSoftnessSlider, new Tooltip(
+            "Directional light shadow penumbra.\n0 = hard shadows, higher = softer.\nAffects both raytracer and path tracer."));
         shadowSoftnessSlider.setOnAction(v -> {
             if (!suppressRender) {
                 getParams().shadowSoftness(v.floatValue());

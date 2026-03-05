@@ -675,6 +675,10 @@ public class FractalConfig {
             map.put("offsetY", sf.getOffsetY());
             map.put("offsetZ", sf.getOffsetZ());
             map.put("basePrimitive", sf.getBasePrimitive().name());
+        } else if (params instanceof KochSurfaceParams ks) {
+            map.put("maxIterations", ks.getMaxIterations());
+            map.put("scale", ks.getScale());
+            map.put("basePrimitive", ks.getBasePrimitive().name());
         } else if (params instanceof PseudoKleinianParams pk) {
             map.put("maxIterations", pk.getMaxIterations());
             map.put("cSizeX", pk.getCSizeX());
@@ -809,6 +813,11 @@ public class FractalConfig {
             if (map.containsKey("offsetZ")) sf.setOffsetZ(getFloat(map, "offsetZ"));
             if (map.containsKey("basePrimitive"))
                 sf.setBasePrimitive(AbstractFractalParams.BasePrimitive.valueOf((String) map.get("basePrimitive")));
+        } else if (params instanceof KochSurfaceParams ks) {
+            if (map.containsKey("maxIterations")) ks.setMaxIterations(getInt(map, "maxIterations"));
+            if (map.containsKey("scale")) ks.setScale(getFloat(map, "scale"));
+            if (map.containsKey("basePrimitive"))
+                ks.setBasePrimitive(AbstractFractalParams.BasePrimitive.valueOf((String) map.get("basePrimitive")));
         } else if (params instanceof PseudoKleinianParams pk) {
             if (map.containsKey("maxIterations")) pk.setMaxIterations(getInt(map, "maxIterations"));
             if (map.containsKey("cSizeX")) pk.setCSizeX(getFloat(map, "cSizeX"));

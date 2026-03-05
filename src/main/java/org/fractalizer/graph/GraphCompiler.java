@@ -192,6 +192,10 @@ public class GraphCompiler {
             uniforms.put(prefix + "offsetY", p.getOffsetY());
             uniforms.put(prefix + "offsetZ", p.getOffsetZ());
             uniforms.put(prefix + "basePrimitive", p.getBasePrimitive().ordinal());
+        } else if (params instanceof KochSurfaceParams p) {
+            uniforms.put(prefix + "maxIterations", p.getMaxIterations());
+            uniforms.put(prefix + "scale", p.getScale());
+            uniforms.put(prefix + "basePrimitive", p.getBasePrimitive().ordinal());
         } else if (params instanceof PseudoKleinianParams p) {
             uniforms.put(prefix + "maxIterations", p.getMaxIterations());
             uniforms.put(prefix + "CSize", new float[]{p.getCSizeX(), p.getCSizeY(), p.getCSizeZ()});

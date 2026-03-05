@@ -528,6 +528,28 @@ vec3 randomUnitSphere(inout uint seed) {
     return vec3(r * cos(a), r * sin(a), z);
 }
 
+// Jitter a direction within a cone for stochastic soft shadows in path tracing.
+// angularRadius controls the half-angle of the virtual sun disc.
+// shadowSoftness 1..64 maps to ~0.05°..~5.5° cone.
+vec3 jitterLightDir(vec3 dir, inout uint seed, float softness) {
+    float angularRadius = softness * 0.0015;
+    if (angularRadius < 0.0002) return dir;
+
+    float r1 = random(seed);
+    float r2 = random(seed);
+    float cosHalf = cos(angularRadius);
+    float cosTheta = 1.0 - r1 * (1.0 - cosHalf);
+    float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
+    float phi = TAU * r2;
+
+    // Build orthonormal basis around dir
+    vec3 w = dir;
+    vec3 u = normalize(cross(abs(w.y) < 0.999 ? vec3(0,1,0) : vec3(1,0,0), w));
+    vec3 v = cross(w, u);
+
+    return normalize(sinTheta * cos(phi) * u + sinTheta * sin(phi) * v + cosTheta * w);
+}
+
 vec3 sampleExtraLightRadiance(vec3 hitPos, vec3 normal, float surfaceDist, inout uint seed, out vec3 lightDirNorm) {
     lightDirNorm = vec3(0.0);
 
@@ -1149,7 +1171,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                 Ray shadowRay;
                 float shadowBias = 0.005 + hitDist * 0.01;
                 shadowRay.origin = hitPos + faceNormal * shadowBias;
-                shadowRay.direction = lightDirNorm;
+                shadowRay.direction = jitterLightDir(lightDirNorm, seed, shadowSoftness);
                 vec3 shPos; float shDist; int shMat;
                 if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
                     vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
@@ -1197,7 +1219,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                 Ray shadowRay;
                 float shadowBias = 0.005 + hitDist * 0.01;
                 shadowRay.origin = hitPos + faceNormal * shadowBias;
-                shadowRay.direction = lightDirNorm;
+                shadowRay.direction = jitterLightDir(lightDirNorm, seed, shadowSoftness);
                 vec3 shPos; float shDist; int shMat;
                 if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
                     radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI, 0.0, FIREFLY_CLAMP);
@@ -1432,14 +1454,14 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             // METALLIC with corrected GGX BRDF (Smith G2 geometry term)
             vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
 
-            // --- Direct light NEE (delta light) ---
+            // --- Direct light NEE (stochastic soft shadow via jittered sun disc) ---
             vec3 lightDirNorm = normalize(lightDir);
             float NdotL = max(dot(faceNormal, lightDirNorm), 0.0);
             if (NdotL > 0.0) {
                 Ray shadowRay;
                 float shadowBias = 0.005 + hitDist * 0.01;
                 shadowRay.origin = hitPos + faceNormal * shadowBias;
-                shadowRay.direction = lightDirNorm;
+                shadowRay.direction = jitterLightDir(lightDirNorm, seed, shadowSoftness);
                 vec3 shPos; float shDist; int shMat;
                 if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
                     vec3 H_light = normalize(lightDirNorm + viewDir);
@@ -1534,7 +1556,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 Ray shadowRay;
                 float shadowBias = 0.005 + hitDist * 0.01;
                 shadowRay.origin = hitPos + faceNormal * shadowBias;
-                shadowRay.direction = lightDirNorm;
+                shadowRay.direction = jitterLightDir(lightDirNorm, seed, shadowSoftness);
                 vec3 shPos; float shDist; int shMat;
                 if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
                     radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI, 0.0, FIREFLY_CLAMP);
