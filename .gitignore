@@ -37,3 +37,9 @@ build/
 
 ### Visual test output ###
 test_output/
+
+### Render regression goldens (GPU-specific — regenerate with RenderRegression 'update') ###
+test_regression/
+
+### Ad-hoc comparison renders ###
+sprint1_compare/
