@@ -296,7 +296,11 @@ float calcAO(vec3 pos, vec3 normal) {
 // Subsurface Scattering Approximation
 // ============================================================================
 
-float calcSSS(vec3 pos, vec3 normal, vec3 lightDir) {
+// Returns per-channel subsurface transmittance. Red light scatters deeper than
+// blue in organic media, so each channel uses a different absorption coefficient
+// (centred on the previous scalar 8.0 to preserve overall intensity). The result
+// is a subtle warm tint in thin, back-lit regions.
+vec3 calcSSS(vec3 pos, vec3 normal, vec3 lightDir) {
     float thickness = 0.0;
     float step = sssRadius / 5.0;
     for (int i = 1; i <= 5; i++) {
@@ -307,7 +311,8 @@ float calcSSS(vec3 pos, vec3 normal, vec3 lightDir) {
     }
     // Wrap lighting: light coming from behind illuminates thin areas
     float wrap = max(0.0, (dot(-normal, lightDir) + 0.5) / 1.5);
-    return wrap * exp(-thickness * 8.0);
+    vec3 absorption = vec3(6.0, 8.0, 11.2); // R penetrates deepest, B shallowest
+    return wrap * exp(-thickness * absorption);
 }
 
 // ============================================================================
@@ -661,7 +666,7 @@ vec3 shadeSimple(vec3 hitPos, Ray ray, int matType) {
         baseColor = mix(baseColor, mossColor, mf);
     }
 
-    vec3 ambient = getAmbientLighting(normal) * baseColor * ao;
+    vec3 ambient = getAmbientLighting(normal) * baseColor * mix(0.2, 1.0, ao);
     vec3 diffuse = lightColor * lightIntensity * baseColor * NdotL * shadow;
 
     vec3 halfDir = normalize(light + viewDir);
@@ -756,7 +761,7 @@ vec3 shade(RayHit hit, Ray ray) {
     }
 
     // Combine lighting
-    vec3 ambient = getAmbientLighting(normal) * baseColor * ao;
+    vec3 ambient = getAmbientLighting(normal) * baseColor * mix(0.2, 1.0, ao);
     vec3 diffuse = lightColor * lightIntensity * baseColor * NdotL * shadow;
     vec3 specular = lightColor * spec * specularIntensity * shadow;
 
@@ -848,7 +853,7 @@ vec3 shade(RayHit hit, Ray ray) {
 
     // ====== SUBSURFACE SCATTERING ======
     if (sssIntensity > 0.0) {
-        float sss = calcSSS(hit.pos, normal, light);
+        vec3 sss = calcSSS(hit.pos, normal, light);
         color += baseColor * sssColor * sss * sssIntensity * lightColor * lightIntensity;
     }
 
@@ -1163,23 +1168,27 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
             }
         } else if (localMatType == MATERIAL_METALLIC) {
             // METALLIC
+            // Evaluate visibility and the specular lobe along the same jittered
+            // sun-disc sample (consistent NEE estimator for soft shadows).
             vec3 lightDirNorm = normalize(lightDir);
-            vec3 H_light = normalize(lightDirNorm + viewDir);
-            float NdotL = max(dot(faceNormal, lightDirNorm), 0.0);
-
-            if (NdotL > 0.0) {
-                Ray shadowRay;
-                float shadowBias = 0.005 + hitDist * 0.01;
-                shadowRay.origin = hitPos + faceNormal * shadowBias;
-                shadowRay.direction = jitterLightDir(lightDirNorm, seed, shadowSoftness);
-                vec3 shPos; float shDist; int shMat;
-                if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
-                    vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
-                    vec3 F = fresnelSchlickVec(max(dot(H_light, viewDir), 0.0), F0);
-                    float a = safeRoughness * safeRoughness;
-                    float D = a * a / (PI * pow(max(dot(faceNormal, H_light), 0.0) * dot(faceNormal, H_light) * (a * a - 1.0) + 1.0, 2.0));
-                    vec3 spec = F * D * NdotL * lightColor * lightIntensity;
-                    radiance += clamp(throughput * spec, 0.0, FIREFLY_CLAMP);
+            if (dot(faceNormal, lightDirNorm) > 0.0) {
+                vec3 sunSampleDir = jitterLightDir(lightDirNorm, seed, shadowSoftness);
+                vec3 H_light = normalize(sunSampleDir + viewDir);
+                float NdotL = max(dot(faceNormal, sunSampleDir), 0.0);
+                if (NdotL > 0.0) {
+                    Ray shadowRay;
+                    float shadowBias = 0.005 + hitDist * 0.01;
+                    shadowRay.origin = hitPos + faceNormal * shadowBias;
+                    shadowRay.direction = sunSampleDir;
+                    vec3 shPos; float shDist; int shMat;
+                    if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
+                        vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
+                        vec3 F = fresnelSchlickVec(max(dot(H_light, viewDir), 0.0), F0);
+                        float a = safeRoughness * safeRoughness;
+                        float D = a * a / (PI * pow(max(dot(faceNormal, H_light), 0.0) * dot(faceNormal, H_light) * (a * a - 1.0) + 1.0, 2.0));
+                        vec3 spec = F * D * NdotL * lightColor * lightIntensity;
+                        radiance += clamp(throughput * spec, 0.0, FIREFLY_CLAMP);
+                    }
                 }
             }
 
@@ -1198,10 +1207,10 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
 
             // SSS contribution in path tracing (metallic)
             if (sssIntensity > 0.0) {
-                float sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
+                vec3 sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
                 radiance += clamp(throughput * albedo * sssColor * sss * sssIntensity * lightColor * lightIntensity, 0.0, FIREFLY_CLAMP);
                 if (hasExtraLight) {
-                    float sssExtra = calcSSS(hitPos, faceNormal, extraLightDirNorm);
+                    vec3 sssExtra = calcSSS(hitPos, faceNormal, extraLightDirNorm);
                     radiance += clamp(throughput * albedo * sssColor * sssExtra * sssIntensity * extraLightRadiance, 0.0, FIREFLY_CLAMP);
                 }
             }
@@ -1213,16 +1222,20 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
             currentRay.direction = normalize(reflectDir);
         } else {
             // LAMBERTIAN
+            // Sample + shade the sun disc along one consistent direction.
             vec3 lightDirNorm = normalize(lightDir);
-            float NdotL = max(dot(faceNormal, lightDirNorm), 0.0);
-            if (NdotL > 0.0) {
-                Ray shadowRay;
-                float shadowBias = 0.005 + hitDist * 0.01;
-                shadowRay.origin = hitPos + faceNormal * shadowBias;
-                shadowRay.direction = jitterLightDir(lightDirNorm, seed, shadowSoftness);
-                vec3 shPos; float shDist; int shMat;
-                if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
-                    radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI, 0.0, FIREFLY_CLAMP);
+            if (dot(faceNormal, lightDirNorm) > 0.0) {
+                vec3 sunSampleDir = jitterLightDir(lightDirNorm, seed, shadowSoftness);
+                float NdotL = max(dot(faceNormal, sunSampleDir), 0.0);
+                if (NdotL > 0.0) {
+                    Ray shadowRay;
+                    float shadowBias = 0.005 + hitDist * 0.01;
+                    shadowRay.origin = hitPos + faceNormal * shadowBias;
+                    shadowRay.direction = sunSampleDir;
+                    vec3 shPos; float shDist; int shMat;
+                    if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
+                        radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI, 0.0, FIREFLY_CLAMP);
+                    }
                 }
             }
 
@@ -1235,10 +1248,10 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
 
             // SSS contribution in path tracing
             if (sssIntensity > 0.0) {
-                float sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
+                vec3 sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
                 radiance += clamp(throughput * albedo * sssColor * sss * sssIntensity * lightColor * lightIntensity, 0.0, FIREFLY_CLAMP);
                 if (hasExtraLight) {
-                    float sssExtra = calcSSS(hitPos, faceNormal, extraLightDirNorm);
+                    vec3 sssExtra = calcSSS(hitPos, faceNormal, extraLightDirNorm);
                     radiance += clamp(throughput * albedo * sssColor * sssExtra * sssIntensity * extraLightRadiance, 0.0, FIREFLY_CLAMP);
                 }
             }
@@ -1455,23 +1468,29 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
 
             // --- Direct light NEE (stochastic soft shadow via jittered sun disc) ---
+            // Sample the sun disc once and evaluate BOTH visibility and the BRDF
+            // along the same direction; otherwise the shadow ray and the specular
+            // lobe disagree (NdotH mismatch) and the estimator is inconsistent.
             vec3 lightDirNorm = normalize(lightDir);
-            float NdotL = max(dot(faceNormal, lightDirNorm), 0.0);
-            if (NdotL > 0.0) {
-                Ray shadowRay;
-                float shadowBias = 0.005 + hitDist * 0.01;
-                shadowRay.origin = hitPos + faceNormal * shadowBias;
-                shadowRay.direction = jitterLightDir(lightDirNorm, seed, shadowSoftness);
-                vec3 shPos; float shDist; int shMat;
-                if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
-                    vec3 H_light = normalize(lightDirNorm + viewDir);
-                    float NdotH = max(dot(faceNormal, H_light), 0.0);
-                    float VdotH = max(dot(viewDir, H_light), 0.0);
-                    vec3 F = fresnelSchlickVec(VdotH, F0);
-                    float D = a2 / (PI * pow(NdotH * NdotH * (a2 - 1.0) + 1.0, 2.0));
-                    float G = smithG2GGX(NdotL, NdotV, a2);
-                    vec3 spec = F * D * G / (4.0 * NdotV) * lightColor * lightIntensity;
-                    radiance += clamp(throughput * spec, 0.0, FIREFLY_CLAMP);
+            if (dot(faceNormal, lightDirNorm) > 0.0) {
+                vec3 sunSampleDir = jitterLightDir(lightDirNorm, seed, shadowSoftness);
+                float NdotL = max(dot(faceNormal, sunSampleDir), 0.0);
+                if (NdotL > 0.0) {
+                    Ray shadowRay;
+                    float shadowBias = 0.005 + hitDist * 0.01;
+                    shadowRay.origin = hitPos + faceNormal * shadowBias;
+                    shadowRay.direction = sunSampleDir;
+                    vec3 shPos; float shDist; int shMat;
+                    if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
+                        vec3 H_light = normalize(sunSampleDir + viewDir);
+                        float NdotH = max(dot(faceNormal, H_light), 0.0);
+                        float VdotH = max(dot(viewDir, H_light), 0.0);
+                        vec3 F = fresnelSchlickVec(VdotH, F0);
+                        float D = a2 / (PI * pow(NdotH * NdotH * (a2 - 1.0) + 1.0, 2.0));
+                        float G = smithG2GGX(NdotL, NdotV, a2);
+                        vec3 spec = F * D * G / (4.0 * NdotV) * lightColor * lightIntensity;
+                        radiance += clamp(throughput * spec, 0.0, FIREFLY_CLAMP);
+                    }
                 }
             }
 
@@ -1523,10 +1542,10 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 
             // SSS contribution
             if (sssIntensity > 0.0) {
-                float sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
+                vec3 sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
                 radiance += clamp(throughput * albedo * sssColor * sss * sssIntensity * lightColor * lightIntensity, 0.0, FIREFLY_CLAMP);
                 if (hasExtraLight) {
-                    float sssExtra = calcSSS(hitPos, faceNormal, extraLightDirNorm);
+                    vec3 sssExtra = calcSSS(hitPos, faceNormal, extraLightDirNorm);
                     radiance += clamp(throughput * albedo * sssColor * sssExtra * sssIntensity * extraLightRadiance, 0.0, FIREFLY_CLAMP);
                 }
             }
@@ -1550,16 +1569,20 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             currentRay.direction = normalize(reflectDir);
         } else {
             // LAMBERTIAN
+            // Sample + shade the sun disc along one consistent direction.
             vec3 lightDirNorm = normalize(lightDir);
-            float NdotL = max(dot(faceNormal, lightDirNorm), 0.0);
-            if (NdotL > 0.0) {
-                Ray shadowRay;
-                float shadowBias = 0.005 + hitDist * 0.01;
-                shadowRay.origin = hitPos + faceNormal * shadowBias;
-                shadowRay.direction = jitterLightDir(lightDirNorm, seed, shadowSoftness);
-                vec3 shPos; float shDist; int shMat;
-                if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
-                    radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI, 0.0, FIREFLY_CLAMP);
+            if (dot(faceNormal, lightDirNorm) > 0.0) {
+                vec3 sunSampleDir = jitterLightDir(lightDirNorm, seed, shadowSoftness);
+                float NdotL = max(dot(faceNormal, sunSampleDir), 0.0);
+                if (NdotL > 0.0) {
+                    Ray shadowRay;
+                    float shadowBias = 0.005 + hitDist * 0.01;
+                    shadowRay.origin = hitPos + faceNormal * shadowBias;
+                    shadowRay.direction = sunSampleDir;
+                    vec3 shPos; float shDist; int shMat;
+                    if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
+                        radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI, 0.0, FIREFLY_CLAMP);
+                    }
                 }
             }
 
@@ -1595,10 +1618,10 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 
             // SSS
             if (sssIntensity > 0.0) {
-                float sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
+                vec3 sss = calcSSS(hitPos, faceNormal, normalize(lightDir));
                 radiance += clamp(throughput * albedo * sssColor * sss * sssIntensity * lightColor * lightIntensity, 0.0, FIREFLY_CLAMP);
                 if (hasExtraLight) {
-                    float sssExtra = calcSSS(hitPos, faceNormal, extraLightDirNorm);
+                    vec3 sssExtra = calcSSS(hitPos, faceNormal, extraLightDirNorm);
                     radiance += clamp(throughput * albedo * sssColor * sssExtra * sssIntensity * extraLightRadiance, 0.0, FIREFLY_CLAMP);
                 }
             }

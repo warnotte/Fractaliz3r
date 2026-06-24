@@ -244,21 +244,35 @@ vec3 filmGrain(vec3 color, vec2 texCoord, float intensity, float time) {
 }
 
 // ============================================================================
-// Sharpening (Unsharp Mask)
+// Sharpening (Unsharp Mask) — evaluated in display-referred space (post tone map)
 // ============================================================================
 
-vec3 sharpen(sampler2D tex, vec2 texCoord, vec2 texelSize, float intensity) {
-    vec3 center = texture(tex, texCoord).rgb;
+// Map an accumulated HDR sample to display-referred space (exposure + tone map
+// + gamma) so the unsharp mask operates on perceptual values. Sharpening raw
+// linear HDR over-shoots highlights and crushes shadow detail.
+vec3 toDisplayReferred(vec2 texCoord, float divisor) {
+    vec3 c = texture(accumTexture, texCoord).rgb / divisor * exposure;
+    c = applyToneMap(c, toneMapMode);
+    return pow(c, vec3(1.0 / 2.2));
+}
 
-    vec3 blur = vec3(0.0);
-    blur += texture(tex, texCoord + vec2(-texelSize.x, 0.0)).rgb;
-    blur += texture(tex, texCoord + vec2( texelSize.x, 0.0)).rgb;
-    blur += texture(tex, texCoord + vec2(0.0, -texelSize.y)).rgb;
-    blur += texture(tex, texCoord + vec2(0.0,  texelSize.y)).rgb;
-    blur *= 0.25;
+// ============================================================================
+// Ordered Dithering (4x4 Bayer)
+// ============================================================================
 
-    // Unsharp mask: original + (original - blurred) * intensity
-    return center + (center - blur) * intensity;
+// Returns an ordered threshold in (0,1). The final 8-bit quantization happens on
+// the CPU via floor(c*255); adding bayer/255 turns that truncation into spatially
+// stable stochastic rounding, replacing gradient banding with an imperceptible
+// dot pattern.
+float bayerDither(vec2 fragCoord) {
+    const float pattern[16] = float[16](
+         0.0,  8.0,  2.0, 10.0,
+        12.0,  4.0, 14.0,  6.0,
+         3.0, 11.0,  1.0,  9.0,
+        15.0,  7.0, 13.0,  5.0
+    );
+    ivec2 p = ivec2(fragCoord) & ivec2(3);
+    return (pattern[p.y * 4 + p.x] + 0.5) / 16.0;
 }
 
 // ============================================================================
@@ -306,14 +320,6 @@ void main() {
         color = applyLensEffects(color, bloom, uv);
     }
 
-    // Sharpening (before tone mapping)
-    if (sharpenEnabled != 0 && sharpenIntensity > 0.0001) {
-        vec3 sharpened = sharpen(accumTexture, uv, texelSize, sharpenIntensity);
-        sharpened /= sampleDivisor;
-        sharpened *= exposure;
-        color = mix(color, sharpened, 0.5);
-    }
-
     // Only apply effects for final render mode
     if (renderMode == 0) {
         // Dynamic saturation boost
@@ -332,6 +338,16 @@ void main() {
         // Gamma correction
         color = pow(color, vec3(1.0 / 2.2));
 
+        // Sharpening (unsharp mask in display-referred space, after tone map + gamma)
+        if (sharpenEnabled != 0 && sharpenIntensity > 0.0001) {
+            vec3 cC = toDisplayReferred(uv, sampleDivisor);
+            vec3 blur = toDisplayReferred(uv + vec2(-texelSize.x, 0.0), sampleDivisor)
+                      + toDisplayReferred(uv + vec2( texelSize.x, 0.0), sampleDivisor)
+                      + toDisplayReferred(uv + vec2(0.0, -texelSize.y), sampleDivisor)
+                      + toDisplayReferred(uv + vec2(0.0,  texelSize.y), sampleDivisor);
+            color += (cC - blur * 0.25) * sharpenIntensity * 0.5;
+        }
+
         // Film grain
         if (filmGrainEnabled != 0 && filmGrainIntensity > 0.0001) {
             color = filmGrain(color, uv, filmGrainIntensity, filmGrainTime);
@@ -342,6 +358,9 @@ void main() {
             color *= vignette(uv, vignetteIntensity, vignetteSoftness);
         }
     }
+
+    // Ordered dithering as the very last step before 8-bit quantization (CPU floor)
+    color += bayerDither(gl_FragCoord.xy) / 255.0;
 
     FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }
