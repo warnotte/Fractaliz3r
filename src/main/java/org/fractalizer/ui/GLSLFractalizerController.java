@@ -294,6 +294,10 @@ public class GLSLFractalizerController implements RenderController {
 
     private static final int MAX_TILE_SIZE = 4096;
 
+    // Samples rendered per GL-thread batch during export. A batch issues one GL task
+    // (no per-sample glFinish); cancellation and progress are checked per batch.
+    private static final int EXPORT_SAMPLE_BATCH = 8;
+
     private CompletableFuture<Void> exportSingleToPNG(File file, int samples, Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         return CompletableFuture.runAsync(() -> {
             try {
@@ -305,15 +309,16 @@ public class GLSLFractalizerController implements RenderController {
                 Map<String, Object> uniforms = buildUniforms();
 
                 int exportSamples = Math.max(1, samples);
-                for (int i = 0; i < exportSamples; i++) {
+                for (int rendered = 0; rendered < exportSamples; ) {
                     if (cancelCheck.get()) {
                         engine.resize(viewportWidth, viewportHeight);
                         return;
                     }
-                    engine.renderSample(uniforms);
-                    engine.glSync();
+                    int batch = Math.min(EXPORT_SAMPLE_BATCH, exportSamples - rendered);
+                    engine.renderSamples(uniforms, batch);
+                    rendered += batch;
                     if (onProgress != null) {
-                        double progress = (double) (i + 1) / exportSamples;
+                        double progress = (double) rendered / exportSamples;
                         Platform.runLater(() -> onProgress.accept(progress));
                     }
                 }
@@ -392,15 +397,16 @@ public class GLSLFractalizerController implements RenderController {
                             uniforms.put("pixelRadius", (float) Math.tan(afp2.getFov() * 0.5) / (fullHf * 0.5f));
                         }
 
-                        for (int i = 0; i < exportSamples; i++) {
+                        for (int rendered = 0; rendered < exportSamples; ) {
                             if (cancelCheck.get()) {
                                 engine.resize(viewportWidth, viewportHeight);
                                 return;
                             }
-                            engine.renderSample(uniforms);
-                            engine.glSync();
+                            int batch = Math.min(EXPORT_SAMPLE_BATCH, exportSamples - rendered);
+                            engine.renderSamples(uniforms, batch);
+                            rendered += batch;
                             if (onProgress != null) {
-                                double progress = (double) (tileIndex * exportSamples + i + 1) / (totalTiles * exportSamples);
+                                double progress = (double) (tileIndex * exportSamples + rendered) / (totalTiles * exportSamples);
                                 Platform.runLater(() -> onProgress.accept(progress));
                             }
                         }
@@ -495,11 +501,12 @@ public class GLSLFractalizerController implements RenderController {
             Map<String, Object> uniforms = buildUniforms();
 
             // Render with specified samples
-            for (int i = 0; i < samples; i++) {
+            for (int rendered = 0; rendered < samples; ) {
                 if (cancelCheck != null && cancelCheck.get()) break;
-                engine.renderSample(uniforms);
-                engine.glSync();
-                if (onProgress != null) onProgress.accept((double) (i + 1) / samples);
+                int batch = Math.min(EXPORT_SAMPLE_BATCH, samples - rendered);
+                engine.renderSamples(uniforms, batch);
+                rendered += batch;
+                if (onProgress != null) onProgress.accept((double) rendered / samples);
             }
 
             // Read pixels
@@ -580,15 +587,16 @@ public class GLSLFractalizerController implements RenderController {
                         uniforms.put("pixelRadius", (float) Math.tan(afp2.getFov() * 0.5) / (fullHf * 0.5f));
                     }
 
-                    for (int i = 0; i < samples; i++) {
+                    for (int rendered = 0; rendered < samples; ) {
                         if (cancelCheck != null && cancelCheck.get()) {
                             engine.resize(viewportWidth, viewportHeight);
                             return null;
                         }
-                        engine.renderSample(uniforms);
-                        engine.glSync();
+                        int batch = Math.min(EXPORT_SAMPLE_BATCH, samples - rendered);
+                        engine.renderSamples(uniforms, batch);
+                        rendered += batch;
                         if (onProgress != null) {
-                            double progress = (double) (tileIndex * samples + i + 1) / (totalTiles * samples);
+                            double progress = (double) (tileIndex * samples + rendered) / (totalTiles * samples);
                             onProgress.accept(progress);
                         }
                     }
@@ -704,7 +712,6 @@ public class GLSLFractalizerController implements RenderController {
 
                 // Render this sample
                 engine.renderSample(uniforms);
-                engine.glSync();
                 if (onProgress != null) onProgress.accept((double) (i + 1) / samples);
             }
 
@@ -809,7 +816,6 @@ public class GLSLFractalizerController implements RenderController {
                         }
 
                         engine.renderSample(uniforms);
-                        engine.glSync();
                         if (onProgress != null) {
                             double progress = (double) (tileIndex * samples + i + 1) / (totalTiles * samples);
                             onProgress.accept(progress);
@@ -881,7 +887,6 @@ public class GLSLFractalizerController implements RenderController {
 
             // 1 sample is sufficient — AOV data is deterministic
             engine.renderSample(uniforms);
-            engine.glSync();
 
             float[] pixels = engine.readImage();
 
@@ -959,7 +964,6 @@ public class GLSLFractalizerController implements RenderController {
                     }
 
                     engine.renderSample(uniforms);
-                    engine.glSync();
 
                     float[] pixels = engine.readImage();
                     for (int py = 0; py < tileH; py++) {

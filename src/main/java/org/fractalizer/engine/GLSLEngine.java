@@ -240,47 +240,81 @@ public class GLSLEngine implements AutoCloseable {
         });
     }
 
+    // Binds the per-pass state that is constant across every sample of one
+    // accumulation batch (FBO, blend, program, textures, SSBO, user uniforms). Bound
+    // once per batch rather than once per sample. Must run on the GL thread.
+    private void bindAccumPass(ShaderProgram program, Map<String, Object> uniforms) {
+        glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
+        glViewport(0, 0, currentWidth, currentHeight);
+        glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE);
+        program.use();
+        program.setUniform("resolution", (float) currentWidth, (float) currentHeight);
+        glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, envMapTexture);
+        program.setUniform("envMap", 0); program.setUniform("useEnvMap", envMapLoaded ? 1 : 0);
+        program.setUniform("envRotation", envRotation); program.setUniform("envLightingMix", envLightingMix);
+        glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, paletteTexture);
+        program.setUniform("paletteTexture", 1);
+        glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, blueNoiseTexture);
+        program.setUniform("blueNoiseTex", 2);
+        if (envCDFReady) {
+            glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, envMarginalCDFTexture); program.setUniform("envMarginalCDF", 3);
+            glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, envConditionalCDFTexture); program.setUniform("envConditionalCDF", 4);
+            program.setUniform("envTotalLuminance", envTotalLuminance);
+            program.setUniform("envMapWidth", envMapWidth); program.setUniform("envMapHeight", envMapHeight);
+        } else {
+            program.setUniform("envMapWidth", 0); program.setUniform("envMapHeight", 0); program.setUniform("envTotalLuminance", 0.0f);
+        }
+        if (adaptiveSamplingEnabled) glBindImageTexture(5, varianceTexture, 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+        if (materialSSBO != 0) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, materialSSBO);
+        for (Map.Entry<String, Object> entry : uniforms.entrySet()) { setUniformValue(program, entry.getKey(), entry.getValue()); }
+        glBindVertexArray(quadVAO);
+    }
+
+    // Draws one accumulation sample; only the per-sample uniforms change. Must run on
+    // the GL thread after bindAccumPass().
+    private void drawAccumSample(ShaderProgram program) {
+        program.setUniform("sampleIndex", sampleCount);
+        program.setUniform("time", (float) glfwGetTime());
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        if (adaptiveSamplingEnabled) glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+        sampleCount++;
+    }
+
+    private void endAccumPass() {
+        glDisable(GL_BLEND); glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
     public void renderSample(Map<String, Object> uniforms) {
         runOnGLThread(() -> {
             if (activeProgram == null) throw new IllegalStateException();
             if (needsReset) { clearAccumulation(); needsReset = false; }
             if (sampleCount >= maxSamples) return;
             ShaderProgram program = programs.get(activeProgram);
-            glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
-            glViewport(0, 0, currentWidth, currentHeight);
-            glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE);
-            program.use();
-            program.setUniform("resolution", (float) currentWidth, (float) currentHeight);
-            program.setUniform("sampleIndex", sampleCount);
-            program.setUniform("time", (float) glfwGetTime());
-            glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, envMapTexture);
-            program.setUniform("envMap", 0); program.setUniform("useEnvMap", envMapLoaded ? 1 : 0);
-            program.setUniform("envRotation", envRotation); program.setUniform("envLightingMix", envLightingMix);
-            glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, paletteTexture);
-            program.setUniform("paletteTexture", 1);
-            glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, blueNoiseTexture);
-            program.setUniform("blueNoiseTex", 2);
-            if (envCDFReady) {
-                glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, envMarginalCDFTexture); program.setUniform("envMarginalCDF", 3);
-                glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, envConditionalCDFTexture); program.setUniform("envConditionalCDF", 4);
-                program.setUniform("envTotalLuminance", envTotalLuminance);
-                program.setUniform("envMapWidth", envMapWidth); program.setUniform("envMapHeight", envMapHeight);
-            } else {
-                program.setUniform("envMapWidth", 0); program.setUniform("envMapHeight", 0); program.setUniform("envTotalLuminance", 0.0f);
-            }
-            if (adaptiveSamplingEnabled) glBindImageTexture(5, varianceTexture, 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
-            if (materialSSBO != 0) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, materialSSBO);
-            for (Map.Entry<String, Object> entry : uniforms.entrySet()) { setUniformValue(program, entry.getKey(), entry.getValue()); }
-            glBindVertexArray(quadVAO); glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            if (adaptiveSamplingEnabled) glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-            glDisable(GL_BLEND); glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            sampleCount++;
+            bindAccumPass(program, uniforms);
+            drawAccumSample(program);
+            endAccumPass();
         });
     }
 
     public void glSync() { runOnGLThread(GL43::glFinish); }
 
-    public void renderSamples(Map<String, Object> uniforms, int count) { for (int i = 0; i < count; i++) renderSample(uniforms); }
+    // Renders `count` accumulation samples in a single GL-thread pass: constant pass
+    // state is bound once and there is NO per-sample glFinish, so the GPU pipelines
+    // every sample and is synchronised only at readback (readImage's glFinish). Used
+    // by both progressive preview and still-frame export.
+    public void renderSamples(Map<String, Object> uniforms, int count) {
+        if (count <= 0) return;
+        runOnGLThread(() -> {
+            if (activeProgram == null) throw new IllegalStateException();
+            if (needsReset) { clearAccumulation(); needsReset = false; }
+            ShaderProgram program = programs.get(activeProgram);
+            bindAccumPass(program, uniforms);
+            for (int s = 0; s < count && sampleCount < maxSamples; s++) {
+                drawAccumSample(program);
+            }
+            endAccumPass();
+        });
+    }
 
     public int getSampleCount() { return sampleCount; }
     public void setMaxSamples(int max) { this.maxSamples = max; }
