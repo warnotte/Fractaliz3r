@@ -43,3 +43,6 @@ test_regression/
 
 ### Ad-hoc comparison renders ###
 sprint1_compare/
+
+### Fractal navigator / traveller output ###
+nav/
