@@ -38,20 +38,37 @@ public class RenderRegression {
     private static final int TIMED_RUNS = 5;   // measured render passes per scene (check/bench)
     private static final int BENCH_RUNS = 5;
 
-    /** A deterministic scene. tol = max mean per-channel delta (/255) allowed vs golden. */
+    /** A deterministic scene. tol = max mean per-channel delta (/255) allowed vs golden.
+     *  cam = {eX,eY,eZ,tX,tY,tZ,fov} for a detail view, or null for the fractal default. */
     private record Scene(String name, FractalType type, Consumer<AbstractFractalParams> cfg,
-                         int samples, double tol) {}
+                         int samples, double tol, float[] cam) {}
 
-    private static List<Scene> scenes() {
+    private static List<Scene> activeScenes;
+
+    private static List<Scene> defaultScenes() {
         List<Scene> s = new ArrayList<>();
-        s.add(new Scene("mandelbulb_classic",     FractalType.MANDELBULB,         pt(false), 16, 1.5));
-        s.add(new Scene("mandelbulb_pathtraced",  FractalType.MANDELBULB,         ptSSS(),   32, 3.0));
-        s.add(new Scene("menger_classic",         FractalType.MENGER_SPONGE,      pt(false), 16, 1.5));
-        s.add(new Scene("mandelbox_classic",      FractalType.MANDELBOX,          pt(false), 16, 1.5));
-        s.add(new Scene("kaleidoscopic_classic",  FractalType.KALEIDOSCOPIC_IFS,  pt(false), 16, 1.5));
-        s.add(new Scene("apollonian_classic",     FractalType.APOLLONIAN,         pt(false), 16, 1.5));
-        s.add(new Scene("sierpinski_classic",     FractalType.SIERPINSKI,         pt(false), 16, 1.5));
-        s.add(new Scene("quatjulia_classic",      FractalType.QUATERNION_JULIA_4D,pt(false), 16, 1.5));
+        s.add(new Scene("mandelbulb_classic",     FractalType.MANDELBULB,         pt(false), 16, 1.5, null));
+        s.add(new Scene("mandelbulb_pathtraced",  FractalType.MANDELBULB,         ptSSS(),   32, 3.0, null));
+        s.add(new Scene("menger_classic",         FractalType.MENGER_SPONGE,      pt(false), 16, 1.5, null));
+        s.add(new Scene("mandelbox_classic",      FractalType.MANDELBOX,          pt(false), 16, 1.5, null));
+        s.add(new Scene("kaleidoscopic_classic",  FractalType.KALEIDOSCOPIC_IFS,  pt(false), 16, 1.5, null));
+        s.add(new Scene("apollonian_classic",     FractalType.APOLLONIAN,         pt(false), 16, 1.5, null));
+        s.add(new Scene("sierpinski_classic",     FractalType.SIERPINSKI,         pt(false), 16, 1.5, null));
+        s.add(new Scene("quatjulia_classic",      FractalType.QUATERNION_JULIA_4D,pt(false), 16, 1.5, null));
+        return s;
+    }
+
+    /** Detail scenes from a FractalNavigator manifest (type eye3 tgt3 fov per line). */
+    private static List<Scene> manifestScenes(String path) throws Exception {
+        List<Scene> s = new ArrayList<>();
+        for (String line : java.nio.file.Files.readAllLines(new File(path).toPath())) {
+            String ln = line.trim();
+            if (ln.isEmpty() || ln.startsWith("#")) continue;
+            String[] t = ln.split("\\s+");
+            float[] cam = new float[7];
+            for (int i = 0; i < 7; i++) cam[i] = Float.parseFloat(t[1 + i]);
+            s.add(new Scene("detail_" + t[0].toLowerCase(), FractalType.valueOf(t[0]), pt(false), 16, 1.5, cam));
+        }
         return s;
     }
 
@@ -66,6 +83,7 @@ public class RenderRegression {
 
     public static void main(String[] args) throws Exception {
         String mode = (args.length > 0) ? args[0].toLowerCase() : "check";
+        String manifest = (args.length > 1) ? args[1] : null;
 
         Platform.startup(() -> {});
         new File(GOLDEN_DIR).mkdirs();
@@ -73,6 +91,9 @@ public class RenderRegression {
         GLSLFractalizerController controller = new GLSLFractalizerController();
         controller.loadAllShaders((m, p) -> {});
         controller.setExportSize(W, H);
+
+        activeScenes = (manifest != null) ? manifestScenes(manifest) : defaultScenes();
+        System.out.println(manifest != null ? "Scenes: DETAIL views (" + manifest + ")" : "Scenes: default global views");
 
         boolean ok = switch (mode) {
             case "update" -> update(controller);
@@ -87,7 +108,7 @@ public class RenderRegression {
 
     private static boolean update(GLSLFractalizerController c) throws Exception {
         System.out.println("=== UPDATE goldens (" + W + "x" + H + ") ===");
-        for (Scene sc : scenes()) {
+        for (Scene sc : activeScenes) {
             renderTo(c, sc, new File(GOLDEN_DIR, sc.name + ".png"));
             // Self-diff: render again to a temp file and compare, to expose the
             // non-determinism noise floor (informs whether the tolerances hold).
@@ -104,7 +125,7 @@ public class RenderRegression {
     private static boolean check(GLSLFractalizerController c) throws Exception {
         System.out.println("=== CHECK vs goldens (" + W + "x" + H + ") ===");
         boolean allPass = true;
-        for (Scene sc : scenes()) {
+        for (Scene sc : activeScenes) {
             File golden = new File(GOLDEN_DIR, sc.name + ".png");
             if (!golden.exists()) {
                 System.out.printf("  %-24s  NO GOLDEN (run 'update' first)%n", sc.name);
@@ -127,7 +148,7 @@ public class RenderRegression {
     private static void bench(GLSLFractalizerController c) throws Exception {
         System.out.println("=== BENCH (" + W + "x" + H + ", median of " + BENCH_RUNS + ") ===");
         long total = 0;
-        for (Scene sc : scenes()) {
+        for (Scene sc : activeScenes) {
             File tmp = File.createTempFile("rr_bench_", ".png");
             long ms = timedRender(c, sc, tmp);
             tmp.delete();
@@ -141,9 +162,17 @@ public class RenderRegression {
 
     private static void renderTo(GLSLFractalizerController c, Scene sc, File out) throws Exception {
         c.setFractalType(sc.type);
-        sc.cfg.accept((AbstractFractalParams) c.getParams());
+        AbstractFractalParams p = (AbstractFractalParams) c.getParams();
+        sc.cfg.accept(p);
+        if (sc.cam != null) {
+            float[] cm = sc.cam;
+            p.getCamera().setPosition(cm[0], cm[1], cm[2]);
+            float[] q = CameraUtils.lookAt(new float[]{cm[0], cm[1], cm[2]}, new float[]{cm[3], cm[4], cm[5]});
+            p.getCamera().setQuaternion(q[0], q[1], q[2], q[3]);
+            p.setFovDegrees(cm[6]);
+        }
         c.setExportSize(W, H);
-        c.exportToPNG(out, sc.samples, p -> {}, () -> false).get();
+        c.exportToPNG(out, sc.samples, p2 -> {}, () -> false).get();
     }
 
     /** Warmup once, then render TIMED_RUNS times to {@code out}; return the median ms. */

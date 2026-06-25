@@ -41,7 +41,8 @@ public class FractalNavigator {
     static int W, H, samples;
 
     public static void main(String[] args) throws Exception {
-        FractalType type = FractalType.valueOf(args[0]);
+        if (args[0].equalsIgnoreCase("manifest")) { generateManifest(args); return; }
+        String spec = args[0];                       // FractalType name OR a .frac file
         outDir = args[1];
         String[] res = args[2].split("x");
         W = Integer.parseInt(res[0]); H = Integer.parseInt(res[1]);
@@ -54,16 +55,31 @@ public class FractalNavigator {
 
         controller = new GLSLFractalizerController();
         controller.loadAllShaders((m, p) -> {});
-        controller.setFractalType(type);
-        params = (AbstractFractalParams) controller.getParams();
+
+        FractalType type;
+        if (spec.toLowerCase().endsWith(".frac")) {
+            org.fractalizer.config.FractalConfig cfg = org.fractalizer.config.FractalConfigManager.load(new File(spec));
+            type = cfg.getFractalTypeEnum();
+            controller.setFractalType(type);
+            params = (AbstractFractalParams) controller.getParams();
+            cfg.applyTo(params);
+        } else {
+            type = FractalType.valueOf(spec);
+            controller.setFractalType(type);
+            params = (AbstractFractalParams) controller.getParams();
+        }
         params.setPathTracingEnabled(false);
         camera = params.getCamera();
 
-        if (args.length > 4 && args[4].equalsIgnoreCase("travel")) {
+        if (args.length > 4 && (args[4].equalsIgnoreCase("travel") || args[4].equalsIgnoreCase("fly"))) {
             int steps = Integer.parseInt(args[5]);
             float shrink = Float.parseFloat(args[6]);
             float fov = (args.length > 7) ? Float.parseFloat(args[7]) : 50f;
-            travel(type, steps, shrink, fov);
+            Plan plan = travel(type, steps, shrink, fov);
+            if (args[4].equalsIgnoreCase("fly")) {
+                int frames = (args.length > 8) ? Integer.parseInt(args[8]) : 48;
+                renderFlight(plan, fov, frames);
+            }
         } else {
             File camFile = new File(args[4]);
             System.out.printf("=== Navigator(list): %s (%dx%d, %d spp) ===%n", type, W, H, samples);
@@ -80,10 +96,46 @@ public class FractalNavigator {
         System.exit(0);
     }
 
+    /** Generate a detail-scene manifest: for each fractal, run the traveller and
+     *  write its sweet-spot camera (type eye target fov) — feeds RenderRegression so
+     *  perf/quality is validated on fine-detail views, not default global ones. */
+    static void generateManifest(String[] args) throws Exception {
+        String outFile = args[1];
+        String[] res = args[2].split("x");
+        W = Integer.parseInt(res[0]); H = Integer.parseInt(res[1]);
+        samples = Integer.parseInt(args[3]);
+        String[] tns = args[4].split(",");
+
+        CountDownLatch latch = new CountDownLatch(1);
+        Platform.startup(latch::countDown);
+        latch.await();
+        outDir = "nav/_manifest_tmp";
+        new File(outDir).mkdirs();
+        controller = new GLSLFractalizerController();
+        controller.loadAllShaders((m, p) -> {});
+
+        StringBuilder sb = new StringBuilder("# detail scenes (sweet-spot cameras) — type eyeX eyeY eyeZ tgtX tgtY tgtZ fov\n");
+        for (String tn : tns) {
+            FractalType ty = FractalType.valueOf(tn.trim());
+            controller.setFractalType(ty);
+            params = (AbstractFractalParams) controller.getParams();
+            params.setPathTracingEnabled(false);
+            camera = params.getCamera();
+            Plan pl = travel(ty, 8, 0.62f, 50f);
+            float[] es = sub(pl.S(), scale(pl.fwd(), (float) pl.sweetCamDist()));
+            sb.append(String.format(java.util.Locale.ROOT, "%s %.5f %.5f %.5f %.5f %.5f %.5f 50%n",
+                tn.trim(), es[0], es[1], es[2], pl.S()[0], pl.S()[1], pl.S()[2]));
+            System.out.printf("manifest: %-22s sweet camDist=%.3f%n", tn.trim(), pl.sweetCamDist());
+        }
+        java.nio.file.Files.writeString(new File(outFile).toPath(), sb.toString());
+        System.out.println("MANIFEST -> " + outFile);
+        System.exit(0);
+    }
+
     /** Auto-dive into fine detail: auto-frame the global view, pick a solid target
      *  from the depth map, then walk the camera toward it. Works on hollow / sparse /
      *  oversized fractals, not just centred blobs. */
-    static void travel(FractalType type, int steps, float shrink, float fov) throws Exception {
+    static Plan travel(FractalType type, int steps, float shrink, float fov) throws Exception {
         float[] origin = {0, 0, 0};
         float[] eye0 = camera.getPosition();
         float[] dirEye = (len(eye0) < 1e-3f) ? new float[]{0, 0, -1} : normalize(eye0);
@@ -113,43 +165,81 @@ public class FractalNavigator {
         float[] up = camera.getUpVector();
         float extent = (float) (R * Math.tan(Math.toRadians(fov * 0.5)) * 0.5);
 
-        float[] bestT = null; double bestDepth = 0; int bestScore = -1;
+        float[] bestT = null; double bestDepth = 0; double bestDetail = -1;
         for (int k = -1; k <= 1; k++) for (int m = -1; m <= 1; m++) {
             float[] T = add(origin, add(scale(right, k * extent), scale(up, m * extent)));
             Probe p = probe(eyeG, T, fov);
             if (!p.hit()) continue;
-            int score = p.coverage() - (Math.abs(k) + Math.abs(m)); // dense, slight centre bias
-            if (score > bestScore) { bestScore = score; bestT = T; bestDepth = p.saturated() ? 0.6 : p.depth(); }
+            double det = probeDetail(eyeG, T, fov);   // aim at the most DETAILED solid patch
+            if (det > bestDetail) { bestDetail = det; bestT = T; bestDepth = p.saturated() ? 0.6 : p.depth(); }
         }
         if (bestT == null) { bestT = origin; bestDepth = R; System.out.println("  no solid target; diving at origin"); }
 
         float[] fwd = normalize(sub(bestT, eyeG));
         float[] S = add(eyeG, scale(fwd, (float) bestDepth));
-        System.out.printf("  target T=(%.2f,%.2f,%.2f) surfaceS=(%.3f,%.3f,%.3f) d=%.3f score=%d%n",
-            bestT[0], bestT[1], bestT[2], S[0], S[1], S[2], bestDepth, bestScore);
+        System.out.printf("  target T=(%.2f,%.2f,%.2f) surfaceS=(%.3f,%.3f,%.3f) d=%.3f detail=%.0f%n",
+            bestT[0], bestT[1], bestT[2], S[0], S[1], S[2], bestDepth, bestDetail);
 
         // C) Dive toward S, scoring each step's fine detail; keep the sweet spot
         // (max detail) rather than the deepest frame (which washes out smooth).
         double camDist = len(sub(S, eyeG));
-        String bestName = null; double bestSharp = -1; int bestStep = -1;
+        String bestName = null; double bestSharp = -1; int bestStep = -1; double bestCamDist = camDist * shrink;
         java.util.List<String> ladder = new java.util.ArrayList<>();
         for (int i = 1; i <= steps; i++) {
             camDist *= shrink;
             float[] eye = sub(S, scale(fwd, (float) camDist));
             String name = String.format(java.util.Locale.ROOT, "t%d_d%.3f", i, camDist);
             renderCam(name, eye, S, fov, true);
-            double sharp = sharpness(new File(outDir, name + ".png"), new File(outDir, name + "_depth.png"));
-            ladder.add(String.format(java.util.Locale.ROOT, "    %-14s detail=%.1f", name, sharp));
-            if (sharp > bestSharp) { bestSharp = sharp; bestName = name; bestStep = i; }
+            FrameScore fs = scoreFrame(new File(outDir, name + ".png"), new File(outDir, name + "_depth.png"));
+            double a = fs.aesthetic();
+            ladder.add(String.format(java.util.Locale.ROOT, "    %-14s detail=%.0f cov=%.0f%% score=%.0f", name, fs.detail(), fs.coverage() * 100, a));
+            if (a > bestSharp) { bestSharp = a; bestName = name; bestStep = i; bestCamDist = camDist; }
         }
         System.out.println("  --- detail ladder ---");
         ladder.forEach(System.out::println);
-        System.out.printf("  SWEET SPOT: step %d (%s) detail=%.1f%n", bestStep, bestName, bestSharp);
+        System.out.printf("  SWEET SPOT: step %d (%s) score=%.0f%n", bestStep, bestName, bestSharp);
+        return new Plan(eyeG, S, fwd, bestCamDist);
     }
 
-    /** Fine-detail score = variance of the Laplacian over surface pixels (depth-masked
-     *  so smooth background/too-close washout scores low, ciselated structure scores high). */
-    static double sharpness(File rgbFile, File depthFile) throws Exception {
+    record Plan(float[] eyeG, float[] S, float[] fwd, double sweetCamDist) {}
+
+    /** Render a smooth eased flight from the global view to the sweet spot. */
+    static void renderFlight(Plan pl, float fov, int frames) throws Exception {
+        float[] origin = {0, 0, 0};
+        float[] eyeSweet = sub(pl.S(), scale(pl.fwd(), (float) pl.sweetCamDist()));
+        System.out.printf("  flight: %d frames global -> sweet spot (camDist %.3f)%n", frames, pl.sweetCamDist());
+        for (int f = 0; f < frames; f++) {
+            double t = (frames <= 1) ? 1.0 : (double) f / (frames - 1);
+            float e = (float) (t * t * (3 - 2 * t));                 // smoothstep ease
+            float[] eye = CameraUtils.lerp(pl.eyeG(), eyeSweet, e);
+            float[] tgt = CameraUtils.lerp(origin, pl.S(), e);
+            renderFrame(String.format(java.util.Locale.ROOT, "fly_%04d", f), eye, tgt, fov);
+        }
+        System.out.println("  flight frames done");
+    }
+
+    static void renderFrame(String name, float[] eye, float[] tgt, float fov) throws Exception {
+        camera.setPosition(eye[0], eye[1], eye[2]);
+        float[] q = CameraUtils.lookAt(eye, tgt);
+        camera.setQuaternion(q[0], q[1], q[2], q[3]);
+        params.setFovDegrees(fov);
+        controller.setExportSize(W, H);
+        controller.exportToPNG(new File(outDir, name + ".png"), samples, p -> {}, () -> false).get();
+    }
+
+    /** Composed framing score: fine detail, surface coverage, and where the detail
+     *  energy sits in the frame. aesthetic() balances them for a pleasing shot. */
+    record FrameScore(double detail, double coverage, double centroidDist) {
+        double aesthetic() {
+            double covBand = Math.exp(-Math.pow((coverage - 0.55) / 0.30, 2)); // peak ~55% coverage
+            double centering = 1.0 - 0.6 * Math.min(1.0, centroidDist);        // detail near centre wins
+            return detail * covBand * centering;
+        }
+    }
+
+    /** Detail = variance of the Laplacian over surface pixels (depth-masked); coverage =
+     *  surface fraction; centroidDist = where the |Laplacian| energy sits (0=centre,1=corner). */
+    static FrameScore scoreFrame(File rgbFile, File depthFile) throws Exception {
         BufferedImage img = ImageIO.read(rgbFile);
         BufferedImage dep = ImageIO.read(depthFile);
         int w = img.getWidth(), h = img.getHeight();
@@ -158,15 +248,40 @@ public class FractalNavigator {
             int p = img.getRGB(x, y);
             lum[y * w + x] = 0.299 * ((p >> 16) & 0xFF) + 0.587 * ((p >> 8) & 0xFF) + 0.114 * (p & 0xFF);
         }
-        double sum = 0, sum2 = 0; long n = 0;
+        double sum = 0, sum2 = 0, cx = 0, cy = 0, wsum = 0;
+        long n = 0, surf = 0, tot = 0;
         for (int y = 1; y < h - 1; y++) for (int x = 1; x < w - 1; x++) {
+            tot++;
             if (dep.getRaster().getSample(x, y, 0) / 65535.0 <= 0.02) continue; // background
+            surf++;
             double lap = -4 * lum[y*w+x] + lum[y*w+x-1] + lum[y*w+x+1] + lum[(y-1)*w+x] + lum[(y+1)*w+x];
+            double al = Math.abs(lap);
             sum += lap; sum2 += lap * lap; n++;
+            cx += al * x; cy += al * y; wsum += al;
         }
-        if (n < 100) return 0;
-        double mean = sum / n;
-        return sum2 / n - mean * mean;
+        double detail = (n < 100) ? 0 : (sum2 / n - (sum / n) * (sum / n));
+        double coverage = (tot == 0) ? 0 : (double) surf / tot;
+        double cdist = 1.0;
+        if (wsum > 1e-6) {
+            double dx = (cx / wsum - w / 2.0) / (w / 2.0), dy = (cy / wsum - h / 2.0) / (h / 2.0);
+            cdist = Math.sqrt(dx * dx + dy * dy) / Math.sqrt(2.0);
+        }
+        return new FrameScore(detail, coverage, cdist);
+    }
+
+    /** Quick colour render at an aim point; returns its detail score (for target choice). */
+    static double probeDetail(float[] eye, float[] tgt, float fov) throws Exception {
+        camera.setPosition(eye[0], eye[1], eye[2]);
+        float[] q = CameraUtils.lookAt(eye, tgt);
+        camera.setQuaternion(q[0], q[1], q[2], q[3]);
+        params.setFovDegrees(fov);
+        controller.setExportSize(W, H);
+        File c = new File(outDir, "_probe_rgb.png");
+        controller.exportToPNG(c, Math.min(samples, 6), p -> {}, () -> false).get();
+        controller.setExportSize(W, H);
+        File d = new File(outDir, "_probe_d.png");
+        controller.exportAOV(d, 2);
+        return scoreFrame(c, d).detail();
     }
 
     /** Depth-only probe of one camera: centre hit/depth + surface coverage. */
