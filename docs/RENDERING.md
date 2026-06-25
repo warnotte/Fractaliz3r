@@ -202,3 +202,31 @@ AnimationTrack supports an opt-in `splineInterpolation` mode. When enabled, `get
 - **Dynamic Speed Meter**: A segmented thrust indicator on the right edge that appears when adjusting movement speed, then fades out.
 - **Telemetry Overlay**: Professional technical readout (FOV, Speed) in the bottom-left for monitoring.
 - **Focus Ring**: Visual circular feedback (Cyan/Red) at the click position when setting Depth of Field focal distance.
+
+---
+
+## Render Quality Finishes
+
+Display-output and shading refinements (`postprocess.glsl`, `raytracer.glsl`):
+
+- **Ordered dithering (4x4 Bayer)**: applied as the last step before the 8-bit quantization (which happens CPU-side via `floor(c*255)`). `color += bayerDither(gl_FragCoord.xy) / 255.0` turns the truncation into spatially-stable stochastic rounding — removes gradient banding without visible noise.
+- **Display-referred sharpening**: the unsharp mask runs **after** tone map + gamma (via `toDisplayReferred()`), not on raw linear HDR — sharpens perceptual values instead of over-shooting highlights / crushing shadows.
+- **Per-channel subsurface scattering**: `calcSSS()` returns a `vec3` with per-channel absorption `vec3(6, 8, 11.2)` (red penetrates deeper than blue) — a subtle warm tint in thin back-lit regions while preserving overall intensity (green = the previous scalar `8.0`).
+- **Ambient floor**: `ambient = getAmbientLighting(normal) * baseColor * mix(0.2, 1.0, ao)` — deep crevices keep 20% ambient instead of crushing to black (multi-bounce fill approximation).
+- **NEE soft-shadow consistency**: in all four path-trace blocks (modern/classic × metallic/lambertian) the jittered sun-disc sample drives **both** the shadow ray and the BRDF (`NdotL`/`H`/`NdotH`), so visibility and shading agree. Hard-shadow output is unchanged (RNG consumption preserved).
+
+## Sample Accumulation Batching
+
+`GLSLEngine.renderSamples(uniforms, count)` renders a whole batch in one GL-thread pass: constant pass state (FBO, blend, textures, SSBO, user uniforms) is bound **once** instead of per sample, with **no per-sample `glFinish`** — the GPU pipelines all samples and synchronises only at readback. Used by progressive preview and still-frame export. Note: export wall-clock is GPU-bound (the raymarch dominates 93–99%; readback / pixel conversion / PNG encode are negligible), so this is mainly a CPU-overhead and sync cleanup, not a large export speedup.
+
+## Test Harnesses: Regression, Benchmark, Traveller
+
+Two headless tools in `org.fractalizer.test` (invocations in **[CLAUDE.md](../CLAUDE.md)** Build Commands):
+
+- **`RenderRegression`** — renders fixed scenes deterministically (bit-exact reproducible per GPU, self-diff 0). `update` writes golden images, `check` diffs against them and fails on any change beyond a small tolerance, `bench` reports median render time. Goldens are GPU-specific and gitignored (`test_regression/`). Accepts a navigator manifest to validate/bench on fine-**detail** views instead of default global cameras.
+- **`FractalNavigator`** — autonomous global → fine-detail camera "traveller", validated across ~15 fractal types + node-graph `.frac` presets:
+  - **auto-frame** the global view (backs off oversized fractals like Mandelbox);
+  - **depth-guided target**: scan a 3×3 view-plane grid of aim points (depth AOV) and pick the most-detailed solid patch — skips hollow cores (Menger) and empty gaps;
+  - **dive** along the view axis in shrinking steps;
+  - **sweet-spot selection**: score each step (`detail × coverage-band × centering`; detail = variance of the Laplacian over depth-masked surface pixels) and keep the best, avoiding the smooth close-up washout.
+  - Modes: `travel` | `fly` (eased flight global→sweet-spot → PNG sequence → mp4) | `manifest` (write per-fractal sweet-spot cameras) | `list` (explicit cameras). Output to `nav/` (gitignored).

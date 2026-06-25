@@ -21,6 +21,17 @@ mvn clean javafx:jlink package -DskipTests  # Release (jlink)
 ```bash
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.TiledRenderTest"   # Tiled export
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ZoomOutTest"       # Zoom-out rendering
+
+# Deterministic golden-image regression + median benchmark (bit-exact reproducible per GPU).
+# Goldens are GPU-specific and gitignored (test_regression/); run 'update' once on a good build.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.RenderRegression" -Dexec.args="update"   # write goldens
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.RenderRegression" -Dexec.args="check"    # diff vs goldens (exit 1 on regression)
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.RenderRegression" -Dexec.args="bench"    # median render time per scene
+# Pass a navigator manifest as a 2nd arg to validate/bench on fine-DETAIL views instead of global defaults.
+
+# Autonomous "traveller": global view -> fine-detail framing on any fractal (output to nav/, gitignored).
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.FractalNavigator" -Dexec.args="MANDELBULB nav 640x360 12 travel 8 0.6 50"
+#   modes: travel (auto-frame -> depth-guided target -> dive -> sharpness sweet-spot) | fly (eased flight -> mp4) | manifest (write detail cameras) | list (explicit cameras)
 ```
 
 ## Project Architecture
