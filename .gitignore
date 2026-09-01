@@ -57,5 +57,8 @@ presets_preview/
 ### Julia prospector output (regenerate with JuliaProspector) ###
 prospect/
 
+### Hybrid chain lab output ###
+hybrid/
+
 ### maven-shade leftover ###
 dependency-reduced-pom.xml

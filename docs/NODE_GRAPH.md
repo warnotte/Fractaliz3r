@@ -306,6 +306,63 @@ Effects modify geometry only (distance field). Coloring factors pass through fro
 
 ---
 
+### HybridNode (leaf) — composing maps, not distances
+
+**This is the one operation CSG cannot express, and the distinction is the whole point.**
+
+A `CSGNode` combines two distance fields that were each produced by a complete,
+independent DE evaluation. Every one of its operations is a pointwise function of the
+two finished distances:
+
+| Op | GLSL emitted |
+|----|--------------|
+| Union | `smin_graph(d1, d2, k)` |
+| Intersect | `smax_graph(d1, d2, k)` |
+| Subtract | `smax_graph(-d1, d2, k)` |
+| Morph | `mix(d1, d2, blend)` |
+
+A hybrid instead composes the **maps**. The orbit of a point is taken under `g(f(z))`
+rather than under `f` and `g` separately, so the escape set it produces is generally not
+any pointwise function of the two original shapes: `g∘f` has its own fixed points, its
+own symmetry group and its own self-similarity ratio, none of which need resemble either
+input. Concretely, a box fold nested inside a spherical power map **at every scale** is
+unreachable by union or morph, because in a union each shape keeps its own
+self-similarity all the way down. Cross-fading two photographs can only ever show what
+is present in one of them; running an image through two filters in alternation,
+repeatedly, cannot.
+
+**Steps.** `BULB` (spherical power map), `BOX_FOLD` (box fold + sphere fold + scale),
+`MENGER_FOLD` (abs + sort + scale/offset), `SIERPINSKI_FOLD` (tetrahedral fold),
+`ABS_FOLD`, `ROTATE`, `SCALE`, `SPHERE_INVERT`, and `ADD_C` (`z += c`, the term that
+turns an IFS into an escape-time set). They are applied in order, once per iteration,
+and the sequence repeats.
+
+**Derivatives.** Each step carries its own `dr` update, which is what keeps the result a
+usable distance estimator: folds and rotations are piecewise isometries and leave `dr`
+alone, scales multiply it, the power map multiplies by `p·r^(p-1)`, an inversion by
+`k/r²`, and `ADD_C` adds 1 (from `d(pos)/d(pos)` in Mandelbrot mode; kept in Julia mode,
+where it only makes the estimate conservative).
+
+**Two DE families.** `LOG` = `0.5·log(r)·r/dr` for power maps, using the radius at which
+the orbit escaped, captured at the top of the loop. `LINEAR` = `r/|dr|` for folds and
+similarities, using the radius of the **final** orbit point — when the loop ends by
+exhausting its iterations rather than by escaping, those are different values, and using
+the loop-top radius makes the estimator disagree with the formula it should reproduce.
+
+**Validation.** `test/HybridLab` renders a set of chains, and its first two entries are
+controls: `BULB → ADD_C` must reproduce the plain Mandelbulb and `BOX_FOLD → ADD_C` the
+plain Mandelbox. Compared on the depth AOV rather than on colour — a chain has no
+formula-specific orbit traps, so the Mandelbox palette legitimately differs while the
+geometry must not — both are exact: mean depth difference 0.00000, max 0.0003 for the
+bulb (a sub-pixel sliver at silhouettes) and 0.0000 for the box.
+
+Emission follows `PrimitiveNode`: inline GLSL, no `.glsl` file, prefix `h0_`, `h1_`, …
+and the same leaf contract (`_OrbitTrap`, `_DE`, `_DE_simple`, `_getFactors`), so a
+hybrid plugs into CSG, transforms, effects and materials like any other leaf.
+
+**Not yet wired:** NodeGraphEditor has no step-list editor, so hybrids are currently
+built in code or loaded from a `.frac` (`presets/HYBRID_BOXBULB`, `HYBRID_ROTOBOX`).
+
 ## GraphCompiler — GLSL Code Generation
 
 **File:** `graph/GraphCompiler.java`

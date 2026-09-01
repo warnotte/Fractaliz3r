@@ -4,6 +4,10 @@ import org.fractalizer.config.FractalConfig;
 import org.fractalizer.config.FractalConfigManager;
 import org.fractalizer.fractals.AbstractFractalParams;
 import org.fractalizer.fractals.FractalType;
+import org.fractalizer.graph.HybridNode;
+import org.fractalizer.graph.HybridNode.DEMode;
+import org.fractalizer.graph.HybridNode.Step;
+import org.fractalizer.graph.HybridNode.StepType;
 import org.fractalizer.ui.GLSLFractalizerController;
 
 import javafx.application.Platform;
@@ -47,6 +51,27 @@ public class PresetForge {
     private static final float[][] EMERALD = {
         {0.00f, 0.01f, 0.05f, 0.03f}, {0.35f, 0.04f, 0.33f, 0.20f},
         {0.70f, 0.45f, 0.85f, 0.38f}, {1.00f, 0.95f, 1.00f, 0.78f}};
+
+    // --- Hybrid chains: several formulas composed inside one iteration loop. No CSG
+    // combination of two finished distance fields can reach these shapes. ---
+
+    private static Step bulbStep(float power) {
+        Step s = new Step(StepType.BULB);
+        s.setPower(power);
+        return s;
+    }
+
+    private static Step boxFoldStep(float scale, float minR, float fixedR, float limit) {
+        Step s = new Step(StepType.BOX_FOLD);
+        s.setScale(scale); s.setMinRadius(minR); s.setFixedRadius(fixedR); s.setFoldLimit(limit);
+        return s;
+    }
+
+    private static Step rotateStep(float rx, float ry, float rz) {
+        Step s = new Step(StepType.ROTATE);
+        s.setRotX(rx); s.setRotY(ry); s.setRotZ(rz);
+        return s;
+    }
 
     static Map<String, Supplier<SceneBuilder>> presets() {
         Map<String, Supplier<SceneBuilder>> p = new LinkedHashMap<>();
@@ -116,6 +141,28 @@ public class PresetForge {
                 .lightDir(-1.8f, 2.2f, -2f).lightIntensity(1.4f)
                 .ambientColor(0.12f, 0.10f, 0.18f).ambientIntensity(0.34f)
                 .colorStrength(0.9f).metalness(0.3f).roughness(0.4f));
+
+        p.put("HYBRID_BOXBULB", () -> SceneBuilder.nodeGraph(new HybridNode(
+                    java.util.List.of(bulbStep(8f), boxFoldStep(1.2f, 0.5f, 1f, 1f),
+                                      new Step(StepType.ADD_C)),
+                    12, 8f, DEMode.LOG))
+                .camera(1.26f, 0.90f, -2.55f).lookAt(0f, 0f, 0f).fov(50)
+                .gradient(AMBER)
+                .pathTracing(true).skyType(1)
+                .lightDir(2f, 3f, -2f).lightIntensity(1.3f)
+                .ambientColor(0.10f, 0.13f, 0.20f).ambientIntensity(0.33f)
+                .colorStrength(0.9f).metalness(0.35f).roughness(0.35f));
+
+        p.put("HYBRID_ROTOBOX", () -> SceneBuilder.nodeGraph(new HybridNode(
+                    java.util.List.of(bulbStep(6f), rotateStep(24f, 37f, 0f),
+                                      boxFoldStep(1.3f, 0.5f, 1f, 1f), new Step(StepType.ADD_C)),
+                    12, 8f, DEMode.LOG))
+                .camera(1.26f, 0.90f, -2.55f).lookAt(0f, 0f, 0f).fov(50)
+                .gradient(ICE)
+                .pathTracing(true).skyType(1)
+                .lightDir(-1.8f, 2.4f, -2f).lightIntensity(1.4f)
+                .ambientColor(0.09f, 0.13f, 0.20f).ambientIntensity(0.33f)
+                .colorStrength(0.9f).metalness(0.4f).roughness(0.3f));
 
         // --- Mandelbox: self-similar, holds detail at any zoom; LOD earns its cost here ---
         p.put("MANDELBOX_DEEP", () -> SceneBuilder.mandelbox()

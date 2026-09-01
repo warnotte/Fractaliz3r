@@ -952,6 +952,33 @@ public class FractalConfig {
                 extractFractalParams(fn.getFractalParams(), params);
                 if (!params.isEmpty()) map.put("params", params);
             }
+        } else if (node instanceof HybridNode hn) {
+            map.put("type", "hybrid");
+            map.put("maxIterations", hn.getMaxIterations());
+            map.put("bailout", (double) hn.getBailout());
+            map.put("deMode", hn.getDeMode().name());
+            map.put("juliaCx", (double) hn.getJuliaCx());
+            map.put("juliaCy", (double) hn.getJuliaCy());
+            map.put("juliaCz", (double) hn.getJuliaCz());
+            java.util.List<Object> stepList = new java.util.ArrayList<>();
+            for (HybridNode.Step st : hn.getSteps()) {
+                Map<String, Object> sm = new java.util.LinkedHashMap<>();
+                sm.put("step", st.getType().name());
+                sm.put("power", (double) st.getPower());
+                sm.put("scale", (double) st.getScale());
+                sm.put("minRadius", (double) st.getMinRadius());
+                sm.put("fixedRadius", (double) st.getFixedRadius());
+                sm.put("foldLimit", (double) st.getFoldLimit());
+                sm.put("offsetX", (double) st.getOffsetX());
+                sm.put("offsetY", (double) st.getOffsetY());
+                sm.put("offsetZ", (double) st.getOffsetZ());
+                sm.put("rotX", (double) st.getRotX());
+                sm.put("rotY", (double) st.getRotY());
+                sm.put("rotZ", (double) st.getRotZ());
+                sm.put("radius", (double) st.getRadius());
+                stepList.add(sm);
+            }
+            map.put("steps", stepList);
         } else if (node instanceof CSGNode csn) {
             map.put("type", "csg");
             map.put("op", csn.getOp().name());
@@ -1011,6 +1038,43 @@ public class FractalConfig {
                 if (map.containsKey("rounding")) pn.setRounding(((Number) map.get("rounding")).floatValue());
                 if (map.containsKey("shell")) pn.setShell(((Number) map.get("shell")).floatValue());
                 yield pn;
+            }
+            case "hybrid" -> {
+                HybridNode hn = new HybridNode();
+                hn.getSteps().clear();
+                Object rawSteps = map.get("steps");
+                if (rawSteps instanceof java.util.List<?> list) {
+                    for (Object o : list) {
+                        if (!(o instanceof Map<?, ?> raw)) continue;
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> sm = (Map<String, Object>) raw;
+                        HybridNode.StepType stp;
+                        try { stp = HybridNode.StepType.valueOf((String) sm.get("step")); }
+                        catch (Exception e) { continue; }
+                        HybridNode.Step st = new HybridNode.Step(stp);
+                        if (sm.get("power") instanceof Number v) st.setPower(v.floatValue());
+                        if (sm.get("scale") instanceof Number v) st.setScale(v.floatValue());
+                        if (sm.get("minRadius") instanceof Number v) st.setMinRadius(v.floatValue());
+                        if (sm.get("fixedRadius") instanceof Number v) st.setFixedRadius(v.floatValue());
+                        if (sm.get("foldLimit") instanceof Number v) st.setFoldLimit(v.floatValue());
+                        if (sm.get("offsetX") instanceof Number v) st.setOffsetX(v.floatValue());
+                        if (sm.get("offsetY") instanceof Number v) st.setOffsetY(v.floatValue());
+                        if (sm.get("offsetZ") instanceof Number v) st.setOffsetZ(v.floatValue());
+                        if (sm.get("rotX") instanceof Number v) st.setRotX(v.floatValue());
+                        if (sm.get("rotY") instanceof Number v) st.setRotY(v.floatValue());
+                        if (sm.get("rotZ") instanceof Number v) st.setRotZ(v.floatValue());
+                        if (sm.get("radius") instanceof Number v) st.setRadius(v.floatValue());
+                        hn.getSteps().add(st);
+                    }
+                }
+                if (map.get("maxIterations") instanceof Number v) hn.setMaxIterations(v.intValue());
+                if (map.get("bailout") instanceof Number v) hn.setBailout(v.floatValue());
+                if (map.get("juliaCx") instanceof Number v) hn.setJuliaCx(v.floatValue());
+                if (map.get("juliaCy") instanceof Number v) hn.setJuliaCy(v.floatValue());
+                if (map.get("juliaCz") instanceof Number v) hn.setJuliaCz(v.floatValue());
+                try { hn.setDeMode(HybridNode.DEMode.valueOf((String) map.get("deMode"))); }
+                catch (Exception e) { /* keep the default */ }
+                yield hn;
             }
             case "fractal" -> {
                 String ftName = (String) map.get("fractalType");

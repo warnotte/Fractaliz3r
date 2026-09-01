@@ -19,6 +19,7 @@ public class GraphCompiler {
 
     private int fractalCounter;
     private int primitiveCounter;
+    private int hybridCounter;
     private int transformCounter;
     private int csgCounter;
     private int effectCounter;
@@ -45,6 +46,7 @@ public class GraphCompiler {
     public String compile(GraphNode root) {
         fractalCounter = 0;
         primitiveCounter = 0;
+        hybridCounter = 0;
         transformCounter = 0;
         csgCounter = 0;
         effectCounter = 0;
@@ -73,6 +75,10 @@ public class GraphCompiler {
                 sb.append("// === ").append(pn.getPrimitiveType().getDisplayName())
                   .append(" Primitive (").append(leaf.prefix).append(") ===\n");
                 sb.append(generatePrimitiveGLSL(pn, leaf.prefix)).append("\n\n");
+            } else if (leaf.node instanceof HybridNode hn) {
+                sb.append("// === Hybrid chain (").append(leaf.prefix).append("): ")
+                  .append(hn.describeChain()).append(" ===\n");
+                sb.append(generateHybridGLSL(hn, leaf.prefix)).append("\n\n");
             } else if (leaf.node instanceof FractalNode fn) {
                 String source;
                 if (fn.getFractalType() == FractalType.CUSTOM_SHADER
@@ -266,6 +272,10 @@ public class GraphCompiler {
             String prefix = "p" + primitiveCounter++;
             pn.id = prefix;
             leaves.add(new LeafInfo(pn, prefix));
+        } else if (node instanceof HybridNode hn) {
+            String prefix = "h" + hybridCounter++;
+            hn.id = prefix;
+            leaves.add(new LeafInfo(hn, prefix));
         } else if (node instanceof FractalNode fn) {
             String prefix = "n" + fractalCounter++;
             fn.id = prefix;
@@ -592,6 +602,8 @@ public class GraphCompiler {
     private DEResult emitDEBody(GraphNode node, String posVar, StringBuilder sb, boolean full) {
         if (node instanceof PrimitiveNode pn) {
             return emitPrimitiveDE(pn, posVar, sb, full);
+        } else if (node instanceof HybridNode hn) {
+            return emitLeafDE(hn.getId(), leafIndex(hn), posVar, sb, full);
         } else if (node instanceof FractalNode fn) {
             return emitFractalDE(fn, posVar, sb, full);
         } else if (node instanceof MaterialNode mn) {
@@ -604,6 +616,22 @@ public class GraphCompiler {
             return emitCSGDE(csn, posVar, sb, full);
         }
         throw new IllegalArgumentException("Unknown node type: " + node.getClass().getSimpleName());
+    }
+
+    /** Every leaf kind exposes the same contract — {prefix}_DE / _DE_simple / _OrbitTrap —
+     *  so the call site is identical whatever produced it. */
+    private DEResult emitLeafDE(String prefix, int leafIdx, String posVar, StringBuilder sb, boolean full) {
+        String dVar = prefix + "_d";
+        if (full) {
+            String tVar = prefix + "_t";
+            sb.append("    ").append(prefix).append("_OrbitTrap ").append(tVar).append(";\n");
+            sb.append("    float ").append(dVar).append(" = ").append(prefix)
+              .append("_DE(").append(posVar).append(", ").append(tVar).append(");\n");
+        } else {
+            sb.append("    float ").append(dVar).append(" = ").append(prefix)
+              .append("_DE_simple(").append(posVar).append(");\n");
+        }
+        return new DEResult(dVar, String.valueOf(leafIdx));
     }
 
     private DEResult emitFractalDE(FractalNode fn, String posVar, StringBuilder sb, boolean full) {
@@ -752,6 +780,8 @@ public class GraphCompiler {
             uniforms.put(id + "_sizeZ", pn.getSizeZ());
             uniforms.put(id + "_rounding", pn.getRounding());
             uniforms.put(id + "_shell", pn.getShell());
+        } else if (node instanceof HybridNode hn) {
+            collectHybridUniforms(hn, uniforms);
         } else if (node instanceof FractalNode fn) {
             AbstractFractalParams stored = fn.getFractalParams();
             if (stored != null) {
@@ -1036,6 +1066,237 @@ public class GraphCompiler {
               .append("_DE_simple(").append(posVar).append(");\n");
         }
         return new DEResult(dVar, String.valueOf(leafIdx));
+    }
+
+    // ========================================================================
+    // Hybrid chains
+    // ========================================================================
+    // A CSG node combines two finished distance fields. A hybrid composes the maps
+    // themselves: one loop, the steps applied in order, so the orbit is taken under
+    // the composition. Every step carries its own derivative update, which is what
+    // keeps the result a usable distance estimator.
+
+    private String generateHybridGLSL(HybridNode hn, String p) {
+        StringBuilder sb = new StringBuilder();
+        List<HybridNode.Step> steps = hn.getSteps();
+
+        sb.append("uniform int ").append(p).append("_maxIterations;\n");
+        sb.append("uniform float ").append(p).append("_bailout;\n");
+        sb.append("uniform vec3 ").append(p).append("_juliaC;\n");
+        for (int i = 0; i < steps.size(); i++) {
+            String u = p + "_s" + i + "_";
+            switch (steps.get(i).getType()) {
+                case BULB -> sb.append("uniform float ").append(u).append("power;\n");
+                case BOX_FOLD -> sb.append("uniform float ").append(u).append("foldLimit;\n")
+                        .append("uniform float ").append(u).append("minRadius;\n")
+                        .append("uniform float ").append(u).append("fixedRadius;\n")
+                        .append("uniform float ").append(u).append("scale;\n");
+                case MENGER_FOLD, SIERPINSKI_FOLD, SCALE -> sb.append("uniform float ").append(u).append("scale;\n")
+                        .append("uniform vec3 ").append(u).append("offset;\n");
+                case ABS_FOLD -> sb.append("uniform vec3 ").append(u).append("offset;\n");
+                case ROTATE -> sb.append("uniform mat3 ").append(u).append("rot;\n");
+                case SPHERE_INVERT -> sb.append("uniform float ").append(u).append("radius;\n");
+                case ADD_C -> { }
+            }
+        }
+        sb.append("\n");
+
+        sb.append("struct ").append(p).append("_OrbitTrap {\n")
+          .append("    float minDist;\n    float planeX;\n    float planeY;\n    float planeZ;\n")
+          .append("    int iterations;\n};\n\n");
+
+        // One shared chain body, so DE and DE_simple cannot drift apart.
+        sb.append("void ").append(p).append("_chain(inout vec3 z, inout float dr, vec3 c) {\n");
+        for (int i = 0; i < steps.size(); i++) {
+            sb.append(stepBody(steps.get(i), p + "_s" + i + "_"));
+        }
+        sb.append("}\n\n");
+
+        String iterBound = p + "_maxIterations + gExtraIterations";
+        String seed = "vec3 c = (dot(" + p + "_juliaC, " + p + "_juliaC) > 0.0001) ? " + p + "_juliaC : pos;\n";
+        // Escape-time uses the radius at which the orbit escaped, captured at the top of
+        // the loop exactly as the stand-alone shaders do. An IFS estimator instead needs
+        // the radius of the final orbit point: when the loop ends by exhausting its
+        // iterations rather than by escaping, those are different values, and using the
+        // loop-top one makes the estimator disagree with the formula it should reproduce.
+        String finalR = (hn.getDeMode() == HybridNode.DEMode.LOG) ? "" : "    r = length(z);\n";
+        String deExpr = (hn.getDeMode() == HybridNode.DEMode.LOG)
+                ? "0.5 * log(r) * r / dr"
+                : "r / max(abs(dr), 1e-9)";
+
+        sb.append("float ").append(p).append("_DE_simple(vec3 pos) {\n")
+          .append("    vec3 z = pos;\n    ").append(seed)
+          .append("    float dr = 1.0;\n    float r = 0.0;\n")
+          .append("    for (int i = 0; i < ").append(iterBound).append("; i++) {\n")
+          .append("        r = length(z);\n")
+          .append("        if (r > ").append(p).append("_bailout) break;\n")
+          .append("        ").append(p).append("_chain(z, dr, c);\n")
+          .append("    }\n")
+          .append(finalR)
+          .append("    float de = ").append(deExpr).append(";\n")
+          .append("    float rPos = length(pos);\n")
+          .append("    if (rPos > 2.0 * ").append(p).append("_bailout) de = min(de, rPos - ").append(p).append("_bailout);\n")
+          .append("    return de;\n}\n\n");
+
+        sb.append("float ").append(p).append("_DE(vec3 pos, out ").append(p).append("_OrbitTrap trap) {\n")
+          .append("    vec3 z = pos;\n    ").append(seed)
+          .append("    float dr = 1.0;\n    float r = 0.0;\n")
+          .append("    trap.minDist = 1e10;\n    trap.planeX = 1e10;\n")
+          .append("    trap.planeY = 1e10;\n    trap.planeZ = 1e10;\n    trap.iterations = 0;\n")
+          .append("    for (int i = 0; i < ").append(iterBound).append("; i++) {\n")
+          .append("        r = length(z);\n")
+          .append("        if (r > ").append(p).append("_bailout) break;\n")
+          .append("        ").append(p).append("_chain(z, dr, c);\n")
+          .append("        trap.minDist = min(trap.minDist, length(z));\n")
+          .append("        trap.planeX = min(trap.planeX, abs(z.x));\n")
+          .append("        trap.planeY = min(trap.planeY, abs(z.y));\n")
+          .append("        trap.planeZ = min(trap.planeZ, abs(z.z));\n")
+          .append("        trap.iterations = i + 1;\n")
+          .append("    }\n")
+          .append(finalR)
+          .append("    float de = ").append(deExpr).append(";\n")
+          .append("    float rPos = length(pos);\n")
+          .append("    if (rPos > 2.0 * ").append(p).append("_bailout) de = min(de, rPos - ").append(p).append("_bailout);\n")
+          .append("    return de;\n}\n\n");
+
+        sb.append("vec3 ").append(p).append("_getFactors(").append(p).append("_OrbitTrap trap) {\n")
+          .append("    float trapX = exp(-trap.planeX * 3.0);\n")
+          .append("    float trapY = exp(-trap.planeY * 3.0);\n")
+          .append("    float trapZ = exp(-trap.planeZ * 3.0);\n")
+          .append("    float structural = 1.0 - exp(-trap.minDist * 0.8);\n")
+          .append("    float flow = (trapX * 0.5 + trapY * 1.0 + trapZ * 1.5) / 3.0;\n")
+          .append("    float iterNorm = float(trap.iterations) / float(max(")
+          .append(p).append("_maxIterations + gExtraIterations, 1));\n")
+          .append("    return vec3(structural, flow, iterNorm);\n}\n");
+
+        return sb.toString();
+    }
+
+    /** GLSL for one step. Local names are underscore-prefixed and block-scoped so
+     *  repeated steps in a chain cannot collide. */
+    private static String stepBody(HybridNode.Step st, String u) {
+        return switch (st.getType()) {
+            case BULB -> ("""
+                {
+                    float _r = length(z);
+                    if (_r > 1e-8) {
+                        float _p = %1$spower;
+                        float _th = acos(clamp(z.z / _r, -1.0, 1.0)) * _p;
+                        float _ph = atan(z.y, z.x) * _p;
+                        float _zr = pow(_r, _p);
+                        dr = pow(_r, _p - 1.0) * _p * dr;
+                        z = _zr * vec3(sin(_th) * cos(_ph), sin(_th) * sin(_ph), cos(_th));
+                    }
+                }
+                """).formatted(u).indent(4);
+            case BOX_FOLD -> ("""
+                {
+                    float _L = %1$sfoldLimit;
+                    z = clamp(z, -_L, _L) * 2.0 - z;
+                    float _r2 = dot(z, z);
+                    float _mn = %1$sminRadius * %1$sminRadius;
+                    float _fx = %1$sfixedRadius * %1$sfixedRadius;
+                    if (_r2 < _mn) { float _f = _fx / _mn; z = z * _f; dr = dr * _f; }
+                    else if (_r2 < _fx) { float _f = _fx / _r2; z = z * _f; dr = dr * _f; }
+                    float _s = %1$sscale;
+                    z = z * _s;
+                    dr = dr * abs(_s);
+                }
+                """).formatted(u).indent(4);
+            case MENGER_FOLD -> ("""
+                {
+                    z = abs(z);
+                    if (z.x < z.y) { float _t = z.x; z.x = z.y; z.y = _t; }
+                    if (z.x < z.z) { float _t = z.x; z.x = z.z; z.z = _t; }
+                    if (z.y < z.z) { float _t = z.y; z.y = z.z; z.z = _t; }
+                    float _s = %1$sscale;
+                    vec3 _o = %1$soffset;
+                    z = z * _s - _o * (_s - 1.0);
+                    float _lim = -0.5 * _o.z * (_s - 1.0);
+                    if (z.z < _lim) { z.z = z.z + _o.z * (_s - 1.0); }
+                    dr = dr * abs(_s);
+                }
+                """).formatted(u).indent(4);
+            case SIERPINSKI_FOLD -> ("""
+                {
+                    if (z.x + z.y < 0.0) { float _t = -z.y; z.y = -z.x; z.x = _t; }
+                    if (z.x + z.z < 0.0) { float _t = -z.z; z.z = -z.x; z.x = _t; }
+                    if (z.y + z.z < 0.0) { float _t = -z.z; z.z = -z.y; z.y = _t; }
+                    float _s = %1$sscale;
+                    vec3 _o = %1$soffset;
+                    z = z * _s - _o * (_s - 1.0);
+                    dr = dr * abs(_s);
+                }
+                """).formatted(u).indent(4);
+            case ABS_FOLD -> ("""
+                {
+                    vec3 _o = %1$soffset;
+                    z = abs(z + _o) - _o;
+                }
+                """).formatted(u).indent(4);
+            case ROTATE -> "    z = " + u + "rot * z;\n";
+            case SCALE -> ("""
+                {
+                    float _s = %1$sscale;
+                    z = z * _s + %1$soffset;
+                    dr = dr * abs(_s);
+                }
+                """).formatted(u).indent(4);
+            case SPHERE_INVERT -> ("""
+                {
+                    float _r2 = max(dot(z, z), 1e-8);
+                    float _k = (%1$sradius * %1$sradius) / _r2;
+                    z = z * _k;
+                    dr = dr * _k;
+                }
+                """).formatted(u).indent(4);
+            // z += c is what turns an IFS into an escape-time set; the matching +1 on
+            // the derivative comes from d(pos)/d(pos) in Mandelbrot mode, and is left
+            // in place in Julia mode where it only makes the estimate conservative.
+            case ADD_C -> "    z = z + c;\n    dr = dr + 1.0;\n";
+        };
+    }
+
+    private static void collectHybridUniforms(HybridNode hn, Map<String, Object> uniforms) {
+        String id = hn.getId();
+        uniforms.put(id + "_maxIterations", hn.getMaxIterations());
+        uniforms.put(id + "_bailout", hn.getBailout());
+        uniforms.put(id + "_juliaC", new float[]{hn.getJuliaCx(), hn.getJuliaCy(), hn.getJuliaCz()});
+        List<HybridNode.Step> steps = hn.getSteps();
+        for (int i = 0; i < steps.size(); i++) {
+            HybridNode.Step st = steps.get(i);
+            String u = id + "_s" + i + "_";
+            float[] off = {st.getOffsetX(), st.getOffsetY(), st.getOffsetZ()};
+            switch (st.getType()) {
+                case BULB -> uniforms.put(u + "power", st.getPower());
+                case BOX_FOLD -> {
+                    uniforms.put(u + "foldLimit", st.getFoldLimit());
+                    uniforms.put(u + "minRadius", st.getMinRadius());
+                    uniforms.put(u + "fixedRadius", st.getFixedRadius());
+                    uniforms.put(u + "scale", st.getScale());
+                }
+                case MENGER_FOLD, SIERPINSKI_FOLD, SCALE -> {
+                    uniforms.put(u + "scale", st.getScale());
+                    uniforms.put(u + "offset", off);
+                }
+                case ABS_FOLD -> uniforms.put(u + "offset", off);
+                case ROTATE -> uniforms.put(u + "rot", eulerMatrix(st.getRotX(), st.getRotY(), st.getRotZ()));
+                case SPHERE_INVERT -> uniforms.put(u + "radius", st.getRadius());
+                case ADD_C -> { }
+            }
+        }
+    }
+
+    /** R = Rz * Ry * Rx, the same convention as the fractal rotation uniforms. */
+    private static float[] eulerMatrix(float x, float y, float z) {
+        float cx = (float) Math.cos(Math.toRadians(x)), sx = (float) Math.sin(Math.toRadians(x));
+        float cy = (float) Math.cos(Math.toRadians(y)), sy = (float) Math.sin(Math.toRadians(y));
+        float cz = (float) Math.cos(Math.toRadians(z)), sz = (float) Math.sin(Math.toRadians(z));
+        return new float[]{
+            cy * cz, -cy * sz, sy,
+            sx * sy * cz + cx * sz, -sx * sy * sz + cx * cz, -sx * cy,
+            -cx * sy * cz + sx * sz, cx * sy * sz + sx * cz, cx * cy
+        };
     }
 
     /**

@@ -19,6 +19,8 @@ public final class GraphNodeNamer {
             return pn.getPrimitiveType().getDisplayName();
         } else if (node instanceof FractalNode fn) {
             return fn.getFractalType().getDisplayName();
+        } else if (node instanceof HybridNode) {
+            return "Hybrid";
         } else if (node instanceof CSGNode) {
             return "CSG";
         } else if (node instanceof EffectNode en) {

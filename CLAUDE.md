@@ -46,6 +46,11 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PresetForge" -Dexec
 # Boundary constants are found on the CPU (no rendering), then rendered, scored, filtered
 # for diversity, and the winners written as .frac. ~180 candidates in ~6 s.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.JuliaProspector" -Dexec.args="prospect 180 320x180 6 8"
+
+# Hybrid chains: several formulas composed inside one iteration loop (HybridNode).
+# The first two entries are controls that must reproduce the stand-alone Mandelbulb and
+# Mandelbox exactly; they are compared on the depth AOV, not on colour.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.HybridLab" -Dexec.args="hybrid 480x270 12"
 ```
 
 ## Project Architecture
@@ -76,6 +81,7 @@ org.fractalizer
 │   ├── PrimitiveNode.java          # Leaf: 11 SDF geometric primitives
 │   ├── CSGNode.java                # Binary: Union/Intersect/Subtract/Morph
 │   ├── TransformNode.java          # Unary: 7 modes (Standard/Mirror/Twist/Bend/Taper/Rep/Rep1D)
+│   ├── HybridNode.java             # Leaf: chains formulas INSIDE one iteration loop
 │   ├── EffectNode.java             # Unary: Erosion/Crystal/Moss
 │   ├── MaterialNode.java           # Unary: per-node material overrides
 │   ├── GraphCompiler.java          # Compiles node tree → composite GLSL shader (8 phases)
