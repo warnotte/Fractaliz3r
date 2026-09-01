@@ -37,7 +37,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
 
     float zScale = 1.0 + vertScale;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         // Toroidal decomposition
         float lenXY = length(z.xy);
         float phi = atan(z.y, z.x);
@@ -101,7 +101,7 @@ float DE_simple(vec3 pos) {
     float dr = 1.0;
     float zScale = 1.0 + vertScale;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         float lenXY = length(z.xy);
         float phi = atan(z.y, z.x);
         vec2 q = vec2(lenXY - ringRadius, z.z * zScale);
@@ -145,6 +145,6 @@ vec3 getFactors(OrbitTrap trap) {
     float trapY = exp(-trap.planeY * 3.0);
     float trapZ = exp(-trap.planeZ * 3.0);
     float flow = (trapX * 0.5 + trapY * 1.0 + trapZ * 1.5) / 3.0;
-    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
+    float iterNorm = float(trap.iterations) / float(max(maxIterations + gExtraIterations, 1));
     return vec3(structural, flow, iterNorm);
 }

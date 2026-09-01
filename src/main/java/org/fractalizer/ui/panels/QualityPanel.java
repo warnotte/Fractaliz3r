@@ -75,6 +75,8 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider fudgeFactorSlider;
     private EnhancedSlider refinementStepsSlider;
     private EnhancedSlider stepRelaxationSlider;
+    private EnhancedSlider detailLODSlider;
+    private EnhancedSlider detailLODMaxSlider;
 
     // Adaptive sampling
     private CheckBox adaptiveSamplingCheck;
@@ -604,7 +606,28 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        box.getChildren().addAll(coneTracingCheck, fudgeFactorSlider, refinementStepsSlider, stepRelaxationSlider);
+        detailLODSlider = new EnhancedSlider("Zoom Detail (iter/octave)", 0.0, 8.0, 0.0, false);
+        detailLODSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setDetailLOD(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        detailLODMaxSlider = new EnhancedSlider("Zoom Detail Ceiling", 0, 128, 24, true);
+        detailLODMaxSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setDetailLODMax(v.intValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        Label detailLODInfo = new Label("Extra DE iterations granted as you dive in.\nKeeps fine structure from smoothing away;\n0 = off (iterations also shape an IFS).");
+        detailLODInfo.getStyleClass().add("info-label");
+        detailLODInfo.setWrapText(true);
+
+        box.getChildren().addAll(coneTracingCheck, fudgeFactorSlider, refinementStepsSlider, stepRelaxationSlider,
+                                 new Separator(), detailLODSlider, detailLODMaxSlider, detailLODInfo);
 
         TitledPane pane = new TitledPane("Raymarcher", box);
         pane.setExpanded(false);
@@ -747,6 +770,8 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             fudgeFactorSlider.setValue(p.getFudgeFactor());
             refinementStepsSlider.setValue(p.getRefinementSteps());
             stepRelaxationSlider.setValue(p.getStepRelaxation());
+            detailLODSlider.setValue(p.getDetailLOD());
+            detailLODMaxSlider.setValue(p.getDetailLODMax());
 
             // Adaptive sampling
             adaptiveSamplingCheck.setSelected(p.isAdaptiveSampling());

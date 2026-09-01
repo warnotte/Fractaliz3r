@@ -84,6 +84,67 @@ Four independently toggleable raymarcher enhancements in QualityPanel "Raymarche
 
 **Parameters** (in `AbstractFractalParams`, serialized in `EffectsConfig`): `coneTracingEnabled` (bool, default true), `fudgeFactor` (float), `refinementSteps` (int), `stepRelaxation` (float).
 
+### Known consequence: dark rim at silhouettes (path tracing only)
+
+Cone tracing accepts a hit as soon as the ray comes within one pixel footprint of the surface (`d < pixelRadius * dist`) — that is what antialiases the silhouette. At the outline the ray only *grazes*, so the accepted point sits up to a full pixel footprint **beside** the geometry, in empty space, and everything downstream is evaluated there:
+
+- the tetrahedron normal (gradient step `e = pixelRadius * dist * 0.5`) is ill-conditioned at a near-tangent, off-surface point;
+- the shadow / NEE ray leaves from that near-tangent point, re-enters the object and reports occlusion;
+- in the path tracer most bounce directions from a tangent point immediately re-hit the fractal, so every bounce loses energy.
+
+The 6 post-hit sphere-tracing steps cannot repair this case: a ray that grazes without ever intersecting has **no true surface to converge to**, so those steps just walk the point further along the ray.
+
+Measured on the default Mandelbulb view (mean luminance per 1-px ring inward from the silhouette, `DeepZoomLab`):
+
+| Configuration | ring 0 (edge) | ring 2 | rim dip |
+|---|---|---|---|
+| Path tracing + cone tracing **on** | 44.4 | 60.5 | **−26.6%** |
+| Path tracing + cone tracing **off** | 71.7 | 76.6 | −6.5% |
+| Classic shading (no path tracing) | 154.6 | 151.3 | +2.2% (no rim) |
+
+So roughly **4/5 of the rim is the cone-tracing offset** and 1/5 is genuine **limb darkening** (at a silhouette the surface is tangent to the view: `NdotL` collapses and the visible hemisphere is mostly the object itself — any renderer darkens there). The rim **does not exist in classic shading**; the path tracer is what compounds the bad normal over several bounces, and it is on by default via "Auto Full Quality". Turning off Cone Tracing removes it at ~1.7× the render cost.
+
+
+---
+
+## Deep Zoom (Fine Detail)
+
+What actually limits detail during a deep dive, measured with `DeepZoomLab` (see Test Harnesses).
+
+### View-relative scales
+
+Radii pinned to world units stop making sense once the whole frame is a fraction of a world unit across: they span many screen-heights, the occlusion term saturates to a flat tint and shadow rays start beyond every nearby fold, so the image flattens and darkens exactly where the detail is. Three helpers in `common.glsl` express those radii relative to the view instead:
+
+| Helper | Meaning |
+|--------|---------|
+| `viewScaleAt(d)` | world-space half-height of the frustum at distance `d` |
+| `pixelScaleAt(d)` | world-space size of one pixel at distance `d` (cone-tracing footprint, or derived from `resolution`) |
+| `surfaceBias(d)` | secondary-ray offset — a few pixel footprints, i.e. the real accuracy of the hit point |
+
+- **`calcAO`** caps its outer probe radius at `min(0.13, 0.12 * viewScaleAt(dist))` and renormalises the (length-scaled) occlusion sum back to the 0.13 reference, so AO *strength* is unchanged while its *scale* follows the zoom.
+- **Every shadow bias** (9 call sites: classic shade, reflections, the 4 path-tracer NEE blocks, extra lights, volumetric fog, AOV pass) now uses `surfaceBias(dist)` instead of the fixed `0.005 + dist * 0.01`.
+
+Fine-detail views gain crevice definition and contact shadows.
+
+**Caveat — `surfaceBias` is resolution-dependent, and the regression harness hides it.** The bias now scales with the pixel footprint, so it shrinks as resolution rises: at 480×270 it lands near the old fixed `0.005 + dist * 0.01`, but at 1280×720 it is ~5× smaller, which deepens self-shadowing in the folds. Measured on the default Mandelbulb view at 720p: surface in full shadow **37.9% → 50.1%**, mean surface luminance **130.6 → 121.2 (−7%)**. `RenderRegression` runs at 480×270 and reports ALL PASS (mean diff < 1/255) — it does **not** catch this. Check resolution-dependent shading changes at final render resolution, not at harness resolution.
+
+### Zoom-adaptive iteration budget
+
+A DE run with a fixed iteration budget stops resolving structure below a scale set by that budget; the boundary it *does* resolve is a smooth manifold. `gExtraIterations` (set once per pixel in `main()` from `zoomDetailIterations(sceneDE_simple(camPos))`) adds `detailLOD` iterations per octave of camera clearance below one world unit, capped at `detailLODMax`. Every fractal shader spends it as `maxIterations + gExtraIterations`, including the normalisers that turn iteration counts into coloring factors.
+
+**Off by default** (`detailLOD = 0`): on an IFS or a Mandelbox the iteration count sets the *shape*, not just how finely it is resolved, so raising it silently would change every saved scene. Enable it in QualityPanel → Raymarcher when diving.
+
+Measured on a Mandelbox at 236× zoom: `detailLOD = 2` gives **+13% detail and +7 points of edge density** at no extra render time; `4` adds ~1% more.
+
+### What the iteration budget cannot fix
+
+Two regimes, and they need different answers:
+
+- **Self-similar formulas hold up.** Mandelbox, camDist 4.73 → 0.02 (236×): detail 10013 → 6788 (−32%), luminance and contrast steady. The renderer is not the bottleneck.
+- **Mandelbrot-mode formulas go smooth.** Mandelbulb, camDist 1.4 → 0.02: detail 8568 → 260 (**−97%**), a featureless drape. This is the formula, not the renderer: adding `pos` each iteration leaves large analytic bulbs whose surface is locally smooth, and the DE saturates — beyond ~11 extra iterations the render is bit-identical (verified at `detailLOD` 2, 4 and 8).
+
+The fix is **Julia mode**: a fixed constant instead of `pos` makes every point of the set a boundary point. `MandelbulbParams.juliaC{x,y,z}` (0,0,0 = Mandelbrot, unchanged), matching the existing Bristorbrot / QuaternionJulia4D convention; the Node Graph editor picks up the sliders automatically under a "Julia C" group. With `c = (0.42, 0.18, -0.31)`, a Mandelbulb dive from camDist 1.24 → 0.034 (88×) holds detail 8729 → 10650 — no collapse at all.
+
 ---
 
 ## Adaptive Sampling
@@ -221,7 +282,7 @@ Display-output and shading refinements (`postprocess.glsl`, `raytracer.glsl`):
 
 ## Test Harnesses: Regression, Benchmark, Traveller
 
-Two headless tools in `org.fractalizer.test` (invocations in **[CLAUDE.md](../CLAUDE.md)** Build Commands):
+Three headless tools in `org.fractalizer.test` (invocations in **[CLAUDE.md](../CLAUDE.md)** Build Commands):
 
 - **`RenderRegression`** — renders fixed scenes deterministically (bit-exact reproducible per GPU, self-diff 0). `update` writes golden images, `check` diffs against them and fails on any change beyond a small tolerance, `bench` reports median render time. Goldens are GPU-specific and gitignored (`test_regression/`). Accepts a navigator manifest to validate/bench on fine-**detail** views instead of default global cameras.
 - **`FractalNavigator`** — autonomous global → fine-detail camera "traveller", validated across ~15 fractal types + node-graph `.frac` presets:
@@ -230,3 +291,10 @@ Two headless tools in `org.fractalizer.test` (invocations in **[CLAUDE.md](../CL
   - **dive** along the view axis in shrinking steps;
   - **sweet-spot selection**: score each step (`detail × coverage-band × centering`; detail = variance of the Laplacian over depth-masked surface pixels) and keep the best, avoiding the smooth close-up washout.
   - Modes: `travel` | `fly` (eased flight global→sweet-spot → PNG sequence → mp4) | `manifest` (write per-fractal sweet-spot cameras) | `list` (explicit cameras). Output to `nav/` (gitignored).
+- **`DeepZoomLab`** — renders one camera list under a set of parameter variants and reports surface-masked metrics: `detail` (variance of the Laplacian), `edges%` (fraction of surface pixels with |Laplacian| > 8), `lum` and `contrast` (mean / stddev of surface luminance — these catch "it goes dark" and "it goes flat"), `cov%`. Background is masked via the depth AOV so a shrinking silhouette cannot masquerade as a change in surface quality. Variants resolve by reflection against the params **and** the node-graph leaf params, e.g. `detailLOD=0,2,4` or `juliaCx=0.42`.
+- **`PresetForge`** — builds demo `.frac` presets from `SceneBuilder` specs and renders a preview of each, so a candidate is judged before it is kept. Two traps it exists to avoid: the framing cameras come from `FractalNavigator` sweet spots (default global cameras do not show the detail a demo is for), and each spec must set its own **gradient** — `paletteIndex` does not feed the palette texture.
+
+### Two gotchas for headless rendering
+
+- **The palette must be uploaded explicitly.** `FractalConfig.applyTo(params)` restores the gradient onto the params, but the GPU texture is only written by `GLSLFractalizerController.updatePaletteTexture(params.getCustomGradient())`. Skip it and every render comes out monochrome no matter what the preset says — which is exactly what the older headless harnesses do, so their images are greyscale by accident, not by design.
+- **`SceneBuilder` factory defaults are not the app defaults.** `SceneBuilder.mandelbox()` uses `scale = -1.5, minRadius = 0.5`; `MandelboxParams` defaults to `scale = 2.0, minRadius = 0.25`. A camera found by the traveller against stock parameters will frame empty space if the preset is built from the factory defaults — override the parameters to match whatever the camera was found against.

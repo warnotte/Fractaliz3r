@@ -77,6 +77,14 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected int refinementSteps = 4;
     protected float stepRelaxation = 0.0f;
 
+    // Deep-zoom detail: extra DE iterations granted per octave of zoom, and their
+    // ceiling. Off by default: on an IFS or a Mandelbox the iteration count sets the
+    // shape, not just how finely it is resolved, so raising it silently would change
+    // every saved scene. Turn it on when diving, where it is what keeps fine
+    // structure from smoothing away.
+    protected float detailLOD = 0.0f;
+    protected int detailLODMax = 24;
+
     // Light direction (will be normalized in kernel)
     protected float lightX, lightY, lightZ;
 
@@ -396,6 +404,8 @@ public abstract class AbstractFractalParams implements FractalParams {
 
         // Raymarcher improvements
         target.coneTracingEnabled = this.coneTracingEnabled;
+        target.detailLOD = this.detailLOD;
+        target.detailLODMax = this.detailLODMax;
         target.fudgeFactor = this.fudgeFactor;
         target.refinementSteps = this.refinementSteps;
         target.stepRelaxation = this.stepRelaxation;
@@ -575,6 +585,9 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.shadowSteps = Math.max(32, this.shadowSteps / reductionFactor);
         target.aoSteps = 2;
         target.dofSamples = Math.max(4, this.dofSamples / reductionFactor);
+        // Extra deep-zoom iterations are the single most expensive part of a dive;
+        // the interactive preview trades that detail for framerate.
+        target.detailLOD = this.detailLOD / reductionFactor;
     }
 
     // ========================================================================
@@ -693,6 +706,10 @@ public abstract class AbstractFractalParams implements FractalParams {
     // Raymarcher improvements
     public boolean isConeTracingEnabled() { return coneTracingEnabled; }
     public void setConeTracingEnabled(boolean enabled) { this.coneTracingEnabled = enabled; }
+    public float getDetailLOD() { return detailLOD; }
+    public void setDetailLOD(float v) { this.detailLOD = Math.max(0f, Math.min(8f, v)); }
+    public int getDetailLODMax() { return detailLODMax; }
+    public void setDetailLODMax(int v) { this.detailLODMax = Math.max(0, Math.min(128, v)); }
     public float getFudgeFactor() { return fudgeFactor; }
     public void setFudgeFactor(float f) { this.fudgeFactor = Math.max(0.1f, Math.min(2.0f, f)); }
     public int getRefinementSteps() { return refinementSteps; }

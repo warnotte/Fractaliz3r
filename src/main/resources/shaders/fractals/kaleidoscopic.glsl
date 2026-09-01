@@ -53,7 +53,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
     float foldSum = 0.0;
 
     int n;
-    for (n = 0; n < maxIterations; n++) {
+    for (n = 0; n < maxIterations + gExtraIterations; n++) {
         // Classic KIFS folding - creates tetrahedral/kaleidoscopic symmetry
         // These are conditional reflections across planes
 
@@ -111,7 +111,7 @@ float DE_simple(vec3 pos) {
     vec3 z = pos;
 
     int n;
-    for (n = 0; n < maxIterations; n++) {
+    for (n = 0; n < maxIterations + gExtraIterations; n++) {
         // Fold 1
         if (z.x + z.y < 0.0) z.xy = -z.yx;
         // Fold 2
@@ -150,7 +150,7 @@ vec3 getFactors(OrbitTrap trap) {
     float flow = sin(trap.sumDist * 0.2) * 0.5 + 0.5;
 
     // Z: Detail (Iterations)
-    float detail = float(trap.iterations) / float(max(maxIterations, 1));
+    float detail = float(trap.iterations) / float(max(maxIterations + gExtraIterations, 1));
 
     return vec3(structural, flow, detail);
 }

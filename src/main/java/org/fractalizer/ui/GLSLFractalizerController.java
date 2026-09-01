@@ -145,7 +145,10 @@ public class GLSLFractalizerController implements RenderController {
             if (ngp.isDirty() || !engine.hasProgram("nodegraph")) {
                 String glsl = ngp.recompile();
                 if (glsl != null) {
-                    String err = engine.loadCustomFractalShader("nodegraph", glsl);
+                    // Deep-zoom LOD is compiled in only when enabled: the mutable global it
+                    // needs is otherwise read inside every DE loop and blocks constant folding.
+                    String defines = ngp.getDetailLOD() > 0f ? "#define DETAIL_LOD\n" : "";
+                    String err = engine.loadCustomFractalShader("nodegraph", glsl, defines);
                     if (err != null) {
                         System.err.println("Node graph shader error: " + err);
                     }
@@ -1046,6 +1049,8 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("fudgeFactor", params.getFudgeFactor());
             uniforms.put("refinementSteps", params.getRefinementSteps());
             uniforms.put("stepRelaxation", params.getStepRelaxation());
+            uniforms.put("detailLOD", params.getDetailLOD());
+            uniforms.put("detailLODMax", params.getDetailLODMax());
 
             // Lighting
             uniforms.put("lightDir", new float[]{

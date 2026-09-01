@@ -53,7 +53,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
 
     vec3 offset = vec3(1.0);
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         // Tetrahedral symmetry folds
         if (z.x + z.y < 0.0) z.xy = -z.yx;
         if (z.x + z.z < 0.0) z.xz = -z.zx;
@@ -70,7 +70,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
         trap.iterations = i + 1;
     }
 
-    return (ifsBasePrimitive(z, basePrimitive) - 2.0) * pow(s, -float(maxIterations));
+    return (ifsBasePrimitive(z, basePrimitive) - 2.0) * pow(s, -float(maxIterations + gExtraIterations));
 }
 
 // ============================================================================
@@ -82,14 +82,14 @@ float DE_simple(vec3 pos) {
     float s = scale;
     vec3 offset = vec3(1.0);
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         if (z.x + z.y < 0.0) z.xy = -z.yx;
         if (z.x + z.z < 0.0) z.xz = -z.zx;
         if (z.y + z.z < 0.0) z.yz = -z.zy;
         z = z * s - offset * (s - 1.0);
     }
 
-    return (ifsBasePrimitive(z, basePrimitive) - 2.0) * pow(s, -float(maxIterations));
+    return (ifsBasePrimitive(z, basePrimitive) - 2.0) * pow(s, -float(maxIterations + gExtraIterations));
 }
 
 // ============================================================================
@@ -103,7 +103,7 @@ vec3 getFactors(OrbitTrap trap) {
 
     float structural = 1.0 - exp(-trap.minDist * 0.8);
     float flow = (trapX * 0.5 + trapY * 1.0 + trapZ * 1.5) / 3.0;
-    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
+    float iterNorm = float(trap.iterations) / float(max(maxIterations + gExtraIterations, 1));
 
     return vec3(structural, flow, iterNorm);
 }

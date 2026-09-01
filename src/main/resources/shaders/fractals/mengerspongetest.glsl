@@ -59,7 +59,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
     vec3 z = pos;
     float dr = 1.0;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         // Per-iteration rotation (negate: rotating space vs object)
         z = rotateXZ(z, -rotX, -rotZ);
 
@@ -101,7 +101,7 @@ float DE_simple(vec3 pos) {
     vec3 z = pos;
     float dr = 1.0;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         z = rotateXZ(z, -rotX, -rotZ);
 
         z = abs(z);
@@ -129,6 +129,6 @@ vec3 getFactors(OrbitTrap trap) {
     float structural = 1.0 - exp(-trap.minDist * 0.5);
     float p = (trap.planeX + trap.planeY + trap.planeZ) * 0.33;
     float flow = sin(p * 5.0) * 0.5 + 0.5;
-    float detail = float(trap.iterations) / float(max(maxIterations, 1));
+    float detail = float(trap.iterations) / float(max(maxIterations + gExtraIterations, 1));
     return vec3(structural, flow, detail);
 }

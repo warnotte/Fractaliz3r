@@ -275,19 +275,32 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
 // Ambient Occlusion
 // ============================================================================
 
+// Probe radii follow the view instead of being pinned to world units. The
+// original 0.01..0.13 range is right for the default framing but spans many
+// screen-heights during a deep dive, which saturates the occlusion sum into a
+// flat tint. Capping the outer radius to a fraction of the visible extent keeps
+// the probes inside the structure actually on screen; the sum is length-scaled,
+// so it is renormalised to the reference radius to keep AO strength unchanged.
+const float AO_REF_RADIUS = 0.13;
+
 float calcAO(vec3 pos, vec3 normal) {
     float ao = 0.0;
     float scale = 1.0;
 
     int steps = int(float(aoSteps) * qualityMultiplier);
 
+    float maxR = min(AO_REF_RADIUS, 0.12 * viewScaleAt(length(pos - camPos)));
+    float minR = maxR * (0.01 / AO_REF_RADIUS);
+
     for (int i = 0; i < steps; i++) {
-        float hr = 0.01 + 0.12 * float(i + 1) / float(steps);
+        float hr = minR + (maxR - minR) * float(i + 1) / float(steps);
         vec3 aoPos = pos + normal * hr;
         float dd = sceneDE_simple(aoPos);
         ao += (hr - dd) * scale;
         scale *= 0.6;
     }
+
+    ao *= AO_REF_RADIUS / max(maxR, 1e-9);
 
     return clamp(1.0 - aoIntensity * ao, 0.0, 1.0);
 }
@@ -469,7 +482,7 @@ vec3 computeVolumetricFog(Ray ray, float hitDist, vec3 surfaceColor, out float e
         if (d > hitDist) break;
         
         vec3 p = ray.origin + ray.direction * d;
-        float shadowBias = 0.01 + d * 0.005;
+        float shadowBias = surfaceBias(d);
         float sh = calcShadow(p, light, shadowBias, 10.0);
         volAccum += sh * exp(-d * fogDensity) * stepSize;
     }
@@ -503,7 +516,7 @@ vec3 getExtraLightPositionWS() {
 
 float calcExtraLightVisibility(vec3 hitPos, vec3 normal, vec3 lightDirNorm, float maxDistance, float surfaceDist) {
     Ray shadowRay;
-    float shadowBias = 0.005 + surfaceDist * 0.01;
+    float shadowBias = surfaceBias(surfaceDist);
     shadowRay.origin = hitPos + normal * shadowBias;
     shadowRay.direction = lightDirNorm;
     vec3 shPos; float shDist; int shMat;
@@ -656,7 +669,7 @@ vec3 shadeSimple(vec3 hitPos, Ray ray, int matType) {
 #endif
 
     float NdotL = max(dot(normal, light), 0.0);
-    float shadowBias = 0.005 + length(hitPos - camPos) * 0.01;
+    float shadowBias = surfaceBias(length(hitPos - camPos));
     float shadow = calcShadow(hitPos + normal * shadowBias, light, shadowBias, 15.0);
     float ao = calcAO(hitPos, normal);
 
@@ -703,7 +716,7 @@ vec3 shade(RayHit hit, Ray ray) {
         vec3 reflectDir = reflect(ray.direction, normal);
         vec3 envReflect = sampleEnvironment(reflectDir);
         float fr = fresnel(viewDir, normal, 5.0);
-        float shadow = calcShadow(hit.pos + normal * 0.01, normalize(lightDir), 0.01, 15.0);
+        float shadow = calcShadow(hit.pos + normal * surfaceBias(hit.dist), normalize(lightDir), surfaceBias(hit.dist), 15.0);
         return mix(oceanColor, envReflect, fr * 0.8) * shadow;
     }
 
@@ -748,7 +761,7 @@ vec3 shade(RayHit hit, Ray ray) {
     float spec = pow(max(dot(normal, halfDir), 0.0), specularPower);
 
     // Shadow
-    float shadowBias = 0.005 + hit.dist * 0.01;
+    float shadowBias = surfaceBias(hit.dist);
     float shadow = calcShadow(hit.pos + normal * shadowBias, light, shadowBias, 15.0);
 
     // Ambient occlusion
@@ -1177,7 +1190,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                 float NdotL = max(dot(faceNormal, sunSampleDir), 0.0);
                 if (NdotL > 0.0) {
                     Ray shadowRay;
-                    float shadowBias = 0.005 + hitDist * 0.01;
+                    float shadowBias = surfaceBias(hitDist);
                     shadowRay.origin = hitPos + faceNormal * shadowBias;
                     shadowRay.direction = sunSampleDir;
                     vec3 shPos; float shDist; int shMat;
@@ -1229,7 +1242,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                 float NdotL = max(dot(faceNormal, sunSampleDir), 0.0);
                 if (NdotL > 0.0) {
                     Ray shadowRay;
-                    float shadowBias = 0.005 + hitDist * 0.01;
+                    float shadowBias = surfaceBias(hitDist);
                     shadowRay.origin = hitPos + faceNormal * shadowBias;
                     shadowRay.direction = sunSampleDir;
                     vec3 shPos; float shDist; int shMat;
@@ -1477,7 +1490,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 float NdotL = max(dot(faceNormal, sunSampleDir), 0.0);
                 if (NdotL > 0.0) {
                     Ray shadowRay;
-                    float shadowBias = 0.005 + hitDist * 0.01;
+                    float shadowBias = surfaceBias(hitDist);
                     shadowRay.origin = hitPos + faceNormal * shadowBias;
                     shadowRay.direction = sunSampleDir;
                     vec3 shPos; float shDist; int shMat;
@@ -1576,7 +1589,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 float NdotL = max(dot(faceNormal, sunSampleDir), 0.0);
                 if (NdotL > 0.0) {
                     Ray shadowRay;
-                    float shadowBias = 0.005 + hitDist * 0.01;
+                    float shadowBias = surfaceBias(hitDist);
                     shadowRay.origin = hitPos + faceNormal * shadowBias;
                     shadowRay.direction = sunSampleDir;
                     vec3 shPos; float shDist; int shMat;
@@ -1761,6 +1774,14 @@ void main() {
     vec2 fullUV = tileOffset + tileUV * tileScale;                 // [0,1] within full image
     vec2 screenUV = fullUV * 2.0 - 1.0 + jitter * 2.0;           // [-1,1] NDC + jitter
 
+    // Deep-zoom iteration LOD: how close the camera sits to the surface sets how
+    // fine the structure on screen is, and therefore how many DE iterations are
+    // needed to still resolve it. Probed at the base budget so the anchor itself
+    // does not depend on the result.
+#ifdef DETAIL_LOD
+    gExtraIterations = zoomDetailIterations(sceneDE_simple(camPos));
+#endif
+
     // Get camera ray (with optional DoF)
     Ray ray = getCameraRayDOF(screenUV, seed, bnDof);
 
@@ -1801,7 +1822,7 @@ void main() {
             DE(hit.pos, hit.trap);
 
             vec3 normal = calcNormal(hit.pos);
-            float shadowBias = 0.001 + hit.dist * 0.001;
+            float shadowBias = surfaceBias(hit.dist);
             float shadow = calcShadow(hit.pos + normal * shadowBias, normalize(lightDir), shadowBias, 15.0);
             float ao = calcAO(hit.pos, normal);
 

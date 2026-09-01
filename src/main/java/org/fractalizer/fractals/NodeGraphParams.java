@@ -75,6 +75,15 @@ public class NodeGraphParams extends AbstractFractalParams {
         return dirty;
     }
 
+    /** Toggling the deep-zoom LOD on or off changes a compile-time define, so the
+     *  program has to be rebuilt — a plain uniform update would not take effect. */
+    @Override
+    public void setDetailLOD(float v) {
+        boolean wasEnabled = detailLOD > 0f;
+        super.setDetailLOD(v);
+        if ((detailLOD > 0f) != wasEnabled) markDirty();
+    }
+
     public void markDirty() {
         this.dirty = true;
     }

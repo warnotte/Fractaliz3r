@@ -19,6 +19,7 @@ uniform int maxIterations;
 uniform float bailout;
 uniform float radiolaria;
 uniform float radiolariaFactor;
+uniform vec3 juliaC;   // (0,0,0) = Mandelbrot mode; otherwise the Julia constant
 
 // ============================================================================
 // Orbit Trap Structure
@@ -37,6 +38,12 @@ struct OrbitTrap {
 // ============================================================================
 
 float DE(vec3 pos, out OrbitTrap trap) {
+    // Mandelbrot mode adds the sample position each iteration, which leaves large
+    // analytic bulbs whose surface is locally smooth: dive into one and the detail
+    // simply is not there. A fixed Julia constant makes every point of the set a
+    // boundary point, so structure survives arbitrarily deep zooms.
+    bool isJulia = dot(juliaC, juliaC) > 0.0001;
+    vec3 c = isJulia ? juliaC : pos;
     vec3 z = pos;
     float dr = 1.0;
     float r = 0.0;
@@ -47,7 +54,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
     trap.planeZ = 1e10;
     trap.iterations = 0;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         r = length(z);
 
         if (r > bailout) break;
@@ -70,7 +77,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
             sin(theta) * sin(phi),
             cos(theta)
         );
-        z += pos;
+        z += c;
 
         // Radiolaria mutation (Tom Beddard): Y-axis clamping for skeletal/hollow structures
         if (radiolaria > 0.0) {
@@ -103,11 +110,13 @@ float DE(vec3 pos, out OrbitTrap trap) {
 // ============================================================================
 
 float DE_simple(vec3 pos) {
+    bool isJulia = dot(juliaC, juliaC) > 0.0001;
+    vec3 c = isJulia ? juliaC : pos;
     vec3 z = pos;
     float dr = 1.0;
     float r = 0.0;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         r = length(z);
         if (r > bailout) break;
 
@@ -124,7 +133,7 @@ float DE_simple(vec3 pos) {
             sin(theta) * sin(phi),
             cos(theta)
         );
-        z += pos;
+        z += c;
 
         // Radiolaria mutation
         if (radiolaria > 0.0) {
@@ -164,7 +173,7 @@ vec3 getFactors(OrbitTrap trap) {
     float flow = (trapX * 0.5 + trapY * 1.0 + trapZ * 1.5) / 3.0;
 
     // Z: Detail / Depth (Iterations)
-    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
+    float iterNorm = float(trap.iterations) / float(max(maxIterations + gExtraIterations, 1));
 
     return vec3(structural, flow, iterNorm);
 }

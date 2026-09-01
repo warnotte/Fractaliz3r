@@ -56,7 +56,7 @@ float polyDE(vec3 p, out OrbitTrap trap) {
     vec3 scale_offset = offset * (scale - 1.0);
     
     int i;
-    for (i = 0; i < maxIterations; i++) {
+    for (i = 0; i < maxIterations + gExtraIterations; i++) {
         w *= fractalRotation1;
 
         if (polyType == 0) { // Octahedral
@@ -143,6 +143,6 @@ vec3 getFactors(OrbitTrap trap) {
     float flow = sin(p * 2.0) * 0.5 + 0.5;
     
     // Detail: Iteration count
-    float detail = float(trap.iterations) / float(max(maxIterations, 1));
+    float detail = float(trap.iterations) / float(max(maxIterations + gExtraIterations, 1));
     return vec3(structural, flow, detail);
 }

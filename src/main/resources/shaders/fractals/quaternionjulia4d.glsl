@@ -104,7 +104,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
 
     float r2 = dot(q, q);
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         if (r2 > bailout) break;
 
         dq = 2.0 * qmul(q, dq);
@@ -139,7 +139,7 @@ float DE_simple(vec3 pos) {
 
     float r2 = dot(q, q);
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         if (r2 > bailout) break;
 
         dq = 2.0 * qmul(q, dq);
@@ -162,6 +162,6 @@ float DE_simple(vec3 pos) {
 vec3 getFactors(OrbitTrap trap) {
     float structural = clamp(trap.lastDist * 0.2, 0.0, 1.0);
     float flow = smoothstep(0.0, 2.0, trap.avgDist);
-    float detail = float(trap.iterations) / float(max(maxIterations, 1));
+    float detail = float(trap.iterations) / float(max(maxIterations + gExtraIterations, 1));
     return vec3(structural, flow, detail);
 }

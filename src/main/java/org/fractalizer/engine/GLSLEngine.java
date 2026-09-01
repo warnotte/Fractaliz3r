@@ -162,13 +162,21 @@ public class GLSLEngine implements AutoCloseable {
      * @return null on success, error message on failure
      */
     public String loadCustomFractalShader(String name, String userSource) {
+        return loadCustomFractalShader(name, userSource, "");
+    }
+
+    /**
+     * @param extraDefines lines injected between {@code #version} and common.glsl, for
+     *                     features that have to be compiled out entirely when unused.
+     */
+    public String loadCustomFractalShader(String name, String userSource, String extraDefines) {
         String[] error = {null};
         runOnGLThread(() -> {
             try {
                 String vertexSource = loadResource("/shaders/fullscreen.vert");
                 String commonSource = stripVersion(loadResource("/shaders/common.glsl"));
                 String raytracerSource = stripVersion(loadResource("/shaders/raytracer.glsl"));
-                String fragmentSource = "#version 430 core\n" + commonSource + "\n" + userSource + "\n" + raytracerSource;
+                String fragmentSource = "#version 430 core\n" + extraDefines + commonSource + "\n" + userSource + "\n" + raytracerSource;
                 ShaderProgram old = programs.remove(name);
                 if (old != null) old.delete();
                 ShaderProgram program = new ShaderProgram(vertexSource, fragmentSource);

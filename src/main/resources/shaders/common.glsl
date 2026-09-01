@@ -81,6 +81,8 @@ uniform float fudgeFactor;      // DE step multiplier (default 1.0)
 uniform int refinementSteps;    // Binary search refinement after hit (0 = disabled)
 uniform float stepRelaxation;   // Over-relaxation factor (0 = disabled, up to 1.0)
 
+uniform float detailLOD;      // extra DE iterations per octave of zoom (0 = off)
+uniform int detailLODMax;     // ceiling on those extra iterations
 uniform float shadowSoftness;
 uniform int shadowSteps;
 uniform int aoSteps;
@@ -1320,4 +1322,74 @@ float computeAdaptiveEpsilon(float totalDist, float baseEps, float quality) {
 float computeStep(float dist, float quality, float stepFactor) {
     float factor = stepFactor / max(1.0, quality * 0.5);
     return dist * factor;
+}
+
+// ============================================================================
+// View-relative scales
+// ============================================================================
+// Diving into a fractal shrinks the world-space size of what the frame shows,
+// but fixed world-space radii (AO probe distances, secondary-ray bias) do not
+// shrink with it. Past a certain zoom they span the whole visible area: the
+// occlusion term saturates to flat grey and shadow rays start beyond every
+// nearby fold, so fine structure loses its shading and the image both flattens
+// and darkens. These helpers express such radii relative to the view instead.
+
+/** World-space half-height of the view frustum at distance d from the camera. */
+float viewScaleAt(float d) {
+    return d * tan(radians(fov) * 0.5);
+}
+
+/** World-space size of one pixel at distance d from the camera. */
+float pixelScaleAt(float d) {
+    if (pixelRadius > 0.0) return pixelRadius * d;
+    return 2.0 * viewScaleAt(d) / max(resolution.y, 1.0);
+}
+
+/** Offset for secondary rays leaving a surface.
+ *
+ *  The legacy `0.005 + 0.01 * d` was well calibrated for ordinary framings but its
+ *  constant term does not shrink, so during a dive it dwarfs everything on screen and
+ *  contact shadows disappear. `0.0125 * d` reproduces it at the usual hit distances
+ *  while scaling all the way down.
+ *
+ *  Sizing this purely from the pixel footprint (the hit-point accuracy) is tempting
+ *  but wrong: that term keeps shrinking as resolution rises, and at 720p the rays
+ *  then start so close to the surface that they burn extra march steps escaping the
+ *  near field and catch far more self-shadowing — measured +38% path-tracer time and
+ *  -15% luminance. It is kept only as a `max` guard, so low resolutions (where a hit
+ *  really is imprecise) cannot fall below their own footprint and pick up acne. */
+float surfaceBias(float d) {
+    return max(max(3.0 * pixelScaleAt(d), 0.0125 * d), 1e-5);
+}
+
+// ============================================================================
+// Deep-zoom iteration LOD
+// ============================================================================
+// A distance estimator run with a fixed iteration budget stops resolving
+// structure below a scale set by that budget. The escape-time boundary it does
+// resolve is a smooth manifold, so a deep dive eventually lands on featureless
+// drapes: the detail is missing from the geometry, not from the lighting. Every
+// extra iteration roughly halves the scale at which structure survives, so the
+// budget is raised by a fixed number of iterations per octave of zoom.
+//
+// Set once per pixel before marching; fractal DEs add it to their own
+// maxIterations.
+//
+// Gated by DETAIL_LOD, injected before this file when the feature is enabled. A
+// *mutable* global read inside the DE loop stops the compiler folding the loop
+// bound, which costs ~30% on the path tracer even while the value is zero; as a
+// constant it folds away and the DEs compile exactly as they did before.
+#ifdef DETAIL_LOD
+int gExtraIterations = 0;
+#else
+const int gExtraIterations = 0;
+#endif
+
+/** Extra iterations to spend given the camera's clearance to the nearest surface.
+ *  Clearance below one world unit is the zoomed-in regime; each halving of it is
+ *  one octave. */
+int zoomDetailIterations(float clearance) {
+    if (detailLOD <= 0.0) return 0;
+    float octaves = max(0.0, -log2(max(clearance, 1e-7)));
+    return int(min(detailLOD * octaves, float(detailLODMax)));
 }

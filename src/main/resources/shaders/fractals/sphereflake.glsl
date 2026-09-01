@@ -69,7 +69,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
     float minDE = ifsBasePrimitive(z, basePrimitive);
     int hitLevel = 0;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         // Fold into positive octant (octahedral symmetry)
         z = abs(z);
 
@@ -136,7 +136,7 @@ float DE_simple(vec3 pos) {
     // Parent shape (level 0)
     float minDE = ifsBasePrimitive(z, basePrimitive);
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         z = abs(z);
 
         if (z.x < z.y) z.xy = z.yx;
@@ -178,7 +178,7 @@ vec3 getFactors(OrbitTrap trap) {
 
     float structural = 1.0 - exp(-trap.minDist * 20.0);
     float flow = (trapX * 0.5 + trapY * 1.0 + trapZ * 1.5) / 3.0;
-    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
+    float iterNorm = float(trap.iterations) / float(max(maxIterations + gExtraIterations, 1));
 
     return vec3(structural, flow, iterNorm);
 }

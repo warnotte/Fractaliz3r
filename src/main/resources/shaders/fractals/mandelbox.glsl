@@ -69,7 +69,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
     trap.plane = vec3(0.0);
     trap.iterations = 0;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         // Box fold
         vec3 oldZ = z;
         z = boxFold(z, foldingLimit);
@@ -112,7 +112,7 @@ float DE_simple(vec3 pos) {
     vec3 offset = pos;
     float dz = 1.0;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         z = boxFold(z, foldingLimit);
         sphereFold(z, dz);
         z = z * scale + offset;
@@ -137,7 +137,7 @@ vec3 getFactors(OrbitTrap trap) {
     float flow = sin(p * 2.0) * 0.5 + 0.5;
 
     // Z: Detail (Iterations)
-    float detail = float(trap.iterations) / float(max(maxIterations, 1));
+    float detail = float(trap.iterations) / float(max(maxIterations + gExtraIterations, 1));
 
     return vec3(structural, flow, detail);
 }

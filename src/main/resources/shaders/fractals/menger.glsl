@@ -78,7 +78,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
     float s = 1.0;
     float rad = radians(rotAngle);
 
-    for (int m = 0; m < maxIterations; m++) {
+    for (int m = 0; m < maxIterations + gExtraIterations; m++) {
         vec3 rp = iterRotate(pos, rad * float(m + 1));
         vec3 a = glsl_mod3(rp * s, 2.0) - offset;
         s *= scale;
@@ -93,7 +93,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
         trap.iterations = m + 1;
     }
 
-    trap.trap /= float(maxIterations);
+    trap.trap /= float(maxIterations + gExtraIterations);
 
     return d;
 }
@@ -107,7 +107,7 @@ float DE_simple(vec3 pos) {
     float s = 1.0;
     float rad = radians(rotAngle);
 
-    for (int m = 0; m < maxIterations; m++) {
+    for (int m = 0; m < maxIterations + gExtraIterations; m++) {
         vec3 rp = iterRotate(pos, rad * float(m + 1));
         vec3 a = glsl_mod3(rp * s, 2.0) - offset;
         s *= scale;
@@ -132,7 +132,7 @@ vec3 getFactors(OrbitTrap trap) {
     float flow = sin(p * 5.0) * 0.5 + 0.5;
 
     // Z: Detail (Iterations)
-    float detail = float(trap.iterations) / float(max(maxIterations, 1));
+    float detail = float(trap.iterations) / float(max(maxIterations + gExtraIterations, 1));
 
     return vec3(structural, flow, detail);
 }

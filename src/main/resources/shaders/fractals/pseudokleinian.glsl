@@ -50,7 +50,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
     trap.planeZ = 1e10;
     trap.iterations = 0;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         // Fixed-point convergence check
         if (ap == p) break;
         ap = p;
@@ -92,7 +92,7 @@ float DE_simple(vec3 pos) {
     float DEfactor = 1.5;
     vec3 ap = p + 1.0;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         if (ap == p) break;
         ap = p;
         p = 2.0 * clamp(p, -CSize, CSize) - p;
@@ -117,7 +117,7 @@ vec3 getFactors(OrbitTrap trap) {
 
     float structural = 1.0 - exp(-trap.minDist * 0.5);
     float flow = (trapX * 0.5 + trapY * 1.0 + trapZ * 1.5) / 3.0;
-    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
+    float iterNorm = float(trap.iterations) / float(max(maxIterations + gExtraIterations, 1));
 
     return vec3(structural, flow, iterNorm);
 }

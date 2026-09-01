@@ -184,6 +184,8 @@ public class FractalConfig {
 
         // Raymarcher improvements
         public boolean coneTracingEnabled = true;
+        public float detailLOD = 0.0f;
+        public int detailLODMax = 24;
         public float fudgeFactor = 1.0f;
         public int refinementSteps = 4;
         public float stepRelaxation = 0.0f;
@@ -375,6 +377,8 @@ public class FractalConfig {
         config.effects.shutterAngle = params.getShutterAngle();
         config.effects.neeEnabled = params.isNeeEnabled();
         config.effects.coneTracingEnabled = params.isConeTracingEnabled();
+        config.effects.detailLOD = params.getDetailLOD();
+        config.effects.detailLODMax = params.getDetailLODMax();
         config.effects.fudgeFactor = params.getFudgeFactor();
         config.effects.refinementSteps = params.getRefinementSteps();
         config.effects.stepRelaxation = params.getStepRelaxation();
@@ -547,6 +551,8 @@ public class FractalConfig {
         params.setShutterAngle(effects.shutterAngle);
         params.setNeeEnabled(effects.neeEnabled);
         params.setConeTracingEnabled(effects.coneTracingEnabled);
+        params.setDetailLOD(effects.detailLOD);
+        params.setDetailLODMax(effects.detailLODMax);
         params.setFudgeFactor(effects.fudgeFactor);
         params.setRefinementSteps(effects.refinementSteps);
         params.setStepRelaxation(effects.stepRelaxation);
@@ -622,6 +628,9 @@ public class FractalConfig {
             map.put("bailout", mb.getBailout());
             map.put("radiolaria", mb.getRadiolaria());
             map.put("radiolariaFactor", mb.getRadiolariaFactor());
+            map.put("juliaCx", mb.getJuliaCx());
+            map.put("juliaCy", mb.getJuliaCy());
+            map.put("juliaCz", mb.getJuliaCz());
         } else if (params instanceof MandelboxParams mbx) {
             map.put("scale", mbx.getScale());
             map.put("minRadius", mbx.getMinRadius());
@@ -755,6 +764,9 @@ public class FractalConfig {
             if (map.containsKey("bailout")) mb.setBailout(getFloat(map, "bailout"));
             if (map.containsKey("radiolaria")) mb.setRadiolaria(getFloat(map, "radiolaria"));
             if (map.containsKey("radiolariaFactor")) mb.setRadiolariaFactor(getFloat(map, "radiolariaFactor"));
+            if (map.containsKey("juliaCx")) mb.setJuliaCx(getFloat(map, "juliaCx"));
+            if (map.containsKey("juliaCy")) mb.setJuliaCy(getFloat(map, "juliaCy"));
+            if (map.containsKey("juliaCz")) mb.setJuliaCz(getFloat(map, "juliaCz"));
         } else if (params instanceof MandelboxParams mbx) {
             if (map.containsKey("scale")) mbx.setScale(getFloat(map, "scale"));
             if (map.containsKey("minRadius")) mbx.setMinRadius(getFloat(map, "minRadius"));

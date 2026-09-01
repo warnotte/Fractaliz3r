@@ -151,6 +151,7 @@ public class GraphCompiler {
             uniforms.put(prefix + "bailout", p.getBailout());
             uniforms.put(prefix + "radiolaria", p.getRadiolaria());
             uniforms.put(prefix + "radiolariaFactor", p.getRadiolariaFactor());
+            uniforms.put(prefix + "juliaC", new float[]{p.getJuliaCx(), p.getJuliaCy(), p.getJuliaCz()});
         } else if (params instanceof MandelboxParams p) {
             uniforms.put(prefix + "scale", p.getScale());
             uniforms.put(prefix + "minRadius", p.getMinRadius());

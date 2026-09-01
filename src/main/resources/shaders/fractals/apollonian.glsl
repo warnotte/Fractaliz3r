@@ -55,7 +55,7 @@ float DE(vec3 pos, out OrbitTrap trap) {
     trap.planeZ = 1e10;
     trap.iterations = 0;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         // Tetrahedral symmetry folds
         if (z.x + z.y < 0.0) z.xy = -z.yx;
         if (z.x + z.z < 0.0) z.xz = -z.zx;
@@ -94,7 +94,7 @@ float DE_simple(vec3 pos) {
     vec3 offset = vec3(1.0);
     float fr2 = foldRadius * foldRadius;
 
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i < maxIterations + gExtraIterations; i++) {
         if (z.x + z.y < 0.0) z.xy = -z.yx;
         if (z.x + z.z < 0.0) z.xz = -z.zx;
         if (z.y + z.z < 0.0) z.yz = -z.zy;
@@ -124,7 +124,7 @@ vec3 getFactors(OrbitTrap trap) {
 
     float structural = 1.0 - exp(-trap.minDist * 0.6);
     float flow = (trapX * 0.5 + trapY * 1.0 + trapZ * 1.5) / 3.0;
-    float iterNorm = float(trap.iterations) / float(max(maxIterations, 1));
+    float iterNorm = float(trap.iterations) / float(max(maxIterations + gExtraIterations, 1));
 
     return vec3(structural, flow, iterNorm);
 }
