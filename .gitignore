@@ -46,3 +46,13 @@ sprint1_compare/
 
 ### Fractal navigator / traveller output ###
 nav/
+nav_*/
+
+### Deep-zoom detail lab output ###
+dzl*/
+
+### Preset preview renders (regenerate with PresetForge) ###
+presets_preview/
+
+### maven-shade leftover ###
+dependency-reduced-pom.xml

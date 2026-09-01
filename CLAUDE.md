@@ -32,6 +32,15 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.RenderRegression" -
 # Autonomous "traveller": global view -> fine-detail framing on any fractal (output to nav/, gitignored).
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.FractalNavigator" -Dexec.args="MANDELBULB nav 640x360 12 travel 8 0.6 50"
 #   modes: travel (auto-frame -> depth-guided target -> dive -> sharpness sweet-spot) | fly (eased flight -> mp4) | manifest (write detail cameras) | list (explicit cameras)
+#   any "name=value" arg overrides a param before travelling, e.g. juliaCx=0.42 juliaCy=0.18
+
+# Deep-zoom detail lab: same cameras, several parameter variants, quantitative surface metrics
+# (detail = Laplacian variance, edges%, lum, contrast) -> proves a deep-zoom change instead of eyeballing.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DeepZoomLab" -Dexec.args="MANDELBOX dzl 480x270 4 nav/mbox_ladder.txt detailLOD=0,2,4"
+
+# Demo presets: build .frac files + render a preview of each so candidates can be judged.
+# Cameras come from FractalNavigator sweet spots, not default global framings.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PresetForge" -Dexec.args="presets presets_preview 960x540 48"
 ```
 
 ## Project Architecture

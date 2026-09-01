@@ -648,6 +648,23 @@ public class SceneBuilder {
     // Fractal-specific params
     // ========================================================================
 
+    /** Replace the palette gradient. Each stop is {position, r, g, b} in 0..1.
+     *  This is what actually colours the fractal — paletteIndex does not. */
+    public SceneBuilder gradient(float[]... stops) {
+        List<FractalConfig.GradientStopConfig> list = new ArrayList<>();
+        for (float[] st : stops) list.add(gs(st[0], st[1], st[2], st[3]));
+        config.material.gradientStops = list;
+        return this;
+    }
+
+    /** Deep-zoom iteration LOD: extra DE iterations per octave of camera clearance,
+     *  and their ceiling. 0 = off (the default), which compiles the feature out. */
+    public SceneBuilder detailLOD(float perOctave, int ceiling) {
+        config.effects.detailLOD = perOctave;
+        config.effects.detailLODMax = ceiling;
+        return this;
+    }
+
     public SceneBuilder param(String name, Object value) {
         config.fractalParams.put(name, value);
         return this;

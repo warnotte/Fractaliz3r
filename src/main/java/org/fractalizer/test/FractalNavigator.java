@@ -41,6 +41,7 @@ public class FractalNavigator {
     static int W, H, samples;
 
     public static void main(String[] args) throws Exception {
+        args = extractOverrides(args);
         if (args[0].equalsIgnoreCase("manifest")) { generateManifest(args); return; }
         String spec = args[0];                       // FractalType name OR a .frac file
         outDir = args[1];
@@ -69,6 +70,7 @@ public class FractalNavigator {
             params = (AbstractFractalParams) controller.getParams();
         }
         params.setPathTracingEnabled(false);
+        applyOverrides();
         camera = params.getCamera();
 
         if (args.length > 4 && (args[4].equalsIgnoreCase("travel") || args[4].equalsIgnoreCase("fly"))) {
@@ -355,6 +357,54 @@ public class FractalNavigator {
             if (img.getRaster().getSample(x, y, 0) / 65535.0 > 0.02) hit++; // >0.02 => not background
         }
         return new int[]{ Math.round(100f * hit / n) };
+    }
+
+    // ---- parameter overrides -----------------------------------------------
+    // Any "name=value" argument is pulled out of the positional list and applied to
+    // the params before travelling, so a variant (a Julia constant, a different
+    // power) can be framed and dived without authoring a .frac for it first.
+
+    static final java.util.Map<String, String> overrides = new java.util.LinkedHashMap<>();
+
+    static String[] extractOverrides(String[] args) {
+        java.util.List<String> positional = new java.util.ArrayList<>();
+        for (String a : args) {
+            int eq = a.indexOf('=');
+            if (eq > 0 && a.chars().noneMatch(Character::isWhitespace) && !a.toLowerCase().endsWith(".frac")) {
+                overrides.put(a.substring(0, eq), a.substring(eq + 1));
+            } else {
+                positional.add(a);
+            }
+        }
+        return positional.toArray(new String[0]);
+    }
+
+    /** Apply overrides to the params, or to the node graph leaf params when the setter
+     *  is fractal-specific (every type now routes through NodeGraphParams). */
+    static void applyOverrides() throws Exception {
+        if (overrides.isEmpty()) return;
+        Object[] targets = { params, (params instanceof org.fractalizer.fractals.NodeGraphParams ngp)
+                ? ngp.getRootFractalParams() : null };
+        for (var e : overrides.entrySet()) {
+            String setter = "set" + Character.toUpperCase(e.getKey().charAt(0)) + e.getKey().substring(1);
+            boolean applied = false;
+            for (Object target : targets) {
+                if (target == null || applied) continue;
+                for (java.lang.reflect.Method m : target.getClass().getMethods()) {
+                    if (!m.getName().equals(setter) || m.getParameterCount() != 1) continue;
+                    Class<?> t = m.getParameterTypes()[0];
+                    if (t == int.class)          m.invoke(target, Integer.parseInt(e.getValue()));
+                    else if (t == float.class)   m.invoke(target, Float.parseFloat(e.getValue()));
+                    else if (t == double.class)  m.invoke(target, Double.parseDouble(e.getValue()));
+                    else if (t == boolean.class) m.invoke(target, Boolean.parseBoolean(e.getValue()));
+                    else continue;
+                    applied = true;
+                    break;
+                }
+            }
+            if (!applied) throw new IllegalArgumentException("No setter for override: " + e.getKey());
+            System.out.printf("  override %s = %s%n", e.getKey(), e.getValue());
+        }
     }
 
     // ---- vec helpers -------------------------------------------------------
