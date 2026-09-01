@@ -1,0 +1,630 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-03-02T23:03:40.111858400Z",
+  "name": null,
+  "description": null,
+  "fractalType": "NODE_GRAPH",
+  "camera": {
+    "position": [
+      0.0,
+      0.0,
+      -4.5
+    ],
+    "quaternion": [
+      0.999764,
+      0.01466543,
+      -0.01602424,
+      2.339343E-4
+    ],
+    "fov": 60.0,
+    "moveSpeed": 0.008954307
+  },
+  "rendering": {
+    "maxRaySteps": 400,
+    "epsilon": 1.0E-5,
+    "qualityMultiplier": 1.0,
+    "renderMode": 0,
+    "shadowSoftness": 16.0,
+    "shadowSteps": 128,
+    "aoSteps": 5,
+    "aoIntensity": 0.5,
+    "glowIntensity": 0.15,
+    "specularIntensity": 0.5,
+    "specularPower": 32.0
+  },
+  "lighting": {
+    "direction": [
+      2.0,
+      3.0,
+      -2.0
+    ],
+    "color": [
+      1.0,
+      0.95,
+      0.9
+    ],
+    "intensity": 1.2,
+    "ambientColor": [
+      0.1,
+      0.15,
+      0.25
+    ],
+    "ambientIntensity": 0.3,
+    "extraType": 0,
+    "extraAttachToCamera": true,
+    "extraPosition": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "extraDirection": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "extraColor": [
+      1.0,
+      0.95,
+      0.9
+    ],
+    "extraIntensity": 1.5,
+    "extraRange": 2.0,
+    "extraAreaRadius": 0.03,
+    "extraConeAngle": 35.0,
+    "extraConeSoftness": 0.3
+  },
+  "material": {
+    "hue": [
+      0.0,
+      0.33,
+      0.67
+    ],
+    "paletteIndex": 0,
+    "colorStrength": 2.0912678,
+    "paletteOffset": 0.0,
+    "trapMode": 0,
+    "type": 0,
+    "metalness": 0.0,
+    "ior": 1.5,
+    "gradientStops": [
+      {
+        "position": 0.0,
+        "r": 0.03921568766236305,
+        "g": 0.0,
+        "b": 0.0784313753247261
+      },
+      {
+        "position": 0.25,
+        "r": 0.7058823704719543,
+        "g": 0.0,
+        "b": 0.7843137383460999
+      },
+      {
+        "position": 0.5,
+        "r": 0.0,
+        "g": 0.7843137383460999,
+        "b": 1.0
+      },
+      {
+        "position": 0.75,
+        "r": 1.0,
+        "g": 0.0,
+        "b": 0.3921568691730499
+      },
+      {
+        "position": 1.0,
+        "r": 1.0,
+        "g": 1.0,
+        "b": 0.19607843458652496
+      }
+    ],
+    "reflectionIntensity": 0.0,
+    "emissiveIntensity": 0.0,
+    "sssIntensity": 0.16120906,
+    "sssRadius": 0.06544081,
+    "sssColor": [
+      1.0,
+      0.4,
+      0.2
+    ]
+  },
+  "effects": {
+    "dofEnabled": true,
+    "focalDistance": 1.7524306,
+    "aperture": 0.0075106933,
+    "dofSamples": 16,
+    "anamorphicRatio": 1.0,
+    "bokehBlades": 0,
+    "bokehRotation": 0.0,
+    "opticalVignettingStrength": 0.0,
+    "tiltShiftEnabled": false,
+    "tiltAngleX": 0.0,
+    "tiltAngleY": 0.0,
+    "dofChromaticStrength": 0.0,
+    "pathTracingEnabled": true,
+    "maxBounces": 4,
+    "roughness": 0.3,
+    "skyIntensity": 1.0,
+    "indirectMultiplier": 0.5,
+    "skyType": 3,
+    "cloudDensity": 0.13056254,
+    "skySpeed": 1.0,
+    "skyTime": 0.0,
+    "skyParallax": 0.25,
+    "projectionMode": 0,
+    "lensEffectsEnabled": false,
+    "lensDirtIntensity": 0.0,
+    "starburstIntensity": 0.0,
+    "volumetricFogEnabled": true,
+    "fogDensity": 0.15,
+    "fogColor": [
+      0.5,
+      0.6,
+      0.7
+    ],
+    "fogScattering": 0.5,
+    "fogSteps": 32,
+    "shutterAngle": 180.0,
+    "neeEnabled": true,
+    "coneTracingEnabled": true,
+    "fudgeFactor": 0.7160369,
+    "refinementSteps": 4,
+    "stepRelaxation": 0.0,
+    "adaptiveSampling": true,
+    "varianceThreshold": 5.0E-4,
+    "minAdaptiveSamples": 64,
+    "erosionEnabled": false,
+    "erosionStrength": 0.5,
+    "erosionTime": 0.0,
+    "erosionScale": 1.0,
+    "erosionType": 0,
+    "crystalEnabled": false,
+    "crystalStrength": 0.5,
+    "crystalTime": 0.0,
+    "crystalScale": 1.0,
+    "crystalSharpness": 2.0,
+    "mossEnabled": false,
+    "mossStrength": 0.5,
+    "mossTime": 0.0,
+    "mossScale": 1.0,
+    "mossColorR": 0.15,
+    "mossColorG": 0.35,
+    "mossColorB": 0.08,
+    "mossNormalThreshold": 0.3,
+    "booleanEnabled": false,
+    "booleanOp": 1,
+    "boolSecondaryType": null,
+    "boolOffsetX": 0.5,
+    "boolOffsetY": 0.0,
+    "boolOffsetZ": 0.0,
+    "boolScale": 1.0,
+    "boolBlend": 0.0,
+    "boolRotX": 0.0,
+    "boolRotY": 0.0,
+    "boolRotZ": 0.0,
+    "nestThreshold": 0.1,
+    "nestRepeatScale": 5.0,
+    "nestRotation": 0.0,
+    "nestMix": 1.0,
+    "oceanEnabled": false,
+    "oceanHeight": -0.13518065,
+    "oceanColor": [
+      0.05,
+      0.15,
+      0.3
+    ],
+    "oceanWaveScale": 2.0,
+    "oceanWaveHeight": 0.1,
+    "oceanSpeed": 1.0,
+    "oceanTime": 0.0
+  },
+  "fractalParams": {
+    "graph": {
+      "name": "CSG",
+      "type": "csg",
+      "op": "UNION",
+      "blend": 0.0,
+      "left": {
+        "name": "CSG_2",
+        "type": "csg",
+        "op": "UNION",
+        "blend": 0.0,
+        "left": {
+          "name": "CSG_3",
+          "type": "csg",
+          "op": "UNION",
+          "blend": 0.0,
+          "left": {
+            "name": "CSG_4",
+            "type": "csg",
+            "op": "UNION",
+            "blend": 0.0,
+            "left": {
+              "name": "CSG_5",
+              "type": "csg",
+              "op": "UNION",
+              "blend": 0.0,
+              "left": {
+                "name": "Material",
+                "type": "material",
+                "materialType": 0,
+                "colorMode": 1,
+                "colorR": 0.8999999761581421,
+                "colorG": 0.8999999761581421,
+                "colorB": 0.8999999761581421,
+                "roughness": -1.0,
+                "metallic": -1.0,
+                "ior": -1.0,
+                "emission": -1.0,
+                "child": {
+                  "name": "Transform",
+                  "type": "transform",
+                  "mode": "STANDARD",
+                  "axis": 1,
+                  "offset": [
+                    0.0,
+                    -1.5,
+                    0.0
+                  ],
+                  "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "scale": 1.0,
+                  "frequency": 1.0,
+                  "child": {
+                    "name": "Box",
+                    "type": "primitive",
+                    "primitiveType": "BOX",
+                    "sizeX": 1.5,
+                    "sizeY": 0.019999999552965164,
+                    "sizeZ": 1.5,
+                    "rounding": 0.0,
+                    "shell": 0.0
+                  }
+                }
+              },
+              "right": {
+                "name": "Material_2",
+                "type": "material",
+                "materialType": 0,
+                "colorMode": 1,
+                "colorR": 0.8999999761581421,
+                "colorG": 0.8999999761581421,
+                "colorB": 0.8999999761581421,
+                "roughness": -1.0,
+                "metallic": -1.0,
+                "ior": -1.0,
+                "emission": -1.0,
+                "child": {
+                  "name": "Transform_2",
+                  "type": "transform",
+                  "mode": "STANDARD",
+                  "axis": 1,
+                  "offset": [
+                    0.0,
+                    1.5,
+                    0.0
+                  ],
+                  "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "scale": 1.0,
+                  "frequency": 1.0,
+                  "child": {
+                    "name": "Box_2",
+                    "type": "primitive",
+                    "primitiveType": "BOX",
+                    "sizeX": 1.5,
+                    "sizeY": 0.019999999552965164,
+                    "sizeZ": 1.5,
+                    "rounding": 0.0,
+                    "shell": 0.0
+                  }
+                }
+              }
+            },
+            "right": {
+              "name": "CSG_6",
+              "type": "csg",
+              "op": "UNION",
+              "blend": 0.0,
+              "left": {
+                "name": "Material_3",
+                "type": "material",
+                "materialType": 0,
+                "colorMode": 1,
+                "colorR": 0.8500000238418579,
+                "colorG": 0.07999999821186066,
+                "colorB": 0.07999999821186066,
+                "roughness": -1.0,
+                "metallic": -1.0,
+                "ior": -1.0,
+                "emission": -1.0,
+                "child": {
+                  "name": "Transform_3",
+                  "type": "transform",
+                  "mode": "STANDARD",
+                  "axis": 1,
+                  "offset": [
+                    -1.5,
+                    0.0,
+                    0.0
+                  ],
+                  "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "scale": 1.0,
+                  "frequency": 1.0,
+                  "child": {
+                    "name": "Box_3",
+                    "type": "primitive",
+                    "primitiveType": "BOX",
+                    "sizeX": 0.019999999552965164,
+                    "sizeY": 1.5,
+                    "sizeZ": 1.5,
+                    "rounding": 0.0,
+                    "shell": 0.0
+                  }
+                }
+              },
+              "right": {
+                "name": "Material_4",
+                "type": "material",
+                "materialType": 0,
+                "colorMode": 1,
+                "colorR": 0.07999999821186066,
+                "colorG": 0.8500000238418579,
+                "colorB": 0.07999999821186066,
+                "roughness": -1.0,
+                "metallic": -1.0,
+                "ior": -1.0,
+                "emission": -1.0,
+                "child": {
+                  "name": "Transform_4",
+                  "type": "transform",
+                  "mode": "STANDARD",
+                  "axis": 1,
+                  "offset": [
+                    1.5,
+                    0.0,
+                    0.0
+                  ],
+                  "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "scale": 1.0,
+                  "frequency": 1.0,
+                  "child": {
+                    "name": "Box_4",
+                    "type": "primitive",
+                    "primitiveType": "BOX",
+                    "sizeX": 0.019999999552965164,
+                    "sizeY": 1.5,
+                    "sizeZ": 1.5,
+                    "rounding": 0.0,
+                    "shell": 0.0
+                  }
+                }
+              }
+            }
+          },
+          "right": {
+            "name": "Material_5",
+            "type": "material",
+            "materialType": 0,
+            "colorMode": 1,
+            "colorR": 0.8999999761581421,
+            "colorG": 0.8999999761581421,
+            "colorB": 0.8999999761581421,
+            "roughness": -1.0,
+            "metallic": -1.0,
+            "ior": -1.0,
+            "emission": -1.0,
+            "child": {
+              "name": "Transform_5",
+              "type": "transform",
+              "mode": "STANDARD",
+              "axis": 1,
+              "offset": [
+                0.0,
+                0.0,
+                1.5
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "scale": 1.0,
+              "frequency": 1.0,
+              "child": {
+                "name": "Box_5",
+                "type": "primitive",
+                "primitiveType": "BOX",
+                "sizeX": 1.5,
+                "sizeY": 1.5,
+                "sizeZ": 0.019999999552965164,
+                "rounding": 0.0,
+                "shell": 0.0
+              }
+            }
+          }
+        },
+        "right": {
+          "name": "Material_6",
+          "type": "material",
+          "materialType": 0,
+          "colorMode": 1,
+          "colorR": 1.0,
+          "colorG": 1.0,
+          "colorB": 1.0,
+          "roughness": -1.0,
+          "metallic": -1.0,
+          "ior": -1.0,
+          "emission": 15.0,
+          "child": {
+            "name": "Transform_6",
+            "type": "transform",
+            "mode": "STANDARD",
+            "axis": 1,
+            "offset": [
+              0.0,
+              1.4500000476837158,
+              0.0
+            ],
+            "rotation": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "scale": 1.0,
+            "frequency": 1.0,
+            "child": {
+              "name": "Box_6",
+              "type": "primitive",
+              "primitiveType": "BOX",
+              "sizeX": 0.4000000059604645,
+              "sizeY": 0.019999999552965164,
+              "sizeZ": 0.4000000059604645,
+              "rounding": 0.0,
+              "shell": 0.0
+            }
+          }
+        }
+      },
+      "right": {
+        "name": "CSG_7",
+        "type": "csg",
+        "op": "UNION",
+        "blend": 0.0,
+        "left": {
+          "name": "Material_7",
+          "type": "material",
+          "materialType": 0,
+          "colorMode": 1,
+          "colorR": 1.0,
+          "colorG": 1.0,
+          "colorB": 1.0,
+          "roughness": -1.0,
+          "metallic": -1.0,
+          "ior": -1.0,
+          "emission": -1.0,
+          "child": {
+            "name": "Transform_7",
+            "type": "transform",
+            "mode": "STANDARD",
+            "axis": 1,
+            "offset": [
+              0.550000011920929,
+              -0.8500000238418579,
+              0.4000000059604645
+            ],
+            "rotation": [
+              0.0,
+              18.0,
+              0.0
+            ],
+            "scale": 1.0,
+            "frequency": 1.0,
+            "child": {
+              "name": "Box_7",
+              "type": "primitive",
+              "primitiveType": "BOX",
+              "sizeX": 0.3499999940395355,
+              "sizeY": 0.6499999761581421,
+              "sizeZ": 0.3499999940395355,
+              "rounding": 0.019999999552965164,
+              "shell": 0.0
+            }
+          }
+        },
+        "right": {
+          "name": "CSG_8",
+          "type": "csg",
+          "op": "UNION",
+          "blend": 0.0,
+          "left": {
+            "name": "Material_8",
+            "type": "material",
+            "materialType": 2,
+            "colorMode": 0,
+            "colorR": 1.0,
+            "colorG": 1.0,
+            "colorB": 1.0,
+            "roughness": 0.05000000074505806,
+            "metallic": -1.0,
+            "ior": 1.5,
+            "emission": -1.0,
+            "child": {
+              "name": "Transform_8",
+              "type": "transform",
+              "mode": "STANDARD",
+              "axis": 1,
+              "offset": [
+                -0.550000011920929,
+                -1.100000023841858,
+                -0.20000000298023224
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "scale": 1.0,
+              "frequency": 1.0,
+              "child": {
+                "name": "Sphere",
+                "type": "primitive",
+                "primitiveType": "SPHERE",
+                "sizeX": 0.4000000059604645,
+                "sizeY": 1.0,
+                "sizeZ": 1.0,
+                "rounding": 0.0,
+                "shell": 0.0
+              }
+            }
+          },
+          "right": {
+            "name": "Transform_9",
+            "type": "transform",
+            "mode": "STANDARD",
+            "axis": 1,
+            "offset": [
+              0.0,
+              -0.699999988079071,
+              -0.30000001192092896
+            ],
+            "rotation": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "scale": 0.3499999940395355,
+            "frequency": 1.0,
+            "child": {
+              "name": "Mandelbulb",
+              "type": "fractal",
+              "fractalType": "MANDELBULB",
+              "params": {
+                "power": 8.0,
+                "maxIterations": 15,
+                "bailout": 2.0,
+                "radiolaria": 0.0,
+                "radiolariaFactor": 0.5
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "animation": null
+}

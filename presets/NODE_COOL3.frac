@@ -1,0 +1,247 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-03-02T21:58:05.033138600Z",
+  "name": null,
+  "description": null,
+  "fractalType": "NODE_GRAPH",
+  "camera": {
+    "position": [
+      1.4100673,
+      1.3929003,
+      -3.0073907
+    ],
+    "quaternion": [
+      0.9567581,
+      0.18466018,
+      -0.22068186,
+      0.04259303
+    ],
+    "fov": 60.0,
+    "moveSpeed": 0.006727503
+  },
+  "rendering": {
+    "maxRaySteps": 400,
+    "epsilon": 1.0E-5,
+    "qualityMultiplier": 1.0,
+    "renderMode": 0,
+    "shadowSoftness": 16.0,
+    "shadowSteps": 128,
+    "aoSteps": 5,
+    "aoIntensity": 0.5,
+    "glowIntensity": 0.15,
+    "specularIntensity": 0.5,
+    "specularPower": 32.0
+  },
+  "lighting": {
+    "direction": [
+      2.0,
+      3.0,
+      -2.0
+    ],
+    "color": [
+      1.0,
+      0.95,
+      0.9
+    ],
+    "intensity": 1.2,
+    "ambientColor": [
+      0.1,
+      0.15,
+      0.25
+    ],
+    "ambientIntensity": 0.3,
+    "extraType": 0,
+    "extraAttachToCamera": true,
+    "extraPosition": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "extraDirection": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "extraColor": [
+      1.0,
+      0.95,
+      0.9
+    ],
+    "extraIntensity": 1.5,
+    "extraRange": 2.0,
+    "extraAreaRadius": 0.03,
+    "extraConeAngle": 35.0,
+    "extraConeSoftness": 0.3
+  },
+  "material": {
+    "hue": [
+      0.0,
+      0.33,
+      0.67
+    ],
+    "paletteIndex": 0,
+    "colorStrength": 3.7986567,
+    "paletteOffset": 0.0,
+    "trapMode": 0,
+    "type": 0,
+    "metalness": 0.0,
+    "ior": 1.5,
+    "gradientStops": [
+      {
+        "position": 0.0,
+        "r": 0.09803921729326248,
+        "g": 0.03921568766236305,
+        "b": 0.23529411852359772
+      },
+      {
+        "position": 0.25,
+        "r": 0.47058823704719543,
+        "g": 0.11764705926179886,
+        "b": 0.47058823704719543
+      },
+      {
+        "position": 0.5,
+        "r": 0.8627451062202454,
+        "g": 0.23529411852359772,
+        "b": 0.23529411852359772
+      },
+      {
+        "position": 0.75,
+        "r": 1.0,
+        "g": 0.6274510025978088,
+        "b": 0.19607843458652496
+      },
+      {
+        "position": 1.0,
+        "r": 1.0,
+        "g": 0.9019607901573181,
+        "b": 0.47058823704719543
+      }
+    ],
+    "reflectionIntensity": 0.0,
+    "emissiveIntensity": 0.0,
+    "sssIntensity": 0.3190596,
+    "sssRadius": 0.1,
+    "sssColor": [
+      1.0,
+      0.4,
+      0.2
+    ]
+  },
+  "effects": {
+    "dofEnabled": false,
+    "focalDistance": 2.5,
+    "aperture": 0.02,
+    "dofSamples": 16,
+    "anamorphicRatio": 1.0,
+    "bokehBlades": 0,
+    "bokehRotation": 0.0,
+    "opticalVignettingStrength": 0.0,
+    "tiltShiftEnabled": false,
+    "tiltAngleX": 0.0,
+    "tiltAngleY": 0.0,
+    "dofChromaticStrength": 0.0,
+    "pathTracingEnabled": true,
+    "maxBounces": 4,
+    "roughness": 0.9,
+    "skyIntensity": 1.0,
+    "indirectMultiplier": 0.5,
+    "skyType": 1,
+    "cloudDensity": 0.5,
+    "skySpeed": 1.0,
+    "skyTime": 0.0,
+    "skyParallax": 0.25,
+    "projectionMode": 0,
+    "lensEffectsEnabled": false,
+    "lensDirtIntensity": 0.0,
+    "starburstIntensity": 0.0,
+    "volumetricFogEnabled": false,
+    "fogDensity": 0.15,
+    "fogColor": [
+      0.5,
+      0.6,
+      0.7
+    ],
+    "fogScattering": 0.5,
+    "fogSteps": 32,
+    "shutterAngle": 180.0,
+    "neeEnabled": true,
+    "coneTracingEnabled": false,
+    "fudgeFactor": 0.7160369,
+    "refinementSteps": 4,
+    "stepRelaxation": 0.0,
+    "adaptiveSampling": false,
+    "varianceThreshold": 5.0E-4,
+    "minAdaptiveSamples": 16,
+    "erosionEnabled": false,
+    "erosionStrength": 0.5,
+    "erosionTime": 0.0,
+    "erosionScale": 1.0,
+    "erosionType": 0,
+    "crystalEnabled": false,
+    "crystalStrength": 0.5,
+    "crystalTime": 0.0,
+    "crystalScale": 1.0,
+    "crystalSharpness": 2.0,
+    "mossEnabled": false,
+    "mossStrength": 0.5,
+    "mossTime": 0.0,
+    "mossScale": 1.0,
+    "mossColorR": 0.15,
+    "mossColorG": 0.35,
+    "mossColorB": 0.08,
+    "mossNormalThreshold": 0.3,
+    "booleanEnabled": false,
+    "booleanOp": 1,
+    "boolSecondaryType": null,
+    "boolOffsetX": 0.5,
+    "boolOffsetY": 0.0,
+    "boolOffsetZ": 0.0,
+    "boolScale": 1.0,
+    "boolBlend": 0.0,
+    "boolRotX": 0.0,
+    "boolRotY": 0.0,
+    "boolRotZ": 0.0,
+    "nestThreshold": 0.1,
+    "nestRepeatScale": 5.0,
+    "nestRotation": 0.0,
+    "nestMix": 1.0,
+    "oceanEnabled": false,
+    "oceanHeight": -1.0,
+    "oceanColor": [
+      0.05,
+      0.15,
+      0.3
+    ],
+    "oceanWaveScale": 2.0,
+    "oceanWaveHeight": 0.1,
+    "oceanSpeed": 1.0,
+    "oceanTime": 0.0
+  },
+  "fractalParams": {
+    "graph": {
+      "name": "Mandelbulb",
+      "type": "fractal",
+      "fractalType": "POLYHEDRAL_IFS",
+      "params": {
+        "polyType": "OCTAHEDRAL",
+        "maxIterations": 20,
+        "scale": 2.0,
+        "offsetX": 1.0,
+        "offsetY": 1.0,
+        "offsetZ": 1.0,
+        "shiftX": 0.0,
+        "shiftY": 0.0,
+        "shiftZ": 0.0,
+        "rot1X": 15.0,
+        "rot1Y": 10.0,
+        "rot1Z": 0.0,
+        "rot2X": 22.541426,
+        "rot2Y": -16.57459,
+        "rot2Z": 8.61879,
+        "basePrimitive": "TORUS"
+      }
+    }
+  },
+  "animation": null
+}
