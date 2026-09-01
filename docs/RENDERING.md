@@ -107,6 +107,52 @@ So roughly **4/5 of the rim is the cone-tracing offset** and 1/5 is genuine **li
 
 ---
 
+## Why renders looked washed out (rim light)
+
+Colour had been flat across the whole project, and the cause was neither the palette nor
+the orbit traps. `test/ColorProbe` forces a pure red/green/blue gradient and renders the
+same camera through several passes, so any pass that comes out less than vivid is the one
+destroying saturation:
+
+| pass | mean HSV saturation |
+|------|--------------------|
+| ORBIT_TRAP (raw factors, no palette lookup) | 0.674 |
+| DIFFUSE (`baseColor * NdotL` — the palette, nothing added) | 0.612 |
+| FINAL classic | **0.289** |
+| FINAL classic, specular and ambient both zeroed | **0.274** |
+| FINAL path traced | 0.569 |
+
+The palette pipeline is fine — DIFFUSE keeps the saturation. FINAL loses more than half of
+it, and zeroing specular *and* ambient barely helps, which rules out the obvious suspects.
+What remained was one line:
+
+```glsl
+vec3 rimLight = lightColor * rim * 0.15;   // rim = fresnel(viewDir, normal, 3.0)
+```
+
+An unconditional white term, hard-coded, with no control. It is proportional to the
+Fresnel factor, and on a convoluted fractal a grazing angle is most of the surface.
+Worse, roughly half the surface sits in full shadow (`calcShadow` returns exactly 0 as
+soon as the shadow ray reaches any geometry), where the diffuse term is zero — so the
+white rim was the *only* thing lighting those regions, and the palette had nothing to
+show there. Disabling it took FINAL from 0.289 to 0.414, and 0.274 to 0.431 with the
+other terms off.
+
+It is now `rimIntensity` (`AbstractFractalParams`, serialized in `RenderingConfig`, slider
+in QualityPanel → Glow / Rim). **The default stays 0.15 so existing scenes render exactly
+as before** — all `RenderRegression` scenes still pass — but every shipped preset sets
+0.03, which takes them from beige to full colour (mean frame saturation ~0.70).
+
+The remainder of the gap between DIFFUSE and FINAL is ACES tone mapping, whose path-to-
+white desaturates bright output by design; `toneMapMode`, `exposure` and `saturation`
+already exist as controls for it.
+
+**Still missing:** those post-processing settings live on the engine's `PostProcessSettings`
+and are **not serialized in `.frac` at all**, so tuning saturation or tone mapping and
+saving a scene loses it on reload — the same class of gap as `coloringMode` had.
+
+---
+
 ## Deep Zoom (Fine Detail)
 
 What actually limits detail during a deep dive, measured with `DeepZoomLab` (see Test Harnesses).

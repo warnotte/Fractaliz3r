@@ -74,6 +74,7 @@ public class FractalConfig {
 
         // Glow
         public float glowIntensity = 0.15f;
+        public float rimIntensity = 0.15f;
 
         // Specular
         public float specularIntensity = 0.5f;
@@ -295,6 +296,7 @@ public class FractalConfig {
         config.rendering.aoSteps = params.getAoSteps();
         config.rendering.aoIntensity = params.getAoIntensity();
         config.rendering.glowIntensity = params.getGlowIntensity();
+        config.rendering.rimIntensity = params.getRimIntensity();
         config.rendering.specularIntensity = params.getSpecularIntensity();
         config.rendering.specularPower = params.getSpecularPower();
 
@@ -458,6 +460,7 @@ public class FractalConfig {
         params.setAoSteps(rendering.aoSteps);
         params.setAoIntensity(rendering.aoIntensity);
         params.setGlowIntensity(rendering.glowIntensity);
+        params.setRimIntensity(rendering.rimIntensity);
         params.setSpecularIntensity(rendering.specularIntensity);
         params.setSpecularPower(rendering.specularPower);
 

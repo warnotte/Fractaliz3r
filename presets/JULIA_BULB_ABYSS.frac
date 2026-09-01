@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-01T23:09:19.048309500Z",
+  "timestamp": "2026-09-01T23:53:11.887477400Z",
   "name": null,
   "description": null,
   "fractalType": "MANDELBULB",
@@ -29,6 +29,7 @@
     "aoSteps": 5,
     "aoIntensity": 0.5,
     "glowIntensity": 0.15,
+    "rimIntensity": 0.03,
     "specularIntensity": 0.5,
     "specularPower": 32.0
   },

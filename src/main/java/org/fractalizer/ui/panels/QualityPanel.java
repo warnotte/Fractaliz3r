@@ -47,6 +47,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
 
     // Glow
     private EnhancedSlider glowIntensitySlider;
+    private EnhancedSlider rimIntensitySlider;
 
     // DoF controls
     private CheckBox dofEnabledCheck;
@@ -286,9 +287,21 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        box.getChildren().addAll(glowIntensitySlider);
+        rimIntensitySlider = new EnhancedSlider("Rim Light", 0, 1, 0.15, false);
+        rimIntensitySlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setRimIntensity(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
 
-        TitledPane pane = new TitledPane("Glow", box);
+        Label rimInfo = new Label("Fresnel rim adds white at grazing angles — most of a\nfractal surface. Lower it to let the palette show.");
+        rimInfo.getStyleClass().add("hint-label");
+        rimInfo.setWrapText(true);
+
+        box.getChildren().addAll(glowIntensitySlider, rimIntensitySlider, rimInfo);
+
+        TitledPane pane = new TitledPane("Glow / Rim", box);
         pane.setExpanded(false);
         return pane;
     }
@@ -738,6 +751,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
 
             // Glow
             glowIntensitySlider.setValue(p.getGlowIntensity());
+            rimIntensitySlider.setValue(p.getRimIntensity());
 
             // DoF
             dofEnabledCheck.setSelected(p.isDofEnabled());

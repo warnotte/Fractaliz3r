@@ -668,6 +668,13 @@ public class SceneBuilder {
     /** 0=Standard 1=Bands 2=Distance 3=Angular 4=Blend 5=Contour, plus the
      *  scale-invariant modes 9-12. Angular builds its hue from an atan2 of two factors,
      *  so it traverses the whole palette even when the factor field itself is narrow. */
+    /** Fresnel rim light, 0..1. At the historical 0.15 it puts white on every grazing
+     *  angle, which on a fractal is most of the surface; 0 lets the palette through. */
+    public SceneBuilder rimIntensity(float v) {
+        config.rendering.rimIntensity = v;
+        return this;
+    }
+
     public SceneBuilder coloringMode(int mode) {
         config.material.coloringMode = mode;
         return this;

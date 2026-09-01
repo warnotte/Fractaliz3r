@@ -88,6 +88,7 @@ uniform int shadowSteps;
 uniform int aoSteps;
 uniform float aoIntensity;
 uniform float glowIntensity;
+uniform float rimIntensity;
 uniform float specularIntensity;
 uniform float specularPower;
 

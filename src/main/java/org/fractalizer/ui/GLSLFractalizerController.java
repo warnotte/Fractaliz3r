@@ -1097,6 +1097,7 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("aoSteps", params.getAoSteps());
             uniforms.put("aoIntensity", params.getAoIntensity());
             uniforms.put("glowIntensity", params.getGlowIntensity());
+            uniforms.put("rimIntensity", params.getRimIntensity());
             uniforms.put("specularIntensity", params.getSpecularIntensity());
             uniforms.put("specularPower", params.getSpecularPower());
 

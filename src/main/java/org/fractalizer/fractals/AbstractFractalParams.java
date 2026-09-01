@@ -124,6 +124,12 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected int aoSteps;
     protected float aoIntensity;
     protected float glowIntensity;
+    // Fresnel rim light. It used to be hard-coded at 0.15 with no control, which put
+    // white on every grazing angle — and on a convoluted fractal that is most of the
+    // surface. Where the key light is shadowed it was the only term contributing at all,
+    // so the palette had nothing to show. Default unchanged so existing scenes render
+    // as before; lower it to let the palette through.
+    protected float rimIntensity = 0.15f;
 
     // Specular
     protected float specularIntensity;
@@ -337,6 +343,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.aoSteps = 5;
         this.aoIntensity = 0.5f;
         this.glowIntensity = 0.15f;
+        this.rimIntensity = 0.15f;
 
         // Specular defaults
         this.specularIntensity = 0.5f;
@@ -457,6 +464,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.aoSteps = this.aoSteps;
         target.aoIntensity = this.aoIntensity;
         target.glowIntensity = this.glowIntensity;
+        target.rimIntensity = this.rimIntensity;
 
         // Copy render mode
         target.renderMode = this.renderMode;
@@ -828,6 +836,9 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setAoIntensity(float intensity) { this.aoIntensity = intensity; }
 
     // Glow
+    public float getRimIntensity() { return rimIntensity; }
+    public void setRimIntensity(float v) { this.rimIntensity = Math.max(0f, Math.min(1f, v)); }
+
     public float getGlowIntensity() { return glowIntensity; }
     public void setGlowIntensity(float intensity) { this.glowIntensity = intensity; }
 

@@ -811,7 +811,7 @@ vec3 shade(RayHit hit, Ray ray) {
 
     // Fresnel rim lighting
     float rim = fresnel(viewDir, normal, 3.0);
-    vec3 rimLight = lightColor * rim * 0.15;
+    vec3 rimLight = lightColor * rim * rimIntensity;
 
     vec3 color = ambient + diffuse + specular + rimLight;
 
