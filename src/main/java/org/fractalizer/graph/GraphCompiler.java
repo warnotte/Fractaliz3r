@@ -1103,7 +1103,7 @@ public class GraphCompiler {
 
         sb.append("struct ").append(p).append("_OrbitTrap {\n")
           .append("    float minDist;\n    float planeX;\n    float planeY;\n    float planeZ;\n")
-          .append("    int iterations;\n};\n\n");
+          .append("    float escapeR;\n    int iterations;\n};\n\n");
 
         // One shared chain body, so DE and DE_simple cannot drift apart.
         sb.append("void ").append(p).append("_chain(inout vec3 z, inout float dr, vec3 c) {\n");
@@ -1141,18 +1141,21 @@ public class GraphCompiler {
         sb.append("float ").append(p).append("_DE(vec3 pos, out ").append(p).append("_OrbitTrap trap) {\n")
           .append("    vec3 z = pos;\n    ").append(seed)
           .append("    float dr = 1.0;\n    float r = 0.0;\n")
-          .append("    trap.minDist = 1e10;\n    trap.planeX = 1e10;\n")
-          .append("    trap.planeY = 1e10;\n    trap.planeZ = 1e10;\n    trap.iterations = 0;\n")
+          .append("    trap.minDist = 1e10;\n    trap.planeX = 0.0;\n")
+          .append("    trap.planeY = 0.0;\n    trap.planeZ = 0.0;\n")
+          .append("    trap.escapeR = 0.0;\n    trap.iterations = 0;\n")
           .append("    for (int i = 0; i < ").append(iterBound).append("; i++) {\n")
           .append("        r = length(z);\n")
           .append("        if (r > ").append(p).append("_bailout) break;\n")
           .append("        ").append(p).append("_chain(z, dr, c);\n")
           .append("        trap.minDist = min(trap.minDist, length(z));\n")
-          .append("        trap.planeX = min(trap.planeX, abs(z.x));\n")
-          .append("        trap.planeY = min(trap.planeY, abs(z.y));\n")
-          .append("        trap.planeZ = min(trap.planeZ, abs(z.z));\n")
+          .append("        vec3 _zd = normalize(z + vec3(1e-9));\n")
+          .append("        trap.planeX = _zd.x;\n")
+          .append("        trap.planeY = _zd.y;\n")
+          .append("        trap.planeZ = _zd.z;\n")
           .append("        trap.iterations = i + 1;\n")
           .append("    }\n")
+          .append("    trap.escapeR = r;\n")
           .append(finalR)
           .append("    float de = ").append(deExpr).append(";\n")
           .append("    float rPos = length(pos);\n")
@@ -1160,13 +1163,18 @@ public class GraphCompiler {
           .append("    return de;\n}\n\n");
 
         sb.append("vec3 ").append(p).append("_getFactors(").append(p).append("_OrbitTrap trap) {\n")
-          .append("    float trapX = exp(-trap.planeX * 3.0);\n")
-          .append("    float trapY = exp(-trap.planeY * 3.0);\n")
-          .append("    float trapZ = exp(-trap.planeZ * 3.0);\n")
-          .append("    float structural = 1.0 - exp(-trap.minDist * 0.8);\n")
-          .append("    float flow = (trapX * 0.5 + trapY * 1.0 + trapZ * 1.5) / 3.0;\n")
-          .append("    float iterNorm = float(trap.iterations) / float(max(")
-          .append(p).append("_maxIterations + gExtraIterations, 1));\n")
+          .append("    float _n = float(max(trap.iterations, 1));\n")
+          .append("    float _az = atan(trap.planeY, trap.planeX) / 6.2831853 + 0.5;\n")
+          .append("    float _el = acos(clamp(trap.planeZ, -1.0, 1.0)) / 3.1415927;\n")
+          .append("    float structural = 1.0 - exp(-trap.minDist * 0.22);\n")
+          .append("    float _sm = _n;\n")
+          .append("    if (trap.escapeR > 1.0001) {\n")
+          .append("        float _lb = log(max(").append(p).append("_bailout, 1.0001));\n")
+          .append("        _sm = _n - log2(max(log(trap.escapeR) / _lb, 1e-6));\n")
+          .append("    }\n")
+          .append("    float iterNorm = clamp(_sm / float(max(")
+          .append(p).append("_maxIterations + gExtraIterations, 1)), 0.0, 1.0);\n")
+          .append("    float flow = fract(_az + _el * 0.35 + iterNorm * 0.6);\n")
           .append("    return vec3(structural, flow, iterNorm);\n}\n");
 
         return sb.toString();

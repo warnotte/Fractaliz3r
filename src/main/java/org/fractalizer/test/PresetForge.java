@@ -151,18 +151,19 @@ public class PresetForge {
                 .pathTracing(true).skyType(1)
                 .lightDir(2f, 3f, -2f).lightIntensity(1.3f)
                 .ambientColor(0.10f, 0.13f, 0.20f).ambientIntensity(0.33f)
-                .colorStrength(0.9f).metalness(0.35f).roughness(0.35f));
+                .colorStrength(1.0f).paletteOffset(0.05f)
+                .metalness(0.35f).roughness(0.35f));
 
         p.put("HYBRID_ROTOBOX", () -> SceneBuilder.nodeGraph(new HybridNode(
                     java.util.List.of(bulbStep(6f), rotateStep(24f, 37f, 0f),
                                       boxFoldStep(1.3f, 0.5f, 1f, 1f), new Step(StepType.ADD_C)),
                     12, 8f, DEMode.LOG))
                 .camera(1.26f, 0.90f, -2.55f).lookAt(0f, 0f, 0f).fov(50)
-                .gradient(ICE)
+                .gradient(VIOLET)
                 .pathTracing(true).skyType(1)
                 .lightDir(-1.8f, 2.4f, -2f).lightIntensity(1.4f)
                 .ambientColor(0.09f, 0.13f, 0.20f).ambientIntensity(0.33f)
-                .colorStrength(0.9f).metalness(0.4f).roughness(0.3f));
+                .colorStrength(1.0f).paletteOffset(0.45f).metalness(0.4f).roughness(0.3f));
 
         // --- Mandelbox: self-similar, holds detail at any zoom; LOD earns its cost here ---
         p.put("MANDELBOX_DEEP", () -> SceneBuilder.mandelbox()

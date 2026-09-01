@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-01T22:40:09.218119500Z",
+  "timestamp": "2026-09-01T23:09:19.048309500Z",
   "name": null,
   "description": null,
   "fractalType": "MANDELBULB",
@@ -80,6 +80,7 @@
       0.67
     ],
     "paletteIndex": 1,
+    "coloringMode": 0,
     "colorStrength": 1.1,
     "paletteOffset": 0.0,
     "trapMode": 0,

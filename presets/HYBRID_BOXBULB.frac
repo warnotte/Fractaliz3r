@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-01T22:40:09.222005400Z",
+  "timestamp": "2026-09-01T23:09:19.052349800Z",
   "name": null,
   "description": null,
   "fractalType": "NODE_GRAPH",
@@ -80,8 +80,9 @@
       0.67
     ],
     "paletteIndex": 0,
-    "colorStrength": 0.9,
-    "paletteOffset": 0.0,
+    "coloringMode": 0,
+    "colorStrength": 1.0,
+    "paletteOffset": 0.05,
     "trapMode": 0,
     "type": 0,
     "metalness": 0.35,

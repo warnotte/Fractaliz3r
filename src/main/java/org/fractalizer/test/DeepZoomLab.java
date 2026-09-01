@@ -82,6 +82,8 @@ public class DeepZoomLab {
             params = (AbstractFractalParams) controller.getParams();
         }
         params.setPathTracingEnabled(false);
+        // Without this every render is monochrome regardless of the gradient in the scene.
+        controller.updatePaletteTexture(params.getCustomGradient());
         camera = params.getCamera();
 
         List<Cam> cams = new ArrayList<>();

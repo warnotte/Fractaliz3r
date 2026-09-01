@@ -665,6 +665,14 @@ public class SceneBuilder {
         return this;
     }
 
+    /** 0=Standard 1=Bands 2=Distance 3=Angular 4=Blend 5=Contour, plus the
+     *  scale-invariant modes 9-12. Angular builds its hue from an atan2 of two factors,
+     *  so it traverses the whole palette even when the factor field itself is narrow. */
+    public SceneBuilder coloringMode(int mode) {
+        config.material.coloringMode = mode;
+        return this;
+    }
+
     public SceneBuilder param(String name, Object value) {
         config.fractalParams.put(name, value);
         return this;

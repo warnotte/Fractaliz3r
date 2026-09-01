@@ -56,6 +56,7 @@ public class NodeGraphEditor extends VBox {
     private static final Color COLOR_PRIMITIVE = Color.web("#8BC34A");
     private static final Color COLOR_EFFECT = Color.web("#F44336");
     private static final Color COLOR_MATERIAL = Color.web("#9C27B0");
+    private static final Color COLOR_HYBRID = Color.web("#00BCD4");
     private static final Color COLOR_SELECTED = Color.web("#00BCD4");
     private static final Color COLOR_CONNECTION = Color.web("#9E9E9E", 0.6);
     private static final Color COLOR_TEXT = Color.WHITE;
@@ -308,6 +309,10 @@ public class NodeGraphEditor extends VBox {
         Button addFractalBtn = new Button("+ Fractal");
         addFractalBtn.setTooltip(new Tooltip("Add a fractal leaf node"));
         addFractalBtn.setOnAction(e -> addFractalNode());
+
+        Button addHybridBtn = new Button("+ Hybrid");
+        addHybridBtn.setTooltip(new Tooltip("Add a hybrid chain: several formulas composed inside one iteration loop"));
+        addHybridBtn.setOnAction(e -> addHybridNode());
 
         MenuButton addPrimitiveBtn = new MenuButton("+ Primitive");
         addPrimitiveBtn.setTooltip(new Tooltip("Add a primitive SDF node"));
@@ -697,6 +702,10 @@ public class NodeGraphEditor extends VBox {
         addFractalItem.setOnAction(e -> addFractalNode());
         contextMenu.getItems().add(addFractalItem);
 
+        MenuItem addHybridItem = new MenuItem("Add Hybrid Chain");
+        addHybridItem.setOnAction(e -> addHybridNode());
+        contextMenu.getItems().add(addHybridItem);
+
         Menu addPrimitiveMenu = new Menu("Add Primitive");
         for (PrimitiveNode.PrimitiveType pt : PrimitiveNode.PrimitiveType.values()) {
             MenuItem mi = new MenuItem(pt.getDisplayName());
@@ -915,6 +924,7 @@ public class NodeGraphEditor extends VBox {
 
     private Color getNodeColor(GraphNode node) {
         if (node instanceof PrimitiveNode) return COLOR_PRIMITIVE;
+        if (node instanceof HybridNode) return COLOR_HYBRID;
         if (node instanceof FractalNode) return COLOR_FRACTAL;
         if (node instanceof MaterialNode) return COLOR_MATERIAL;
         if (node instanceof EffectNode) return COLOR_EFFECT;
@@ -936,6 +946,7 @@ public class NodeGraphEditor extends VBox {
     private String getNodeLabel(GraphNode node) {
         if (node.getName() != null) return node.getName();
         if (node instanceof PrimitiveNode pn) return pn.getPrimitiveType().getDisplayName();
+        if (node instanceof HybridNode) return "Hybrid";
         if (node instanceof FractalNode fn) return fn.getFractalType().getDisplayName();
         if (node instanceof MaterialNode) return "Material";
         if (node instanceof EffectNode en) return en.getEffectType().getDisplayName();
@@ -1009,6 +1020,8 @@ public class NodeGraphEditor extends VBox {
 
         if (selectedNode instanceof PrimitiveNode pn) {
             buildPrimitiveDetail(pn);
+        } else if (selectedNode instanceof HybridNode hn) {
+            buildHybridDetail(hn);
         } else if (selectedNode instanceof FractalNode fn) {
             buildFractalDetail(fn);
         } else if (selectedNode instanceof MaterialNode mn) {
@@ -1127,6 +1140,192 @@ public class NodeGraphEditor extends VBox {
             onParameterChange();
         });
         detailPanel.getChildren().add(shellSlider);
+    }
+
+    // ------------------------------------------------------------------
+    // Hybrid chain editor
+    // ------------------------------------------------------------------
+    // Adding, removing, reordering or retyping a step changes which uniforms exist, so
+    // those go through onStructuralChange() and recompile. Moving a slider only changes
+    // a value, so it goes through onParameterChange() and does not.
+
+    private void buildHybridDetail(HybridNode hn) {
+        Label title = new Label("Hybrid Chain");
+        title.getStyleClass().add("bold-label");
+        detailPanel.getChildren().add(title);
+        buildNameField(hn);
+
+        Label chain = new Label(hn.describeChain());
+        chain.setWrapText(true);
+        chain.getStyleClass().add("small-label");
+        chain.setStyle("-fx-text-fill: #00BCD4; -fx-font-size: 10;");
+        detailPanel.getChildren().add(chain);
+
+        Label hint = new Label("Formulas composed inside one iteration loop — not a CSG "
+                + "combination of two finished shapes.");
+        hint.setWrapText(true);
+        hint.getStyleClass().add("hint-label");
+        detailPanel.getChildren().add(hint);
+
+        detailPanel.getChildren().add(sectionSeparator());
+
+        EnhancedSlider iters = new EnhancedSlider("Iterations", 1, 48, hn.getMaxIterations(), true);
+        iters.setOnAction(v -> { hn.setMaxIterations(v.intValue()); onParameterChange(); });
+        detailPanel.getChildren().add(iters);
+
+        EnhancedSlider bail = new EnhancedSlider("Bailout", 1, 1000, hn.getBailout(), false);
+        bail.setOnAction(v -> { hn.setBailout(v.floatValue()); onParameterChange(); });
+        detailPanel.getChildren().add(bail);
+
+        ComboBox<HybridNode.DEMode> deCombo = new ComboBox<>();
+        deCombo.getItems().addAll(HybridNode.DEMode.values());
+        deCombo.setValue(hn.getDeMode());
+        deCombo.setMaxWidth(Double.MAX_VALUE);
+        deCombo.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(HybridNode.DEMode m) { return m == null ? "" : m.getDisplayName(); }
+            @Override public HybridNode.DEMode fromString(String s) { return null; }
+        });
+        // The estimator family changes the emitted GLSL, so this one does recompile.
+        deCombo.setOnAction(e -> {
+            pushUndoSnapshot();
+            hn.setDeMode(deCombo.getValue());
+            onStructuralChange();
+        });
+        detailPanel.getChildren().addAll(new Label("Distance estimator:"), deCombo);
+
+        detailPanel.getChildren().add(groupHeader("Julia C"));
+        addHybridSlider("Julia Cx", -2, 2, hn.getJuliaCx(), v -> hn.setJuliaCx(v));
+        addHybridSlider("Julia Cy", -2, 2, hn.getJuliaCy(), v -> hn.setJuliaCy(v));
+        addHybridSlider("Julia Cz", -2, 2, hn.getJuliaCz(), v -> hn.setJuliaCz(v));
+
+        detailPanel.getChildren().add(groupHeader("Steps"));
+
+        List<HybridNode.Step> steps = hn.getSteps();
+        for (int i = 0; i < steps.size(); i++) {
+            final int idx = i;
+            HybridNode.Step st = steps.get(i);
+
+            HBox row = new HBox(4);
+            Label num = new Label((i + 1) + ".");
+            num.setMinWidth(18);
+
+            ComboBox<HybridNode.StepType> typeCombo = new ComboBox<>();
+            typeCombo.getItems().addAll(HybridNode.StepType.values());
+            typeCombo.setValue(st.getType());
+            typeCombo.setConverter(new javafx.util.StringConverter<>() {
+                @Override public String toString(HybridNode.StepType t) { return t == null ? "" : t.getDisplayName(); }
+                @Override public HybridNode.StepType fromString(String s) { return null; }
+            });
+            HBox.setHgrow(typeCombo, Priority.ALWAYS);
+            typeCombo.setMaxWidth(Double.MAX_VALUE);
+            typeCombo.setOnAction(e -> {
+                pushUndoSnapshot();
+                st.setType(typeCombo.getValue());
+                onStructuralChange();
+            });
+
+            Button up = new Button("\u25B2");
+            up.setDisable(i == 0);
+            up.setOnAction(e -> {
+                pushUndoSnapshot();
+                java.util.Collections.swap(steps, idx, idx - 1);
+                onStructuralChange();
+            });
+
+            Button down = new Button("\u25BC");
+            down.setDisable(i == steps.size() - 1);
+            down.setOnAction(e -> {
+                pushUndoSnapshot();
+                java.util.Collections.swap(steps, idx, idx + 1);
+                onStructuralChange();
+            });
+
+            Button del = new Button("\u2715");
+            del.setDisable(steps.size() <= 1);
+            del.setOnAction(e -> {
+                pushUndoSnapshot();
+                steps.remove(idx);
+                onStructuralChange();
+            });
+
+            row.getChildren().addAll(num, typeCombo, up, down, del);
+            detailPanel.getChildren().add(row);
+            addStepSliders(st);
+            detailPanel.getChildren().add(sectionSeparator());
+        }
+
+        ComboBox<HybridNode.StepType> addCombo = new ComboBox<>();
+        addCombo.getItems().addAll(HybridNode.StepType.values());
+        addCombo.setValue(HybridNode.StepType.ROTATE);
+        addCombo.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(HybridNode.StepType t) { return t == null ? "" : t.getDisplayName(); }
+            @Override public HybridNode.StepType fromString(String s) { return null; }
+        });
+        HBox.setHgrow(addCombo, Priority.ALWAYS);
+        addCombo.setMaxWidth(Double.MAX_VALUE);
+        Button addBtn = new Button("+ Step");
+        addBtn.setOnAction(e -> {
+            pushUndoSnapshot();
+            hn.getSteps().add(new HybridNode.Step(addCombo.getValue()));
+            onStructuralChange();
+        });
+        HBox addRow = new HBox(4, addCombo, addBtn);
+        detailPanel.getChildren().add(addRow);
+    }
+
+    /** Sliders for whichever parameters the step type actually uses. */
+    private void addStepSliders(HybridNode.Step st) {
+        switch (st.getType()) {
+            case BULB -> addHybridSlider("Power", 1, 24, st.getPower(), st::setPower);
+            case BOX_FOLD -> {
+                addHybridSlider("Scale", -5, 5, st.getScale(), st::setScale);
+                addHybridSlider("Min Radius", 0.01, 2, st.getMinRadius(), st::setMinRadius);
+                addHybridSlider("Fixed Radius", 0.05, 4, st.getFixedRadius(), st::setFixedRadius);
+                addHybridSlider("Fold Limit", 0.1, 4, st.getFoldLimit(), st::setFoldLimit);
+            }
+            case MENGER_FOLD, SIERPINSKI_FOLD, SCALE -> {
+                addHybridSlider("Scale", -5, 5, st.getScale(), st::setScale);
+                addHybridSlider("Offset X", -4, 4, st.getOffsetX(), st::setOffsetX);
+                addHybridSlider("Offset Y", -4, 4, st.getOffsetY(), st::setOffsetY);
+                addHybridSlider("Offset Z", -4, 4, st.getOffsetZ(), st::setOffsetZ);
+            }
+            case ABS_FOLD -> {
+                addHybridSlider("Offset X", -4, 4, st.getOffsetX(), st::setOffsetX);
+                addHybridSlider("Offset Y", -4, 4, st.getOffsetY(), st::setOffsetY);
+                addHybridSlider("Offset Z", -4, 4, st.getOffsetZ(), st::setOffsetZ);
+            }
+            case ROTATE -> {
+                addHybridSlider("Rotate X", -180, 180, st.getRotX(), st::setRotX);
+                addHybridSlider("Rotate Y", -180, 180, st.getRotY(), st::setRotY);
+                addHybridSlider("Rotate Z", -180, 180, st.getRotZ(), st::setRotZ);
+            }
+            case SPHERE_INVERT -> addHybridSlider("Radius", 0.05, 4, st.getRadius(), st::setRadius);
+            case ADD_C -> {
+                Label none = new Label("z += c  (no parameters)");
+                none.getStyleClass().add("hint-label");
+                detailPanel.getChildren().add(none);
+            }
+        }
+    }
+
+    private void addHybridSlider(String label, double min, double max, float value,
+                                 java.util.function.Consumer<Float> setter) {
+        EnhancedSlider sl = new EnhancedSlider(label, min, max, value, false);
+        sl.setOnAction(v -> { setter.accept(v.floatValue()); onParameterChange(); });
+        detailPanel.getChildren().add(sl);
+    }
+
+    private Separator sectionSeparator() {
+        Separator sep = new Separator();
+        sep.setPadding(new Insets(4, 0, 4, 0));
+        return sep;
+    }
+
+    private Label groupHeader(String text) {
+        Label l = new Label(text);
+        l.getStyleClass().add("small-label");
+        l.setStyle("-fx-text-fill: #00ccff; -fx-font-size: 10;");
+        return l;
     }
 
     private void buildFractalDetail(FractalNode fn) {
@@ -1829,6 +2028,22 @@ public class NodeGraphEditor extends VBox {
         } else {
             GraphNode oldRoot = currentParams.getGraphRoot();
             CSGNode newRoot = new CSGNode(CSGNode.Op.UNION, oldRoot, newPrimitive);
+            currentParams.setGraphRoot(newRoot);
+        }
+        onStructuralChange();
+    }
+
+    private void addHybridNode() {
+        if (currentParams == null) return;
+        pushUndoSnapshot();
+
+        HybridNode newHybrid = new HybridNode();
+        if (selectedNode instanceof CSGNode csn) {
+            CSGNode newCSG = new CSGNode(CSGNode.Op.UNION, csn.getRight(), newHybrid);
+            csn.setRight(newCSG);
+        } else {
+            GraphNode oldRoot = currentParams.getGraphRoot();
+            CSGNode newRoot = new CSGNode(CSGNode.Op.UNION, oldRoot, newHybrid);
             currentParams.setGraphRoot(newRoot);
         }
         onStructuralChange();

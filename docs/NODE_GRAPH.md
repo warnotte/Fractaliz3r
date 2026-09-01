@@ -360,8 +360,23 @@ Emission follows `PrimitiveNode`: inline GLSL, no `.glsl` file, prefix `h0_`, `h
 and the same leaf contract (`_OrbitTrap`, `_DE`, `_DE_simple`, `_getFactors`), so a
 hybrid plugs into CSG, transforms, effects and materials like any other leaf.
 
-**Not yet wired:** NodeGraphEditor has no step-list editor, so hybrids are currently
-built in code or loaded from a `.frac` (`presets/HYBRID_BOXBULB`, `HYBRID_ROTOBOX`).
+**Editing.** NodeGraphEditor has a `+ Hybrid` toolbar button and a step-list editor in the
+detail panel: iterations, bailout, estimator family, Julia constant, and per-step sliders,
+with a type combo plus move-up / move-down / delete on each row and an add-step control.
+Adding, removing, reordering or retyping a step changes which uniforms exist, so those
+recompile; moving a slider only updates a value and does not.
+
+**Colouring is weaker than a stand-alone formula, by nature.** A formula ships orbit traps
+tuned to its own orbit — the Mandelbox tracks fold amount and sphere-fold hits, the
+Mandelbulb plane traps calibrated to a bailout of 2. A chain has no such thing, and generic
+traps do not substitute well: taken as a minimum over a long orbit they saturate towards
+zero for every point, taken as a mean they average the contrast away, and the final orbit
+direction fared no better. Measured against a stand-alone Mandelbulb, the hybrid factor
+field has a comparable spread but a higher mean (flow 0.60 vs 0.48), so it walks a narrower
+part of the gradient. What helped, in order: softening `structural` (it drives the
+white highlight mix in `applyMaterial`, and a high value washes the palette out regardless
+of the hue chosen), then raising `colorStrength` and `paletteOffset` per preset. A
+multi-hue gradient does *not* help — sub-pixel averaging turns it to mud.
 
 ## GraphCompiler — GLSL Code Generation
 

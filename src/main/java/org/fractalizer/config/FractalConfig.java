@@ -104,6 +104,7 @@ public class FractalConfig {
     public static class MaterialConfig {
         public float[] hue = {0, 0.33f, 0.67f};
         public int paletteIndex = 0;
+        public int coloringMode = 0;
         public float colorStrength = 1.0f;
         public float paletteOffset = 0.0f;
         public int trapMode = 0;
@@ -317,6 +318,7 @@ public class FractalConfig {
         // Material
         config.material.hue = new float[]{params.getHueR(), params.getHueG(), params.getHueB()};
         config.material.paletteIndex = params.getPaletteIndex();
+        config.material.coloringMode = params.getColoringMode();
         config.material.colorStrength = params.getColorStrength();
         config.material.paletteOffset = params.getPaletteOffset();
         config.material.trapMode = params.getTrapMode();
@@ -485,6 +487,7 @@ public class FractalConfig {
         // Material
         params.setMaterialHue(material.hue[0], material.hue[1], material.hue[2]);
         params.setPaletteIndex(material.paletteIndex);
+        params.setColoringMode(material.coloringMode);
         params.setColorStrength(material.colorStrength);
         params.setPaletteOffset(material.paletteOffset);
         params.setTrapMode(material.trapMode);
