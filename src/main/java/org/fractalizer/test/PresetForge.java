@@ -95,6 +95,28 @@ public class PresetForge {
                 .palette(4).colorStrength(0.8f)
                 .metalness(0.4f).roughness(0.3f));
 
+        // --- Found by JuliaProspector, not by hand: constants sitting on the Mandelbulb
+        // boundary whose Julia sets branch instead of closing into a ball. ---
+        p.put("JULIA_FOUND_BRANCH", () -> SceneBuilder.mandelbulb()
+                .param("maxIterations", 20)
+                .param("juliaCx", -0.2422).param("juliaCy", 0.9995).param("juliaCz", 0.2219)
+                .camera(1.20f, 0.85f, -1.85f).lookAt(0f, 0f, 0f).fov(50)
+                .gradient(EMERALD)
+                .pathTracing(true).skyType(1)
+                .lightDir(2f, 2.5f, -2f).lightIntensity(1.4f)
+                .ambientColor(0.09f, 0.14f, 0.18f).ambientIntensity(0.32f)
+                .colorStrength(0.9f).metalness(0.35f).roughness(0.35f));
+
+        p.put("JULIA_FOUND_CLUSTER", () -> SceneBuilder.mandelbulb()
+                .param("maxIterations", 20)
+                .param("juliaCx", 0.7126).param("juliaCy", 0.7796).param("juliaCz", 0.2602)
+                .camera(1.20f, 0.85f, -1.85f).lookAt(0f, 0f, 0f).fov(50)
+                .gradient(VIOLET)
+                .pathTracing(true).skyType(2)
+                .lightDir(-1.8f, 2.2f, -2f).lightIntensity(1.4f)
+                .ambientColor(0.12f, 0.10f, 0.18f).ambientIntensity(0.34f)
+                .colorStrength(0.9f).metalness(0.3f).roughness(0.4f));
+
         // --- Mandelbox: self-similar, holds detail at any zoom; LOD earns its cost here ---
         p.put("MANDELBOX_DEEP", () -> SceneBuilder.mandelbox()
                 .param("scale", 2.0).param("minRadius", 0.25)

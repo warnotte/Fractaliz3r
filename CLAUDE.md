@@ -41,6 +41,11 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DeepZoomLab" -Dexec
 # Demo presets: build .frac files + render a preview of each so candidates can be judged.
 # Cameras come from FractalNavigator sweet spots, not default global framings.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PresetForge" -Dexec.args="presets presets_preview 960x540 48"
+
+# Autonomous discovery: search Julia-constant space for new fractals worth looking at.
+# Boundary constants are found on the CPU (no rendering), then rendered, scored, filtered
+# for diversity, and the winners written as .frac. ~180 candidates in ~6 s.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.JuliaProspector" -Dexec.args="prospect 180 320x180 6 8"
 ```
 
 ## Project Architecture

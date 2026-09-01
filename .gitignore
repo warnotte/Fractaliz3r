@@ -54,5 +54,8 @@ dzl*/
 ### Preset preview renders (regenerate with PresetForge) ###
 presets_preview/
 
+### Julia prospector output (regenerate with JuliaProspector) ###
+prospect/
+
 ### maven-shade leftover ###
 dependency-reduced-pom.xml

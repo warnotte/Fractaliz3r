@@ -294,6 +294,22 @@ Three headless tools in `org.fractalizer.test` (invocations in **[CLAUDE.md](../
 - **`DeepZoomLab`** — renders one camera list under a set of parameter variants and reports surface-masked metrics: `detail` (variance of the Laplacian), `edges%` (fraction of surface pixels with |Laplacian| > 8), `lum` and `contrast` (mean / stddev of surface luminance — these catch "it goes dark" and "it goes flat"), `cov%`. Background is masked via the depth AOV so a shrinking silhouette cannot masquerade as a change in surface quality. Variants resolve by reflection against the params **and** the node-graph leaf params, e.g. `detailLOD=0,2,4` or `juliaCx=0.42`.
 - **`PresetForge`** — builds demo `.frac` presets from `SceneBuilder` specs and renders a preview of each, so a candidate is judged before it is kept. Two traps it exists to avoid: the framing cameras come from `FractalNavigator` sweet spots (default global cameras do not show the detail a demo is for), and each spec must set its own **gradient** — `paletteIndex` does not feed the palette texture.
 
+- **`JuliaProspector`** — searches Julia-constant space for fractals nobody has framed yet, described below.
+
+### Autonomous discovery in Julia-constant space
+
+The Julia constant is a 3D parameter and every value of it is a **different fractal**, so the space of shapes is continuous — and almost entirely uninteresting. A constant well inside the Mandelbulb gives a smooth blob; one well outside gives disconnected dust. What makes the search tractable is the Mandelbrot/Julia duality: the constants worth rendering are the ones **on the boundary of the Mandelbulb**, and the distance estimator already knows where that boundary is.
+
+So the search is not a random sweep:
+
+1. **CPU, no rendering.** The same DE as `fractals/mandelbulb.glsl`, reimplemented in Java, is sphere-traced inward along a Fibonacci-sphere set of directions until it lands on the surface. Every landing point is a boundary constant by construction. A small offset per direction walks the candidate just inside or just outside, which controls how connected the resulting set is — inside gives fat closed forms, outside gives filigree.
+2. **GPU.** A small thumbnail per surviving candidate, classic shading, a fixed three-quarter camera.
+3. **Score.** The same `FrameScore.aesthetic()` the traveller uses: fine-detail energy × a coverage band peaking near 55% × where the detail energy sits in frame.
+4. **Diversity filter.** Ranking alone returns a *family portrait* — neighbouring constants give near-identical sets, and the first run had three of its top four from one direction. Candidates are taken greedily in rank order and kept only if they are at least `MIN_SEPARATION` from everything already kept, which turns the result into a catalogue of the space rather than its best neighbourhood.
+5. **Output.** Ranked list, contact sheet, and the winners written as `.frac`.
+
+Measured: 177 candidates rendered and scored in 6.2 s, 53 surviving a 0.35 separation. `JULIA_FOUND_BRANCH` and `JULIA_FOUND_CLUSTER` in `presets/` came out of it — branching, coral-like forms unlike anything that was in the preset set.
+
 ### Two gotchas for headless rendering
 
 - **The palette must be uploaded explicitly.** `FractalConfig.applyTo(params)` restores the gradient onto the params, but the GPU texture is only written by `GLSLFractalizerController.updatePaletteTexture(params.getCustomGradient())`. Skip it and every render comes out monochrome no matter what the preset says — which is exactly what the older headless harnesses do, so their images are greyscale by accident, not by design.
