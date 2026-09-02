@@ -62,6 +62,7 @@ hybrid/
 
 ### Colour probe output ###
 colorprobe*/
+colordemo/
 
 ### Ad-hoc A/B renders ###
 ab_*/

@@ -57,6 +57,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.HybridLab" -Dexec.a
 # Where saturation is lost: forces a pure R/G/B gradient and renders the same camera as
 # raw factors / diffuse / specular / final, so the pass that flattens colour is identifiable.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac colorprobe 480x270 12"
+
+# Which coloring modes can put more than one hue on an object: one scene under all 13,
+# as a labelled sheet with a hue-spread count. Modes 0-8 give one hue, 9-12 give several.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorDemo" -Dexec.args="presets/HYBRID_BOXBULB.frac colordemo 400x225 20"
 ```
 
 ## Project Architecture

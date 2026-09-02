@@ -48,6 +48,9 @@ public class PresetForge {
     private static final float[][] VIOLET = {
         {0.00f, 0.03f, 0.00f, 0.10f}, {0.30f, 0.32f, 0.04f, 0.45f},
         {0.60f, 0.85f, 0.25f, 0.62f}, {1.00f, 1.00f, 0.86f, 0.96f}};
+    private static final float[][] SPECTRUM = {
+        {0.00f, 0.08f, 0.12f, 0.47f}, {0.25f, 0.08f, 0.67f, 0.75f},
+        {0.50f, 0.94f, 0.78f, 0.24f}, {0.75f, 0.86f, 0.24f, 0.24f}, {1.00f, 0.59f, 0.16f, 0.67f}};
     private static final float[][] EMERALD = {
         {0.00f, 0.01f, 0.05f, 0.03f}, {0.35f, 0.04f, 0.33f, 0.20f},
         {0.70f, 0.45f, 0.85f, 0.38f}, {1.00f, 0.95f, 1.00f, 0.78f}};
@@ -81,6 +84,7 @@ public class PresetForge {
                 .param("maxIterations", 20)
                 .param("juliaCx", JCX).param("juliaCy", JCY).param("juliaCz", JCZ)
                 .camera(0f, 0.30f, -2.30f).lookAt(0f, 0.30f, 0f).fov(45)
+                .gradient(SPECTRUM).coloringMode(10)
                 .pathTracing(true).rimIntensity(0.03f).skyType(1)
                 .nebula(0.14f, 0.22f, 0.62f, 1.0f)
                 .lightDir(2, 3, -2).lightIntensity(1.3f)
@@ -105,6 +109,7 @@ public class PresetForge {
                 .param("juliaCx", JCX).param("juliaCy", JCY).param("juliaCz", JCZ)
                 .camera(0f, 0.450f, -0.827f).lookAt(0f, 0.457f, -0.793f).fov(45)
                 .detailLOD(2f, 24)
+                .gradient(SPECTRUM).coloringMode(9)
                 .pathTracing(true).rimIntensity(0.03f).skyType(1)
                 .nebula(0.18f, 0.16f, 0.60f, 1.0f)
                 .lightDir(2f, 1.5f, -2f).lightIntensity(1.4f)
@@ -129,7 +134,7 @@ public class PresetForge {
                 .param("maxIterations", 20)
                 .param("juliaCx", -0.2422).param("juliaCy", 0.9995).param("juliaCz", 0.2219)
                 .camera(1.20f, 0.85f, -1.85f).lookAt(0f, 0f, 0f).fov(50)
-                .gradient(EMERALD)
+                .gradient(SPECTRUM).coloringMode(9)
                 .pathTracing(true).rimIntensity(0.03f).skyType(1)
                 .nebula(0.42f, 0.14f, 0.52f, 1.0f)
                 .lightDir(2f, 2.5f, -2f).lightIntensity(1.4f)
@@ -140,7 +145,7 @@ public class PresetForge {
                 .param("maxIterations", 20)
                 .param("juliaCx", 0.7126).param("juliaCy", 0.7796).param("juliaCz", 0.2602)
                 .camera(1.20f, 0.85f, -1.85f).lookAt(0f, 0f, 0f).fov(50)
-                .gradient(VIOLET)
+                .gradient(SPECTRUM).coloringMode(9)
                 .pathTracing(true).rimIntensity(0.03f).skyType(2)
                 .lightDir(-1.8f, 2.2f, -2f).lightIntensity(1.4f)
                 .ambientColor(0.12f, 0.10f, 0.18f).ambientIntensity(0.34f)
@@ -151,7 +156,7 @@ public class PresetForge {
                                       new Step(StepType.ADD_C)),
                     12, 8f, DEMode.LOG))
                 .camera(1.26f, 0.90f, -2.55f).lookAt(0f, 0f, 0f).fov(50)
-                .gradient(EMERALD)
+                .gradient(SPECTRUM).coloringMode(10)
                 .pathTracing(true).rimIntensity(0.03f).skyType(1)
                 .nebula(0.16f, 0.20f, 0.72f, 1.0f)
                 .lightDir(2f, 3f, -2f).lightIntensity(1.3f)
@@ -164,7 +169,7 @@ public class PresetForge {
                                       boxFoldStep(1.3f, 0.5f, 1f, 1f), new Step(StepType.ADD_C)),
                     12, 8f, DEMode.LOG))
                 .camera(1.26f, 0.90f, -2.55f).lookAt(0f, 0f, 0f).fov(50)
-                .gradient(VIOLET)
+                .gradient(SPECTRUM).coloringMode(11)
                 .pathTracing(true).rimIntensity(0.03f).skyType(1)
                 .nebula(0.10f, 0.52f, 0.55f, 1.0f)
                 .lightDir(-1.8f, 2.4f, -2f).lightIntensity(1.4f)
@@ -176,7 +181,7 @@ public class PresetForge {
                 .param("scale", 2.0).param("minRadius", 0.25)
                 .camera(-1.4863f, 1.4465f, -6.0484f).lookAt(-1.45361f, 1.45941f, -6.01285f).fov(45)
                 .detailLOD(2f, 24)
-                .gradient(EMERALD)
+                .gradient(SPECTRUM).coloringMode(10)
                 .pathTracing(true).rimIntensity(0.03f).skyType(1)
                 .nebula(0.16f, 0.20f, 0.72f, 1.0f)
                 .lightDir(2, 3, -1).lightIntensity(1.9f)
@@ -199,7 +204,7 @@ public class PresetForge {
         // --- Detail camera from the traveller manifest ---
         p.put("MENGER_WALL", () -> SceneBuilder.menger()
                 .camera(-0.21993f, 1.03134f, -2.08363f).lookAt(-0.57876f, -0.08390f, -0.96397f).fov(50)
-                .gradient(ICE)
+                .gradient(SPECTRUM).coloringMode(9)
                 .pathTracing(true).rimIntensity(0.03f).skyType(1)
                 .nebula(0.62f, 0.30f, 0.10f, 1.0f)
                 .lightDir(2, 3, -2).lightIntensity(1.3f)

@@ -179,11 +179,22 @@ that is uniformly one hue. Measured on the surface, `HYBRID_BOXBULB` at 0.369 wa
 less saturated than the visibly-purple `JULIA_FOUND_CLUSTER` at 0.387 — brown is a
 saturated orange, and the problem was hue, never saturation.
 
-**Multi-hue gradients do not fix it.** Retested after the rim light was corrected, so the
-earlier rejection was not a confound: surface saturation drops from 0.369 to 0.154. The
-factor field varies faster than the pixel footprint, so adjacent palette positions average
-to grey within a pixel. The object is going to be essentially one hue; the choice that
-matters is *which* hue, and what the background does.
+**Multi-hue gradients do not fix it — in modes 0-8.** Surface saturation drops from 0.369
+to 0.154 when one is used there. Those modes build their lookup from orbit traps, whose
+field varies faster than a pixel, so sweeping the palette wide enough to cross several
+hues makes neighbouring positions average to grey inside a pixel.
+
+**Modes 9-12 do fix it.** They read geometry rather than orbit traps — surface orientation
+(9), world position (10), curvature (11), view angle (12) — which varies slowly and in
+large regions, so a multi-hue gradient survives. `test/ColorDemo` renders one scene under
+all thirteen modes as a labelled sheet with a hue-spread count per mode, and the split is
+unambiguous: 0-8 give one hue whatever gradient they are handed, 9-12 put several on the
+same object. This is what the shipped presets now use.
+
+**Choosing between them:** Triplanar (10) is keyed to world position, so on a deep-zoom
+framing its noise sits at a scale far larger than the view and flattens to a single value —
+`JULIA_BULB_ABYSS` blew out to white under it. Normal Map (9) depends only on orientation
+and is scale-free, which is what a close-up needs. Triplanar suits whole-object framings.
 
 **Fixed:** the nebula now has a colour of its own. `nebulaColor` and `nebulaTint`
 (`AbstractFractalParams`, serialized in `EffectsConfig`) blend `renderSpaceLegacy`'s nebula
