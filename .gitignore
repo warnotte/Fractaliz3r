@@ -63,5 +63,8 @@ hybrid/
 ### Colour probe output ###
 colorprobe*/
 
+### Ad-hoc A/B renders ###
+ab_*/
+
 ### maven-shade leftover ###
 dependency-reduced-pom.xml

@@ -46,7 +46,8 @@ public class DeepZoomLab {
     static int W, H, samples;
 
     record Cam(String name, float[] eye, float[] tgt, float fov) {}
-    record Metrics(double detail, double edges, double lum, double contrast, double coverage) {}
+    record Metrics(double detail, double edges, double lum, double contrast, double coverage,
+                   double saturation) {}
 
     public static void main(String[] args) throws Exception {
         if (args.length < 5) {
@@ -58,7 +59,7 @@ public class DeepZoomLab {
         String[] res = args[2].split("x");
         W = Integer.parseInt(res[0]); H = Integer.parseInt(res[1]);
         samples = Integer.parseInt(args[3]);
-        File camFile = new File(args[4]);
+        File camFile = new File(args[4]);   // or the literal "scene"
         String variantSpec = (args.length > 5) ? args[5] : "base";
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -87,6 +88,12 @@ public class DeepZoomLab {
         camera = params.getCamera();
 
         List<Cam> cams = new ArrayList<>();
+        // "scene" keeps the camera the .frac was saved with, so a preset can be compared
+        // against itself under a parameter variant without re-deriving its framing.
+        boolean useSceneCamera = args[4].equalsIgnoreCase("scene");
+        if (useSceneCamera) {
+            cams.add(new Cam("scene", null, null, 0f));
+        } else
         for (String line : Files.readAllLines(camFile.toPath())) {
             String s = line.trim();
             if (s.isEmpty() || s.startsWith("#")) continue;
@@ -106,8 +113,8 @@ public class DeepZoomLab {
         }
 
         System.out.printf("=== DeepZoomLab: %s (%dx%d, %d spp) - %s ===%n", type, W, H, samples, variantSpec);
-        System.out.printf("%-14s %-10s | %9s %7s %7s %8s %5s %7s%n",
-                "camera", "variant", "detail", "edges%", "lum", "contrast", "cov%", "ms");
+        System.out.printf("%-14s %-10s | %9s %7s %7s %8s %6s %5s %7s%n",
+                "camera", "variant", "detail", "edges%", "lum", "contrast", "sat", "cov%", "ms");
 
         for (Cam c : cams) {
             for (String v : variants) {
@@ -116,8 +123,9 @@ public class DeepZoomLab {
                 String tag = c.name() + (setterKey == null ? "" : "_" + setterKey + v);
                 Metrics m = renderAndScore(tag, c);
                 long ms = (System.nanoTime() - t0) / 1_000_000;
-                System.out.printf(Locale.ROOT, "%-14s %-10s | %9.1f %7.2f %7.1f %8.1f %5.0f %7d%n",
-                        c.name(), v, m.detail(), 100 * m.edges(), m.lum(), m.contrast(), 100 * m.coverage(), ms);
+                System.out.printf(Locale.ROOT, "%-14s %-10s | %9.1f %7.2f %7.1f %8.1f %6.3f %5.0f %7d%n",
+                        c.name(), v, m.detail(), 100 * m.edges(), m.lum(), m.contrast(),
+                        m.saturation(), 100 * m.coverage(), ms);
                 System.out.flush();
             }
         }
@@ -158,10 +166,12 @@ public class DeepZoomLab {
     }
 
     static Metrics renderAndScore(String tag, Cam c) throws Exception {
-        camera.setPosition(c.eye()[0], c.eye()[1], c.eye()[2]);
-        float[] q = CameraUtils.lookAt(c.eye(), c.tgt());
-        camera.setQuaternion(q[0], q[1], q[2], q[3]);
-        params.setFovDegrees(c.fov());
+        if (c.eye() != null) {
+            camera.setPosition(c.eye()[0], c.eye()[1], c.eye()[2]);
+            float[] q = CameraUtils.lookAt(c.eye(), c.tgt());
+            camera.setQuaternion(q[0], q[1], q[2], q[3]);
+            params.setFovDegrees(c.fov());
+        }
 
         controller.setExportSize(W, H);
         File rgb = new File(outDir, tag + ".png");
@@ -196,11 +206,19 @@ public class DeepZoomLab {
             if (Math.abs(lap) > 8.0) edgeCount++;
             lSum += lum[y*w+x]; lSq += lum[y*w+x] * lum[y*w+x];
         }
-        if (n < 100) return new Metrics(0, 0, 0, 0, 0);
+        if (n < 100) return new Metrics(0, 0, 0, 0, 0, 0);
         double detail = lapSq / n - (lapSum / n) * (lapSum / n);
         double meanL = lSum / n;
         double contrast = Math.sqrt(Math.max(0, lSq / n - meanL * meanL));
-        return new Metrics(detail, (double) edgeCount / n, meanL, contrast, (double) surf / tot);
+        double sat = 0;
+        for (int y = 1; y < h - 1; y++) for (int x = 1; x < w - 1; x++) {
+            if (dep.getRaster().getSample(x, y, 0) / 65535.0 <= 0.02) continue;
+            int p = img.getRGB(x, y);
+            double r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
+            double mx = Math.max(r, Math.max(g, b)), mn = Math.min(r, Math.min(g, b));
+            sat += (mx < 1e-6) ? 0 : (mx - mn) / mx;
+        }
+        return new Metrics(detail, (double) edgeCount / n, meanL, contrast, (double) surf / tot, sat / n);
     }
 
     static float f(String s) { return Float.parseFloat(s); }

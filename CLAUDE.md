@@ -37,6 +37,8 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.FractalNavigator" -
 # Deep-zoom detail lab: same cameras, several parameter variants, quantitative surface metrics
 # (detail = Laplacian variance, edges%, lum, contrast) -> proves a deep-zoom change instead of eyeballing.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DeepZoomLab" -Dexec.args="MANDELBOX dzl 480x270 4 nav/mbox_ladder.txt detailLOD=0,2,4"
+#   pass "scene" instead of a camera file to keep the camera the .frac was saved with,
+#   e.g. A/B any preset against itself: ... "presets/X.frac ab 640x360 24 scene rimIntensity=0.15,0.0"
 
 # Demo presets: build .frac files + render a preview of each so candidates can be judged.
 # Cameras come from FractalNavigator sweet spots, not default global framings.
