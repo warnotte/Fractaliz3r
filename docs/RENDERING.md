@@ -107,6 +107,40 @@ So roughly **4/5 of the rim is the cone-tracing offset** and 1/5 is genuine **li
 
 ---
 
+## Interactive preview vs full quality
+
+`renderPreview` and `renderFull` used to differ only in sample count. Both resized the
+engine to the **full** viewport and built the **same** uniforms, so navigating a
+path-traced scene paid for path tracing, full resolution, every ray step, shadow step, AO
+step and DoF on each frame. `withReducedQuality` existed on every params class and was
+called from nowhere.
+
+The preview path now cheapens itself in the uniform map only, leaving the scene's own
+settings untouched so the next full-quality pass is unaffected:
+
+- **`previewScale`** (0.2–1.0, default 0.5) — the engine is resized to that fraction of
+  the viewport and the ImageView scales the result back up. Resolution is the larger
+  lever: half scale is a quarter of the pixels. `engine.resize()` is a no-op when the size
+  is unchanged, so continuous navigation stays at preview size and only reallocates once,
+  on the way back to full quality.
+- **`previewFastShading`** (default on) — classic shading instead of path tracing, no DoF,
+  no volumetric fog, no deep-zoom LOD, half the ray steps, a quarter of the shadow steps,
+  2 AO steps.
+
+Measured on `NODE_COOL1`, cost of one navigation frame:
+
+| | frame |
+|---|---|
+| before — 1920×1080, path traced | 2459 ms |
+| after — scale 0.5, classic shading | **258 ms** (9.5×) |
+| after — scale 0.35 | **187 ms** (13×) |
+
+The return to full quality was already in place and is unchanged: `GLSLFractalizerApp`'s
+render loop calls `renderFull()` once `HQ_DELAY_MS` passes with no interaction, gated by
+the "Auto Full Quality" checkbox. Controls are in QualityPanel → Quality Settings.
+
+---
+
 ## Why renders looked washed out (rim light)
 
 Colour had been flat across the whole project, and the cause was neither the palette nor

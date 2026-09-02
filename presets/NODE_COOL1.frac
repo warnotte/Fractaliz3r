@@ -21,7 +21,7 @@
   },
   "rendering": {
     "maxRaySteps": 400,
-    "epsilon": 1.0E-5,
+    "epsilon": 1e-05,
     "qualityMultiplier": 1.0,
     "renderMode": 0,
     "shadowSoftness": 16.0,
@@ -132,7 +132,8 @@
       1.0,
       0.4,
       0.2
-    ]
+    ],
+    "coloringMode": 10
   },
   "effects": {
     "dofEnabled": false,
@@ -177,7 +178,7 @@
     "refinementSteps": 4,
     "stepRelaxation": 0.0,
     "adaptiveSampling": false,
-    "varianceThreshold": 5.0E-4,
+    "varianceThreshold": 0.0005,
     "minAdaptiveSamples": 16,
     "erosionEnabled": false,
     "erosionStrength": 0.5,

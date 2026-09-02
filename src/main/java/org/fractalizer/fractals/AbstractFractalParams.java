@@ -68,6 +68,13 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected int maxRaySteps;
     protected float epsilon;
 
+    // Interactive preview: how the viewport is drawn *while* the camera is moving.
+    // renderPreview and renderFull used to differ only in sample count, so navigating a
+    // path-traced scene meant paying for path tracing, full resolution and every quality
+    // setting on each frame. Full quality comes back on its own once interaction stops.
+    protected float previewScale = 0.5f;          // fraction of viewport resolution
+    protected boolean previewFastShading = true;  // classic shading instead of path tracing
+
     // Quality multiplier for adaptive precision (1.0 = normal, higher = more detail)
     protected float qualityMultiplier;
 
@@ -289,6 +296,8 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.maxRaySteps = 400;
         this.epsilon = 0.00001f;
         this.qualityMultiplier = 1.0f;
+        this.previewScale = 0.5f;
+        this.previewFastShading = true;
 
         // Raymarcher improvements
         this.coneTracingEnabled = true;
@@ -414,6 +423,8 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.maxRaySteps = this.maxRaySteps;
         target.epsilon = this.epsilon;
         target.qualityMultiplier = this.qualityMultiplier;
+        target.previewScale = this.previewScale;
+        target.previewFastShading = this.previewFastShading;
 
         // Raymarcher improvements
         target.coneTracingEnabled = this.coneTracingEnabled;
@@ -716,6 +727,11 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setMaxRaySteps(int steps) { this.maxRaySteps = steps; }
     public float getEpsilon() { return epsilon; }
     public void setEpsilon(float epsilon) { this.epsilon = epsilon; }
+    public float getPreviewScale() { return previewScale; }
+    public void setPreviewScale(float v) { this.previewScale = Math.max(0.2f, Math.min(1f, v)); }
+    public boolean isPreviewFastShading() { return previewFastShading; }
+    public void setPreviewFastShading(boolean v) { this.previewFastShading = v; }
+
     public float getQualityMultiplier() { return qualityMultiplier; }
     public void setQualityMultiplier(float multiplier) { this.qualityMultiplier = Math.max(0.5f, multiplier); }
 

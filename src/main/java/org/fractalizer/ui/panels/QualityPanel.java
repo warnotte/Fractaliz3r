@@ -37,6 +37,8 @@ public class QualityPanel extends ScrollPane implements Refreshable {
 
     // Quality
     private EnhancedSlider qualitySlider;
+    private EnhancedSlider previewScaleSlider;
+    private CheckBox previewFastCheck;
 
     // Shadows
     private EnhancedSlider shadowSoftnessSlider;
@@ -216,7 +218,29 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         Label infoLabel = new Label("Higher = more detail when close to surface.\nWarning: >2x is slow!");
         infoLabel.getStyleClass().add("hint-label");
 
-        box.getChildren().addAll(qualitySlider, infoLabel);
+        previewScaleSlider = new EnhancedSlider("Preview Scale", 0.2, 1.0, 0.5, false);
+        previewScaleSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setPreviewScale(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        previewFastCheck = new CheckBox("Fast preview shading");
+        previewFastCheck.setSelected(true);
+        previewFastCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setPreviewFastShading(previewFastCheck.isSelected());
+                renderCallback.requestRender();
+            }
+        });
+
+        Label previewInfo = new Label("Both apply only while you are moving.\nFull quality returns on its own when you stop.");
+        previewInfo.getStyleClass().add("hint-label");
+        previewInfo.setWrapText(true);
+
+        box.getChildren().addAll(qualitySlider, infoLabel,
+                previewScaleSlider, previewFastCheck, previewInfo);
 
         TitledPane pane = new TitledPane("Quality Settings", box);
         pane.setExpanded(false);
@@ -741,6 +765,8 @@ public class QualityPanel extends ScrollPane implements Refreshable {
 
             // Quality
             qualitySlider.setValue(p.getQualityMultiplier());
+            previewScaleSlider.setValue(p.getPreviewScale());
+            previewFastCheck.setSelected(p.isPreviewFastShading());
 
             // Shadows
             shadowSoftnessSlider.setValue(p.getShadowSoftness());

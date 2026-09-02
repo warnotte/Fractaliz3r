@@ -62,6 +62,8 @@ public class FractalConfig {
         public int maxRaySteps = 200;
         public float epsilon = 0.0001f;
         public float qualityMultiplier = 1.0f;
+        public float previewScale = 0.5f;
+        public boolean previewFastShading = true;
         public int renderMode = 0;
 
         // Shadows
@@ -292,6 +294,8 @@ public class FractalConfig {
         config.rendering.maxRaySteps = params.getMaxRaySteps();
         config.rendering.epsilon = params.getEpsilon();
         config.rendering.qualityMultiplier = params.getQualityMultiplier();
+        config.rendering.previewScale = params.getPreviewScale();
+        config.rendering.previewFastShading = params.isPreviewFastShading();
         config.rendering.renderMode = params.getRenderMode();
         config.rendering.shadowSoftness = params.getShadowSoftness();
         config.rendering.shadowSteps = params.getShadowSteps();
@@ -458,6 +462,8 @@ public class FractalConfig {
         params.setMaxRaySteps(rendering.maxRaySteps);
         params.setEpsilon(rendering.epsilon);
         params.setQualityMultiplier(rendering.qualityMultiplier);
+        params.setPreviewScale(rendering.previewScale);
+        params.setPreviewFastShading(rendering.previewFastShading);
         params.setRenderMode(rendering.renderMode);
         params.setShadowSoftness(rendering.shadowSoftness);
         params.setShadowSteps(rendering.shadowSteps);

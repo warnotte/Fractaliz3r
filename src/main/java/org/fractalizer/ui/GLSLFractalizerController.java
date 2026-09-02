@@ -230,10 +230,27 @@ public class GLSLFractalizerController implements RenderController {
     @Override
     public void renderPreview(Consumer<Image> onComplete, Consumer<Double> onProgress) {
         cancelRender();
-        engine.resize(viewportWidth, viewportHeight);
+
+        // Draw the moving viewport smaller and cheaper. Resolution is the larger lever —
+        // half scale is a quarter of the pixels — and dropping path tracing for classic
+        // shading is the other. engine.resize() is a no-op when the size is unchanged, so
+        // continuous navigation stays at preview size and only reallocates on the way back
+        // to full quality.
+        float scale = 1f;
+        boolean fast = false;
+        if (currentParams instanceof AbstractFractalParams pp) {
+            scale = pp.getPreviewScale();
+            fast = pp.isPreviewFastShading();
+        }
+        int pw = Math.max(160, Math.round(viewportWidth * scale));
+        int ph = Math.max(90, Math.round(viewportHeight * scale));
+        engine.resize(pw, ph);
         activateCurrentProgram();
 
         Map<String, Object> uniforms = buildUniforms();
+        if (fast) {
+            applyFastPreviewOverrides(uniforms);
+        }
 
         // ProgressiveRenderer already calls Platform.runLater, so callbacks run on FX thread
         progressiveRenderer.setOnImageUpdate(image -> {
@@ -245,6 +262,22 @@ public class GLSLFractalizerController implements RenderController {
         progressiveRenderer.setOnRenderComplete(null);
 
         progressiveRenderer.start(uniforms, previewSamples);
+    }
+
+    /** Cheapen a preview frame without touching the scene's own settings — the values are
+     *  overridden in the uniform map only, so the next full-quality pass is unaffected.
+     *  Path tracing is the dominant cost (126 ms against 16 ms for classic shading on the
+     *  benchmark Mandelbulb); the step counts and DoF are what remain after that. */
+    private void applyFastPreviewOverrides(Map<String, Object> uniforms) {
+        uniforms.put("pathTracingEnabled", 0);
+        uniforms.put("dofEnabled", 0);
+        uniforms.put("detailLOD", 0f);            // extra DE iterations are for stills
+        uniforms.put("volumetricFogEnabled", 0);
+        Object steps = uniforms.get("maxRaySteps");
+        if (steps instanceof Integer n) uniforms.put("maxRaySteps", Math.max(60, n / 2));
+        Object sh = uniforms.get("shadowSteps");
+        if (sh instanceof Integer n) uniforms.put("shadowSteps", Math.max(16, n / 4));
+        uniforms.put("aoSteps", 2);
     }
 
     /**
