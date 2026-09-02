@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-02T00:13:19.515236500Z",
+  "timestamp": "2026-09-02T00:30:08.795815500Z",
   "name": null,
   "description": null,
   "fractalType": "MANDELBOX",
@@ -144,6 +144,12 @@
     "indirectMultiplier": 0.5,
     "skyType": 1,
     "cloudDensity": 0.5,
+    "nebulaColor": [
+      0.12,
+      0.45,
+      0.48
+    ],
+    "nebulaTint": 1.0,
     "skySpeed": 1.0,
     "skyTime": 0.0,
     "skyParallax": 0.25,

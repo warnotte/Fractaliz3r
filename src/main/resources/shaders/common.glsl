@@ -124,6 +124,12 @@ uniform float envLightingMix;
 
 uniform int skyType;
 uniform float cloudDensity;
+// The nebula used to be coloured straight from the fractal palette, which meant the sky
+// and the object always shared a hue and a single-hue gradient turned the whole frame one
+// colour. nebulaTint blends towards a colour of its own: 0 keeps the historical
+// behaviour, 1 detaches the sky from the palette entirely.
+uniform vec3 nebulaColor;
+uniform float nebulaTint;
 uniform float skySpeed;
 uniform float skyTime;
 uniform float skyParallax;
@@ -725,7 +731,8 @@ vec3 renderSpaceLegacy(vec3 dir) {
     vec3 p1 = (dir + camPos * 0.02 * skyParallax) * 1.0 * skySpeed;
     p1.z += skyTime * 0.01;
     float n1 = warpedFbm(p1);
-    vec3 nebula = getSmoothPalette(n1 * 1.2 + paletteOffset) * smoothstep(0.2, 0.8, n1) * cloudDensity * 0.4;
+    vec3 _nebBase = mix(getSmoothPalette(n1 * 1.2 + paletteOffset), nebulaColor, nebulaTint);
+    vec3 nebula = _nebBase * smoothstep(0.2, 0.8, n1) * cloudDensity * 0.4;
     
     vec3 p2 = (dir + camPos * 0.05 * skyParallax) * 2.0 * skySpeed;
     p2.x += skyTime * 0.02;

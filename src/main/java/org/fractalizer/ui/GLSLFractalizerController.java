@@ -1126,6 +1126,8 @@ public class GLSLFractalizerController implements RenderController {
             // Sky
             uniforms.put("skyType", params.getSkyType());
             uniforms.put("cloudDensity", params.getCloudDensity());
+            uniforms.put("nebulaColor", params.getNebulaColor());
+            uniforms.put("nebulaTint", params.getNebulaTint());
             uniforms.put("skySpeed", params.getSkySpeed());
             uniforms.put("skyTime", params.getSkyTime());
             uniforms.put("skyParallax", params.getSkyParallax());

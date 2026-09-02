@@ -670,6 +670,14 @@ public class SceneBuilder {
      *  so it traverses the whole palette even when the factor field itself is narrow. */
     /** Fresnel rim light, 0..1. At the historical 0.15 it puts white on every grazing
      *  angle, which on a fractal is most of the surface; 0 lets the palette through. */
+    /** Nebula colour independent of the fractal palette. Without this the Space sky is
+     *  tinted by the same gradient as the object, so the whole frame reads as one hue. */
+    public SceneBuilder nebula(float r, float g, float b, float tint) {
+        config.effects.nebulaColor = new float[]{r, g, b};
+        config.effects.nebulaTint = tint;
+        return this;
+    }
+
     public SceneBuilder rimIntensity(float v) {
         config.rendering.rimIntensity = v;
         return this;

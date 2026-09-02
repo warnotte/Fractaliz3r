@@ -161,6 +161,8 @@ public class FractalConfig {
         // Procedural Sky
         public int skyType = 0;
         public float cloudDensity = 0.5f;
+        public float[] nebulaColor = {0.25f, 0.35f, 0.75f};
+        public float nebulaTint = 0f;
         public float skySpeed = 1.0f;
         public float skyTime = 0.0f;
         public float skyParallax = 0.25f;
@@ -366,6 +368,8 @@ public class FractalConfig {
         config.effects.indirectMultiplier = params.getIndirectMultiplier();
         config.effects.skyType = params.getSkyType();
         config.effects.cloudDensity = params.getCloudDensity();
+        config.effects.nebulaColor = params.getNebulaColor();
+        config.effects.nebulaTint = params.getNebulaTint();
         config.effects.skySpeed = params.getSkySpeed();
         config.effects.skyTime = params.getSkyTime();
         config.effects.skyParallax = params.getSkyParallax();
@@ -540,6 +544,10 @@ public class FractalConfig {
         params.setIndirectMultiplier(effects.indirectMultiplier);
         params.setSkyType(effects.skyType);
         params.setCloudDensity(effects.cloudDensity);
+        if (effects.nebulaColor != null && effects.nebulaColor.length == 3) {
+            params.setNebulaColor(effects.nebulaColor[0], effects.nebulaColor[1], effects.nebulaColor[2]);
+        }
+        params.setNebulaTint(effects.nebulaTint);
         params.setSkySpeed(effects.skySpeed);
         params.setSkyTime(effects.skyTime);
         params.setSkyParallax(effects.skyParallax);

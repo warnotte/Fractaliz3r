@@ -185,8 +185,17 @@ factor field varies faster than the pixel footprint, so adjacent palette positio
 to grey within a pixel. The object is going to be essentially one hue; the choice that
 matters is *which* hue, and what the background does.
 
-**Open:** the nebula has no colour of its own — it cannot be set independently of the
-fractal palette.
+**Fixed:** the nebula now has a colour of its own. `nebulaColor` and `nebulaTint`
+(`AbstractFractalParams`, serialized in `EffectsConfig`) blend `renderSpaceLegacy`'s nebula
+away from the palette lookup towards an explicit colour — tint 0 keeps the historical
+behaviour, so existing scenes are untouched. Every shipped preset sets a nebula that
+contrasts with its object: deep blue behind a golden bulb, teal behind a violet one, warm
+amber behind an icy Menger.
+
+Moving the presets to a neutral studio sky was the wrong answer to this, and worth
+recording as a trade not to repeat: it removed the monochrome frame by removing the
+background altogether, which is a worse image than the one it replaced. The sky needed its
+own colour, not to be switched off.
 
 ---
 

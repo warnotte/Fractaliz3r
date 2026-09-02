@@ -162,6 +162,10 @@ public abstract class AbstractFractalParams implements FractalParams {
     // Sky
     protected int skyType; // 0=Clouds, 1=Space, 2=Ocean, 3=Studio
     protected float cloudDensity;
+    // Nebula colour, independent of the fractal palette. tint 0 = historical behaviour
+    // (sky coloured by the same gradient as the fractal), 1 = fully its own colour.
+    protected float nebulaR = 0.25f, nebulaG = 0.35f, nebulaB = 0.75f;
+    protected float nebulaTint = 0f;
     protected float skySpeed; // Renamed to "Variation" in UI
     protected float skyTime;  // Manual time control
     protected float skyParallax;
@@ -363,6 +367,8 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.indirectMultiplier = 0.5f;
         this.skyType = 1; // Default to Deep Space
         this.cloudDensity = 0.5f;
+        this.nebulaR = 0.25f; this.nebulaG = 0.35f; this.nebulaB = 0.75f;
+        this.nebulaTint = 0f;
         this.skySpeed = 1.0f; // Variation scale
         this.skyTime = 0.0f;
         this.skyParallax = 0.25f;
@@ -491,6 +497,8 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.indirectMultiplier = this.indirectMultiplier;
         target.skyType = this.skyType;
         target.cloudDensity = this.cloudDensity;
+        target.nebulaR = this.nebulaR; target.nebulaG = this.nebulaG; target.nebulaB = this.nebulaB;
+        target.nebulaTint = this.nebulaTint;
         target.skySpeed = this.skySpeed;
         target.skyTime = this.skyTime;
         target.skyParallax = this.skyParallax;
@@ -895,6 +903,11 @@ public abstract class AbstractFractalParams implements FractalParams {
     // Sky
     public int getSkyType() { return skyType; }
     public void setSkyType(int type) { this.skyType = type; }
+    public float[] getNebulaColor() { return new float[]{nebulaR, nebulaG, nebulaB}; }
+    public void setNebulaColor(float r, float g, float b) { nebulaR = r; nebulaG = g; nebulaB = b; }
+    public float getNebulaTint() { return nebulaTint; }
+    public void setNebulaTint(float v) { this.nebulaTint = Math.max(0f, Math.min(1f, v)); }
+
     public float getCloudDensity() { return cloudDensity; }
     public void setCloudDensity(float density) { this.cloudDensity = density; }
     public float getSkySpeed() { return skySpeed; }
