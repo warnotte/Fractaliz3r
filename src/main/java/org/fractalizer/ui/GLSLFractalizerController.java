@@ -1063,6 +1063,7 @@ public class GLSLFractalizerController implements RenderController {
             // GLSL expects vec4(x, y, z, w), so reorder from Java's [w, x, y, z]
             uniforms.put("camQuat", new float[]{quat[1], quat[2], quat[3], quat[0]});
             uniforms.put("fov", (float) Math.toDegrees(params.getFov()));
+            uniforms.put("tanHalfFov", (float) Math.tan(params.getFov() * 0.5));
             uniforms.put("projectionMode", params.getProjectionMode());
 
             // Quality

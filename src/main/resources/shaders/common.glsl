@@ -48,6 +48,7 @@ uniform float time;
 uniform vec3 camPos;
 uniform vec4 camQuat;
 uniform float fov;
+uniform float tanHalfFov;   // tan(radians(fov) * 0.5), computed once per frame
 uniform int projectionMode;
 
 uniform vec3 lightDir;
@@ -1344,7 +1345,7 @@ float computeStep(float dist, float quality, float stepFactor) {
 
 /** World-space half-height of the view frustum at distance d from the camera. */
 float viewScaleAt(float d) {
-    return d * tan(radians(fov) * 0.5);
+    return d * tanHalfFov;
 }
 
 /** World-space size of one pixel at distance d from the camera. */
