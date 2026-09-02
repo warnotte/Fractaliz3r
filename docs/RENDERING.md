@@ -153,6 +153,43 @@ saving a scene loses it on reload — the same class of gap as `coloringMode` ha
 
 ---
 
+## Why a frame reads as a single tone (palette-driven sky)
+
+Separate from the rim light, and just as structural. The Space sky — `skyType 1`, the
+default in most presets — builds its nebula from the **same palette texture the fractal
+reads**:
+
+```glsl
+vec3 nebula = getSmoothPalette(n1 * 1.2 + paletteOffset) * smoothstep(...) * cloudDensity * 0.4;
+```
+
+So object and background are always the same hue family. With a single-hue gradient the
+entire frame comes out one colour, which is exactly what "everything is brown" looks like.
+Same object, same gradient, three skies:
+
+| sky | result |
+|-----|--------|
+| 1 — Space (reads the palette) | green object on a green sky, one tone |
+| 2 — Ocean | green object on a blue sky |
+| 3 — Studio | green object on neutral grey |
+
+**A related trap when judging this:** measure saturation over **surface pixels only**. A
+whole-frame mean includes a palette-tinted sky and reports a colourful number for an image
+that is uniformly one hue. Measured on the surface, `HYBRID_BOXBULB` at 0.369 was *not*
+less saturated than the visibly-purple `JULIA_FOUND_CLUSTER` at 0.387 — brown is a
+saturated orange, and the problem was hue, never saturation.
+
+**Multi-hue gradients do not fix it.** Retested after the rim light was corrected, so the
+earlier rejection was not a confound: surface saturation drops from 0.369 to 0.154. The
+factor field varies faster than the pixel footprint, so adjacent palette positions average
+to grey within a pixel. The object is going to be essentially one hue; the choice that
+matters is *which* hue, and what the background does.
+
+**Open:** the nebula has no colour of its own — it cannot be set independently of the
+fractal palette.
+
+---
+
 ## Deep Zoom (Fine Detail)
 
 What actually limits detail during a deep dive, measured with `DeepZoomLab` (see Test Harnesses).

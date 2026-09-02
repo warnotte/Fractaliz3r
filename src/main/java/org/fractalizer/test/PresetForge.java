@@ -147,8 +147,8 @@ public class PresetForge {
                                       new Step(StepType.ADD_C)),
                     12, 8f, DEMode.LOG))
                 .camera(1.26f, 0.90f, -2.55f).lookAt(0f, 0f, 0f).fov(50)
-                .gradient(AMBER)
-                .pathTracing(true).rimIntensity(0.03f).skyType(1)
+                .gradient(EMERALD)
+                .pathTracing(true).rimIntensity(0.03f).skyType(3)
                 .lightDir(2f, 3f, -2f).lightIntensity(1.3f)
                 .ambientColor(0.10f, 0.13f, 0.20f).ambientIntensity(0.33f)
                 .colorStrength(1.0f).paletteOffset(0.05f)
@@ -160,7 +160,7 @@ public class PresetForge {
                     12, 8f, DEMode.LOG))
                 .camera(1.26f, 0.90f, -2.55f).lookAt(0f, 0f, 0f).fov(50)
                 .gradient(VIOLET)
-                .pathTracing(true).rimIntensity(0.03f).skyType(1)
+                .pathTracing(true).rimIntensity(0.03f).skyType(3)
                 .lightDir(-1.8f, 2.4f, -2f).lightIntensity(1.4f)
                 .ambientColor(0.09f, 0.13f, 0.20f).ambientIntensity(0.33f)
                 .colorStrength(1.0f).paletteOffset(0.45f).metalness(0.4f).roughness(0.3f));

@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-01T23:53:11.892072300Z",
+  "timestamp": "2026-09-02T00:13:19.513339900Z",
   "name": null,
   "description": null,
   "fractalType": "NODE_GRAPH",
@@ -142,7 +142,7 @@
     "roughness": 0.3,
     "skyIntensity": 1.0,
     "indirectMultiplier": 0.5,
-    "skyType": 1,
+    "skyType": 3,
     "cloudDensity": 0.5,
     "skySpeed": 1.0,
     "skyTime": 0.0,
