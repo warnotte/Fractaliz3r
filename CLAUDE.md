@@ -69,6 +69,9 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResponsivenessProbe
 # Proves the cheap interactive preview cannot leak into an export: same scene exported cold
 # and again straight after a preview, compared pixel for pixel.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportAfterPreviewProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 640x360 12"
+# Every setting a .frac is supposed to carry, written and read back. No GPU. Two settings
+# had silently failed to persist (coloringMode, the whole post-processing chain).
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ConfigRoundTripProbe"
 ```
 
 ## Project Architecture

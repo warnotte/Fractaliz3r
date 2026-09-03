@@ -768,6 +768,26 @@ public class GLSLEngine implements AutoCloseable {
             c.audioForceVignette = this.audioForceVignette; c.audioForceCA = this.audioForceCA;
             return c;
         }
+        /** Copy persisted values in place. A load must not swap the instance: the FX panel
+         *  holds a reference to it, and the audio deltas are live state that belongs to the
+         *  running session, not to the saved scene. */
+        public void copyFrom(PostProcessParams o) {
+            if (o == null) return;
+            toneMapMode = o.toneMapMode; exposure = o.exposure;
+            bloomEnabled = o.bloomEnabled; bloomIntensity = o.bloomIntensity;
+            bloomThreshold = o.bloomThreshold; bloomRadius = o.bloomRadius;
+            chromaticAberrationEnabled = o.chromaticAberrationEnabled;
+            chromaticAberrationIntensity = o.chromaticAberrationIntensity;
+            vignetteEnabled = o.vignetteEnabled; vignetteIntensity = o.vignetteIntensity;
+            vignetteSoftness = o.vignetteSoftness;
+            filmGrainEnabled = o.filmGrainEnabled; filmGrainIntensity = o.filmGrainIntensity;
+            sharpenEnabled = o.sharpenEnabled; sharpenIntensity = o.sharpenIntensity;
+            saturation = o.saturation;
+            lensEffectsEnabled = o.lensEffectsEnabled; lensDirtIntensity = o.lensDirtIntensity;
+            starburstIntensity = o.starburstIntensity;
+            colorGradingMode = o.colorGradingMode; colorGradingIntensity = o.colorGradingIntensity;
+        }
+
         public void applyCinematicPreset() {
             toneMapMode = 2; exposure = 1.1f; bloomEnabled = true; bloomIntensity = 0.4f; bloomThreshold = 0.8f; bloomRadius = 4;
             chromaticAberrationEnabled = true; chromaticAberrationIntensity = 0.003f; vignetteEnabled = true; vignetteIntensity = 0.4f; vignetteSoftness = 0.6f;   

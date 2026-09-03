@@ -757,6 +757,7 @@ public class GLSLFractalizerApp extends Application {
                 if (animationManager != null) {
                     config.animation = animationManager.exportAnimation();
                 }
+                config.postProcess = controller.getEngine().getPostProcessParams().copy();
                 
                 FractalConfigManager.save(config, file);
                 currentConfigFile = file;
@@ -788,6 +789,11 @@ public class GLSLFractalizerApp extends Application {
             // Apply config to current params
             AbstractFractalParams params = (AbstractFractalParams) controller.getParams();
             config.applyTo(params);
+
+            // Filled in place: the FX panel holds a reference to this instance.
+            if (config.postProcess != null) {
+                controller.getEngine().getPostProcessParams().copyFrom(config.postProcess);
+            }
 
             // Update fractal panel reference
             fractalPanel.setParams(params);

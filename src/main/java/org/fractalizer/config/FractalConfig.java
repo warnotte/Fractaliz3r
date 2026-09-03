@@ -45,6 +45,12 @@ public class FractalConfig {
     public Map<String, Object> fractalParams = new HashMap<>();
 
     // Animation (optional - only present if animation has keyframes)
+    // Tone mapping, exposure, saturation, bloom and the rest of the FX chain live on the
+    // engine rather than on the fractal params, and were therefore never written to a
+    // .frac: tuning them and saving the scene lost them on reload. Serialized directly —
+    // the audio deltas on that class are transient and stay out of the file.
+    public org.fractalizer.engine.GLSLEngine.PostProcessParams postProcess;
+
     public AnimationConfig animation;
 
     // ========================================================================
