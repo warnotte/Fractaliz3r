@@ -141,6 +141,34 @@ the "Auto Full Quality" checkbox. Controls are in QualityPanel → Quality Setti
 
 ---
 
+## Progressive batching and how soon a render can be interrupted
+
+`ProgressiveRenderer` submits a batch of samples to the GL thread as one blocking call and
+only tests the cancelled flag **between** batches, so the batch size is also the worst-case
+delay before navigation can interrupt a full-quality pass. It was a fixed 8: free on a cheap
+scene, and seconds of dead viewport at 1080p path-traced where a sample costs ~600 ms.
+
+Batches are now sized from the measured cost of the previous one, targeting `BATCH_TARGET_NS`
+(120 ms) of wall clock and capped at the old 8 so cheap scenes are unchanged. Measured at
+1280x720 path traced: worst tick **372 ms down to 130 ms**.
+
+Two things had to be right for that to be a win rather than a trade:
+
+- The readback and Image conversion in `updateImage()` is a **fixed cost per tick**, so
+  sizing batches for responsiveness alone bought thirteen readbacks instead of three and a
+  40% longer render. The display refresh is rate-limited separately (`IMAGE_INTERVAL_NS`,
+  200 ms), which buys interruptibility without buying readbacks.
+- The batch timing needs an explicit `glSync()`. GL calls return before the GPU is done, and
+  without the wait the estimate collapses, the batch grows back to 8 and the worst tick goes
+  to 896 ms — worse than the starting point. Verified by removing it.
+
+Exports do not go through this path; see **[EXPORT.md](EXPORT.md)** for their own
+progress-vs-work problem. `test/ResponsivenessProbe` reports the longest tick;
+`test/ResizeProbe` measures the framebuffer reallocation a preview/full switch costs (9.5 ms
+at 1080p, 24.8 ms at 4K — real, but minor next to the batch).
+
+---
+
 ## Why renders looked washed out (rim light)
 
 Colour had been flat across the whole project, and the cause was neither the palette nor
@@ -419,7 +447,32 @@ Display-output and shading refinements (`postprocess.glsl`, `raytracer.glsl`):
 
 ## Test Harnesses: Regression, Benchmark, Traveller
 
-Three headless tools in `org.fractalizer.test` (invocations in **[CLAUDE.md](../CLAUDE.md)** Build Commands):
+Twelve headless tools in `org.fractalizer.test` (invocations in **[CLAUDE.md](../CLAUDE.md)**
+Build Commands). Most exist because a real bug got through a reading of the code — running
+one is faster and more reliable than re-reading the path it covers:
+
+| tool | what it catches |
+|------|-----------------|
+| `RenderRegression` | visual regression + benchmark; accepts a detail-scene manifest |
+| `DeepZoomLab` | detail / saturation / contrast on a camera list or the scene's own camera (`scene`), A/B any parameter |
+| `ColorProbe` | which shading pass loses saturation (ORBIT_TRAP → DIFFUSE → FINAL) |
+| `ColorDemo` | which coloring modes put more than one hue on an object |
+| `JuliaProspector` | autonomous search of Julia-constant space |
+| `HybridLab` | hybrid chains, with controls that must reproduce the stand-alone formulas |
+| `FractalNavigator` | global → fine-detail camera traveller |
+| `PresetForge` | build demo presets and render a preview of each |
+| `ResizeProbe` | framebuffer cost of a preview↔full switch |
+| `ResponsivenessProbe` | worst tick = delay before a cancel can interrupt a render |
+| `ExportProgressProbe` | how far ahead of the work an export progress bar runs |
+| `ExportAfterPreviewProbe` | the cheap preview must not leak into an export |
+| `ConfigRoundTripProbe` | does a setting survive save and reload (no GPU) |
+| `UiWiringProbe` | is a control actually **on** the built panel (no window) |
+
+The last two cover bugs that are invisible in the source: a control that is written, wired
+to an action and never added to its container, and a setting that is simply absent from the
+saved file. Both had already got through twice.
+
+The three below are the ones with enough behaviour to need describing:
 
 - **`RenderRegression`** — renders fixed scenes deterministically (bit-exact reproducible per GPU, self-diff 0). `update` writes golden images, `check` diffs against them and fails on any change beyond a small tolerance, `bench` reports median render time. Goldens are GPU-specific and gitignored (`test_regression/`). Accepts a navigator manifest to validate/bench on fine-**detail** views instead of default global cameras.
 - **`FractalNavigator`** — autonomous global → fine-detail camera "traveller", validated across ~15 fractal types + node-graph `.frac` presets:

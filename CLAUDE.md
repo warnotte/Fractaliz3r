@@ -110,6 +110,7 @@ org.fractalizer
 │   ├── CSGNode.java                # Binary: Union/Intersect/Subtract/Morph
 │   ├── TransformNode.java          # Unary: 7 modes (Standard/Mirror/Twist/Bend/Taper/Rep/Rep1D)
 │   ├── HybridNode.java             # Leaf: chains formulas INSIDE one iteration loop
+│   ├── HybridPresets.java          # 9 named chains, offered as "Load a chain…" in the editor
 │   ├── EffectNode.java             # Unary: Erosion/Crystal/Moss
 │   ├── MaterialNode.java           # Unary: per-node material overrides
 │   ├── GraphCompiler.java          # Compiles node tree → composite GLSL shader (8 phases)
@@ -142,6 +143,22 @@ org.fractalizer
         ├── PostProcessingPanel.java    # Bloom, tone mapping, color correction
         ├── AudioPanel.java             # Audio-reactive controls + offline video export
         └── ExportPanel.java            # Image/animation export with motion blur
+
+test/  (headless, GPU where noted — run them instead of re-reading the render path)
+├── RenderRegression.java        # golden-image diff + benchmark, global and detail scenes
+├── DeepZoomLab.java             # detail/saturation metrics, A/B any param on any .frac
+├── ColorProbe.java              # which shading pass loses saturation
+├── ColorDemo.java               # which coloring modes give more than one hue
+├── JuliaProspector.java         # autonomous search of Julia-constant space
+├── HybridLab.java               # hybrid chains + bit-exact controls; "presets" = the library
+├── FractalNavigator.java        # global -> fine-detail camera traveller
+├── PresetForge.java             # build demo .frac files + preview each
+├── ResizeProbe.java             # framebuffer cost of a preview<->full switch
+├── ResponsivenessProbe.java     # worst tick = delay before a cancel can land
+├── ExportProgressProbe.java     # how far ahead of the work a progress bar runs
+├── ExportAfterPreviewProbe.java # the cheap preview must not leak into an export
+├── ConfigRoundTripProbe.java    # does a setting survive save/reload (no GPU)
+└── UiWiringProbe.java           # is a control actually ON the built panel (no window)
 ```
 
 ### GLSL Shaders (`src/main/resources/shaders/`)
@@ -181,13 +198,19 @@ Full documentation: **[docs/NODE_GRAPH.md](docs/NODE_GRAPH.md)**
 
 ## Detailed Documentation Index
 
+Most of what this project learned the hard way is in these files rather than in the code.
+Before reading a render path to answer a question about it, check whether one of the
+harnesses in **[docs/RENDERING.md](docs/RENDERING.md) § Test Harnesses** already measures
+it — several exist precisely because reading the code gave the wrong answer.
+
+
 | Topic | File | Contents |
 |-------|------|----------|
 | Shader pipeline | [docs/SHADER_PIPELINE.md](docs/SHADER_PIPELINE.md) | Assembly modes, ShaderPreprocessor, uniform lifecycle, recompilation triggers |
-| Node graph | [docs/NODE_GRAPH.md](docs/NODE_GRAPH.md) | All node types, GraphCompiler phases, uniforms, animation, serialization, UI |
-| Rendering | [docs/RENDERING.md](docs/RENDERING.md) | Blue noise, cone tracing, adaptive sampling, cinematic pipeline, effects, coloring, spline camera, HUD |
+| Node graph | [docs/NODE_GRAPH.md](docs/NODE_GRAPH.md) | All node types incl. **HybridNode** (formulas composed inside one iteration loop) and its chain library, GraphCompiler phases, uniforms, animation, serialization, UI |
+| Rendering | [docs/RENDERING.md](docs/RENDERING.md) | Blue noise, cone tracing, adaptive sampling, cinematic pipeline, effects, coloring, spline camera, HUD. Also: **why colour looked flat** (rim light, palette-tinted sky, which coloring modes carry more than one hue), **deep zoom** (view-relative scales, iteration LOD, what the formula limits), **interactive preview vs full quality**, **progressive batching and interruptibility**, and the twelve test harnesses |
 | Features | [docs/FEATURES.md](docs/FEATURES.md) | EnhancedSlider, dice randomizer, morph crossfade, custom shader editor, boolean ops, nesting |
-| Export | [docs/EXPORT.md](docs/EXPORT.md) | VR/360, tiled rendering, AOV export, mesh export, video encoding, jlink release, visual regression test |
+| Export | [docs/EXPORT.md](docs/EXPORT.md) | VR/360, tiled rendering, AOV export, mesh export, video encoding, jlink release, visual regression test, **why an export progress bar can lie** |
 | Audio-reactive | [docs/AUDIO_REACTIVE.md](docs/AUDIO_REACTIVE.md) | Spectrum analysis, beat/onset detection, mappings, offline export pipeline |
 
 ## How to Add a New Fractal Type

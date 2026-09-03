@@ -57,6 +57,34 @@ Automatic MP4 creation via FFmpeg (H.265 HEVC) with `+faststart` for web optimiz
 
 ---
 
+## Export Progress (why a bar can lie)
+
+`engine.renderSamples()` issues GL commands and returns; `runOnGLThread` waits for them to
+be **issued**, not for the GPU to finish. Left alone, an export loop pushes every batch into
+the driver queue far faster than it drains, so progress reports submissions rather than
+work. Measured on a 2600x1600, 128-sample export: the bar reached 100% after **0.07 s of a
+26 s render** and sat full for the rest.
+
+All six sample loops therefore wait on the GPU before reporting — the four batch loops
+(`exportSingleToPNG`, `exportTiledToPNG`, `exportAnimationFrameSingle`,
+`exportAnimationFrameTiled`) and the two motion-blur loops, which render sample by sample
+through `renderSample`. 100% now arrives at 22.4 s of a 23.0 s export. The two remaining
+`renderSample` callers are AOV exports: one sample followed immediately by `readImage()`,
+which waits by itself and has no progress bar to be wrong.
+
+**The wait is not free everywhere.** A batch of eight samples takes ~1.6 s at 2600x1600,
+where draining the pipeline is noise, and ~28 ms at 480x270, where syncing every batch cost
+~18% on the benchmark. Timing the first batch to decide does **not** work — it carries the
+program activation and buffer reset and always looks slow. The gate is therefore
+`width x height x samples > SYNC_MIN_WORK`, known before the loop starts. It ignores how
+expensive the scene is, so an unusually slow small export gets a coarse bar; those finish in
+about a second regardless.
+
+`test/ExportProgressProbe` measures the gap between the first 100% report and the moment the
+export actually completes, for both the still and the animation-frame paths.
+
+---
+
 ## Visual Regression Test
 
 A headless rendering test (`TiledRenderTest.java`) that exports the same Mandelbulb scene at multiple resolutions. **Run this after any shader or rendering pipeline change** to verify no visual regression.
