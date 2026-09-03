@@ -88,6 +88,26 @@ public class UiWiringProbe {
                 check("toolbar exposes \"+ Hybrid\"", labels.contains("+ Hybrid"));
                 check("toolbar exposes \"+ Fractal\" (control)", labels.contains("+ Fractal"));
 
+                // The node context menu is built on demand for the node under the cursor,
+                // so it is reached through its builder rather than through a real click.
+                try {
+                    var root = ngp.getGraphRoot();
+                    var m = NodeGraphEditor.class.getDeclaredMethod("buildNodeContextMenu", GraphNode.class);
+                    m.setAccessible(true);
+                    m.invoke(editor, root);
+                    var f = NodeGraphEditor.class.getDeclaredField("contextMenu");
+                    f.setAccessible(true);
+                    var menu = (javafx.scene.control.ContextMenu) f.get(editor);
+                    List<String> items = new ArrayList<>();
+                    for (var mi : menu.getItems()) if (mi.getText() != null) items.add(mi.getText());
+                    check("node menu offers \"Replace with Hybrid Chain\"",
+                            items.contains("Replace with Hybrid Chain"));
+                    check("node menu offers \"Add Hybrid Chain (union)\"",
+                            items.contains("Add Hybrid Chain (union)"));
+                } catch (Exception ex) {
+                    failures.add("could not inspect the node context menu: " + ex);
+                }
+
                 Button hybridBtn = findButton(editor, "+ Hybrid");
                 if (hybridBtn != null) {
                     hybridBtn.fire();

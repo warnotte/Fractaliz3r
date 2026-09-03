@@ -311,7 +311,9 @@ public class NodeGraphEditor extends VBox {
         addFractalBtn.setOnAction(e -> addFractalNode());
 
         Button addHybridBtn = new Button("+ Hybrid");
-        addHybridBtn.setTooltip(new Tooltip("Add a hybrid chain: several formulas composed inside one iteration loop"));
+        addHybridBtn.setTooltip(new Tooltip("Add a hybrid chain — several formulas composed inside one "
+        + "iteration loop. Joins the existing graph with a Union, like + Fractal does; to work on a "
+        + "chain alone, right-click a node and choose Replace with Hybrid Chain."));
         addHybridBtn.setOnAction(e -> addHybridNode());
 
         MenuButton addPrimitiveBtn = new MenuButton("+ Primitive");
@@ -692,9 +694,18 @@ public class NodeGraphEditor extends VBox {
             contextMenu.getItems().add(changeTypeMenu);
         }
 
-        MenuItem addHybridHere = new MenuItem("Add Hybrid Chain");
+        MenuItem addHybridHere = new MenuItem("Add Hybrid Chain (union)");
         addHybridHere.setOnAction(e -> addHybridNode());
         contextMenu.getItems().add(addHybridHere);
+
+        MenuItem replaceWithHybrid = new MenuItem("Replace with Hybrid Chain");
+        replaceWithHybrid.setOnAction(e -> {
+            pushUndoSnapshot();
+            replaceNode(node, new HybridNode());
+            selectedNode = null;
+            onStructuralChange();
+        });
+        contextMenu.getItems().add(replaceWithHybrid);
 
         MenuItem deleteItem = new MenuItem("Delete");
         deleteItem.setOnAction(e -> deleteSelected());
