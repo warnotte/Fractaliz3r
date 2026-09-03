@@ -32,15 +32,18 @@ Creative feature ideas for Fractaliz3r. Status: IDEA (not started), IN PROGRESS,
 ## Open Ideas
 
 ### 14. New Fractal Formulas
-**Status:** IDEA (Mandelorus done)
+**Status:** PARTIAL — Mandelorus done; Buffalo, BoxBulb and MarbleMarcher are now chains in
+the hybrid node library (HybridPresets), reachable without writing a formula. The rest still
+need real new maths: Phoenix needs the previous z, Tetrabrot a quaternion square step,
+MandelBolic / Appell / Borromean new step types.
 
 Exotic fractal types to expand the formula library:
 - ~~Mandelorus~~ — DONE
-- **Buffalo** — Mandelbulb with absolute-value folds, furry plate-like textures
-- **BoxBulb** — Mandelbox + Mandelbulb hybrid
+- ~~**Buffalo**~~ — DONE as a hybrid chain (Bulb -> Abs Fold -> Add Seed), no shader needed
+- ~~**BoxBulb**~~ — DONE as a hybrid chain (Bulb -> Box Fold -> Add Seed); also ships as presets/HYBRID_BOXBULB.frac
 - **Tetrabrot** — 4D pseudo-quaternion set, diamond-like geometric symmetries
 - **Phoenix** — Phoenix Julia set in 3D
-- **MarbleMarcher** — Dynamic Menger IFS with rotation/shifting
+- ~~**MarbleMarcher**~~ — DONE as a hybrid chain (Menger Fold -> Rotate), no shader needed
 - **MandelBolic** — Hyperbolic 3-space extension (Poincaré-Ahlfors)
 - **Appell** — Appell Polynomials / Clifford Analysis, skeleton-like patterns
 - **Borromean** — 3 interlocking complex planes, tetrahedral symmetries
