@@ -76,6 +76,9 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ConfigRoundTripProb
 # Builds the node graph panel headless and checks a control is actually ON it. The
 # "+ Hybrid" button was written, wired to an action, and never added to the toolbar.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.UiWiringProbe"
+# How far ahead of the work an export progress bar runs: time of the first 100%% report
+# against the moment the export future actually completes.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportProgressProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 2600x1600 128"
 ```
 
 ## Project Architecture
