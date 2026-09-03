@@ -10,58 +10,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 mvn compile              # Build
-mvn test                 # Run tests
+mvn test                 # Unit tests (JUnit, no GPU) — exactly what CI runs
 mvn javafx:run           # Run app (JavaFX)
-mvn package              # Package JAR
+mvn package              # Shaded JAR in target/Fractaliz3r-<version>.jar
 mvn clean install        # Clean rebuild
-mvn clean javafx:jlink package -DskipTests  # Release (jlink)
+mvn -Prelease clean javafx:jlink package -DskipTests   # Release image (jlink + LWJGL DLLs) in target/image/
 ```
 
-**Visual regression tests** (run after shader/rendering changes):
+**Unit tests** live in `src/test/java` and need no GPU: graph compiler output, material SSBO
+layout, hybrid chains and their library, `.frac` save/reload round trip (`ConfigRoundTripTest`),
+camera and animation maths, and the node graph panel built against a stub controller
+(`UiWiringTest`, which is how a control that was written but never added to its toolbar gets
+caught). `.github/workflows/ci.yml` runs `mvn verify` on Windows and Linux (under xvfb) on every
+push; `.github/workflows/release.yml` builds the Windows installer on a `v*` tag (see
+**[docs/EXPORT.md](docs/EXPORT.md)** § Building a Release).
+
+**Every harness writes under `out/`** (gitignored). Keep it that way — the repo root once held
+thirty output folders.
+
+**GPU harnesses** (run after shader/rendering changes):
 ```bash
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.TiledRenderTest"   # Tiled export
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ZoomOutTest"       # Zoom-out rendering
 
 # Deterministic golden-image regression + median benchmark (bit-exact reproducible per GPU).
-# Goldens are GPU-specific and gitignored (test_regression/); run 'update' once on a good build.
+# Goldens are GPU-specific and gitignored (out/test_regression/); run 'update' once on a good build.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.RenderRegression" -Dexec.args="update"   # write goldens
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.RenderRegression" -Dexec.args="check"    # diff vs goldens (exit 1 on regression)
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.RenderRegression" -Dexec.args="bench"    # median render time per scene
 # Pass a navigator manifest as a 2nd arg to validate/bench on fine-DETAIL views instead of global defaults.
 
-# Autonomous "traveller": global view -> fine-detail framing on any fractal (output to nav/, gitignored).
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.FractalNavigator" -Dexec.args="MANDELBULB nav 640x360 12 travel 8 0.6 50"
+# Autonomous "traveller": global view -> fine-detail framing on any fractal (output to out/nav/).
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.FractalNavigator" -Dexec.args="MANDELBULB out/nav 640x360 12 travel 8 0.6 50"
 #   modes: travel (auto-frame -> depth-guided target -> dive -> sharpness sweet-spot) | fly (eased flight -> mp4) | manifest (write detail cameras) | list (explicit cameras)
 #   any "name=value" arg overrides a param before travelling, e.g. juliaCx=0.42 juliaCy=0.18
 
 # Deep-zoom detail lab: same cameras, several parameter variants, quantitative surface metrics
 # (detail = Laplacian variance, edges%, lum, contrast) -> proves a deep-zoom change instead of eyeballing.
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DeepZoomLab" -Dexec.args="MANDELBOX dzl 480x270 4 nav/mbox_ladder.txt detailLOD=0,2,4"
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DeepZoomLab" -Dexec.args="MANDELBOX out/dzl 480x270 4 out/nav/mbox_ladder.txt detailLOD=0,2,4"
 #   pass "scene" instead of a camera file to keep the camera the .frac was saved with,
-#   e.g. A/B any preset against itself: ... "presets/X.frac ab 640x360 24 scene rimIntensity=0.15,0.0"
+#   e.g. A/B any preset against itself: ... "presets/X.frac out/ab 640x360 24 scene rimIntensity=0.15,0.0"
 
 # Demo presets: build .frac files + render a preview of each so candidates can be judged.
 # Cameras come from FractalNavigator sweet spots, not default global framings.
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PresetForge" -Dexec.args="presets presets_preview 960x540 48"
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PresetForge" -Dexec.args="presets out/presets_preview 960x540 48"
+
+# Gallery: render every .frac in a directory exactly as the app shows it (params + gradient +
+# post-processing chain). This is where docs/gallery/*.jpg come from (1280x720, 128 spp).
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.GalleryRender" -Dexec.args="presets out/gallery 1280x720 128"
 
 # Autonomous discovery: search Julia-constant space for new fractals worth looking at.
 # Boundary constants are found on the CPU (no rendering), then rendered, scored, filtered
 # for diversity, and the winners written as .frac. ~180 candidates in ~6 s.
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.JuliaProspector" -Dexec.args="prospect 180 320x180 6 8"
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.JuliaProspector" -Dexec.args="out/prospect 180 320x180 6 8"
 
 # Hybrid chains: several formulas composed inside one iteration loop (HybridNode).
 # The first two entries are controls that must reproduce the stand-alone Mandelbulb and
 # Mandelbox exactly; they are compared on the depth AOV, not on colour.
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.HybridLab" -Dexec.args="hybrid 480x270 12"
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.HybridLab" -Dexec.args="out/hybrid 480x270 12"
 #   4th arg "presets" renders the shipped chain library (HybridPresets) instead.
 
 # Where saturation is lost: forces a pure R/G/B gradient and renders the same camera as
 # raw factors / diffuse / specular / final, so the pass that flattens colour is identifiable.
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac colorprobe 480x270 12"
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac out/colorprobe 480x270 12"
 
 # Which coloring modes can put more than one hue on an object: one scene under all 13,
 # as a labelled sheet with a hue-spread count. Modes 0-8 give one hue, 9-12 give several.
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorDemo" -Dexec.args="presets/HYBRID_BOXBULB.frac colordemo 400x225 20"
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorDemo" -Dexec.args="presets/HYBRID_BOXBULB.frac out/colordemo 400x225 20"
 
 # Interaction cost: framebuffer reallocation on a preview<->full resize, and the worst-case
 # delay before a cancel can interrupt a full-quality pass (= one progressive batch).
@@ -70,12 +85,6 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResponsivenessProbe
 # Proves the cheap interactive preview cannot leak into an export: same scene exported cold
 # and again straight after a preview, compared pixel for pixel.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportAfterPreviewProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 640x360 12"
-# Every setting a .frac is supposed to carry, written and read back. No GPU. Two settings
-# had silently failed to persist (coloringMode, the whole post-processing chain).
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ConfigRoundTripProbe"
-# Builds the node graph panel headless and checks a control is actually ON it. The
-# "+ Hybrid" button was written, wired to an action, and never added to the toolbar.
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.UiWiringProbe"
 # How far ahead of the work an export progress bar runs: time of the first 100%% report
 # against the moment the export future actually completes.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportProgressProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 2600x1600 128"
@@ -144,7 +153,17 @@ org.fractalizer
         ├── AudioPanel.java             # Audio-reactive controls + offline video export
         └── ExportPanel.java            # Image/animation export with motion blur
 
-test/  (headless, GPU where noted — run them instead of re-reading the render path)
+src/test/java/  (JUnit, no GPU — `mvn test`, run by CI)
+├── config/ConfigRoundTripTest       # every setting a .frac carries, written and read back
+├── engine/ShaderPreprocessorTest    # symbol prefixing for shader concatenation
+├── engine/CameraTest                # quaternion camera: orthonormal, no drift, axes
+├── animation/AnimationTrackTest     # keyframes, easing, Catmull-Rom, timeline
+├── graph/GraphCompilerTest          # GLSL + uniforms for leaves, CSG, transforms
+├── graph/MaterialSSBOTest           # SSBO layout, matId propagation, serialization
+├── graph/HybridNodeTest             # chain library, per-step uniforms, serialization
+└── ui/components/UiWiringTest       # is a control actually ON the built panel (stub controller)
+
+test/  (GPU harnesses in src/main — run them instead of re-reading the render path; output in out/)
 ├── RenderRegression.java        # golden-image diff + benchmark, global and detail scenes
 ├── DeepZoomLab.java             # detail/saturation metrics, A/B any param on any .frac
 ├── ColorProbe.java              # which shading pass loses saturation
@@ -157,8 +176,7 @@ test/  (headless, GPU where noted — run them instead of re-reading the render 
 ├── ResponsivenessProbe.java     # worst tick = delay before a cancel can land
 ├── ExportProgressProbe.java     # how far ahead of the work a progress bar runs
 ├── ExportAfterPreviewProbe.java # the cheap preview must not leak into an export
-├── ConfigRoundTripProbe.java    # does a setting survive save/reload (no GPU)
-└── UiWiringProbe.java           # is a control actually ON the built panel (no window)
+└── GalleryRender.java           # every .frac in a dir rendered as the app shows it (README gallery)
 ```
 
 ### GLSL Shaders (`src/main/resources/shaders/`)

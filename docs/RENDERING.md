@@ -447,9 +447,20 @@ Display-output and shading refinements (`postprocess.glsl`, `raytracer.glsl`):
 
 ## Test Harnesses: Regression, Benchmark, Traveller
 
-Twelve headless tools in `org.fractalizer.test` (invocations in **[CLAUDE.md](../CLAUDE.md)**
-Build Commands). Most exist because a real bug got through a reading of the code — running
-one is faster and more reliable than re-reading the path it covers:
+Two layers. The **unit suite** under `src/test/java` runs with `mvn test`, needs no GPU, and is
+what CI runs on every push: graph compiler output, material SSBO layout, hybrid chains and their
+library, save/reload round trips, camera and animation maths, and the node graph panel built
+against a stub controller. The two checks that used to be stand-alone probes live there now
+(`ConfigRoundTripTest`, `UiWiringTest`): they cover bugs that are invisible in the source — a
+control that is written, wired to an action and never added to its container, and a setting
+that is simply absent from the saved file. Both had already got through twice. Running the
+suite on the module path also caught a third: a package Gson needs opened in `module-info`,
+which only bites when the app runs as a module (the jlink image), not from an IDE classpath.
+
+The **GPU harnesses** are thirteen headless tools in `org.fractalizer.test` (invocations in
+**[CLAUDE.md](../CLAUDE.md)** Build Commands), all writing under `out/` (gitignored). Most
+exist because a real bug got through a reading of the code — running one is faster and more
+reliable than re-reading the path it covers:
 
 | tool | what it catches |
 |------|-----------------|
@@ -465,22 +476,17 @@ one is faster and more reliable than re-reading the path it covers:
 | `ResponsivenessProbe` | worst tick = delay before a cancel can interrupt a render |
 | `ExportProgressProbe` | how far ahead of the work an export progress bar runs |
 | `ExportAfterPreviewProbe` | the cheap preview must not leak into an export |
-| `ConfigRoundTripProbe` | does a setting survive save and reload (no GPU) |
-| `UiWiringProbe` | is a control actually **on** the built panel (no window) |
+| `GalleryRender` | every `.frac` in a directory rendered as the app would show it (README gallery, release page) |
 
-The last two cover bugs that are invisible in the source: a control that is written, wired
-to an action and never added to its container, and a setting that is simply absent from the
-saved file. Both had already got through twice.
+The ones below have enough behaviour to need describing:
 
-The three below are the ones with enough behaviour to need describing:
-
-- **`RenderRegression`** — renders fixed scenes deterministically (bit-exact reproducible per GPU, self-diff 0). `update` writes golden images, `check` diffs against them and fails on any change beyond a small tolerance, `bench` reports median render time. Goldens are GPU-specific and gitignored (`test_regression/`). Accepts a navigator manifest to validate/bench on fine-**detail** views instead of default global cameras.
+- **`RenderRegression`** — renders fixed scenes deterministically (bit-exact reproducible per GPU, self-diff 0). `update` writes golden images, `check` diffs against them and fails on any change beyond a small tolerance, `bench` reports median render time. Goldens are GPU-specific and gitignored (`out/test_regression/`). Accepts a navigator manifest to validate/bench on fine-**detail** views instead of default global cameras.
 - **`FractalNavigator`** — autonomous global → fine-detail camera "traveller", validated across ~15 fractal types + node-graph `.frac` presets:
   - **auto-frame** the global view (backs off oversized fractals like Mandelbox);
   - **depth-guided target**: scan a 3×3 view-plane grid of aim points (depth AOV) and pick the most-detailed solid patch — skips hollow cores (Menger) and empty gaps;
   - **dive** along the view axis in shrinking steps;
   - **sweet-spot selection**: score each step (`detail × coverage-band × centering`; detail = variance of the Laplacian over depth-masked surface pixels) and keep the best, avoiding the smooth close-up washout.
-  - Modes: `travel` | `fly` (eased flight global→sweet-spot → PNG sequence → mp4) | `manifest` (write per-fractal sweet-spot cameras) | `list` (explicit cameras). Output to `nav/` (gitignored).
+  - Modes: `travel` | `fly` (eased flight global→sweet-spot → PNG sequence → mp4) | `manifest` (write per-fractal sweet-spot cameras) | `list` (explicit cameras). Output to `out/nav/` (gitignored).
 - **`DeepZoomLab`** — renders one camera list under a set of parameter variants and reports surface-masked metrics: `detail` (variance of the Laplacian), `edges%` (fraction of surface pixels with |Laplacian| > 8), `lum` and `contrast` (mean / stddev of surface luminance — these catch "it goes dark" and "it goes flat"), `cov%`. Background is masked via the depth AOV so a shrinking silhouette cannot masquerade as a change in surface quality. Variants resolve by reflection against the params **and** the node-graph leaf params, e.g. `detailLOD=0,2,4` or `juliaCx=0.42`.
 - **`PresetForge`** — builds demo `.frac` presets from `SceneBuilder` specs and renders a preview of each, so a candidate is judged before it is kept. Two traps it exists to avoid: the framing cameras come from `FractalNavigator` sweet spots (default global cameras do not show the detail a demo is for), and each spec must set its own **gradient** — `paletteIndex` does not feed the palette texture.
 
