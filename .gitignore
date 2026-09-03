@@ -67,5 +67,8 @@ colordemo/
 ### Ad-hoc A/B renders ###
 ab_*/
 
+### Export verification renders ###
+export_probe/
+
 ### maven-shade leftover ###
 dependency-reduced-pom.xml

@@ -66,6 +66,9 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorDemo" -Dexec.a
 # delay before a cancel can interrupt a full-quality pass (= one progressive batch).
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResizeProbe" -Dexec.args="1920x1080 0.5 20"
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResponsivenessProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 1280x720 24"
+# Proves the cheap interactive preview cannot leak into an export: same scene exported cold
+# and again straight after a preview, compared pixel for pixel.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportAfterPreviewProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 640x360 12"
 ```
 
 ## Project Architecture
