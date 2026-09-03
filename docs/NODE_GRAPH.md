@@ -360,6 +360,20 @@ Emission follows `PrimitiveNode`: inline GLSL, no `.glsl` file, prefix `h0_`, `h
 and the same leaf contract (`_OrbitTrap`, `_DE`, `_DE_simple`, `_getFactors`), so a
 hybrid plugs into CSG, transforms, effects and materials like any other leaf.
 
+**Chain library.** `HybridPresets` ships nine named chains, offered as a "Load a chain…"
+dropdown in the hybrid detail panel. Three of them are entries from the IDEAS.md #14
+formula wish-list that need no new shader at all — BoxBulb is a power map with a box fold,
+Buffalo a power map with absolute-value folds, MarbleMarcher a Menger IFS with a rotation
+between iterations — which turns that part of the roadmap from shader work into a dropdown.
+The first two entries are the HybridLab controls, reproducing the stand-alone Mandelbulb
+and Mandelbox exactly, and are the sane place to start a chain of your own: begin from a
+shape you recognise, then add one step.
+
+Each preset carries a `previewDist`, because these live in worlds of very different sizes —
+a Mandelbox is several times a Mandelbulb. `HybridLab` renders the library from the same
+source the editor offers (`-Dexec.args="hybrid_lib 480x270 12 presets"`), so the dropdown
+cannot drift away from what actually renders.
+
 **Editing.** NodeGraphEditor has a `+ Hybrid` toolbar button and a step-list editor in the
 detail panel: iterations, bailout, estimator family, Julia constant, and per-step sliders,
 with a type combo plus move-up / move-down / delete on each row and an add-step control.

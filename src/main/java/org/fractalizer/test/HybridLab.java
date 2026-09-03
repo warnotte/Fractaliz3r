@@ -72,6 +72,19 @@ public class HybridLab {
         return s;
     }
 
+    /** The shipped chain library, rendered from the same source the editor offers, so the
+     *  dropdown cannot drift away from what actually renders. */
+    static Map<String, Chain> presetChains() {
+        Map<String, Chain> m = new LinkedHashMap<>();
+        for (org.fractalizer.graph.HybridPresets.Preset p : org.fractalizer.graph.HybridPresets.all()) {
+            HybridNode n = new HybridNode();
+            org.fractalizer.graph.HybridPresets.apply(n, p);
+            m.put(p.name().replaceAll("[^A-Za-z0-9]+", "_"),
+                    new Chain(n, p.previewDist(), p.description()));
+        }
+        return m;
+    }
+
     static Map<String, Chain> chains() {
         Map<String, Chain> m = new LinkedHashMap<>();
 
@@ -205,7 +218,8 @@ public class HybridLab {
 
         System.out.printf("=== HybridLab (%dx%d, %d spp) ===%n", W, H, samples);
         List<String> names = new ArrayList<>();
-        for (var e : chains().entrySet()) {
+        boolean libraryMode = args.length > 3 && args[3].equalsIgnoreCase("presets");
+        for (var e : (libraryMode ? presetChains() : chains()).entrySet()) {
             String name = e.getKey();
             Chain ch = e.getValue();
 
@@ -238,7 +252,7 @@ public class HybridLab {
             names.add(name);
         }
 
-        verifyControls(controller, ngp, params, outDir, W, H, samples);
+        if (!libraryMode) verifyControls(controller, ngp, params, outDir, W, H, samples);
 
         int cols = 2, rows = (names.size() + cols - 1) / cols;
         BufferedImage sheet = new BufferedImage(W * cols, H * rows, BufferedImage.TYPE_INT_RGB);

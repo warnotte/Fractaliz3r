@@ -53,6 +53,7 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.JuliaProspector" -D
 # The first two entries are controls that must reproduce the stand-alone Mandelbulb and
 # Mandelbox exactly; they are compared on the depth AOV, not on colour.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.HybridLab" -Dexec.args="hybrid 480x270 12"
+#   4th arg "presets" renders the shipped chain library (HybridPresets) instead.
 
 # Where saturation is lost: forces a pure R/G/B gradient and renders the same camera as
 # raw factors / diffuse / specular / final, so the pass that flattens colour is identifiable.

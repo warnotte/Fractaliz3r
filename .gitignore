@@ -59,6 +59,7 @@ prospect/
 
 ### Hybrid chain lab output ###
 hybrid/
+hybrid_lib/
 
 ### Colour probe output ###
 colorprobe*/

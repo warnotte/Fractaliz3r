@@ -1167,6 +1167,32 @@ public class NodeGraphEditor extends VBox {
         hint.getStyleClass().add("hint-label");
         detailPanel.getChildren().add(hint);
 
+        // Ready-made chains. The two controls at the top reproduce the stand-alone
+        // Mandelbulb and Mandelbox exactly, which makes them the sane place to start a
+        // chain of your own: begin from a shape you recognise, then add one step.
+        ComboBox<HybridPresets.Preset> presetCombo = new ComboBox<>();
+        presetCombo.getItems().addAll(HybridPresets.all());
+        presetCombo.setPromptText("Load a chain…");
+        presetCombo.setMaxWidth(Double.MAX_VALUE);
+        presetCombo.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(HybridPresets.Preset p) { return p == null ? "" : p.name(); }
+            @Override public HybridPresets.Preset fromString(String s) { return null; }
+        });
+        Label presetHint = new Label("");
+        presetHint.setWrapText(true);
+        presetHint.getStyleClass().add("hint-label");
+        presetCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldP, newP) -> {
+            if (newP != null) presetHint.setText(newP.description());
+        });
+        presetCombo.setOnAction(e -> {
+            HybridPresets.Preset sel = presetCombo.getValue();
+            if (sel == null) return;
+            pushUndoSnapshot();
+            HybridPresets.apply(hn, sel);
+            onStructuralChange();
+        });
+        detailPanel.getChildren().addAll(presetCombo, presetHint);
+
         detailPanel.getChildren().add(sectionSeparator());
 
         EnhancedSlider iters = new EnhancedSlider("Iterations", 1, 48, hn.getMaxIterations(), true);
