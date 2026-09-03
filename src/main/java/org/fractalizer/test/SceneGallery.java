@@ -21,7 +21,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class SceneGallery {
 
-    private static final String OUTPUT_DIR = "test_output/gallery";
+    private static final String OUTPUT_DIR = "out/test_output/gallery";
     private static final int THUMB_W = 480;
     private static final int THUMB_H = 270;
     private static final int THUMB_SAMPLES = 2;

@@ -17,7 +17,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TiledRenderTest {
 
-    private static final String OUTPUT_DIR = "test_output";
+    private static final String OUTPUT_DIR = "out/test_output";
     private static final int SAMPLES = 4; // Low samples for speed
 
     public static void main(String[] args) throws Exception {

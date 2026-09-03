@@ -35,41 +35,12 @@ build/
 ### Mac OS ###
 .DS_Store
 
-### Visual test output ###
-test_output/
+### Every harness writes under out/ (renders, goldens, navigator logs, lab sheets).
+### Goldens are GPU-specific: regenerate with RenderRegression 'update'.
+out/
 
-### Render regression goldens (GPU-specific — regenerate with RenderRegression 'update') ###
-test_regression/
-
-### Ad-hoc comparison renders ###
-sprint1_compare/
-
-### Fractal navigator / traveller output ###
-nav/
-nav_*/
-
-### Deep-zoom detail lab output ###
-dzl*/
-
-### Preset preview renders (regenerate with PresetForge) ###
-presets_preview/
-
-### Julia prospector output (regenerate with JuliaProspector) ###
-prospect/
-
-### Hybrid chain lab output ###
-hybrid/
-hybrid_lib/
-
-### Colour probe output ###
-colorprobe*/
-colordemo/
-
-### Ad-hoc A/B renders ###
-ab_*/
-
-### Export verification renders ###
-export_probe/
+### Scenes saved from the app during a session ###
+saves/
 
 ### maven-shade leftover ###
 dependency-reduced-pom.xml

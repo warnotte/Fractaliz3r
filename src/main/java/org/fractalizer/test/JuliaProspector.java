@@ -39,7 +39,7 @@ import java.util.concurrent.CountDownLatch;
  *
  * Usage:
  *   -Dexec.args="&lt;outDir&gt; &lt;candidates&gt; &lt;WxH&gt; &lt;samples&gt; [keepAsPresets]"
- *   -Dexec.args="prospect 96 320x180 6 8"
+ *   -Dexec.args="out/prospect 96 320x180 6 8"
  */
 public class JuliaProspector {
 
@@ -103,7 +103,7 @@ public class JuliaProspector {
     record Candidate(double[] c, double score, double detail, double coverage, String tag) {}
 
     public static void main(String[] args) throws Exception {
-        String outDir = args.length > 0 ? args[0] : "prospect";
+        String outDir = args.length > 0 ? args[0] : "out/prospect";
         int wanted = args.length > 1 ? Integer.parseInt(args[1]) : 96;
         String[] res = (args.length > 2 ? args[2] : "320x180").split("x");
         int W = Integer.parseInt(res[0]), H = Integer.parseInt(res[1]);

@@ -31,8 +31,8 @@ import java.util.concurrent.CountDownLatch;
  *   cov      - surface coverage %
  *
  * Usage:
- *   -Dexec.args="MANDELBULB dzl 640x360 8 nav/cams.txt iter=15,40,80,150"
- *   -Dexec.args="MANDELBULB dzl 640x360 8 nav/cams.txt base"
+ *   -Dexec.args="MANDELBULB dzl 640x360 8 out/nav/cams.txt iter=15,40,80,150"
+ *   -Dexec.args="MANDELBULB dzl 640x360 8 out/nav/cams.txt base"
  *
  * Variant spec: "base" or "key=v1,v2,..." where key is resolved by reflection
  * against the params object (e.g. iter -&gt; setMaxIterations).

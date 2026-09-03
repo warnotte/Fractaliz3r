@@ -34,7 +34,7 @@ public class ExportAfterPreviewProbe {
         int W = Integer.parseInt(res[0]), H = Integer.parseInt(res[1]);
         int samples = args.length > 2 ? Integer.parseInt(args[2]) : 12;
 
-        File outDir = new File("export_probe");
+        File outDir = new File("out/export_probe");
         outDir.mkdirs();
 
         CountDownLatch latch = new CountDownLatch(1);

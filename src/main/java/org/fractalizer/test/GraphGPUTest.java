@@ -27,7 +27,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class GraphGPUTest {
 
-    private static final String OUTPUT_DIR = "test_output/graph";
+    private static final String OUTPUT_DIR = "out/test_output/graph";
     private static final int WIDTH = 960;
     private static final int HEIGHT = 540;
     private static final int SAMPLES = 4;

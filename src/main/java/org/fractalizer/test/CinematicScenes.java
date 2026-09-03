@@ -21,7 +21,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class CinematicScenes {
 
-    private static final String OUTPUT_DIR = "test_output/cinematic";
+    private static final String OUTPUT_DIR = "out/test_output/cinematic";
     private static final int W = 480;
     private static final int H = 270;
     private static final int SAMPLES = 2;

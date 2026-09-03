@@ -24,13 +24,13 @@ import java.util.function.Supplier;
  * Builds demo presets and renders a preview for each, so a candidate can be judged
  * before it is kept.
  *
- * Cameras come from FractalNavigator sweet spots (see nav/detail_scenes.txt and the
+ * Cameras come from FractalNavigator sweet spots (see out/nav/detail_scenes.txt and the
  * traveller logs) rather than default global framings — the point of a demo preset is
  * the fine detail, which default cameras do not show.
  *
  * Usage:
  *   -Dexec.args="&lt;outDir&gt; &lt;previewDir&gt; &lt;WxH&gt; &lt;samples&gt;"
- *   -Dexec.args="presets presets_preview 640x360 24"
+ *   -Dexec.args="presets out/presets_preview 640x360 24"
  */
 public class PresetForge {
 
@@ -217,7 +217,7 @@ public class PresetForge {
 
     public static void main(String[] args) throws Exception {
         String outDir = args.length > 0 ? args[0] : "presets";
-        String previewDir = args.length > 1 ? args[1] : "presets_preview";
+        String previewDir = args.length > 1 ? args[1] : "out/presets_preview";
         String[] res = (args.length > 2 ? args[2] : "640x360").split("x");
         int W = Integer.parseInt(res[0]), H = Integer.parseInt(res[1]);
         int samples = args.length > 3 ? Integer.parseInt(args[3]) : 24;

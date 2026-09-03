@@ -45,7 +45,7 @@ public class PrecisionCompareTest {
         Platform.startup(latch::countDown);
         latch.await();
 
-        File outDir = new File("test_output/before_after");
+        File outDir = new File("out/test_output/before_after");
         if (!outDir.exists()) outDir.mkdirs();
 
         System.out.println("=== Before/After Precision Test ===");

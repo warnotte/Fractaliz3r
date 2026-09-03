@@ -18,7 +18,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class SceneGallery2 {
 
-    private static final String OUTPUT_DIR = "test_output/gallery2";
+    private static final String OUTPUT_DIR = "out/test_output/gallery2";
     private static final int W = 480;
     private static final int H = 270;
     private static final int SAMPLES = 2;

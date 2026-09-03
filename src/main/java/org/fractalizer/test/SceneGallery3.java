@@ -22,7 +22,7 @@ import static org.fractalizer.test.SceneBuilder.*;
  */
 public class SceneGallery3 {
 
-    private static final String OUTPUT_DIR = "test_output/gallery3";
+    private static final String OUTPUT_DIR = "out/test_output/gallery3";
     private static final int W = 480;
     private static final int H = 270;
     private static final int SAMPLES = 2;

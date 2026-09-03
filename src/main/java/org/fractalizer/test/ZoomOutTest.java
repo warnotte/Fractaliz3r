@@ -22,7 +22,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class ZoomOutTest {
 
-    private static final String OUTPUT_DIR = "test_output/zoom_out";
+    private static final String OUTPUT_DIR = "out/test_output/zoom_out";
     private static final int WIDTH = 960;
     private static final int HEIGHT = 540;
     private static final int SAMPLES = 4;

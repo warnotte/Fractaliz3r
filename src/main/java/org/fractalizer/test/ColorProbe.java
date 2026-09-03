@@ -75,7 +75,7 @@ public class ColorProbe {
 
     public static void main(String[] args) throws Exception {
         String spec = args.length > 0 ? args[0] : "MANDELBULB";
-        String outDir = args.length > 1 ? args[1] : "colorprobe";
+        String outDir = args.length > 1 ? args[1] : "out/colorprobe";
         String[] res = (args.length > 2 ? args[2] : "480x270").split("x");
         int W = Integer.parseInt(res[0]), H = Integer.parseInt(res[1]);
         int samples = args.length > 3 ? Integer.parseInt(args[3]) : 12;

@@ -33,7 +33,7 @@ import java.util.function.Consumer;
  */
 public class RenderRegression {
 
-    private static final String GOLDEN_DIR = "test_regression/golden";
+    private static final String GOLDEN_DIR = "out/test_regression/golden";
     private static final int W = 480, H = 270;
     private static final int TIMED_RUNS = 5;   // measured render passes per scene (check/bench)
     private static final int BENCH_RUNS = 5;

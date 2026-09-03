@@ -28,7 +28,7 @@ import java.util.concurrent.CountDownLatch;
  * d = 15^(1-v) - 0.1 (saturates for d < ~0.9).
  *
  * Usage:
- *   list:   -Dexec.args="MANDELBULB nav 640x360 12 nav/cams.txt"
+ *   list:   -Dexec.args="MANDELBULB nav 640x360 12 out/nav/cams.txt"
  *   travel: -Dexec.args="MENGER_SPONGE nav 640x360 12 travel 6 0.55 50"
  *                          (TYPE out WxH samples travel steps shrink [fov])
  */
@@ -111,7 +111,7 @@ public class FractalNavigator {
         CountDownLatch latch = new CountDownLatch(1);
         Platform.startup(latch::countDown);
         latch.await();
-        outDir = "nav/_manifest_tmp";
+        outDir = "out/nav/_manifest_tmp";
         new File(outDir).mkdirs();
         controller = new GLSLFractalizerController();
         controller.loadAllShaders((m, p) -> {});
