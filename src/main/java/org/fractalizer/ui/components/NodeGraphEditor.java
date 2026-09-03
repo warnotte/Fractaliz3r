@@ -378,7 +378,7 @@ public class NodeGraphEditor extends VBox {
         presetCombo.setPromptText("Presets...");
         presetCombo.setOnAction(e -> applyPreset(presetCombo.getValue()));
 
-        HBox toolbar = new HBox(4, addFractalBtn, addPrimitiveBtn, wrapCSGBtn, wrapTransformBtn, moreTransforms,
+        HBox toolbar = new HBox(4, addFractalBtn, addHybridBtn, addPrimitiveBtn, wrapCSGBtn, wrapTransformBtn, moreTransforms,
             wrapEffectBtn, wrapMaterialBtn, deleteBtn,
             tbSep1, undoBtn, redoBtn, tbSep2, presetCombo);
         toolbar.setPadding(new Insets(2));
@@ -691,6 +691,10 @@ public class NodeGraphEditor extends VBox {
             }
             contextMenu.getItems().add(changeTypeMenu);
         }
+
+        MenuItem addHybridHere = new MenuItem("Add Hybrid Chain");
+        addHybridHere.setOnAction(e -> addHybridNode());
+        contextMenu.getItems().add(addHybridHere);
 
         MenuItem deleteItem = new MenuItem("Delete");
         deleteItem.setOnAction(e -> deleteSelected());

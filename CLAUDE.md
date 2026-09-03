@@ -73,6 +73,9 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportAfterPreviewP
 # Every setting a .frac is supposed to carry, written and read back. No GPU. Two settings
 # had silently failed to persist (coloringMode, the whole post-processing chain).
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ConfigRoundTripProbe"
+# Builds the node graph panel headless and checks a control is actually ON it. The
+# "+ Hybrid" button was written, wired to an action, and never added to the toolbar.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.UiWiringProbe"
 ```
 
 ## Project Architecture
