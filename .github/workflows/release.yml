@@ -1,0 +1,97 @@
+name: Release
+
+# Builds the Windows installer and publishes it on a GitHub release.
+#
+#   git tag v3.0.0 && git push origin v3.0.0
+#
+# The tag is the version: v3.0.0 becomes app-version 3.0.0 (jpackage on Windows accepts
+# numbers and dots only). Two assets are attached to the release:
+#   Fractaliz3r-<version>.msi          installer (Start menu entry, shortcut, uninstall)
+#   Fractaliz3r-<version>-windows.zip  the same build as a portable folder
+# Both embed their own Java runtime; the target machine needs nothing but a GPU with
+# OpenGL 4.3. The build itself is the documented one (docs/EXPORT.md, "Building a
+# Release"): jlink image with the LWJGL DLLs, then jpackage on top of it.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Version from tag
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          fi
+
+      # jpackage produces an .msi through WiX 3 (candle/light on the PATH).
+      - name: Install WiX 3
+        shell: pwsh
+        run: |
+          choco install wixtoolset -y --no-progress
+          $bin = Get-ChildItem "C:\Program Files (x86)\WiX Toolset v3*\bin" -Directory | Select-Object -First 1
+          if (-not $bin) { throw "WiX 3 bin directory not found" }
+          $bin.FullName | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: jlink image with LWJGL natives
+        run: mvn -B -Prelease clean javafx:jlink package -DskipTests
+
+      - name: Installer and portable zip
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          $common = @(
+            '--name', 'Fractaliz3r',
+            '--app-version', $env:VERSION,
+            '--vendor', 'Renaud Warnotte',
+            '--description', 'Real-time cinematic 3D fractal renderer',
+            '--runtime-image', 'target/image',
+            '--module', 'Fractaliz3r/org.fractalizer.Launcher',
+            '--icon', 'src/main/resources/icons/fractaliz3r.ico',
+            '--java-options', '-Dorg.lwjgl.librarypath=$ROOTDIR\runtime\bin',
+            '--license-file', 'LICENSE'
+          )
+          jpackage --type msi --dest target/installer @common `
+            --win-menu --win-shortcut --win-dir-chooser --win-per-user-install `
+            --win-upgrade-uuid 6f1b3c2e-7a4d-4b8e-9c21-3d5e7f9a1b2c
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          jpackage --type app-image --dest target/portable @common
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Compress-Archive -Path target/portable/Fractaliz3r -DestinationPath "target/installer/Fractaliz3r-$env:VERSION-windows.zip"
+          Get-ChildItem target/installer
+
+      - name: Attach to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/installer/*.msi
+            target/installer/*.zip
+          generate_release_notes: true
+
+      - name: Keep the artifacts on a manual run
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: fractaliz3r-windows
+          path: |
+            target/installer/*.msi
+            target/installer/*.zip

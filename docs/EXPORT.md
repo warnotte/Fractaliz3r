@@ -93,7 +93,7 @@ A headless rendering test (`TiledRenderTest.java`) that exports the same Mandelb
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.TiledRenderTest"
 ```
 
-Outputs PNGs to `test_output/` (gitignored). After running, **read the images with the Read tool** to visually verify:
+Outputs PNGs to `out/test_output/` (gitignored). After running, **read the images with the Read tool** to visually verify:
 - `01_1920x1080_reference.png` — baseline, no tiling
 - `02_4096x4096_boundary.png` — boundary case (exactly MAX_TILE_SIZE)
 - `03_5000x2000_2x1tiles.png` — 2x1 tiles (X exceeds threshold)
@@ -104,12 +104,62 @@ What to check: fractal centered, correct aspect ratio, no tile seams, no Y-flip,
 
 ---
 
-## Building a Release (jlink)
+## Building a Release
+
+Three layers, each on top of the previous one.
+
+### 1. jlink image
 
 ```bash
-mvn clean javafx:jlink package -DskipTests
+mvn -Prelease clean javafx:jlink package -DskipTests
 ```
 
-This creates a self-contained runtime in `target/image/` with launcher script `bin/fractaliz3r.bat`. The `package` phase automatically extracts LWJGL native DLLs (glfw.dll, lwjgl.dll, etc.) into `bin/` and patches the launcher to set `-Dorg.lwjgl.librarypath`. Without this step, the app crashes on machines that never ran LWJGL before (no native cache in temp).
+Creates a self-contained runtime in `target/image/` with the launcher script `bin/fractaliz3r.bat`.
+The `release` profile adds two steps to `package`: it extracts the LWJGL native DLLs (glfw.dll,
+lwjgl.dll, lwjgl_opengl.dll, lwjgl_stb.dll) from their classifier jars into `bin/`, and patches the
+launcher to pass `-Dorg.lwjgl.librarypath`. Without them the image works on the build machine
+(LWJGL finds its DLLs in the temp cache left by earlier runs) and crashes on any machine that never
+ran LWJGL. The steps live in a profile because they assume the image exists: bound unconditionally,
+a plain `mvn package` failed on the missing launcher script.
 
-Distribute: zip `target/image/` — no JDK needed on the target machine.
+Zipping `target/image/` is already a portable distribution; no Java needed on the target.
+
+### 2. jpackage: installer and portable folder
+
+`jpackage` (part of the JDK) wraps the image in a native launcher with the icon, a version, and
+either an `.msi` or a plain folder:
+
+```bash
+# Portable folder: target/installer/Fractaliz3r/Fractaliz3r.exe — no extra tools needed
+jpackage --type app-image --dest target/installer \
+  --name Fractaliz3r --app-version 3.0.0 --vendor "Renaud Warnotte" \
+  --description "Real-time cinematic 3D fractal renderer" \
+  --runtime-image target/image --module Fractaliz3r/org.fractalizer.Launcher \
+  --icon src/main/resources/icons/fractaliz3r.ico \
+  --java-options '-Dorg.lwjgl.librarypath=$ROOTDIR\runtime\bin'
+
+# Installer: same command with --type msi and the Windows options; needs WiX 3 (candle/light) on the PATH
+#   --win-menu --win-shortcut --win-dir-chooser --win-per-user-install --license-file LICENSE
+```
+
+Two things to know about the result:
+
+- The runtime image is copied whole into `runtime/`, DLLs included, so the LWJGL library path
+  must point there. `$ROOTDIR` is expanded by the launcher to the installation directory; the
+  launcher script's `%~dp0` trick from step 1 does not apply because the `.exe` never runs it.
+- The launcher reads `app/Fractaliz3r.cfg`; if a start-up option ever needs changing after the
+  fact, that file is where it lives.
+
+### 3. GitHub release
+
+`.github/workflows/release.yml` runs the two steps above on a Windows runner when a `v*` tag is
+pushed (WiX is installed with Chocolatey), then attaches `Fractaliz3r-<version>.msi` and
+`Fractaliz3r-<version>-windows.zip` to the release for that tag:
+
+```bash
+git tag v3.0.0
+git push origin v3.0.0
+```
+
+The tag is the version. A manual run of the workflow (`workflow_dispatch`) builds the same two
+files and keeps them as a workflow artifact instead of publishing a release.
