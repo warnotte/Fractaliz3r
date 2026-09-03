@@ -26,6 +26,24 @@ public class ProgressiveRenderer {
     // Rendering state
     private final AtomicBoolean rendering = new AtomicBoolean(false);
     private final AtomicBoolean cancelled = new AtomicBoolean(false);
+
+    // A batch is submitted to the GL thread as one blocking call, and cancellation is only
+    // checked between batches — so the batch size is also the worst case latency before
+    // navigation can interrupt a full-quality pass. A fixed 8 is harmless on a cheap scene
+    // and unusable on an expensive one: at 1080p path-traced a sample costs ~600 ms, so
+    // eight of them held the viewport for ~5 s, and ~20 s at 4K. The batch is sized from
+    // the measured cost of the previous one instead, aiming at a fixed slice of wall clock.
+    private static final long BATCH_TARGET_NS = 120_000_000L;   // 120 ms
+    private static final int MAX_BATCH = 8;
+    private volatile long nsPerSample = 0;   // 0 = not measured yet
+
+    // Reading the accumulation buffer back and converting it to a JavaFX Image is a fixed
+    // cost per tick, unrelated to how many samples the tick rendered. Sizing batches for
+    // responsiveness alone multiplied that cost — thirteen readbacks instead of three, and
+    // a 40% longer render. The display refresh is therefore rate-limited separately, so
+    // short batches buy interruptibility without buying extra readbacks.
+    private static final long IMAGE_INTERVAL_NS = 200_000_000L;  // 200 ms
+    private long lastImageUpdateNs = 0;
     private final AtomicInteger targetSamples = new AtomicInteger(100);
     private ScheduledFuture<?> renderTask;
 
@@ -64,6 +82,8 @@ public class ProgressiveRenderer {
         targetSamples.set(samples);
         cancelled.set(false);
         rendering.set(true);
+        nsPerSample = 0;   // cost is per scene and per resolution; re-measure
+        lastImageUpdateNs = 0;
 
         engine.resetAccumulation();
 
@@ -95,13 +115,30 @@ public class ProgressiveRenderer {
                     return;
                 }
 
-                // Render batch of samples
-                int batchSize = Math.min(8, targetSamples.get() - currentSamples);
-                if (batchSize <= 0) batchSize = 1; // Ensure at least one sample on first iteration
-                engine.renderSamples(uniforms, batchSize);
+                // Size the batch so one tick costs about BATCH_TARGET_NS. The first tick
+                // has nothing to go on and renders a single sample, which is also the
+                // smallest interruptible unit there is.
+                int remaining = Math.max(1, targetSamples.get() - currentSamples);
+                int batchSize = 1;
+                if (nsPerSample > 0) {
+                    batchSize = (int) Math.max(1, Math.min(MAX_BATCH, BATCH_TARGET_NS / nsPerSample));
+                }
+                batchSize = Math.min(batchSize, remaining);
 
-                // Update image and progress
-                updateImage();
+                long t0 = System.nanoTime();
+                engine.renderSamples(uniforms, batchSize);
+                // GL calls return before the GPU is done, so the batch has to be waited on
+                // for the measurement to mean anything. Without the readback below doing it
+                // implicitly, that wait has to be explicit.
+                engine.glSync();
+                long now = System.nanoTime();
+                long perSample = Math.max(1L, (now - t0) / batchSize);
+                nsPerSample = (nsPerSample == 0) ? perSample : (nsPerSample * 3 + perSample) / 4;
+
+                if (lastImageUpdateNs == 0 || now - lastImageUpdateNs >= IMAGE_INTERVAL_NS) {
+                    updateImage();
+                    lastImageUpdateNs = System.nanoTime();
+                }
                 notifyProgress(engine.getSampleCount(), targetSamples.get(), false);
 
             } catch (Exception e) {

@@ -61,6 +61,11 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorProbe" -Dexec.
 # Which coloring modes can put more than one hue on an object: one scene under all 13,
 # as a labelled sheet with a hue-spread count. Modes 0-8 give one hue, 9-12 give several.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorDemo" -Dexec.args="presets/HYBRID_BOXBULB.frac colordemo 400x225 20"
+
+# Interaction cost: framebuffer reallocation on a preview<->full resize, and the worst-case
+# delay before a cancel can interrupt a full-quality pass (= one progressive batch).
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResizeProbe" -Dexec.args="1920x1080 0.5 20"
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResponsivenessProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 1280x720 24"
 ```
 
 ## Project Architecture
