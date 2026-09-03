@@ -153,6 +153,10 @@ public class GLSLFractalizerApp extends Application {
         AbstractFractalParams initialParams = (AbstractFractalParams) controller.getParams();
 
         primaryStage.setTitle("Fractaliz3r GLSL - 3D Fractal Renderer");
+        var iconStream = getClass().getResourceAsStream("/icons/fractaliz3r.png");
+        if (iconStream != null) {
+            primaryStage.getIcons().add(new Image(iconStream));
+        }
 
         // Initialize file chooser
         fileChooser.setTitle("Fractal Configuration");
