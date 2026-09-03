@@ -747,6 +747,7 @@ public class GLSLFractalizerController implements RenderController {
             Random random = new Random();
 
             // Render samples with time jittering for motion blur
+            boolean syncProgress = (long) width * height * samples > SYNC_MIN_WORK;
             for (int i = 0; i < samples; i++) {
                 if (cancelCheck != null && cancelCheck.get()) break;
 
@@ -766,6 +767,7 @@ public class GLSLFractalizerController implements RenderController {
 
                 // Render this sample
                 engine.renderSample(uniforms);
+                if (syncProgress) engine.glSync();
                 if (onProgress != null) onProgress.accept((double) (i + 1) / samples);
             }
 
@@ -845,6 +847,7 @@ public class GLSLFractalizerController implements RenderController {
 
                     Random random = new Random(tileIndex); // Consistent per-tile seed
 
+                    boolean syncProgress = (long) tileW * tileH * samples > SYNC_MIN_WORK;
                     for (int i = 0; i < samples; i++) {
                         if (cancelCheck != null && cancelCheck.get()) {
                             engine.resize(viewportWidth, viewportHeight);
@@ -870,6 +873,7 @@ public class GLSLFractalizerController implements RenderController {
                         }
 
                         engine.renderSample(uniforms);
+                        if (syncProgress) engine.glSync();
                         if (onProgress != null) {
                             double progress = (double) (tileIndex * samples + i + 1) / (totalTiles * samples);
                             onProgress.accept(progress);

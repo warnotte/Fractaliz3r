@@ -73,6 +73,28 @@ public class ExportProgressProbe {
                     stuck, 100 * stuck / total);
         }
         out.delete();
+
+        // The video path renders frame by frame through exportAnimationFrame, which is a
+        // different code path from the still export and was never tested.
+        System.out.println();
+        System.out.println("  --- animation frame path ---");
+        File frameFile = File.createTempFile("frame_", ".png");
+        AtomicLong frameFullAt = new AtomicLong(0);
+        long f0 = System.nanoTime();
+        controller.exportAnimationFrame(frameFile, W, H, samples, pr -> {
+            if (pr >= 0.999 && frameFullAt.get() == 0) frameFullAt.set(System.nanoTime());
+        }, () -> false);
+        long f1 = System.nanoTime();
+        double frameTotal = (f1 - f0) / 1e9;
+        double frameFull = (frameFullAt.get() == 0) ? -1 : (frameFullAt.get() - f0) / 1e9;
+        System.out.printf(Locale.ROOT, "  bar reaches 100%%        %8.2f s%n", frameFull);
+        System.out.printf(Locale.ROOT, "  frame actually done     %8.2f s%n", frameTotal);
+        if (frameFull >= 0) {
+            System.out.printf(Locale.ROOT, "  time spent at a full bar %7.2f s  (%.0f%% of the frame)%n",
+                    frameTotal - frameFull, 100 * (frameTotal - frameFull) / frameTotal);
+        }
+        frameFile.delete();
+
         System.exit(0);
     }
 }
