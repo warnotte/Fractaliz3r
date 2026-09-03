@@ -5,7 +5,7 @@
 
   <groupId>org.fractalizer</groupId>
   <artifactId>Fractaliz3r</artifactId>
-  <version>1.0-SNAPSHOT</version>
+  <version>3.0.0</version>
   <packaging>jar</packaging>
 
   <name>Fractaliz3r</name>
@@ -18,6 +18,8 @@
     <maven.compiler.release>21</maven.compiler.release>
     <lwjgl.version>3.4.1</lwjgl.version>
     <javafx.version>25.0.1</javafx.version>
+    <!-- Set by the OS profiles below; picks the LWJGL native jar for the build machine. -->
+    <lwjgl.natives>natives-windows</lwjgl.natives>
   </properties>
 
   <dependencyManagement>
@@ -32,6 +34,159 @@
     </dependencies>
   </dependencyManagement>
 
+  <!--
+    LWJGL ships its native libraries in one classifier jar per platform. The jar is
+    selected by the OS the build runs on, so `mvn javafx:run` works on Windows and Linux
+    from the same pom. The app itself needs OpenGL 4.3 (SSBOs, `#version 430`), which
+    macOS does not offer; the macOS profiles only make the project compile there.
+  -->
+  <profiles>
+    <profile>
+      <id>lwjgl-natives-windows</id>
+      <activation><os><family>windows</family></os></activation>
+      <properties><lwjgl.natives>natives-windows</lwjgl.natives></properties>
+    </profile>
+    <profile>
+      <id>lwjgl-natives-linux</id>
+      <activation><os><family>unix</family><name>Linux</name></os></activation>
+      <properties><lwjgl.natives>natives-linux</lwjgl.natives></properties>
+    </profile>
+    <profile>
+      <id>lwjgl-natives-macos</id>
+      <activation><os><family>mac</family><arch>x86_64</arch></os></activation>
+      <properties><lwjgl.natives>natives-macos</lwjgl.natives></properties>
+    </profile>
+    <profile>
+      <id>lwjgl-natives-macos-arm64</id>
+      <activation><os><family>mac</family><arch>aarch64</arch></os></activation>
+      <properties><lwjgl.natives>natives-macos-arm64</lwjgl.natives></properties>
+    </profile>
+
+    <!--
+      ============================================================================
+      Release image: jlink runtime + LWJGL native DLLs (Windows)
+      ============================================================================
+      Problem: jlink creates a self-contained Java runtime, but LWJGL native
+      libraries (glfw.dll, lwjgl.dll, etc.) live inside classifier JARs
+      (e.g. lwjgl-glfw-3.4.1-natives-windows.jar) and are normally extracted
+      at runtime by LWJGL's SharedLibraryLoader into a temp cache folder.
+
+      On a dev machine this cache already exists (from mvn javafx:run or IDE),
+      so the jlink image appears to work. On a clean machine (end user), the
+      cache is empty and the DLLs are not in the jlink image => crash with
+      "Failed to locate library: lwjgl" / "glfw.dll not found".
+
+      Fix (2 steps, both run during 'mvn package' AFTER 'mvn javafx:jlink'):
+      1. maven-dependency-plugin: extracts DLLs from the 4 native JARs into
+         target/natives-tmp/  (preserving the nested org/lwjgl/... paths)
+      2. maven-antrun-plugin: copies the DLLs FLAT into target/image/bin/
+         (next to java.exe) and patches fractaliz3r.bat to pass
+         -Dorg.lwjgl.librarypath=%~dp0 so LWJGL finds them without cache.
+
+      These two steps live in the `release` profile because they assume the jlink
+      image already exists: bound unconditionally, a plain `mvn package` failed on
+      the missing launcher script.
+
+      Full build command:  mvn -Prelease clean javafx:jlink package -DskipTests
+      Installer on top:    see docs/EXPORT.md, "Building a Release"
+      ============================================================================
+    -->
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <!-- Step 1: Extract LWJGL native DLLs from classifier JARs -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-dependency-plugin</artifactId>
+            <version>3.10.0</version>
+            <executions>
+              <execution>
+                <id>unpack-lwjgl-natives</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>unpack</goal>
+                </goals>
+                <configuration>
+                  <artifactItems>
+                    <artifactItem>
+                      <groupId>org.lwjgl</groupId>
+                      <artifactId>lwjgl</artifactId>
+                      <version>${lwjgl.version}</version>
+                      <classifier>natives-windows</classifier>
+                      <type>jar</type>
+                      <outputDirectory>${project.build.directory}/natives-tmp</outputDirectory>
+                      <includes>**/*.dll</includes>
+                    </artifactItem>
+                    <artifactItem>
+                      <groupId>org.lwjgl</groupId>
+                      <artifactId>lwjgl-glfw</artifactId>
+                      <version>${lwjgl.version}</version>
+                      <classifier>natives-windows</classifier>
+                      <type>jar</type>
+                      <outputDirectory>${project.build.directory}/natives-tmp</outputDirectory>
+                      <includes>**/*.dll</includes>
+                    </artifactItem>
+                    <artifactItem>
+                      <groupId>org.lwjgl</groupId>
+                      <artifactId>lwjgl-opengl</artifactId>
+                      <version>${lwjgl.version}</version>
+                      <classifier>natives-windows</classifier>
+                      <type>jar</type>
+                      <outputDirectory>${project.build.directory}/natives-tmp</outputDirectory>
+                      <includes>**/*.dll</includes>
+                    </artifactItem>
+                    <artifactItem>
+                      <groupId>org.lwjgl</groupId>
+                      <artifactId>lwjgl-stb</artifactId>
+                      <version>${lwjgl.version}</version>
+                      <classifier>natives-windows</classifier>
+                      <type>jar</type>
+                      <outputDirectory>${project.build.directory}/natives-tmp</outputDirectory>
+                      <includes>**/*.dll</includes>
+                    </artifactItem>
+                  </artifactItems>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+          <!-- Step 2: Copy DLLs flat into jlink bin/ and patch launcher script -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.2.0</version>
+            <executions>
+              <execution>
+                <id>copy-natives-flat</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>run</goal>
+                </goals>
+                <configuration>
+                  <target>
+                    <!-- Flatten nested DLLs (e.g. windows/x64/org/lwjgl/glfw/glfw.dll)
+                         into target/image/bin/ next to java.exe -->
+                    <copy todir="${project.build.directory}/image/bin" flatten="true">
+                      <fileset dir="${project.build.directory}/natives-tmp">
+                        <include name="**/*.dll"/>
+                      </fileset>
+                    </copy>
+                    <!-- Tell LWJGL to look for natives in bin/ instead of
+                         trying to extract from JARs (which don't exist in jlink) -->
+                    <replace file="${project.build.directory}/image/bin/fractaliz3r.bat"
+                             token="set JLINK_VM_OPTIONS="
+                             value="set JLINK_VM_OPTIONS=-Dorg.lwjgl.librarypath=%~dp0"/>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
   <dependencies>
     <!-- LWJGL Core -->
     <dependency>
@@ -41,16 +196,10 @@
     <dependency>
       <groupId>org.lwjgl</groupId>
       <artifactId>lwjgl</artifactId>
-      <classifier>natives-windows</classifier>
+      <classifier>${lwjgl.natives}</classifier>
     </dependency>
 
-    <!-- LWJGL OpenCL -->
-      <!--<dependency>
-        <groupId>org.lwjgl</groupId>
-        <artifactId>lwjgl-opencl</artifactId>
-      </dependency>-->
-
-      <!-- LWJGL GLFW -->
+    <!-- LWJGL GLFW -->
     <dependency>
       <groupId>org.lwjgl</groupId>
       <artifactId>lwjgl-glfw</artifactId>
@@ -58,7 +207,7 @@
     <dependency>
       <groupId>org.lwjgl</groupId>
       <artifactId>lwjgl-glfw</artifactId>
-      <classifier>natives-windows</classifier>
+      <classifier>${lwjgl.natives}</classifier>
     </dependency>
 
     <!-- LWJGL OpenGL -->
@@ -69,7 +218,7 @@
     <dependency>
       <groupId>org.lwjgl</groupId>
       <artifactId>lwjgl-opengl</artifactId>
-      <classifier>natives-windows</classifier>
+      <classifier>${lwjgl.natives}</classifier>
     </dependency>
 
     <!-- LWJGL STB (image loading) -->
@@ -80,7 +229,7 @@
     <dependency>
       <groupId>org.lwjgl</groupId>
       <artifactId>lwjgl-stb</artifactId>
-      <classifier>natives-windows</classifier>
+      <classifier>${lwjgl.natives}</classifier>
     </dependency>
 
     <!-- JavaFX -->
@@ -121,8 +270,6 @@
       <artifactId>gson</artifactId>
       <version>2.13.2</version>
     </dependency>
-
-
   </dependencies>
 
   <build>
@@ -136,20 +283,19 @@
         </configuration>
       </plugin>
 
-        <!--
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>exec-maven-plugin</artifactId>
-        <version>3.1.0</version>
-        <configuration>
-          <mainClass>org.fractalizer.GLSLFractalizerApp</mainClass>
-        </configuration>
-      </plugin>
-        -->
+      <!--
+        Unit tests (src/test/java) need no GPU: graph compiler output, serialization
+        round trips, camera and animation maths, and the node graph panel built with a
+        stub controller. The JavaFX toolkit is started without a window; prism.order=sw
+        keeps it off the GPU so the same run passes under xvfb on a CI runner.
+      -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.2.2</version>
+        <version>3.5.3</version>
+        <configuration>
+          <argLine>-Dprism.order=sw -Djavafx.animation.fullspeed=false</argLine>
+        </configuration>
       </plugin>
 
       <plugin>
@@ -172,7 +318,6 @@
           </execution>
         </executions>
       </plugin>
-
 
         <plugin>
             <groupId>org.openjfx</groupId>
@@ -202,120 +347,6 @@
                 </execution>
             </executions>
         </plugin>
-
-      <!--
-        ============================================================================
-        LWJGL Native DLLs for jlink distribution
-        ============================================================================
-        Problem: jlink creates a self-contained Java runtime, but LWJGL native
-        libraries (glfw.dll, lwjgl.dll, etc.) live inside classifier JARs
-        (e.g. lwjgl-glfw-3.3.6-natives-windows.jar) and are normally extracted
-        at runtime by LWJGL's SharedLibraryLoader into a temp cache folder.
-
-        On a dev machine this cache already exists (from mvn javafx:run or IDE),
-        so the jlink image appears to work. On a clean machine (end user), the
-        cache is empty and the DLLs are not in the jlink image => crash with
-        "Failed to locate library: lwjgl" / "glfw.dll not found".
-
-        Fix (2 steps, both run during 'mvn package' AFTER 'mvn javafx:jlink'):
-        1. maven-dependency-plugin: extracts DLLs from the 4 native JARs into
-           target/natives-tmp/  (preserving the nested org/lwjgl/... paths)
-        2. maven-antrun-plugin: copies the DLLs FLAT into target/image/bin/
-           (next to java.exe) and patches fractaliz3r.bat to pass
-           -Dorg.lwjgl.librarypath=%~dp0 so LWJGL finds them without cache.
-
-        Full build command: mvn clean javafx:jlink package -DskipTests
-        ============================================================================
-      -->
-
-      <!-- Step 1: Extract LWJGL native DLLs from classifier JARs -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <version>3.10.0</version>
-        <executions>
-          <execution>
-            <id>unpack-lwjgl-natives</id>
-            <phase>package</phase>
-            <goals>
-              <goal>unpack</goal>
-            </goals>
-            <configuration>
-              <artifactItems>
-                <artifactItem>
-                  <groupId>org.lwjgl</groupId>
-                  <artifactId>lwjgl</artifactId>
-                  <version>${lwjgl.version}</version>
-                  <classifier>natives-windows</classifier>
-                  <type>jar</type>
-                  <outputDirectory>${project.build.directory}/natives-tmp</outputDirectory>
-                  <includes>**/*.dll</includes>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>org.lwjgl</groupId>
-                  <artifactId>lwjgl-glfw</artifactId>
-                  <version>${lwjgl.version}</version>
-                  <classifier>natives-windows</classifier>
-                  <type>jar</type>
-                  <outputDirectory>${project.build.directory}/natives-tmp</outputDirectory>
-                  <includes>**/*.dll</includes>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>org.lwjgl</groupId>
-                  <artifactId>lwjgl-opengl</artifactId>
-                  <version>${lwjgl.version}</version>
-                  <classifier>natives-windows</classifier>
-                  <type>jar</type>
-                  <outputDirectory>${project.build.directory}/natives-tmp</outputDirectory>
-                  <includes>**/*.dll</includes>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>org.lwjgl</groupId>
-                  <artifactId>lwjgl-stb</artifactId>
-                  <version>${lwjgl.version}</version>
-                  <classifier>natives-windows</classifier>
-                  <type>jar</type>
-                  <outputDirectory>${project.build.directory}/natives-tmp</outputDirectory>
-                  <includes>**/*.dll</includes>
-                </artifactItem>
-              </artifactItems>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <!-- Step 2: Copy DLLs flat into jlink bin/ and patch launcher script -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-antrun-plugin</artifactId>
-        <version>3.2.0</version>
-        <executions>
-          <execution>
-            <id>copy-natives-flat</id>
-            <phase>package</phase>
-            <goals>
-              <goal>run</goal>
-            </goals>
-            <configuration>
-              <target>
-                <!-- Flatten nested DLLs (e.g. windows/x64/org/lwjgl/glfw/glfw.dll)
-                     into target/image/bin/ next to java.exe -->
-                <copy todir="${project.build.directory}/image/bin" flatten="true">
-                  <fileset dir="${project.build.directory}/natives-tmp">
-                    <include name="**/*.dll"/>
-                  </fileset>
-                </copy>
-                <!-- Tell LWJGL to look for natives in bin/ instead of
-                     trying to extract from JARs (which don't exist in jlink) -->
-                <replace file="${project.build.directory}/image/bin/fractaliz3r.bat"
-                         token="set JLINK_VM_OPTIONS="
-                         value="set JLINK_VM_OPTIONS=-Dorg.lwjgl.librarypath=%~dp0"/>
-              </target>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
     </plugins>
   </build>
 </project>
