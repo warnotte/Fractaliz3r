@@ -100,6 +100,17 @@ public class HybridLab {
         m.put("tetra_rot", new Chain(
                 chain(14, 1000f, DEMode.LINEAR, folded(StepType.SIERPINSKI_FOLD, 2f, 1f, 1f, 1f), rotate(12, 0, 18)),
                 4.0f, "rotated tetra fold — a KIFS the graph cannot build"));
+        // Two entries from IDEAS.md #14 that need no new formula, only a chain:
+        // Buffalo is a Mandelbulb with absolute-value folds, MarbleMarcher a Menger IFS
+        // with rotation between iterations.
+        m.put("buffalo", new Chain(
+                chain(12, 8f, DEMode.LOG, bulb(8), step(StepType.ABS_FOLD), step(StepType.ADD_C)),
+                3.0f, "IDEAS #14 Buffalo: power map plus abs folds"));
+        m.put("marblemarcher", new Chain(
+                chain(14, 1000f, DEMode.LINEAR, folded(StepType.MENGER_FOLD, 2f, 1f, 1f, 1f),
+                        rotate(18, 27, 0)),
+                4.0f, "IDEAS #14 MarbleMarcher: Menger IFS with rotation"));
+
         m.put("bulb_invert", new Chain(
                 chain(12, 8f, DEMode.LOG, bulb(8), invert(1.1f), step(StepType.ADD_C)),
                 3.0f, "sphere inversion folded into the orbit"));
