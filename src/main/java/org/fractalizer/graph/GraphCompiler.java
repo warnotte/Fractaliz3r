@@ -1085,18 +1085,8 @@ public class GraphCompiler {
         sb.append("uniform vec3 ").append(p).append("_juliaC;\n");
         for (int i = 0; i < steps.size(); i++) {
             String u = p + "_s" + i + "_";
-            switch (steps.get(i).getType()) {
-                case BULB -> sb.append("uniform float ").append(u).append("power;\n");
-                case BOX_FOLD -> sb.append("uniform float ").append(u).append("foldLimit;\n")
-                        .append("uniform float ").append(u).append("minRadius;\n")
-                        .append("uniform float ").append(u).append("fixedRadius;\n")
-                        .append("uniform float ").append(u).append("scale;\n");
-                case MENGER_FOLD, SIERPINSKI_FOLD, SCALE -> sb.append("uniform float ").append(u).append("scale;\n")
-                        .append("uniform vec3 ").append(u).append("offset;\n");
-                case ABS_FOLD -> sb.append("uniform vec3 ").append(u).append("offset;\n");
-                case ROTATE -> sb.append("uniform mat3 ").append(u).append("rot;\n");
-                case SPHERE_INVERT -> sb.append("uniform float ").append(u).append("radius;\n");
-                case ADD_C -> { }
+            for (String decl : stepUniforms(steps.get(i).getType())) {
+                sb.append("uniform ").append(decl.replace("$", u)).append(";\n");
             }
         }
         sb.append("\n");
@@ -1105,10 +1095,23 @@ public class GraphCompiler {
           .append("    float minDist;\n    float planeX;\n    float planeY;\n    float planeZ;\n")
           .append("    float escapeR;\n    int iterations;\n};\n\n");
 
-        // One shared chain body, so DE and DE_simple cannot drift apart.
-        sb.append("void ").append(p).append("_chain(inout vec3 z, inout float dr, vec3 c) {\n");
+        // One shared chain body, so DE and DE_simple cannot drift apart. The iteration
+        // index is passed in for the steps that depend on it: per-iteration rotation,
+        // and any step gated to a range of iterations.
+        sb.append("void ").append(p).append("_chain(inout vec3 z, inout float dr, vec3 c, int i) {\n");
         for (int i = 0; i < steps.size(); i++) {
-            sb.append(stepBody(steps.get(i), p + "_s" + i + "_"));
+            HybridNode.Step st = steps.get(i);
+            String body = stepBody(st, p + "_s" + i + "_");
+            if (st.isGated()) {
+                // Baked in rather than a uniform: the gate decides which code runs on
+                // which pass, and the editor treats it as a structural edit.
+                String cond = "i >= " + st.getIterStart() + " && i < " + st.getIterEnd();
+                if (st.getIterEvery() != 1) {
+                    cond += " && ((i - " + st.getIterStart() + ") % " + st.getIterEvery() + ") == 0";
+                }
+                body = "    if (" + cond + ") {\n" + body.indent(4) + "    }\n";
+            }
+            sb.append(body);
         }
         sb.append("}\n\n");
 
@@ -1120,9 +1123,16 @@ public class GraphCompiler {
         // iterations rather than by escaping, those are different values, and using the
         // loop-top one makes the estimator disagree with the formula it should reproduce.
         String finalR = (hn.getDeMode() == HybridNode.DEMode.LOG) ? "" : "    r = length(z);\n";
-        String deExpr = (hn.getDeMode() == HybridNode.DEMode.LOG)
-                ? "0.5 * log(r) * r / dr"
-                : "r / max(abs(dr), 1e-9)";
+        String deExpr = switch (hn.getDeMode()) {
+            case LOG -> "0.5 * log(r) * r / dr";
+            case LINEAR -> "r / max(abs(dr), 1e-9)";
+            // Knighty's estimator for the pseudo-Kleinian: the distance of the final
+            // orbit point to a plane, divided by the accumulated stretch. Orbits under
+            // that fold never escape, so an escape radius means nothing to them. The
+            // stand-alone pseudokleinian.glsl starts its stretch at 1.5 rather than 1
+            // as a safety margin; the same margin is folded into the constant here.
+            case PLANE -> "abs(z.z + 0.1) / (3.0 * max(abs(dr), 1e-9))";
+        };
 
         sb.append("float ").append(p).append("_DE_simple(vec3 pos) {\n")
           .append("    vec3 z = pos;\n    ").append(seed)
@@ -1130,7 +1140,7 @@ public class GraphCompiler {
           .append("    for (int i = 0; i < ").append(iterBound).append("; i++) {\n")
           .append("        r = length(z);\n")
           .append("        if (r > ").append(p).append("_bailout) break;\n")
-          .append("        ").append(p).append("_chain(z, dr, c);\n")
+          .append("        ").append(p).append("_chain(z, dr, c, i);\n")
           .append("    }\n")
           .append(finalR)
           .append("    float de = ").append(deExpr).append(";\n")
@@ -1147,7 +1157,7 @@ public class GraphCompiler {
           .append("    for (int i = 0; i < ").append(iterBound).append("; i++) {\n")
           .append("        r = length(z);\n")
           .append("        if (r > ").append(p).append("_bailout) break;\n")
-          .append("        ").append(p).append("_chain(z, dr, c);\n")
+          .append("        ").append(p).append("_chain(z, dr, c, i);\n")
           .append("        trap.minDist = min(trap.minDist, length(z));\n")
           .append("        vec3 _zd = normalize(z + vec3(1e-9));\n")
           .append("        trap.planeX = _zd.x;\n")
@@ -1180,6 +1190,71 @@ public class GraphCompiler {
         return sb.toString();
     }
 
+    /** Uniform declarations a step type needs, with "$" standing for the per-step
+     *  prefix. The same table drives {@link #collectHybridUniforms}, so a step cannot
+     *  declare a uniform it never receives a value for. */
+    static List<String> stepUniforms(HybridNode.StepType t) {
+        return switch (t) {
+            case BULB, BULB_COSINE, COMPLEX_POWER -> List.of("float $power");
+            case RIEMANN -> List.of("float $power", "float $scale");
+            case QUAT_SQUARE, BRISTOR, BENESI_MAG, ADD_C -> List.of();
+            case BOX_FOLD, AMAZING_SURF -> List.of("float $foldLimit", "float $minRadius", "float $fixedRadius", "float $scale");
+            case BOX_FOLD_ONLY -> List.of("float $foldLimit");
+            case SPHERE_FOLD -> List.of("float $minRadius", "float $fixedRadius");
+            case ABOX_MOD -> List.of("vec3 $offset", "float $minRadius", "float $fixedRadius", "float $scale");
+            case KLEINIAN_FOLD -> List.of("vec3 $offset", "float $radius");
+            case MENGER_FOLD, SIERPINSKI_FOLD, OCTA_FOLD, ICOSA_FOLD, BENESI_FOLD, SCALE -> List.of("float $scale", "vec3 $offset");
+            case ABS_FOLD -> List.of("vec3 $offset");
+            case PLANE_FOLD -> List.of("vec3 $normal", "float $dist");
+            case ROTATIONAL_FOLD -> List.of("int $count");
+            case KALI_FOLD -> List.of("float $radius", "vec3 $offset");
+            case SPHERE_INVERT -> List.of("float $radius");
+            case ROTATE -> List.of("mat3 $rot");
+            case ROTATE_ITER -> List.of("vec3 $rotIter");
+            case TWIST -> List.of("float $twist");
+        };
+    }
+
+    /** The Mandelbox sphere fold, shared by every step that contains one. */
+    private static final String SPHERE_FOLD_BODY = """
+            float _r2 = dot(z, z);
+            float _mn = %1$sminRadius * %1$sminRadius;
+            float _fx = %1$sfixedRadius * %1$sfixedRadius;
+            if (_r2 < _mn) { float _f = _fx / _mn; z = z * _f; dr = dr * _f; }
+            else if (_r2 < _fx) { float _f = _fx / _r2; z = z * _f; dr = dr * _f; }
+            """;
+
+    /** Scale about the origin and pull towards the offset — the IFS contraction that
+     *  ends every KIFS fold. */
+    private static final String IFS_SCALE_BODY = """
+            float _s = %1$sscale;
+            vec3 _o = %1$soffset;
+            z = z * _s - _o * (_s - 1.0);
+            dr = dr * abs(_s);
+            """;
+
+    /** Plane coordinates (u, v) around one axis and the write-back, for the steps that
+     *  act in the plane perpendicular to an axis. */
+    private static String planeRead(int axis) {
+        return switch (axis) {
+            case 0 -> "vec2 _pq = z.yz;";
+            case 1 -> "vec2 _pq = z.zx;";
+            default -> "vec2 _pq = z.xy;";
+        };
+    }
+
+    private static String planeWrite(int axis) {
+        return switch (axis) {
+            case 0 -> "z = vec3(z.x, _pq.x, _pq.y);";
+            case 1 -> "z = vec3(_pq.y, z.y, _pq.x);";
+            default -> "z = vec3(_pq.x, _pq.y, z.z);";
+        };
+    }
+
+    private static String axisComponent(int axis) {
+        return switch (axis) { case 0 -> "z.x"; case 1 -> "z.y"; default -> "z.z"; };
+    }
+
     /** GLSL for one step. Local names are underscore-prefixed and block-scoped so
      *  repeated steps in a chain cannot collide. */
     private static String stepBody(HybridNode.Step st, String u) {
@@ -1197,6 +1272,83 @@ public class GraphCompiler {
                     }
                 }
                 """).formatted(u).indent(4);
+            // Nylander's other convention: the polar angle is measured from the XY plane
+            // (asin) instead of from the Z axis (acos). Same power, a different bulb.
+            case BULB_COSINE -> ("""
+                {
+                    float _r = length(z);
+                    if (_r > 1e-8) {
+                        float _p = %1$spower;
+                        float _ph = atan(z.y, z.x) * _p;
+                        float _th = asin(clamp(z.z / _r, -1.0, 1.0)) * _p;
+                        float _zr = pow(_r, _p);
+                        dr = pow(_r, _p - 1.0) * _p * dr;
+                        z = _zr * vec3(cos(_th) * cos(_ph), cos(_th) * sin(_ph), sin(_th));
+                    }
+                }
+                """).formatted(u).indent(4);
+            // (x + yi + zj)^2 with the k part dropped — the w = 0 slice of the quaternion
+            // square, which is also the 3D slice of the bicomplex Tetrabrot.
+            case QUAT_SQUARE -> """
+                {
+                    float _r = length(z);
+                    dr = 2.0 * _r * dr;
+                    z = vec3(z.x * z.x - z.y * z.y - z.z * z.z, 2.0 * z.x * z.y, 2.0 * z.x * z.z);
+                }
+                """.indent(4);
+            // Same as the stand-alone bristorbrot.glsl, minus the +1 that ADD_C supplies.
+            case BRISTOR -> """
+                {
+                    float _r = length(z);
+                    dr = 2.0 * _r * dr;
+                    z = vec3(z.x * z.x - z.y * z.y - z.z * z.z, 2.0 * z.x * z.y, -2.0 * z.x * z.z);
+                }
+                """.indent(4);
+            // Benesi's quadratic "mag transform": x^2 - y^2 - z^2 on X, and the YZ plane
+            // gets its angle doubled with the 2*x*rho magnitude of a complex square.
+            case BENESI_MAG -> """
+                {
+                    float _r = length(z);
+                    vec3 _q = z * z;
+                    float _yz = _q.y + _q.z;
+                    float _t = (_yz > 0.0) ? 2.0 * z.x / sqrt(_yz) : 1.0;
+                    dr = 2.0 * _r * dr;
+                    z = vec3(_q.x - _q.y - _q.z, 2.0 * _t * z.y * z.z, _t * (_q.y - _q.z));
+                }
+                """.indent(4);
+            // msltoe's Riemann sphere: project the direction stereographically, fold the
+            // plane with |sin|, project back, and raise the radius to the power. The
+            // plane frequency is the scale parameter.
+            case RIEMANN -> ("""
+                {
+                    float _r = length(z);
+                    if (_r > 1e-8) {
+                        vec3 _u = z / _r;
+                        float _q = %1$sscale / max(1.0 - _u.z, 1e-6);
+                        float _s = abs(sin(3.1415927 * _u.x * _q));
+                        float _t = abs(sin(3.1415927 * _u.y * _q));
+                        float _d = 1.0 + _s * _s + _t * _t;
+                        float _p = %1$spower;
+                        dr = pow(_r, _p - 1.0) * _p * dr;
+                        z = vec3(2.0 * _s, 2.0 * _t, _d - 2.0) * (pow(_r, _p) / _d);
+                    }
+                }
+                """).formatted(u).indent(4);
+            // z^p on the complex XY plane; Z passes through, so alone this extrudes a 2D
+            // Julia set along Z. A Twist or Rotate per Iteration before it bends the stack.
+            case COMPLEX_POWER -> String.join("\n",
+                    "{",
+                    "    " + planeRead(st.getAxis()),
+                    "    float _rr = length(_pq);",
+                    "    if (_rr > 1e-8) {",
+                    "        float _p = " + u + "power;",
+                    "        float _a = atan(_pq.y, _pq.x) * _p;",
+                    "        float _rp = pow(_rr, _p);",
+                    "        dr = pow(_rr, _p - 1.0) * _p * dr;",
+                    "        _pq = vec2(_rp * cos(_a), _rp * sin(_a));",
+                    "        " + planeWrite(st.getAxis()),
+                    "    }",
+                    "}", "").indent(4);
             case BOX_FOLD -> ("""
                 {
                     float _L = %1$sfoldLimit;
@@ -1242,7 +1394,147 @@ public class GraphCompiler {
                     z = abs(z + _o) - _o;
                 }
                 """).formatted(u).indent(4);
+            case BOX_FOLD_ONLY -> ("""
+                {
+                    float _L = %1$sfoldLimit;
+                    z = clamp(z, -_L, _L) * 2.0 - z;
+                }
+                """).formatted(u).indent(4);
+            case SPHERE_FOLD -> ("{\n" + SPHERE_FOLD_BODY + "}\n").formatted(u).indent(4);
+            // Kali's Amazing Surf: the Mandelbox step with no fold on Z, which is what
+            // turns the box's cells into open sheets and shelves.
+            case AMAZING_SURF -> ("""
+                {
+                    float _L = %1$sfoldLimit;
+                    z = vec3(clamp(z.xy, -_L, _L) * 2.0 - z.xy, z.z);
+                """ + SPHERE_FOLD_BODY + """
+                    float _s = %1$sscale;
+                    z = z * _s;
+                    dr = dr * abs(_s);
+                }
+                """).formatted(u).indent(4);
+            // Mandelbulber's ABoxMod: the box fold limit is a vector, one per axis. With
+            // (1,1,1) it is the plain Mandelbox step.
+            case ABOX_MOD -> ("""
+                {
+                    vec3 _o = abs(%1$soffset);
+                    z = clamp(z, -_o, _o) * 2.0 - z;
+                """ + SPHERE_FOLD_BODY + """
+                    float _s = %1$sscale;
+                    z = z * _s;
+                    dr = dr * abs(_s);
+                }
+                """).formatted(u).indent(4);
+            // The pseudo-Kleinian step: a per-axis box fold, then the interior of the
+            // sphere r^2 < size is inverted outwards. A sphere fold with no inner radius.
+            case KLEINIAN_FOLD -> ("""
+                {
+                    vec3 _o = abs(%1$soffset);
+                    z = clamp(z, -_o, _o) * 2.0 - z;
+                    float _r2 = max(dot(z, z), 1e-8);
+                    float _k = max(%1$sradius / _r2, 1.0);
+                    z = z * _k;
+                    dr = dr * _k;
+                }
+                """).formatted(u).indent(4);
+            // Knighty's octahedral fold: four reflections leave x >= |y| and x >= |z|.
+            case OCTA_FOLD -> ("""
+                {
+                    if (z.x + z.y < 0.0) { float _t = -z.y; z.y = -z.x; z.x = _t; }
+                    if (z.x + z.z < 0.0) { float _t = -z.z; z.z = -z.x; z.x = _t; }
+                    if (z.x - z.y < 0.0) { float _t = z.y; z.y = z.x; z.x = _t; }
+                    if (z.x - z.z < 0.0) { float _t = z.z; z.z = z.x; z.x = _t; }
+                """ + IFS_SCALE_BODY + "}\n").formatted(u).indent(4);
+            // Knighty's icosahedral fold: abs and reflections in two golden-ratio planes,
+            // n1 = normalize(-phi, phi-1, 1) and n2 = normalize(1, -phi, phi+1).
+            case ICOSA_FOLD -> ("""
+                {
+                    const vec3 _n1 = vec3(-0.809017, 0.309017, 0.5);
+                    const vec3 _n2 = vec3(0.309017, -0.5, 0.809017);
+                    z = abs(z);
+                    z = z - 2.0 * min(0.0, dot(z, _n1)) * _n1;
+                    z = abs(z);
+                    z = z - 2.0 * min(0.0, dot(z, _n2)) * _n2;
+                    z = abs(z);
+                    z = z - 2.0 * min(0.0, dot(z, _n1)) * _n1;
+                    z = abs(z);
+                """ + IFS_SCALE_BODY + "}\n").formatted(u).indent(4);
+            // One reflection: whatever lies below the plane (n, dist) is mirrored above it.
+            // The generic conditional fold — a mirror on one axis is normal (1,0,0), dist 0.
+            case PLANE_FOLD -> ("""
+                {
+                    vec3 _n = %1$snormal;
+                    float _d = dot(z, _n) - %1$sdist;
+                    if (_d < 0.0) z = z - 2.0 * _d * _n;
+                }
+                """).formatted(u).indent(4);
+            // Fold the angle around one axis into a wedge of 2*pi/N, mirrored at its
+            // half: N-fold dihedral symmetry, the kaleidoscope.
+            case ROTATIONAL_FOLD -> String.join("\n",
+                    "{",
+                    "    float _n = float(max(" + u + "count, 1));",
+                    "    float _w = 6.2831853 / _n;",
+                    "    " + planeRead(st.getAxis()),
+                    "    float _l = length(_pq);",
+                    "    float _a = atan(_pq.y, _pq.x);",
+                    "    _a = abs(mod(_a + 0.5 * _w, _w) - 0.5 * _w);",
+                    "    _pq = _l * vec2(cos(_a), sin(_a));",
+                    "    " + planeWrite(st.getAxis()),
+                    "}", "").indent(4);
+            // Benesi's T1: rotate so the body diagonal becomes the Z axis, abs, scale,
+            // rotate back, subtract the offset. The rotation is orthogonal (rows checked),
+            // so only the scale touches the derivative.
+            case BENESI_FOLD -> ("""
+                {
+                    float _t = z.x * 0.8164966 - z.z * 0.5773503;
+                    z = vec3((_t - z.y) * 0.7071068, (_t + z.y) * 0.7071068, z.x * 0.5773503 + z.z * 0.8164966);
+                    z = abs(z);
+                    float _s = %1$sscale;
+                    z = z * _s;
+                    dr = dr * abs(_s);
+                    _t = (z.y + z.x) * 0.7071068;
+                    z = vec3(z.z * 0.5773503 + _t * 0.8164966, (z.y - z.x) * 0.7071068, z.z * 0.8164966 - _t * 0.5773503);
+                    z = z - %1$soffset;
+                }
+                """).formatted(u).indent(4);
+            // The Kaliset: abs, invert in a sphere, subtract c. Abs Fold + Sphere Invert +
+            // Scale would build it; it is here by name because it is a formula people ask for.
+            case KALI_FOLD -> ("""
+                {
+                    z = abs(z);
+                    float _r2 = max(dot(z, z), 1e-8);
+                    float _k = (%1$sradius * %1$sradius) / _r2;
+                    z = z * _k - %1$soffset;
+                    dr = dr * _k;
+                }
+                """).formatted(u).indent(4);
             case ROTATE -> "    z = " + u + "rot * z;\n";
+            // X, then Y, then Z, each by (angle per iteration) * i. Isometry: dr untouched.
+            case ROTATE_ITER -> ("""
+                {
+                    vec3 _a = %1$srotIter * float(i);
+                    float _cx = cos(_a.x), _sx = sin(_a.x);
+                    float _cy = cos(_a.y), _sy = sin(_a.y);
+                    float _cz = cos(_a.z), _sz = sin(_a.z);
+                    z = vec3(z.x, _cx * z.y - _sx * z.z, _sx * z.y + _cx * z.z);
+                    z = vec3(_cy * z.x + _sy * z.z, z.y, -_sy * z.x + _cy * z.z);
+                    z = vec3(_cz * z.x - _sz * z.y, _sz * z.x + _cz * z.y, z.z);
+                }
+                """).formatted(u).indent(4);
+            // Rotate the plane perpendicular to the axis by (twist * height). Not an
+            // isometry: the shear grows with the distance from the axis, so the
+            // derivative takes the bound 1 + |twist| * radius to stay conservative.
+            case TWIST -> String.join("\n",
+                    "{",
+                    "    float _k = " + u + "twist;",
+                    "    float _a = " + axisComponent(st.getAxis()) + " * _k;",
+                    "    float _c = cos(_a), _sn = sin(_a);",
+                    "    " + planeRead(st.getAxis()),
+                    "    float _l = length(_pq);",
+                    "    _pq = vec2(_c * _pq.x - _sn * _pq.y, _sn * _pq.x + _c * _pq.y);",
+                    "    " + planeWrite(st.getAxis()),
+                    "    dr = dr * (1.0 + abs(_k) * _l);",
+                    "}", "").indent(4);
             case SCALE -> ("""
                 {
                     float _s = %1$sscale;
@@ -1274,25 +1566,40 @@ public class GraphCompiler {
         for (int i = 0; i < steps.size(); i++) {
             HybridNode.Step st = steps.get(i);
             String u = id + "_s" + i + "_";
-            float[] off = {st.getOffsetX(), st.getOffsetY(), st.getOffsetZ()};
-            switch (st.getType()) {
-                case BULB -> uniforms.put(u + "power", st.getPower());
-                case BOX_FOLD -> {
-                    uniforms.put(u + "foldLimit", st.getFoldLimit());
-                    uniforms.put(u + "minRadius", st.getMinRadius());
-                    uniforms.put(u + "fixedRadius", st.getFixedRadius());
-                    uniforms.put(u + "scale", st.getScale());
-                }
-                case MENGER_FOLD, SIERPINSKI_FOLD, SCALE -> {
-                    uniforms.put(u + "scale", st.getScale());
-                    uniforms.put(u + "offset", off);
-                }
-                case ABS_FOLD -> uniforms.put(u + "offset", off);
-                case ROTATE -> uniforms.put(u + "rot", eulerMatrix(st.getRotX(), st.getRotY(), st.getRotZ()));
-                case SPHERE_INVERT -> uniforms.put(u + "radius", st.getRadius());
-                case ADD_C -> { }
+            for (String decl : stepUniforms(st.getType())) {
+                String name = decl.substring(decl.indexOf('$') + 1);
+                uniforms.put(u + name, stepUniformValue(st, name));
             }
         }
+    }
+
+    /** The value behind one of a step's uniforms, by the name used in {@link #stepUniforms}. */
+    private static Object stepUniformValue(HybridNode.Step st, String name) {
+        return switch (name) {
+            case "power" -> st.getPower();
+            case "scale" -> st.getScale();
+            case "foldLimit" -> st.getFoldLimit();
+            case "minRadius" -> st.getMinRadius();
+            case "fixedRadius" -> st.getFixedRadius();
+            case "radius" -> st.getRadius();
+            case "dist" -> st.getDist();
+            case "count" -> st.getCount();
+            case "offset" -> new float[]{st.getOffsetX(), st.getOffsetY(), st.getOffsetZ()};
+            case "normal" -> unitOrX(st.getOffsetX(), st.getOffsetY(), st.getOffsetZ());
+            case "rot" -> eulerMatrix(st.getRotX(), st.getRotY(), st.getRotZ());
+            case "rotIter" -> new float[]{
+                    (float) Math.toRadians(st.getRotX()), (float) Math.toRadians(st.getRotY()),
+                    (float) Math.toRadians(st.getRotZ())};
+            case "twist" -> (float) Math.toRadians(st.getRotX());
+            default -> throw new IllegalStateException("no value for hybrid step uniform " + name);
+        };
+    }
+
+    /** Normalised, or the X axis when the vector is degenerate. */
+    private static float[] unitOrX(float x, float y, float z) {
+        double len = Math.sqrt(x * x + y * y + z * z);
+        if (len < 1e-6) return new float[]{1f, 0f, 0f};
+        return new float[]{(float) (x / len), (float) (y / len), (float) (z / len)};
     }
 
     /** R = Rz * Ry * Rx, the same convention as the fractal rotation uniforms. */

@@ -55,7 +55,26 @@ public class RenderRegression {
         s.add(new Scene("apollonian_classic",     FractalType.APOLLONIAN,         pt(false), 16, 1.5, null));
         s.add(new Scene("sierpinski_classic",     FractalType.SIERPINSKI,         pt(false), 16, 1.5, null));
         s.add(new Scene("quatjulia_classic",      FractalType.QUATERNION_JULIA_4D,pt(false), 16, 1.5, null));
+        // A hybrid chain goes through GraphCompiler's inline emission, a path none of the
+        // stand-alone formulas touch. BoxBulb from the library, at its preview framing.
+        s.add(new Scene("hybrid_boxbulb",         FractalType.NODE_GRAPH,         hybrid("BoxBulb"), 16, 1.5,
+                new float[]{1.26f, 0.9f, -2.55f, 0, 0, 0, 50}));
         return s;
+    }
+
+    /** Load a named chain from the hybrid library as the graph root. */
+    private static Consumer<AbstractFractalParams> hybrid(String presetName) {
+        return p -> {
+            p.setPathTracingEnabled(false);
+            org.fractalizer.graph.HybridPresets.Preset preset = org.fractalizer.graph.HybridPresets.all().stream()
+                    .filter(x -> x.name().equals(presetName)).findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("no hybrid preset " + presetName));
+            org.fractalizer.graph.HybridNode node = new org.fractalizer.graph.HybridNode();
+            org.fractalizer.graph.HybridPresets.apply(node, preset);
+            org.fractalizer.fractals.NodeGraphParams ngp = (org.fractalizer.fractals.NodeGraphParams) p;
+            ngp.setGraphRoot(node);
+            ngp.markDirty();
+        };
     }
 
     /** Detail scenes from a FractalNavigator manifest (type eye3 tgt3 fov per line). */

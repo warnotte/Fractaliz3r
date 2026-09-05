@@ -64,9 +64,9 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.GalleryRender" -Dex
 # for diversity, and the winners written as .frac. ~180 candidates in ~6 s.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.JuliaProspector" -Dexec.args="out/prospect 180 320x180 6 8"
 
-# Hybrid chains: several formulas composed inside one iteration loop (HybridNode).
-# The first two entries are controls that must reproduce the stand-alone Mandelbulb and
-# Mandelbox exactly; they are compared on the depth AOV, not on colour.
+# Hybrid chains: several formulas composed inside one iteration loop (HybridNode), 28 step
+# types. The first entries are controls that must reproduce the stand-alone Mandelbulb,
+# Mandelbox and Bristorbrot exactly; they are compared on the depth AOV, not on colour.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.HybridLab" -Dexec.args="out/hybrid 480x270 12"
 #   4th arg "presets" renders the shipped chain library (HybridPresets) instead.
 
@@ -118,8 +118,8 @@ org.fractalizer
 │   ├── PrimitiveNode.java          # Leaf: 11 SDF geometric primitives
 │   ├── CSGNode.java                # Binary: Union/Intersect/Subtract/Morph
 │   ├── TransformNode.java          # Unary: 7 modes (Standard/Mirror/Twist/Bend/Taper/Rep/Rep1D)
-│   ├── HybridNode.java             # Leaf: chains formulas INSIDE one iteration loop
-│   ├── HybridPresets.java          # 9 named chains, offered as "Load a chain…" in the editor
+│   ├── HybridNode.java             # Leaf: chains formulas INSIDE one iteration loop (28 step types, per-step iteration gating)
+│   ├── HybridPresets.java          # 31 named chains (controls first), offered as "Load a chain…" in the editor
 │   ├── EffectNode.java             # Unary: Erosion/Crystal/Moss
 │   ├── MaterialNode.java           # Unary: per-node material overrides
 │   ├── GraphCompiler.java          # Compiles node tree → composite GLSL shader (8 phases)
@@ -323,5 +323,5 @@ Both blocks must go **before** the `TestSceneParams` / `CornellBoxParams` blocks
 - **LWJGL 3.4.1** — OpenGL bindings for GPU rendering
 - **JavaFX 25.0.1** — UI framework
 - **JavaFX Media** — Audio playback and spectrum analysis
-- **Java 21+** required
+- **JDK 24** to build and run from source (JavaFX 25 class files need 23+; `--release 21` remains the bytecode target; CI uses Temurin 24)
 - **FFmpeg** (optional) — MP4 video export and audio pre-analysis (must be in system PATH)

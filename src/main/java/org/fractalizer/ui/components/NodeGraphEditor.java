@@ -1291,40 +1291,77 @@ public class NodeGraphEditor extends VBox {
 
             row.getChildren().addAll(num, typeCombo, up, down, del);
             detailPanel.getChildren().add(row);
+
+            Label stepHint = new Label(st.getType().getHint());
+            stepHint.setWrapText(true);
+            stepHint.getStyleClass().add("hint-label");
+            detailPanel.getChildren().add(stepHint);
+
             addStepSliders(st);
+            addStepGate(st);
             detailPanel.getChildren().add(sectionSeparator());
         }
 
-        ComboBox<HybridNode.StepType> addCombo = new ComboBox<>();
-        addCombo.getItems().addAll(HybridNode.StepType.values());
-        addCombo.setValue(HybridNode.StepType.ROTATE);
-        addCombo.setConverter(new javafx.util.StringConverter<>() {
-            @Override public String toString(HybridNode.StepType t) { return t == null ? "" : t.getDisplayName(); }
-            @Override public HybridNode.StepType fromString(String s) { return null; }
-        });
-        HBox.setHgrow(addCombo, Priority.ALWAYS);
-        addCombo.setMaxWidth(Double.MAX_VALUE);
-        Button addBtn = new Button("+ Step");
-        addBtn.setOnAction(e -> {
-            pushUndoSnapshot();
-            hn.getSteps().add(new HybridNode.Step(addCombo.getValue()));
-            onStructuralChange();
-        });
-        HBox addRow = new HBox(4, addCombo, addBtn);
-        detailPanel.getChildren().add(addRow);
+        // The step menu is grouped by family: with this many maps a flat list is
+        // where a user stops reading.
+        MenuButton addBtn = new MenuButton("+ Step");
+        addBtn.setMaxWidth(Double.MAX_VALUE);
+        for (HybridNode.Family family : HybridNode.Family.values()) {
+            Menu group = new Menu(family.getDisplayName());
+            for (HybridNode.StepType t : HybridNode.StepType.values()) {
+                if (t.getFamily() != family) continue;
+                MenuItem item = new MenuItem(t.getDisplayName());
+                item.setOnAction(e -> {
+                    pushUndoSnapshot();
+                    hn.getSteps().add(new HybridNode.Step(t));
+                    onStructuralChange();
+                });
+                group.getItems().add(item);
+            }
+            addBtn.getItems().add(group);
+        }
+        detailPanel.getChildren().add(addBtn);
     }
 
     /** Sliders for whichever parameters the step type actually uses. */
     private void addStepSliders(HybridNode.Step st) {
         switch (st.getType()) {
-            case BULB -> addHybridSlider("Power", 1, 24, st.getPower(), st::setPower);
-            case BOX_FOLD -> {
+            case BULB, BULB_COSINE -> addHybridSlider("Power", 1, 24, st.getPower(), st::setPower);
+            case COMPLEX_POWER -> {
+                addAxisChoice(st);
+                addHybridSlider("Power", 1, 24, st.getPower(), st::setPower);
+            }
+            case QUAT_SQUARE, BRISTOR, BENESI_MAG -> addNoParamsLabel("z -> z^2  (no parameters)");
+            case RIEMANN -> {
+                addHybridSlider("Power", 1, 24, st.getPower(), st::setPower);
+                addHybridSlider("Plane Frequency", 0.1, 5, st.getScale(), st::setScale);
+            }
+            case BOX_FOLD, AMAZING_SURF -> {
                 addHybridSlider("Scale", -5, 5, st.getScale(), st::setScale);
                 addHybridSlider("Min Radius", 0.01, 2, st.getMinRadius(), st::setMinRadius);
                 addHybridSlider("Fixed Radius", 0.05, 4, st.getFixedRadius(), st::setFixedRadius);
                 addHybridSlider("Fold Limit", 0.1, 4, st.getFoldLimit(), st::setFoldLimit);
             }
-            case MENGER_FOLD, SIERPINSKI_FOLD, SCALE -> {
+            case BOX_FOLD_ONLY -> addHybridSlider("Fold Limit", 0.1, 4, st.getFoldLimit(), st::setFoldLimit);
+            case SPHERE_FOLD -> {
+                addHybridSlider("Min Radius", 0.01, 2, st.getMinRadius(), st::setMinRadius);
+                addHybridSlider("Fixed Radius", 0.05, 4, st.getFixedRadius(), st::setFixedRadius);
+            }
+            case ABOX_MOD -> {
+                addHybridSlider("Scale", -5, 5, st.getScale(), st::setScale);
+                addHybridSlider("Min Radius", 0.01, 2, st.getMinRadius(), st::setMinRadius);
+                addHybridSlider("Fixed Radius", 0.05, 4, st.getFixedRadius(), st::setFixedRadius);
+                addHybridSlider("Fold Limit X", 0, 4, st.getOffsetX(), st::setOffsetX);
+                addHybridSlider("Fold Limit Y", 0, 4, st.getOffsetY(), st::setOffsetY);
+                addHybridSlider("Fold Limit Z", 0, 4, st.getOffsetZ(), st::setOffsetZ);
+            }
+            case KLEINIAN_FOLD -> {
+                addHybridSlider("Size", 0.05, 4, st.getRadius(), st::setRadius);
+                addHybridSlider("Fold Limit X", 0, 4, st.getOffsetX(), st::setOffsetX);
+                addHybridSlider("Fold Limit Y", 0, 4, st.getOffsetY(), st::setOffsetY);
+                addHybridSlider("Fold Limit Z", 0, 4, st.getOffsetZ(), st::setOffsetZ);
+            }
+            case MENGER_FOLD, SIERPINSKI_FOLD, OCTA_FOLD, ICOSA_FOLD, BENESI_FOLD, SCALE -> {
                 addHybridSlider("Scale", -5, 5, st.getScale(), st::setScale);
                 addHybridSlider("Offset X", -4, 4, st.getOffsetX(), st::setOffsetX);
                 addHybridSlider("Offset Y", -4, 4, st.getOffsetY(), st::setOffsetY);
@@ -1335,18 +1372,101 @@ public class NodeGraphEditor extends VBox {
                 addHybridSlider("Offset Y", -4, 4, st.getOffsetY(), st::setOffsetY);
                 addHybridSlider("Offset Z", -4, 4, st.getOffsetZ(), st::setOffsetZ);
             }
+            case PLANE_FOLD -> {
+                addHybridSlider("Normal X", -4, 4, st.getOffsetX(), st::setOffsetX);
+                addHybridSlider("Normal Y", -4, 4, st.getOffsetY(), st::setOffsetY);
+                addHybridSlider("Normal Z", -4, 4, st.getOffsetZ(), st::setOffsetZ);
+                addHybridSlider("Distance", -4, 4, st.getDist(), st::setDist);
+            }
+            case ROTATIONAL_FOLD -> {
+                addAxisChoice(st);
+                addHybridIntSlider("Symmetry", 1, 24, st.getCount(), st::setCount);
+            }
+            case KALI_FOLD -> {
+                addHybridSlider("Radius", 0.05, 4, st.getRadius(), st::setRadius);
+                addHybridSlider("C X", -4, 4, st.getOffsetX(), st::setOffsetX);
+                addHybridSlider("C Y", -4, 4, st.getOffsetY(), st::setOffsetY);
+                addHybridSlider("C Z", -4, 4, st.getOffsetZ(), st::setOffsetZ);
+            }
             case ROTATE -> {
                 addHybridSlider("Rotate X", -180, 180, st.getRotX(), st::setRotX);
                 addHybridSlider("Rotate Y", -180, 180, st.getRotY(), st::setRotY);
                 addHybridSlider("Rotate Z", -180, 180, st.getRotZ(), st::setRotZ);
             }
-            case SPHERE_INVERT -> addHybridSlider("Radius", 0.05, 4, st.getRadius(), st::setRadius);
-            case ADD_C -> {
-                Label none = new Label("z += c  (no parameters)");
-                none.getStyleClass().add("hint-label");
-                detailPanel.getChildren().add(none);
+            case ROTATE_ITER -> {
+                addHybridSlider("X per Iteration", -180, 180, st.getRotX(), st::setRotX);
+                addHybridSlider("Y per Iteration", -180, 180, st.getRotY(), st::setRotY);
+                addHybridSlider("Z per Iteration", -180, 180, st.getRotZ(), st::setRotZ);
             }
+            case TWIST -> {
+                addAxisChoice(st);
+                addHybridSlider("Degrees per Unit", -180, 180, st.getRotX(), st::setRotX);
+            }
+            case SPHERE_INVERT -> addHybridSlider("Radius", 0.05, 4, st.getRadius(), st::setRadius);
+            case ADD_C -> addNoParamsLabel("z += c  (no parameters)");
         }
+    }
+
+    private void addNoParamsLabel(String text) {
+        Label none = new Label(text);
+        none.getStyleClass().add("hint-label");
+        detailPanel.getChildren().add(none);
+    }
+
+    /** The axis a step works around. Baked into the GLSL, so it recompiles. */
+    private void addAxisChoice(HybridNode.Step st) {
+        ComboBox<String> axisCombo = new ComboBox<>();
+        axisCombo.getItems().addAll("Axis X", "Axis Y", "Axis Z");
+        axisCombo.getSelectionModel().select(st.getAxis());
+        axisCombo.setMaxWidth(Double.MAX_VALUE);
+        axisCombo.setOnAction(e -> {
+            int a = axisCombo.getSelectionModel().getSelectedIndex();
+            if (a < 0 || a == st.getAxis()) return;
+            pushUndoSnapshot();
+            st.setAxis(a);
+            onStructuralChange();
+        });
+        detailPanel.getChildren().add(axisCombo);
+    }
+
+    /** Which iterations the step runs on. Baked into the GLSL, so any change recompiles. */
+    private void addStepGate(HybridNode.Step st) {
+        Spinner<Integer> from = new Spinner<>(0, HybridNode.ITER_ALL - 1, st.getIterStart());
+        Spinner<Integer> to = new Spinner<>(1, HybridNode.ITER_ALL, st.getIterEnd());
+        Spinner<Integer> every = new Spinner<>(1, 8, st.getIterEvery());
+        for (Spinner<Integer> sp : List.of(from, to, every)) {
+            sp.setPrefWidth(58);
+            sp.setEditable(false);
+        }
+        from.setTooltip(new Tooltip("First iteration (0-based) the step runs on"));
+        to.setTooltip(new Tooltip("Iteration the step stops at (exclusive); " + HybridNode.ITER_ALL + " = all"));
+        every.setTooltip(new Tooltip("Run every n-th iteration, counted from the first"));
+
+        from.valueProperty().addListener((obs, o, v) -> {
+            if (v == null || v == st.getIterStart()) return;
+            pushUndoSnapshot(); st.setIterStart(v); onStructuralChange();
+        });
+        to.valueProperty().addListener((obs, o, v) -> {
+            if (v == null || v == st.getIterEnd()) return;
+            pushUndoSnapshot(); st.setIterEnd(v); onStructuralChange();
+        });
+        every.valueProperty().addListener((obs, o, v) -> {
+            if (v == null || v == st.getIterEvery()) return;
+            pushUndoSnapshot(); st.setIterEvery(v); onStructuralChange();
+        });
+
+        Label lbl = new Label("Iterations");
+        lbl.getStyleClass().add("small-label");
+        HBox gate = new HBox(3, lbl, from, new Label("to"), to, new Label("every"), every);
+        gate.setAlignment(Pos.CENTER_LEFT);
+        detailPanel.getChildren().add(gate);
+    }
+
+    private void addHybridIntSlider(String label, int min, int max, int value,
+                                    java.util.function.IntConsumer setter) {
+        EnhancedSlider sl = new EnhancedSlider(label, min, max, value, true);
+        sl.setOnAction(v -> { setter.accept(v.intValue()); onParameterChange(); });
+        detailPanel.getChildren().add(sl);
     }
 
     private void addHybridSlider(String label, double min, double max, float value,

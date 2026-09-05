@@ -331,54 +331,107 @@ self-similarity all the way down. Cross-fading two photographs can only ever sho
 is present in one of them; running an image through two filters in alternation,
 repeatedly, cannot.
 
-**Steps.** `BULB` (spherical power map), `BOX_FOLD` (box fold + sphere fold + scale),
-`MENGER_FOLD` (abs + sort + scale/offset), `SIERPINSKI_FOLD` (tetrahedral fold),
-`ABS_FOLD`, `ROTATE`, `SCALE`, `SPHERE_INVERT`, and `ADD_C` (`z += c`, the term that
-turns an IFS into an escape-time set). They are applied in order, once per iteration,
-and the sequence repeats.
+**Steps.** Twenty-eight maps in four families, applied in order, once per iteration, the
+sequence repeating. The step is the unit of the library: Mandelbulb3D's catalogue of
+formulas is, for the most part, these maps in different orders with different constants.
+
+| Family | Step | What it does | Parameters it reads |
+|--------|------|--------------|---------------------|
+| Power | `BULB` | spherical power map, sine convention (the Mandelbulb) | power |
+| Power | `BULB_COSINE` | Nylander's cosine convention — same power, another bulb | power |
+| Power | `QUAT_SQUARE` | `z²` on the `w = 0` quaternion slice (also the Tetrabrot's 3D section) | — |
+| Power | `BRISTOR` | Bristorbrot square `(x²-y²-z², 2xy, -2xz)` | — |
+| Power | `BENESI_MAG` | Benesi's quadratic mag transform, the square behind the Pine Tree | — |
+| Power | `RIEMANN` | msltoe's Riemann sphere: stereographic projection, `|sin|` tiling, back, radial power | power, scale (plane frequency) |
+| Power | `COMPLEX_POWER` | `z^p` in the plane perpendicular to one axis, which passes through | axis, power |
+| Fold | `BOX_FOLD` | the whole Mandelbox step: box fold, sphere fold, scale | foldLimit, minRadius, fixedRadius, scale |
+| Fold | `BOX_FOLD_ONLY` | `clamp(z)·2 - z` alone | foldLimit |
+| Fold | `SPHERE_FOLD` | the Mandelbox sphere fold alone | minRadius, fixedRadius |
+| Fold | `AMAZING_SURF` | Kali's Amazing Surf: Mandelbox step with no fold on Z | as `BOX_FOLD` |
+| Fold | `ABOX_MOD` | Mandelbox step with one fold limit per axis | offset (limits), minRadius, fixedRadius, scale |
+| Fold | `KLEINIAN_FOLD` | per-axis box fold, then the interior inversion `k = max(size/r², 1)` | offset (limits), radius (size) |
+| Fold | `MENGER_FOLD` | abs, sort the axes, scale and offset | scale, offset |
+| Fold | `SIERPINSKI_FOLD` | tetrahedral fold, three planes | scale, offset |
+| Fold | `OCTA_FOLD` | octahedral fold, four planes (Knighty) | scale, offset |
+| Fold | `ICOSA_FOLD` | icosahedral fold, golden-ratio planes (Knighty) | scale, offset |
+| Fold | `ABS_FOLD` | `abs(z + o) - o` | offset |
+| Fold | `PLANE_FOLD` | reflect what lies below one plane to above it — the generic conditional fold | offset (normal), dist |
+| Fold | `ROTATIONAL_FOLD` | N-fold kaleidoscope: the angle around one axis folded into a wedge | axis, count |
+| Fold | `BENESI_FOLD` | Benesi T1: abs in the frame whose Z is the body diagonal, scale, offset | scale, offset |
+| Fold | `KALI_FOLD` | the Kaliset step `abs(z)/r² - c` | radius, offset (c) |
+| Fold | `SPHERE_INVERT` | inversion in a sphere | radius |
+| Transform | `ROTATE` | rigid rotation | rotX/Y/Z |
+| Transform | `ROTATE_ITER` | rotation by `angle × iteration index` | rotX/Y/Z per iteration |
+| Transform | `TWIST` | rotate the plane around an axis by `twist × height` | axis, rotX (degrees per unit) |
+| Transform | `SCALE` | `z·s + offset` | scale, offset |
+| Seed | `ADD_C` | `z += c` — the term that turns an IFS into an escape-time set | — |
+
+**Iteration gating.** Every step carries `iterStart`, `iterEnd` (exclusive) and
+`iterEvery`, defaulting to "every iteration". A gated step is wrapped in
+`if (i >= start && i < end && ((i - start) % every) == 0)`, baked into the GLSL rather
+than passed as a uniform: the gate decides which code runs on which pass, so the editor
+treats it as a structural edit. This is how the classic "formula A for three iterations,
+then formula B" and "A and B alternating" hybrids of Mandelbulber are written here — see
+the *Box / bulb, alternating* and *Bulb, boxed early* chains. An ungated chain emits
+exactly the code it did before gating existed, which is what keeps the controls exact.
 
 **Derivatives.** Each step carries its own `dr` update, which is what keeps the result a
 usable distance estimator: folds and rotations are piecewise isometries and leave `dr`
-alone, scales multiply it, the power map multiplies by `p·r^(p-1)`, an inversion by
-`k/r²`, and `ADD_C` adds 1 (from `d(pos)/d(pos)` in Mandelbrot mode; kept in Julia mode,
-where it only makes the estimate conservative).
+alone, scales multiply it, the power maps multiply by `p·r^(p-1)` (`2r` for the squares),
+an inversion by `k/r²`, and `ADD_C` adds 1 (from `d(pos)/d(pos)` in Mandelbrot mode; kept
+in Julia mode, where it only makes the estimate conservative). `TWIST` is the one
+non-isometry among the transforms: it multiplies `dr` by `1 + |twist|·radius`, a bound on
+its shear, so the estimate stays conservative. `RIEMANN`'s plane fold is conformal but
+not isometric; only its radial power reaches `dr`, so its estimate is approximate.
 
-**Two DE families.** `LOG` = `0.5·log(r)·r/dr` for power maps, using the radius at which
+**Three estimators.** `LOG` = `0.5·log(r)·r/dr` for power maps, using the radius at which
 the orbit escaped, captured at the top of the loop. `LINEAR` = `r/|dr|` for folds and
 similarities, using the radius of the **final** orbit point — when the loop ends by
 exhausting its iterations rather than by escaping, those are different values, and using
 the loop-top radius makes the estimator disagree with the formula it should reproduce.
+`PLANE` = `|z.z + 0.1| / (3·|dr|)`, Knighty's pseudo-Kleinian estimator: orbits under that
+fold never escape, so an escape radius means nothing to them, and the distance of the
+final point to a plane is what carries the shape (the 3 is the stand-alone shader's
+`0.5 / 1.5`, its safety margin on the stretch, folded into one constant).
 
-**Validation.** `test/HybridLab` renders a set of chains, and its first two entries are
-controls: `BULB → ADD_C` must reproduce the plain Mandelbulb and `BOX_FOLD → ADD_C` the
-plain Mandelbox. Compared on the depth AOV rather than on colour — a chain has no
-formula-specific orbit traps, so the Mandelbox palette legitimately differs while the
-geometry must not — both are exact: mean depth difference 0.00000, max 0.0003 for the
-bulb (a sub-pixel sliver at silhouettes) and 0.0000 for the box.
+**Validation.** `test/HybridLab` renders a set of chains, and its first entries are
+controls: `BULB → ADD_C` must reproduce the plain Mandelbulb, `BOX_FOLD → ADD_C` the
+plain Mandelbox, `BRISTOR → ADD_C` the plain Bristorbrot, and `ABOX_MOD → ADD_C` with the
+limit `(1,1,1)` the Mandelbox again, since it is the same step written with a vector
+limit. Compared on the depth AOV rather than on colour — a chain has no formula-specific
+orbit traps, so the Mandelbox palette legitimately differs while the geometry must not —
+all four are exact to the sub-pixel: mean depth difference 0.00000 on each.
 
 Emission follows `PrimitiveNode`: inline GLSL, no `.glsl` file, prefix `h0_`, `h1_`, …
 and the same leaf contract (`_OrbitTrap`, `_DE`, `_DE_simple`, `_getFactors`), so a
 hybrid plugs into CSG, transforms, effects and materials like any other leaf.
 
-**Chain library.** `HybridPresets` ships nine named chains, offered as a "Load a chain…"
-dropdown in the hybrid detail panel. Three of them are entries from the IDEAS.md #14
-formula wish-list that need no new shader at all — BoxBulb is a power map with a box fold,
-Buffalo a power map with absolute-value folds, MarbleMarcher a Menger IFS with a rotation
-between iterations — which turns that part of the roadmap from shader work into a dropdown.
-The first two entries are the HybridLab controls, reproducing the stand-alone Mandelbulb
-and Mandelbox exactly, and are the sane place to start a chain of your own: begin from a
-shape you recognise, then add one step.
+**Chain library.** `HybridPresets` ships thirty-one named chains, offered as a "Load a
+chain…" dropdown in the hybrid detail panel, and every step type appears in at least one of
+them (a JUnit test insists on it: a step nobody can reach from the library is a step nobody
+has rendered). The first three entries are the HybridLab controls, reproducing the
+stand-alone Mandelbulb, Mandelbox and Bristorbrot exactly, and are the sane place to start
+a chain of your own: begin from a shape you recognise, then add one step. Then the IDEAS.md
+#14 wish-list entries that turned out to need no shader (BoxBulb, Buffalo, MarbleMarcher,
+JuliaMorph, the Tetrabrot's 3D section), the Mandelbulb3D / Mandelbulber catalogue as
+chains (Amazing Surf, Benesi Pine Tree, Kaliset, Pseudo-Kleinian, Riemann Sphere, Octa and
+Icosa KIFS, the cosine bulb, Quaternion Julia), the maps that only exist inside a loop
+(kaleidoscope, per-iteration rotation, twist, plane and sphere folds inside a power map),
+and two iteration-gated chains.
 
-Each preset carries a `previewDist`, because these live in worlds of very different sizes —
-a Mandelbox is several times a Mandelbulb. `HybridLab` renders the library from the same
-source the editor offers (`-Dexec.args="hybrid_lib 480x270 12 presets"`), so the dropdown
-cannot drift away from what actually renders.
+A preset carries its `previewDist`, because these live in worlds of very different sizes —
+a Mandelbox is several times a Mandelbulb — and, when it needs one, its Julia constant;
+loading a preset sets or clears the node's constant accordingly. `HybridLab` renders the
+library from the same source the editor offers (`-Dexec.args="out/hybrid_lib 480x270 12
+presets"`), so the dropdown cannot drift away from what actually renders.
 
 **Editing.** NodeGraphEditor has a `+ Hybrid` toolbar button and a step-list editor in the
-detail panel: iterations, bailout, estimator family, Julia constant, and per-step sliders,
-with a type combo plus move-up / move-down / delete on each row and an add-step control.
-Adding, removing, reordering or retyping a step changes which uniforms exist, so those
-recompile; moving a slider only updates a value and does not.
+detail panel: iterations, bailout, estimator family, Julia constant, and per step a type
+combo with move-up / move-down / delete, a one-line hint on what the step does, the sliders
+it actually reads, an axis choice where it works around one, and an iteration row (from /
+to / every) for gating. Steps are added from a `+ Step` menu grouped by family. Adding,
+removing, reordering or retyping a step, gating it or changing its axis changes which code
+is emitted, so those recompile; moving a slider only updates a value and does not.
 
 **Colouring is weaker than a stand-alone formula, by nature.** A formula ships orbit traps
 tuned to its own orbit — the Mandelbox tracks fold amount and sphere-fold hits, the

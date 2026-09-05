@@ -1002,6 +1002,16 @@ public class FractalConfig {
                 sm.put("rotY", (double) st.getRotY());
                 sm.put("rotZ", (double) st.getRotZ());
                 sm.put("radius", (double) st.getRadius());
+                sm.put("dist", (double) st.getDist());
+                sm.put("axis", st.getAxis());
+                sm.put("count", st.getCount());
+                // Only written when set, so a chain saved before gating existed reads
+                // back unchanged and a step that runs every iteration stays compact.
+                if (st.isGated()) {
+                    sm.put("iterStart", st.getIterStart());
+                    sm.put("iterEnd", st.getIterEnd());
+                    sm.put("iterEvery", st.getIterEvery());
+                }
                 stepList.add(sm);
             }
             map.put("steps", stepList);
@@ -1090,6 +1100,12 @@ public class FractalConfig {
                         if (sm.get("rotY") instanceof Number v) st.setRotY(v.floatValue());
                         if (sm.get("rotZ") instanceof Number v) st.setRotZ(v.floatValue());
                         if (sm.get("radius") instanceof Number v) st.setRadius(v.floatValue());
+                        if (sm.get("dist") instanceof Number v) st.setDist(v.floatValue());
+                        if (sm.get("axis") instanceof Number v) st.setAxis(v.intValue());
+                        if (sm.get("count") instanceof Number v) st.setCount(v.intValue());
+                        if (sm.get("iterStart") instanceof Number v) st.setIterStart(v.intValue());
+                        if (sm.get("iterEnd") instanceof Number v) st.setIterEnd(v.intValue());
+                        if (sm.get("iterEvery") instanceof Number v) st.setIterEvery(v.intValue());
                         hn.getSteps().add(st);
                     }
                 }

@@ -30,7 +30,9 @@ import java.util.concurrent.CountDownLatch;
  * updates are wrong and nothing further can be trusted.
  *
  * Usage:
- *   -Dexec.args="out/hybrid 480x270 12"
+ *   -Dexec.args="out/hybrid 480x270 12"                       lab chains + the control comparison
+ *   -Dexec.args="out/hybrid_lib 480x270 12 presets"           the shipped library (HybridPresets)
+ *   -Dexec.args="out/hybrid_lib 480x270 12 presets Icosa,Kali" only the entries whose name matches
  */
 public class HybridLab {
 
@@ -142,10 +144,19 @@ public class HybridLab {
         System.out.println("=== controls vs the stand-alone formulas ===");
 
         record Ctrl(String name, HybridNode hybrid, FractalType ref, float camDist) {}
+        // ABox Mod with the limit (1,1,1) is the Mandelbox step written with a vector
+        // limit, so it has to agree with the Mandelbox as well.
+        Step abox = new Step(StepType.ABOX_MOD);
+        abox.setScale(2f); abox.setMinRadius(0.25f); abox.setFixedRadius(1f);
+        abox.setOffsetX(1f); abox.setOffsetY(1f); abox.setOffsetZ(1f);
         List<Ctrl> ctrls = List.of(
             new Ctrl("bulb", chain(15, 2f, DEMode.LOG, bulb(8), step(StepType.ADD_C)),
                      FractalType.MANDELBULB, 3.0f),
             new Ctrl("box", chain(15, 1000f, DEMode.LINEAR, boxFold(2f, 0.25f, 1f, 1f), step(StepType.ADD_C)),
+                     FractalType.MANDELBOX, 12.0f),
+            new Ctrl("bristor", chain(15, 4f, DEMode.LOG, step(StepType.BRISTOR), step(StepType.ADD_C)),
+                     FractalType.BRISTORBROT, 3.0f),
+            new Ctrl("abox", chain(15, 1000f, DEMode.LINEAR, abox, step(StepType.ADD_C)),
                      FractalType.MANDELBOX, 12.0f));
 
         for (Ctrl c : ctrls) {
@@ -219,9 +230,14 @@ public class HybridLab {
         System.out.printf("=== HybridLab (%dx%d, %d spp) ===%n", W, H, samples);
         List<String> names = new ArrayList<>();
         boolean libraryMode = args.length > 3 && args[3].equalsIgnoreCase("presets");
+        // Optional 5th arg: comma-separated name fragments; only chains whose key contains
+        // one of them are rendered. For tuning a few entries without the whole sheet.
+        String[] only = args.length > 4 ? args[4].split(",") : null;
         for (var e : (libraryMode ? presetChains() : chains()).entrySet()) {
             String name = e.getKey();
             Chain ch = e.getValue();
+            if (only != null && java.util.Arrays.stream(only)
+                    .noneMatch(f -> name.toLowerCase(Locale.ROOT).contains(f.toLowerCase(Locale.ROOT)))) continue;
 
             ngp.setGraphRoot(ch.node());
             ngp.markDirty();

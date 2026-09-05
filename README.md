@@ -33,7 +33,9 @@ scene, live. All were rendered by the app at 1280×720 with 128 samples per pixe
 - **Composition, not a formula list.** Fractals, SDF primitives, CSG operations, domain transforms,
   surface effects and per-node materials are nodes in a tree. The whole tree compiles to one shader.
 - **Hybrid chains.** Several formulas composed *inside* one iteration loop (`HybridNode`), which CSG
-  cannot express. Buffalo, BoxBulb and Marble Marcher ship as chains, not as hand-written shaders.
+  cannot express. 28 step types (power maps, folds, transforms) with per-step iteration gating, and a
+  library of 31 chains: Buffalo, BoxBulb, Marble Marcher, Amazing Surf, Benesi Pine Tree, Pseudo-Kleinian,
+  Kaliset, Riemann Sphere, JuliaMorph and the rest ship as chains, not as hand-written shaders.
 - **Cinematic quality in real time.** Monte Carlo path tracing with NEE + MIS and a GGX BRDF,
   HDRI or procedural environments, volumetric fog, depth of field with nine bokeh models, and a
   grading chain, all interactive on a single GPU.
@@ -101,7 +103,7 @@ primitive. Julia mode is available where the formula has a seed.
 | **GPU** | OpenGL 4.3 or newer (any recent NVIDIA, AMD or Intel GPU). |
 | **OS** | Windows or Linux. macOS is not supported: Apple stopped OpenGL at 4.1 and the renderer needs 4.3 features (SSBOs). |
 | **To run the installer** | Nothing else: the Windows installer ships its own Java runtime. |
-| **To build** | Java 21+, Maven. |
+| **To build** | JDK 24 (JavaFX 25 ships Java 23 class files; the bytecode target stays 21), Maven. |
 | **Optional** | FFmpeg on the PATH for video export and audio pre-analysis; ExifTool for 360 metadata. |
 
 ### Install (Windows)

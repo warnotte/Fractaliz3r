@@ -32,22 +32,26 @@ Creative feature ideas for Fractaliz3r. Status: IDEA (not started), IN PROGRESS,
 ## Open Ideas
 
 ### 14. New Fractal Formulas
-**Status:** PARTIAL — Mandelorus done; Buffalo, BoxBulb and MarbleMarcher are now chains in
-the hybrid node library (HybridPresets), reachable without writing a formula. The rest still
-need real new maths: Phoenix needs the previous z, Tetrabrot a quaternion square step,
-MandelBolic / Appell / Borromean new step types.
+**Status:** MOSTLY DONE — Mandelorus done; the rest of the list that could be written as a
+sequence of maps now lives in the hybrid step library (28 step types, HybridPresets), reachable
+without writing a formula. Amazing Surf, Benesi (T1 fold and mag transform), Kaliset,
+Pseudo-Kleinian, Riemann Sphere, octahedral and icosahedral KIFS, the cosine bulb, per-iteration
+rotation, twist, plane and kaleidoscope folds, and per-step iteration gating came in the same
+batch. Still needing real new maths: Phoenix needs the previous z (the chain state is one
+vector), MandelBolic / Appell / Borromean new step types.
 
 Exotic fractal types to expand the formula library:
 - ~~Mandelorus~~ — DONE
 - ~~**Buffalo**~~ — DONE as a hybrid chain (Bulb -> Abs Fold -> Add Seed), no shader needed
 - ~~**BoxBulb**~~ — DONE as a hybrid chain (Bulb -> Box Fold -> Add Seed); also ships as presets/HYBRID_BOXBULB.frac
-- **Tetrabrot** — 4D pseudo-quaternion set, diamond-like geometric symmetries
+- ~~**Tetrabrot**~~ — its 3D section is the `QUAT_SQUARE` step (Quaternion Julia chain); the
+  bicomplex 4th component is dropped, so the full 4D set is not it
 - **Phoenix** — Phoenix Julia set in 3D
 - ~~**MarbleMarcher**~~ — DONE as a hybrid chain (Menger Fold -> Rotate), no shader needed
 - **MandelBolic** — Hyperbolic 3-space extension (Poincaré-Ahlfors)
 - **Appell** — Appell Polynomials / Clifford Analysis, skeleton-like patterns
 - **Borromean** — 3 interlocking complex planes, tetrahedral symmetries
-- **JuliaMorph** — 2D Julia sets stacked along Z with twist/bend
+- ~~**JuliaMorph**~~ — DONE as a hybrid chain (Complex Power -> Twist -> Add Seed, Julia mode)
 
 ### 15. Droste Effect
 **Status:** IDEA
