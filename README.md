@@ -39,9 +39,11 @@ scene, live. All were rendered by the app at 1280×720 with 128 samples per pixe
 - **Cinematic quality in real time.** Monte Carlo path tracing with NEE + MIS and a GGX BRDF,
   HDRI or procedural environments, volumetric fog, depth of field with nine bokeh models, and a
   grading chain, all interactive on a single GPU.
-- **The software explores for you.** A navigator travels from the global view to a fine-detail
-  framing on any fractal; a prospector searches Julia-constant space and scores what it finds.
-  Several of the presets above were found this way.
+- **The software explores for you.** An *Explore* button looks for detailed views from wherever
+  the camera is and shows them as scored thumbnails; click one to fly there, explore again to go
+  deeper. Behind it, a navigator travels from the global view to a fine-detail framing on any
+  fractal, and a prospector searches Julia-constant space and scores what it finds. Several of
+  the presets above were found this way.
 - **Measured, not eyeballed.** Bit-exact golden-image regression, deep-zoom detail metrics, colour
   probes per shading pass, and probes that catch a control missing from the UI or a setting missing
   from the save file. Rendering claims in the docs come with the harness that proved them.

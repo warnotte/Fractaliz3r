@@ -934,6 +934,59 @@ public class GLSLFractalizerController implements RenderController {
         }
     }
 
+    // ------------------------------------------------------------------------
+    // In-memory renders at an arbitrary size, for the Explore dialog: the same
+    // calls as the file exports, without the file. The engine is left at that
+    // size; call restoreViewportSize() when done.
+    // ------------------------------------------------------------------------
+
+    /** Depth AOV of the current scene, one value per pixel in [0, 1], row-major. */
+    public float[] renderDepthAOV(int width, int height) {
+        engine.resize(width, height);
+        activateCurrentProgram();
+        engine.resetAccumulation();
+        Map<String, Object> uniforms = buildUniforms();
+        uniforms.put("renderMode", 2);
+        engine.renderSample(uniforms);
+        float[] pixels = engine.readImage();
+        float[] depth = new float[width * height];
+        for (int i = 0; i < depth.length; i++) depth[i] = pixels[i * 4];
+        return depth;
+    }
+
+    /** Colour render of the current scene; null if {@code cancelCheck} turned true. */
+    public BufferedImage renderStill(int width, int height, int samples, Supplier<Boolean> cancelCheck) {
+        cancelRender();
+        engine.resize(width, height);
+        activateCurrentProgram();
+        engine.resetAccumulation();
+        Map<String, Object> uniforms = buildUniforms();
+        int n = Math.max(1, samples);
+        for (int rendered = 0; rendered < n; ) {
+            if (cancelCheck != null && cancelCheck.get()) return null;
+            int batch = Math.min(EXPORT_SAMPLE_BATCH, n - rendered);
+            engine.renderSamples(uniforms, batch);
+            rendered += batch;
+        }
+        float[] pixels = engine.readImage();
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int idx = (y * width + x) * 4;
+                int r = Math.max(0, Math.min(255, (int) (pixels[idx] * 255)));
+                int g = Math.max(0, Math.min(255, (int) (pixels[idx + 1] * 255)));
+                int b = Math.max(0, Math.min(255, (int) (pixels[idx + 2] * 255)));
+                image.setRGB(x, y, (r << 16) | (g << 8) | b);
+            }
+        }
+        return image;
+    }
+
+    /** Put the framebuffer back at viewport size after in-memory renders. */
+    public void restoreViewportSize() {
+        engine.resize(viewportWidth, viewportHeight);
+    }
+
     private void exportSingleAOV(File file, int renderMode) {
         try {
             engine.resize(exportWidth, exportHeight);

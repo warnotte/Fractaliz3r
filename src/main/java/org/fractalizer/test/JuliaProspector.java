@@ -169,7 +169,7 @@ public class JuliaProspector {
             File dep = new File(outDir, tag + "_d.png");
             controller.exportAOV(dep, 2);
 
-            FractalNavigator.FrameScore fs = FractalNavigator.scoreFrame(rgb, dep);
+            org.fractalizer.explore.FrameScorer.FrameScore fs = FractalNavigator.scoreFrame(rgb, dep);
             dep.delete();
             scored.add(new Candidate(c, fs.aesthetic(), fs.detail(), fs.coverage(), tag));
             if ((i + 1) % 16 == 0) {

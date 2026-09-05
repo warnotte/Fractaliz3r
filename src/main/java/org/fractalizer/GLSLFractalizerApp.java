@@ -26,6 +26,7 @@ import javafx.stage.Stage;
 import javafx.concurrent.Task;
 import org.fractalizer.config.FractalConfig;
 import org.fractalizer.config.FractalConfigManager;
+import org.fractalizer.engine.Camera;
 import org.fractalizer.engine.GLSLEngine.PostProcessParams;
 import org.fractalizer.fractals.*;
 import org.fractalizer.ui.AnimationManager;
@@ -96,6 +97,11 @@ public class GLSLFractalizerApp extends Application {
     
     private boolean autoFullQuality = true;
     private volatile boolean exportingAnimation = false;
+
+    // Explore: the search drives the scene camera and the engine size on its own thread,
+    // so the preview loop and keyboard navigation stand down while it runs.
+    private volatile boolean exploring = false;
+    private org.fractalizer.ui.components.ExploreDialog exploreDialog;
     
     // Eye Candy state
     private boolean turntableMode = false;
@@ -548,8 +554,46 @@ public class GLSLFractalizerApp extends Application {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        statusBar.getChildren().addAll(statusLabel, sampleLabel, spacer, progressBar);
+        Button exploreBtn = new Button("Explore…");
+        exploreBtn.setTooltip(new Tooltip("Let the app look for detailed views from here: "
+                + "scored thumbnails, click one to fly there (Ctrl+E)"));
+        exploreBtn.setOnAction(e -> openExplore());
+
+        statusBar.getChildren().addAll(statusLabel, sampleLabel, spacer, exploreBtn, progressBar);
         return statusBar;
+    }
+
+    private void openExplore() {
+        if (exploreDialog == null) {
+            exploreDialog = new org.fractalizer.ui.components.ExploreDialog(primaryStage, controller,
+                    new org.fractalizer.ui.components.ExploreDialog.Host() {
+                @Override public AbstractFractalParams params() {
+                    return (AbstractFractalParams) controller.getParams();
+                }
+                @Override public void exploringChanged(boolean on) {
+                    exploring = on;
+                    if (on) {
+                        controller.cancelRender();
+                        isHighQualityActive = false;
+                        statusLabel.setText("Exploring…");
+                    } else {
+                        updateViewportSize();
+                        fractalPanel.updatePositionLabel();
+                        requestRender();
+                    }
+                }
+                @Override public void flyTo(float[] eye, float[] target, float fovDeg) {
+                    Camera cam = fractalPanel.getCamera();
+                    cam.setPosition(eye[0], eye[1], eye[2]);
+                    float[] q = org.fractalizer.test.CameraUtils.lookAt(eye, target);
+                    cam.setQuaternion(q[0], q[1], q[2], q[3]);
+                    fractalPanel.getParams().setFovDegrees(fovDeg);
+                    fractalPanel.updatePositionLabel();
+                    requestRender();
+                }
+            });
+        }
+        exploreDialog.show();
     }
 
     private MenuBar createMenuBar() {
@@ -584,7 +628,11 @@ public class GLSLFractalizerApp extends Application {
         fullscreenItem.setAccelerator(new KeyCodeCombination(KeyCode.F11));
         fullscreenItem.setOnAction(e -> primaryStage.setFullScreen(!primaryStage.isFullScreen()));
 
-        viewMenu.getItems().addAll(darkThemeItem, new SeparatorMenuItem(), fullscreenItem);
+        MenuItem exploreItem = new MenuItem("Explore…");
+        exploreItem.setAccelerator(new KeyCodeCombination(KeyCode.E, KeyCombination.CONTROL_DOWN));
+        exploreItem.setOnAction(e -> openExplore());
+
+        viewMenu.getItems().addAll(darkThemeItem, new SeparatorMenuItem(), exploreItem, fullscreenItem);
 
         Menu helpMenu = new Menu("Help");
         MenuItem shortcutsItem = new MenuItem("Keyboard Shortcuts");
@@ -625,6 +673,7 @@ public class GLSLFractalizerApp extends Application {
                   Ctrl + S                Save configuration
 
                 View
+                  Ctrl + E                Explore: scored views from here
                   F11                       Toggle fullscreen
                   F1                         This dialog
                 """;
@@ -651,6 +700,9 @@ public class GLSLFractalizerApp extends Application {
             @Override
             public void handle(long now) {
                 long currentTime = System.currentTimeMillis();
+
+                // The explorer owns the camera and the engine while it runs.
+                if (exploring) return;
 
                 // Process keyboard input
                 if (navigation != null && navigation.processKeyboardInput()) {

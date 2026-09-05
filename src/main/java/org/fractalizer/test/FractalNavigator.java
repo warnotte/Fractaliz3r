@@ -4,6 +4,7 @@ import org.fractalizer.ui.GLSLFractalizerController;
 import org.fractalizer.fractals.AbstractFractalParams;
 import org.fractalizer.fractals.FractalType;
 import org.fractalizer.engine.Camera;
+import org.fractalizer.explore.FrameScorer;
 
 import javafx.application.Platform;
 
@@ -192,7 +193,7 @@ public class FractalNavigator {
             float[] eye = sub(S, scale(fwd, (float) camDist));
             String name = String.format(java.util.Locale.ROOT, "t%d_d%.3f", i, camDist);
             renderCam(name, eye, S, fov, true);
-            FrameScore fs = scoreFrame(new File(outDir, name + ".png"), new File(outDir, name + "_depth.png"));
+            FrameScorer.FrameScore fs = scoreFrame(new File(outDir, name + ".png"), new File(outDir, name + "_depth.png"));
             double a = fs.aesthetic();
             ladder.add(String.format(java.util.Locale.ROOT, "    %-14s detail=%.0f cov=%.0f%% score=%.0f", name, fs.detail(), fs.coverage() * 100, a));
             if (a > bestSharp) { bestSharp = a; bestName = name; bestStep = i; bestCamDist = camDist; }
@@ -229,46 +230,18 @@ public class FractalNavigator {
         controller.exportToPNG(new File(outDir, name + ".png"), samples, p -> {}, () -> false).get();
     }
 
-    /** Composed framing score: fine detail, surface coverage, and where the detail
-     *  energy sits in the frame. aesthetic() balances them for a pleasing shot. */
-    record FrameScore(double detail, double coverage, double centroidDist) {
-        double aesthetic() {
-            double covBand = Math.exp(-Math.pow((coverage - 0.55) / 0.30, 2)); // peak ~55% coverage
-            double centering = 1.0 - 0.6 * Math.min(1.0, centroidDist);        // detail near centre wins
-            return detail * covBand * centering;
-        }
-    }
-
-    /** Detail = variance of the Laplacian over surface pixels (depth-masked); coverage =
+    /** The framing score is shared with the app's Explore dialog: {@link FrameScorer}.
+     *  Detail = variance of the Laplacian over surface pixels (depth-masked); coverage =
      *  surface fraction; centroidDist = where the |Laplacian| energy sits (0=centre,1=corner). */
-    static FrameScore scoreFrame(File rgbFile, File depthFile) throws Exception {
+    static FrameScorer.FrameScore scoreFrame(File rgbFile, File depthFile) throws Exception {
         BufferedImage img = ImageIO.read(rgbFile);
         BufferedImage dep = ImageIO.read(depthFile);
-        int w = img.getWidth(), h = img.getHeight();
-        double[] lum = new double[w * h];
+        int w = dep.getWidth(), h = dep.getHeight();
+        float[] depth = new float[w * h];
         for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
-            int p = img.getRGB(x, y);
-            lum[y * w + x] = 0.299 * ((p >> 16) & 0xFF) + 0.587 * ((p >> 8) & 0xFF) + 0.114 * (p & 0xFF);
+            depth[y * w + x] = (float) (dep.getRaster().getSample(x, y, 0) / 65535.0);
         }
-        double sum = 0, sum2 = 0, cx = 0, cy = 0, wsum = 0;
-        long n = 0, surf = 0, tot = 0;
-        for (int y = 1; y < h - 1; y++) for (int x = 1; x < w - 1; x++) {
-            tot++;
-            if (dep.getRaster().getSample(x, y, 0) / 65535.0 <= 0.02) continue; // background
-            surf++;
-            double lap = -4 * lum[y*w+x] + lum[y*w+x-1] + lum[y*w+x+1] + lum[(y-1)*w+x] + lum[(y+1)*w+x];
-            double al = Math.abs(lap);
-            sum += lap; sum2 += lap * lap; n++;
-            cx += al * x; cy += al * y; wsum += al;
-        }
-        double detail = (n < 100) ? 0 : (sum2 / n - (sum / n) * (sum / n));
-        double coverage = (tot == 0) ? 0 : (double) surf / tot;
-        double cdist = 1.0;
-        if (wsum > 1e-6) {
-            double dx = (cx / wsum - w / 2.0) / (w / 2.0), dy = (cy / wsum - h / 2.0) / (h / 2.0);
-            cdist = Math.sqrt(dx * dx + dy * dy) / Math.sqrt(2.0);
-        }
-        return new FrameScore(detail, coverage, cdist);
+        return FrameScorer.score(img, depth);
     }
 
     /** Quick colour render at an aim point; returns its detail score (for target choice). */

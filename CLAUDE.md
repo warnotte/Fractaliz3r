@@ -85,6 +85,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResponsivenessProbe
 # Proves the cheap interactive preview cannot leak into an export: same scene exported cold
 # and again straight after a preview, compared pixel for pixel.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportAfterPreviewProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 640x360 12"
+# The app's Explore button, headless: CameraExplorer from a fractal's default camera (or a
+# .frac), scored thumbnails written as a sheet best first, time per view.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExploreProbe" -Dexec.args="MANDELBULB out/explore 320x180 4 3 4 0.6"
+#   (TYPE-or-.frac outDir WxH samples targets steps shrink)
 # How far ahead of the work an export progress bar runs: time of the first 100%% report
 # against the moment the export future actually completes.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportProgressProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 2600x1600 128"
@@ -125,6 +129,11 @@ org.fractalizer
 │   ├── GraphCompiler.java          # Compiles node tree → composite GLSL shader (8 phases)
 │   ├── GraphNodeNamer.java         # Stable node naming for animation tracks
 │   └── NodeGraphAnimationHelper.java # Bridge: graph nodes → animatable timeline parameters
+├── explore/
+│   ├── CameraExplorer.java          # Scored views from the current camera: pivot, auto-frame, aim scan, dives
+│   ├── FrameScorer.java             # detail / coverage / centring score shared with the navigator harness
+│   ├── ViewRenderer.java            # what the explorer needs from a renderer (GPU in the app, a sphere in tests)
+│   └── ControllerViewRenderer.java  # ViewRenderer over GLSLFractalizerController, in memory at thumbnail size
 ├── audio/
 │   ├── AudioReactiveEngine.java     # Spectrum analysis, beat/onset detection
 │   └── AudioPreAnalyzer.java        # Offline FFT pre-analysis (FFmpeg decode)
@@ -143,7 +152,8 @@ org.fractalizer
     │   ├── EnhancedSlider.java         # Pro slider: mouse wheel, precision, lock, inline edit
     │   ├── GradientEditor.java         # Visual gradient editor with draggable color stops
     │   ├── CustomShaderEditor.java     # GLSL editor with @param parsing, dynamic sliders
-    │   └── NodeGraphEditor.java        # Visual node graph editor: canvas + detail panel + undo/redo
+    │   ├── NodeGraphEditor.java        # Visual node graph editor: canvas + detail panel + undo/redo
+    │   └── ExploreDialog.java          # "Explore": scored thumbnails of detailed views from here, click to fly
     └── panels/
         ├── FractalPanel.java           # Fractal type and parameters
         ├── MaterialPanel.java          # Material type, physical props, artistic palettes
@@ -176,6 +186,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ResponsivenessProbe.java     # worst tick = delay before a cancel can land
 ├── ExportProgressProbe.java     # how far ahead of the work a progress bar runs
 ├── ExportAfterPreviewProbe.java # the cheap preview must not leak into an export
+├── ExploreProbe.java            # the app's Explore button, headless: scored views from any camera
 └── GalleryRender.java           # every .frac in a dir rendered as the app shows it (README gallery)
 ```
 

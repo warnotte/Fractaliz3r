@@ -36,6 +36,43 @@ Smooth interpolation between two parameter snapshots:
 - **Type safety**: Morph is disabled (slider grayed out) if A and B are different fractal types, with a warning label.
 - Uses the same recursive `IdentityHashMap` snapshot mechanism as the dice history.
 
+### Explore (status bar button, View › Explore…, Ctrl+E)
+
+The app looks for detailed views of the scene from where the camera is, and shows them as
+scored thumbnails. Click one and the camera flies there; explore again from there to go
+deeper. It is the `FractalNavigator` traveller (see [RENDERING.md](RENDERING.md) § Test
+Harnesses) running inside the app, on the GPU at thumbnail size, with one change: it keeps
+several targets instead of diving on the best one, so the answer is a set of framings rather
+than a single camera.
+
+What one run does, in order (`org.fractalizer.explore.CameraExplorer`):
+1. **Pivot** — the surface point under the centre of the view; if the centre looks at
+   nothing, the origin.
+2. **Auto-frame** — back off along the pivot→eye axis while the view is inside or overflowing
+   (surface coverage above 85%, or the centre closer than the depth encoding can tell), move
+   in while it is sparse (below 25%). The result is the *Global view* thumbnail.
+3. **Aim scan** — nine aim points on a 3×3 grid across the view plane; each that hits a
+   surface gets a quick render and a detail score. The most detailed few become targets (the
+   *Targets* setting). This is what keeps it out of the Menger sponge's hollow core.
+4. **Dive** — for each target, walk the camera toward its surface point in shrinking steps
+   (*Steps* × *Shrink*), scoring every step. The sweet spot is usually a middle step: too
+   close, a surface goes smooth and dark.
+
+Every thumbnail carries the composed score (`FrameScorer.aesthetic()`: Laplacian-variance
+detail × a coverage band peaking at 55% × how central the detail is), the raw detail, the
+surface coverage and the camera distance. The grid is kept sorted best first as results
+arrive. Thumbnails are 320×180 at a few samples; a run is a few seconds on a warm shader.
+
+While it runs the search owns the scene camera and the engine size, so the preview loop and
+keyboard navigation stand down, and the thumbnails are not clickable. When it ends — done,
+cancelled, or failed — the camera the user had is put back. Flying somewhere is always a
+click, never a side effect of searching.
+
+The decisions above are unit-tested against an analytic sphere on the CPU
+(`CameraExplorerTest`): backing off from inside, the pivot fallback, the ladder geometry,
+cancellation. `test/ExploreProbe` runs the same code on the GPU from any fractal or `.frac`
+and writes the scored sheet, best first, with the time per view.
+
 ### Parameter Persistence
 
 The `GLSLFractalizerController` maintains a cache of fractal parameters. Switching between fractal types preserves your specific settings for each fractal, while common settings (Path Tracing, Palette, Lighting) are synchronized across all types.
