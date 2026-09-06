@@ -307,6 +307,24 @@ public final class HybridPresets {
         return new float[]{d * 0.42f, d * 0.30f, -d * 0.85f};
     }
 
+    /** A fresh scene whose node graph is this chain, camera at {@link #previewEye}: what
+     *  the browser loads and what its thumbnail was rendered from. */
+    public static org.fractalizer.fractals.NodeGraphParams toFreshParams(Preset p) {
+        org.fractalizer.fractals.NodeGraphParams ngp = new org.fractalizer.fractals.NodeGraphParams();
+        HybridNode node = new HybridNode();
+        apply(node, p);
+        GraphNodeNamer.ensureAllNamed(node);
+        ngp.setGraphRoot(node);
+        ngp.markDirty();
+        ngp.setPathTracingEnabled(false);
+        float[] eye = previewEye(p);
+        ngp.getCamera().setPosition(eye[0], eye[1], eye[2]);
+        float[] q = org.fractalizer.test.CameraUtils.lookAt(eye, new float[]{0, 0, 0});
+        ngp.getCamera().setQuaternion(q[0], q[1], q[2], q[3]);
+        ngp.setFovDegrees(50f);
+        return ngp;
+    }
+
     /** Overwrite a node's chain in place, so the node keeps its identity in the graph. */
     public static void apply(HybridNode node, Preset preset) {
         node.getSteps().clear();

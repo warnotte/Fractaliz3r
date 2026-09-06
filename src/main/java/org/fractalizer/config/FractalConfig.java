@@ -633,6 +633,23 @@ public class FractalConfig {
     }
 
     /**
+     * The scene this file describes, on parameters that start from the defaults — the
+     * only reading of a file that does not depend on what was loaded before it.
+     *
+     * Applying a file onto whatever parameters are current is how a Julia constant went
+     * missing: a single-type file writes its values into the root fractal node, and when
+     * the current graph's root is a hybrid chain there is no such node, so the values are
+     * silently dropped and the chain renders under the file's camera and lighting. The
+     * thumbnail browser, File &gt; Load and the thumbnail forge all go through here.
+     */
+    public NodeGraphParams toFreshParams() {
+        FractalType type = getFractalTypeEnum();
+        NodeGraphParams fresh = (type == FractalType.NODE_GRAPH) ? new NodeGraphParams() : new NodeGraphParams(type);
+        applyTo(fresh);
+        return fresh;
+    }
+
+    /**
      * Get the fractal type enum from this config.
      */
     public FractalType getFractalTypeEnum() {

@@ -576,7 +576,9 @@ public class GLSLFractalizerApp extends Application {
             sceneBrowser = new org.fractalizer.ui.components.SceneBrowser(primaryStage,
                     new org.fractalizer.ui.components.SceneBrowser.Host() {
                 @Override public void loadPreset(String name) { loadShippedPreset(name); }
-                @Override public void loadChain(org.fractalizer.graph.HybridPresets.Preset preset) { loadChain(preset); }
+                @Override public void loadChain(org.fractalizer.graph.HybridPresets.Preset preset) {
+                    loadChainIntoScene(preset);
+                }
             });
         }
         sceneBrowser.show();
@@ -602,31 +604,18 @@ public class GLSLFractalizerApp extends Application {
         }
     }
 
-    /** Make a hybrid chain the scene: a node graph whose root is that chain, framed as
-     *  its thumbnail was, with the editor showing its steps. */
-    private void loadChain(org.fractalizer.graph.HybridPresets.Preset preset) {
+    /** Make a hybrid chain the scene: a fresh node graph whose root is that chain, framed
+     *  as its thumbnail was, with the editor showing its steps. Fresh, so it renders as the
+     *  thumbnail did, whatever palette or lighting the previous scene had. */
+    private void loadChainIntoScene(org.fractalizer.graph.HybridPresets.Preset preset) {
         flight = null;
-        if (controller.getFractalType() != FractalType.NODE_GRAPH) {
-            controller.setFractalType(FractalType.NODE_GRAPH);
-        }
-        AbstractFractalParams params = (AbstractFractalParams) controller.getParams();
-        NodeGraphParams ngp = (NodeGraphParams) params;
-        org.fractalizer.graph.HybridNode node = new org.fractalizer.graph.HybridNode();
-        org.fractalizer.graph.HybridPresets.apply(node, preset);
-        org.fractalizer.graph.GraphNodeNamer.ensureAllNamed(node);
-        ngp.setGraphRoot(node);
-        ngp.markDirty();
+        NodeGraphParams ngp = org.fractalizer.graph.HybridPresets.toFreshParams(preset);
+        controller.replaceParams(ngp);
+        controller.getEngine().getPostProcessParams().reset();
 
-        float[] eye = org.fractalizer.graph.HybridPresets.previewEye(preset);
-        Camera cam = params.getCamera();
-        cam.setPosition(eye[0], eye[1], eye[2]);
-        float[] q = org.fractalizer.test.CameraUtils.lookAt(eye, new float[]{0, 0, 0});
-        cam.setQuaternion(q[0], q[1], q[2], q[3]);
-        params.setFovDegrees(50f);
-
-        fractalPanel.setParams(params);
+        fractalPanel.setParams(ngp);
         for (Refreshable pnl : refreshablePanels) pnl.refreshFromParams();
-        controller.updatePaletteTexture(params.getCustomGradient());
+        controller.updatePaletteTexture(ngp.getCustomGradient());
         if (animationManager != null) animationManager.onNodeGraphChanged(ngp);
         statusLabel.setText("Chain: " + preset.name());
         requestRender();
@@ -940,19 +929,18 @@ public class GLSLFractalizerApp extends Application {
         try {
             flight = null;
 
-            // Get fractal type and switch if needed
-            FractalType type = config.getFractalTypeEnum();
-            if (type != controller.getFractalType()) {
-                controller.setFractalType(type);
-            }
+            // The file on fresh parameters, never blended into the previous scene's: a
+            // single-type file applied onto a graph whose root was a hybrid chain used to
+            // lose its Julia constant without a word.
+            AbstractFractalParams params = config.toFreshParams();
+            controller.replaceParams(params);
 
-            // Apply config to current params
-            AbstractFractalParams params = (AbstractFractalParams) controller.getParams();
-            config.applyTo(params);
-
-            // Filled in place: the FX panel holds a reference to this instance.
+            // Filled in place: the FX panel holds a reference to this instance. A file
+            // without a post chain (older presets) means the default one, for the same reason.
             if (config.postProcess != null) {
                 controller.getEngine().getPostProcessParams().copyFrom(config.postProcess);
+            } else {
+                controller.getEngine().getPostProcessParams().reset();
             }
 
             // Update fractal panel reference

@@ -1643,6 +1643,20 @@ public class GLSLFractalizerController implements RenderController {
         }
     }
 
+    /**
+     * Make {@code fresh} the scene, replacing whatever the cache held for its type. This
+     * is what loading a file or a chain means: the previous state of that type is gone,
+     * not blended in. ({@link #setParams} keeps the cached instance when the type changes,
+     * which is right for the panels and wrong for a load.)
+     */
+    public void replaceParams(AbstractFractalParams fresh) {
+        cancelRender();
+        this.currentFractalType = fresh.getType();
+        this.currentParams = fresh;
+        paramsCache.put(fresh.getType(), fresh);
+        activateCurrentProgram();
+    }
+
     @Override
     public FractalParams getParams() {
         return currentParams;

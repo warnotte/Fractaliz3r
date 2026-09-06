@@ -64,29 +64,24 @@ public class ThumbnailForge {
         GLSLFractalizerController controller = new GLSLFractalizerController();
         controller.loadAllShaders((m, p) -> {});
 
-        // --- Chains first, on untouched params: a preset loaded before would leave its
-        // palette and lighting behind on the cached Mandelbulb params.
-        controller.setFractalType(FractalType.MANDELBULB);
-        AbstractFractalParams params = (AbstractFractalParams) controller.getParams();
-        NodeGraphParams ngp = (NodeGraphParams) params;
-        params.setPathTracingEnabled(false);
-        controller.updatePaletteTexture(params.getCustomGradient());
+        // --- Chains, each on a fresh scene: the same object the browser loads. The first
+        // version of this rendered them on the cached Mandelbulb params and left a chain
+        // as that cache's graph root, so every Julia preset rendered afterwards silently
+        // lost its constant and showed the last chain under the preset's camera.
         List<HybridPresets.Preset> chains = HybridPresets.all();
         System.out.printf("=== thumbnails (%dx%d, %d spp): %d chains ===%n", W, H, samples, chains.size());
         for (HybridPresets.Preset p : chains) {
-            HybridNode node = new HybridNode();
-            HybridPresets.apply(node, p);
-            ngp.setGraphRoot(node);
-            ngp.markDirty();
-            float[] eye = HybridPresets.previewEye(p);
-            aim(params, eye, new float[]{0, 0, 0}, 50f);
+            NodeGraphParams ngp = HybridPresets.toFreshParams(p);
+            controller.replaceParams(ngp);
+            controller.getEngine().getPostProcessParams().reset();
+            controller.updatePaletteTexture(ngp.getCustomGradient());
             long t0 = System.nanoTime();
             BufferedImage img = controller.renderStill(W, H, samples, () -> false);
             writeJpeg(img, new File(chainsDir, HybridPresets.key(p) + ".jpg"));
             System.out.printf(Locale.ROOT, "  chain  %-28s %5d ms%n", HybridPresets.key(p), (System.nanoTime() - t0) / 1_000_000);
         }
 
-        // --- Presets from disk, each exactly as File > Load would show it.
+        // --- Presets from disk, each exactly as File > Load shows it: on fresh params.
         File[] files = new File("presets").listFiles((d, n) -> n.endsWith(".frac"));
         if (files == null) files = new File[0];
         Arrays.sort(files);
@@ -95,9 +90,8 @@ public class ThumbnailForge {
         for (File frac : files) {
             String name = frac.getName().replaceFirst("\\.frac$", "");
             FractalConfig cfg = FractalConfigManager.load(frac);
-            controller.setFractalType(cfg.getFractalTypeEnum());
-            AbstractFractalParams pp = (AbstractFractalParams) controller.getParams();
-            cfg.applyTo(pp);
+            AbstractFractalParams pp = cfg.toFreshParams();
+            controller.replaceParams(pp);
             controller.updatePaletteTexture(pp.getCustomGradient());
             if (cfg.postProcess != null) controller.getEngine().getPostProcessParams().copyFrom(cfg.postProcess);
             else controller.getEngine().getPostProcessParams().reset();
