@@ -43,7 +43,7 @@ This compiles into a single GLSL block with:
 - `n0_DE()` / `n0_DE_simple()` — Mandelbulb (prefixed)
 - `n1_DE()` / `n1_DE_simple()` — Menger (prefixed)
 - `applyTransform_t0()` — Twist function
-- `e0_strength/time/scale/erosionType` — Erosion uniforms
+- `e0_strength/time/scale` — Erosion uniforms (the erosion type is baked into the GLSL as a literal)
 - `DE()` — Composite: `smin_graph(n0_d * deCorr_t0(pos), eroded_n1_d, c0_blend)`
 
 ---
@@ -287,17 +287,17 @@ public class EffectNode extends GraphNode {
 uniform float e0_strength;
 uniform float e0_time;
 uniform float e0_scale;
-uniform int e0_erosionType;  // EROSION only
 
 // DE emission (Phase 6/7) — with proximity gating
 float n0_d = n0_DE(pos, n0_t);  // child DE
 { float _emaxD = erosionMaxDisplacementP(e0_strength, e0_time, e0_scale);
   if (n0_d < _emaxD + 0.1)
-    n0_d += getErosionDisplacementP(pos, e0_strength, e0_time, e0_scale, e0_erosionType); }
+    n0_d += getErosionDisplacementP(pos, e0_strength, e0_time, e0_scale, 2); }   // 2 = the node's erosionType, a literal
 ```
 
 - `DE()` (full) uses full-quality displacement functions
-- `DE_simple()` uses lightweight `*LightP()` variants for shadows/AO
+- `DE_simple()` calls the **same** `*P()` functions. It used to call the `*LightP()` variants of common.glsl, a cheaper noise (fewer octaves, other offsets, no hydraulic warp) that describes a different surface, so shadows, AO and normals were computed on a surface the eye ray never hit: a golf-ball sheen on smooth surfaces next to eroded ones, dark fringes wherever a shadow ray started inside the other surface. `DE_simple` is the same geometry without orbit traps, nothing less. The light variants still exist for the legacy global effects of the built-in fractal shaders, where the mismatch remains: making them full there pushed every built-in shader (7-10 s to compile each, already) past the NVIDIA compiler's limit, a fatal `C9999` at startup.
+- **The erosion type is a literal, not a uniform.** With `pType` known at compile time the compiler drops the two noise families a node does not use, so a graph with twenty erosion nodes compiles in the same ~13 s as one with thirteen did before. Changing the type in the editor is a structural change and recompiles (it already went through `onStructuralChange`).
 - Effects can stack: Erosion wrapping Crystal wrapping a FractalNode
 
 #### Coloring
@@ -489,7 +489,7 @@ If any CSG nodes exist, emit:
 
 For each EffectNode, emit per-node uniforms:
 - Common: `uniform float {eid}_strength; {eid}_time; {eid}_scale;`
-- EROSION: `uniform int {eid}_erosionType;`
+- EROSION: no extra uniform; the type is emitted as an integer literal in the displacement call
 - CRYSTAL: `uniform float {eid}_sharpness;`
 
 #### Phase 0 (top of generated code) — Material SSBO Declaration
@@ -556,8 +556,8 @@ float d_t0 = child_d;                       // MIRROR/REPETITION: no correction
 // child DE emission → n0_d
 { float _emaxD = erosionMaxDisplacementP(e0_strength, e0_time, e0_scale);
   if (n0_d < _emaxD + 0.1)
-    n0_d += getErosionDisplacementP(pos, e0_strength, e0_time, e0_scale, e0_erosionType); }
-// DE_simple uses *LightP() variants instead
+    n0_d += getErosionDisplacementP(pos, e0_strength, e0_time, e0_scale, 0); }   // erosionType baked as a literal
+// DE_simple emits exactly the same call: same displacement, so normals, shadows and AO see the surface the eye ray hit
 ```
 
 **CSGNode (UNION):**
@@ -665,7 +665,7 @@ e0_time = 3.0
 e0_scale = 1.0
 
 // EROSION only
-e0_erosionType = 0    (int: 0=All, 1=Hydraulic, 2=Thermal, 3=Cracks)
+(erosionType is not a uniform: 0=All, 1=Hydraulic, 2=Thermal, 3=Cracks is baked into the GLSL)
 
 // CRYSTAL only
 e0_sharpness = 2.0
@@ -718,7 +718,7 @@ Color varies by mode (e.g., orange for Standard, purple for Twist).
 
 **CSGNode:** Single `blend` parameter. Color: orange (`#FF9800`).
 
-**EffectNode:** Parameters: `strength`, `time`, `scale` (+ `sharpness` for CRYSTAL). `erosionType` is structural (not animated). Color: red (`#F44336`).
+**EffectNode:** Parameters: `strength`, `time`, `scale` (+ `sharpness` for CRYSTAL). `erosionType` is structural (not animated, baked into the GLSL, recompiles on change). Color: red (`#F44336`).
 
 **MaterialNode:** Parameters: `colorR`, `colorG`, `colorB`, `roughness`, `metallic`, `ior`, `emission`. `materialType` is structural (not animated). Color: purple (`#9C27B0`).
 

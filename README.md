@@ -28,16 +28,17 @@ scene, live. All were rendered by the app at 1280×720 with 128 samples per pixe
 
 ### Worlds
 
-![Albedo 0.39: a blue planet at dawn seen from orbit, green continents with fractal coastlines, polar ice, an atmospheric halo, a moon](docs/gallery/albedo_039.jpg)
+![Albedo 0.39: a blue planet at dawn seen from orbit, green continents with fractal coastlines and turquoise shallows, polar ice, city lights on the night side, a blue atmospheric halo, a moon](docs/gallery/albedo_039.jpg)
 
 **Albedo 0.39** — [`ALBEDO_039.frac`](presets/ALBEDO_039.frac) — a world seen from orbit at dawn, the
 way astronauts describe it: one sphere, no borders. It is nothing but the engine's own pieces. The
 continents are a sphere carved by the fractal noise of the erosion effect, the sea a smooth sphere
-underneath, so every coastline is an iso-line of fBm and detailed at every zoom; the plateaus the
-noise leaves highest are deserts, the poles are ice; a single low sun draws the terminator; the
-rim light is the atmosphere; a cratered moon, the same noise again. You are in orbit, free to
-circle it, descend to a coast, or back away until it is a point. Named after the Vangelis album,
-which is named after the Earth's albedo.
+underneath, so every coastline is an iso-line of fBm and detailed at every zoom; shallows fringe
+the coasts, the plateaus climb through green and brown to snow, the poles are ice with a fractal
+edge; a single low sun draws the terminator, and on the night side the cities are lit; the rim
+light is the atmosphere; a cratered moon, the same noise again. You are in orbit, free to circle
+it, descend to a coast, or back away until it is a point. Named after the Vangelis album, which
+is named after the Earth's albedo.
 
 ![The Labyrinth: a stone corridor of the Menger maze opening on the Escher room, three staircases climbing under three gravities around a glowing crystal](docs/gallery/labyrinth.jpg)
 

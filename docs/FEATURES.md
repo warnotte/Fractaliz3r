@@ -39,32 +39,57 @@ Smooth interpolation between two parameter snapshots:
 ### Albedo 0.39: a planet built from nodes (`presets/ALBEDO_039.frac`)
 
 A world seen from orbit at dawn, built by `PresetForge.blueWorld()` (rebuild: `PresetForge
-presets out/presets_preview 640x360 48 ALBEDO`). Radii and thresholds are the whole design:
+presets - 640x360 24 ALBEDO` writes the file, `ShaderCompileProbe --render 1280x720 48 out/x
+presets/ALBEDO_039.frac` renders it in 15 s). Radii and thresholds are the whole design:
 
-- **Land** is a sphere of radius 1.046 carved by two erosion passes. The first is thermal
+- **Land** is a sphere of radius 1.022 carved by two erosion passes. The first is thermal
   only (type 2: isotropic fBm at low frequency, noise scale 2) and makes the continents; the
-  carve depth is `fbm × K` with `K = 0.35 × time × strength × scale × 0.05 = 0.112`. The second
-  is weathering only (type 3: fine, signed, scale 0.5) and makes the mountains.
-- **Sea** is a smooth sphere of radius 1.0. Where the carve exceeds 0.046 the land falls
-  below it — the sea shows where `fbm > 0.41`, about half the globe — so every coastline is an
-  fBm iso-line, fractal at every zoom. The land/sea ratio is extremely sensitive to the land
-  radius: 1.05 gave three quarters land, 1.04 a water world.
-- **Deserts** are the land still above radius 1.026 (the plateaus the noise left highest),
-  ochre; the rest of the land is green. Both are the same eroded sphere split by a CSG
-  intersection and subtraction with a sphere, so the two never overlap.
-- **Ice** is whatever the globe is beyond |y| = 0.86: an intersection with two slabs, white,
-  and the complementary subtraction for the temperate globe.
-- **The moon** is a sphere of radius 0.27 cratered by the weathering noise.
+  carve depth is `fbm × K` with `K = 0.35 × time × strength × scale × 0.05 = 0.056`. The second
+  is weathering only (type 3: fine, signed, scale 0.5) and makes the mountains. This is half
+  the relief of the first two passes: at 0.112 the coasts were 280 km cliffs at Earth scale
+  and drew themselves, as black shadow bands on the sea at dawn and as grey rim-lit lines
+  on the night side. Halving K and the land radius offset together keeps every coastline.
+- **Sea** is a smooth sphere of radius 1.0. Where the carve exceeds 0.022 the land falls
+  below it — about half the globe — so every coastline is an fBm iso-line, fractal at every
+  zoom. The land/sea ratio is extremely sensitive to that offset (at the old relief, 0.05
+  gave three quarters land, 0.04 a water world). **Shallows**: the sea intersected with the
+  land raised 0.0007 is turquoise, the rest deep blue, so every coast has a fringe of
+  shallow water; the fringe's width is that depth over the coastal slope.
+- **Altitude bands**: the same eroded sphere cut by spheres into green (to 1.013), brown
+  (to 1.019) and snow, by CSG intersections and subtractions, so no two bands overlap.
+- **Ice** is whatever the globe is beyond the polar slabs: an intersection with them, white,
+  and the complementary subtraction for the temperate globe. The slabs' faces start at
+  |y| = 0.80 and are carved by the thermal noise at scale 0.5, up to 0.15 deep, plus a fine
+  weathering pass, so the edge of each cap wanders between |y| = 0.80 and 0.95 in about nine
+  lobes; a flat slab gave a lid, and a 0.06 carve still read as a straight line from orbit.
+- **City lights** on the night side: a skin 0.003 thick on the land (the land raised 0.003
+  minus the land) kept where three masks agree. The fine mask is the land carved by the
+  signed weathering noise at scale 0.10: where that noise is below its zero the mask rises
+  above the land and the skin survives, as blobs with the outlines of towns, about four
+  tenths of the ground (a lattice of small spheres tried first read as a grid). The coarse
+  mask is a sphere of radius 1.05 carved 0.10 deep by the thermal noise at scale 0.7:
+  clusters, denser in the lowlands. The third is the half-space facing away from the sun, a
+  box turned onto the sun direction. Above the sea, emissive, sodium orange.
+- **The moon** is a sphere of radius 1.35 cratered by the weathering noise, on the same line
+  of sight as the small near moon of the first passes but five times as far: the silhouette
+  glow has a fixed width in world units, so a near moon wore an atmosphere.
 - **Light**: a single low sun from the side (`lightDir (2.6, 0.7, 0.5)`), so the terminator
   crosses the disc; a faint blue ambient for the night side; **the rim light at 0.45 is the
-  atmosphere**, with the silhouette glow. This is why the preset ships with classic shading:
-  the path tracer has no rim term, and the halo is most of the beauty.
+  atmosphere**, with the silhouette glow. The palette is on no surface (every material is
+  solid): it colours the glow, pale blue at the limb fading to deep blue, and the night
+  sky's nebula. This is why the preset ships with classic shading: the path tracer has no
+  rim term, and the halo is most of the beauty.
 
 Two things that did not work, kept out on purpose: a glass sphere as atmosphere (a black disc
 under path tracing, a white ball under classic shading), and a cloud layer as an fBm-carved
 shell (thick white plates with smooth edges — ice floes, not clouds; a distance field gives no
-soft edge). `BlueWorldTest` compiles the graph, round-trips it, and checks the shipped preset
-is in orbit with the atmosphere on.
+soft edge). One engine bug the planet exposed: in the node graph, the erosion displacement used
+by shadows, AO and normals was a cheaper noise than the one the eye ray hit, off by as much as
+the land relief, which read as a golf-ball ocean and dark fringes along the coasts near the
+terminator. `GraphCompiler` now emits the same displacement in both, with the erosion type
+baked in as a literal so the shader does not grow (see docs/RENDERING.md § Surface Effects).
+`BlueWorldTest` compiles the graph, round-trips it, and checks the shipped preset is in orbit
+with the atmosphere on.
 
 ### The Labyrinth: a world built from nodes (`presets/LABYRINTH.frac`)
 

@@ -51,6 +51,14 @@ public class PresetForge {
     private static final float[][] SPECTRUM = {
         {0.00f, 0.08f, 0.12f, 0.47f}, {0.25f, 0.08f, 0.67f, 0.75f},
         {0.50f, 0.94f, 0.78f, 0.24f}, {0.75f, 0.86f, 0.24f, 0.24f}, {1.00f, 0.59f, 0.16f, 0.67f}};
+    /** Albedo 0.39's palette. No surface uses it (every material is solid): it colours
+     *  the silhouette glow, pale blue at the limb fading to deep blue, and the night sky. */
+    private static final float[][] ATMOSPHERE = {
+        {0.00f, 0.62f, 0.80f, 1.00f}, {0.15f, 0.22f, 0.50f, 0.98f},
+        {0.45f, 0.05f, 0.12f, 0.40f}, {1.00f, 0.01f, 0.02f, 0.06f}};
+    /** Albedo 0.39's sun: low, from the side, so the terminator crosses the disc. The
+     *  night half-space of the city lights is turned to face away from it. */
+    private static final float[] SUN = {2.6f, 0.7f, 0.5f};
     private static final float[][] EMERALD = {
         {0.00f, 0.01f, 0.05f, 0.03f}, {0.35f, 0.04f, 0.33f, 0.20f},
         {0.70f, 0.45f, 0.85f, 0.38f}, {1.00f, 0.95f, 1.00f, 0.78f}};
@@ -238,10 +246,10 @@ public class PresetForge {
                 .camera(1.0f, 0.6f, -2.55f).lookAt(0.02f, 0.0f, 0.08f).fov(48)
                 .moveSpeed(0.05f)
                 .maxRaySteps(300)
-                .gradient(SPECTRUM).coloringMode(0)
+                .gradient(ATMOSPHERE).coloringMode(0)
                 .pathTracing(false).rimIntensity(0.45f).skyType(1)
                 .nebula(0.02f, 0.03f, 0.09f, 0.5f)
-                .lightDir(2.6f, 0.7f, 0.5f).lightColor(1.0f, 0.92f, 0.80f).lightIntensity(2.3f)
+                .lightDir(SUN[0], SUN[1], SUN[2]).lightColor(1.0f, 0.92f, 0.80f).lightIntensity(2.3f)
                 .ambientColor(0.16f, 0.28f, 0.60f).ambientIntensity(0.07f)
                 .glowIntensity(0.25f)
                 .specular(1.0f, 90f)
@@ -251,50 +259,47 @@ public class PresetForge {
     }
 
     /**
-     * The blue world. Radii: sea 1.00; land 1.05 carved down by fractal noise, so the
-     * basins fall below the sea and the plateaus stay above it; desert where the land is
-     * still above 1.026; ice caps beyond |y| = 0.86. A moon, cratered by the same noise.
-     * Two erosion passes on the land: thermal only (type 2, isotropic, low frequency)
-     * for the continents, weathering only (type 3, fine, signed) for the mountains.
-     * The plateaus the noise leaves highest are deserts, ochre; the poles are white.
+     * The blue world. Radii: sea 1.00; land 1.022 carved down by fractal noise, so the
+     * basins fall below the sea and the plateaus stay above it; green to 1.013, brown to
+     * 1.019, snow above; ice caps beyond |y| ~ 0.83, their edge carved by the same noise;
+     * city lights on the night side; a moon, cratered by the same noise, far enough away
+     * that the silhouette glow is a line on it and not an atmosphere.
      */
     static org.fractalizer.graph.GraphNode blueWorld() {
         // The graph is a tree, not a DAG: every branch builds its own copy of the land.
         // A node used twice is serialized twice anyway, and the compiler would emit it twice.
-        org.fractalizer.graph.GraphNode temperate = SceneBuilder.subtract(colouredGlobe(), polarSlabs());
+        org.fractalizer.graph.GraphNode temperate = SceneBuilder.subtract(colouredGlobe(), polarCaps());
         temperate.setName("Temperate");
-        org.fractalizer.graph.GraphNode ice = material(SceneBuilder.intersect(globeShape(), polarSlabs()), 0.92f, 0.96f, 1.0f, 0.6f, 0f);
+        org.fractalizer.graph.GraphNode ice = material(SceneBuilder.intersect(globeShape(), polarCaps()), 0.92f, 0.96f, 1.0f, 0.6f, 0f);
         ice.setName("Ice");
         org.fractalizer.graph.GraphNode planet = SceneBuilder.union(temperate, ice);
         planet.setName("Planet");
-
-        org.fractalizer.graph.GraphNode moonBall = SceneBuilder.erode(sphere(0.27f), 0.7f, 4.0f, 0.4f, 3);
-        org.fractalizer.graph.GraphNode moon = material(SceneBuilder.translate(moonBall, -1.55f, 0.95f, -0.55f), 0.55f, 0.53f, 0.50f, 0.95f, 0f);
-        moon.setName("Moon");
 
         // No clouds: a shell carved by fbm gives plates with smooth edges (ice floes), and
         // the moss effect only fuzzes a surface it cannot open. A distance field has no
         // soft edge to offer. No glass atmosphere either: a black disc under path tracing,
         // a white ball under classic shading. The halo is the rim light.
-        org.fractalizer.graph.GraphNode world = SceneBuilder.union(planet, moon);
+        org.fractalizer.graph.GraphNode world = SceneBuilder.union(SceneBuilder.union(planet, cityLights()), moon());
         world.setName("Albedo 0.39");
         return world;
     }
 
     /** Land relief: sea level is radius 1. */
-    private static final float LAND_R = 1.044f;
+    private static final float LAND_R = 1.022f;
 
     /**
      * The carved land on a base sphere of radius {@code r}. Two passes of the erosion
      * effect, both position-based, so the same carve lands on any base radius: thermal
-     * noise at scale 2 for the continents (carve = fbm * 0.112), fine signed weathering
-     * for the mountains. A third pass at a middle scale was tried for hill ranges and
+     * noise at scale 2 for the continents (carve = fbm * 0.056), fine signed weathering
+     * for the mountains. Half the relief of the first passes: at 0.112 the coasts were
+     * 280 km cliffs at Earth scale, and drew themselves as black shadow bands on the sea
+     * at dawn and as grey rim-lit lines on the night side. A third pass at a middle scale was tried for hill ranges and
      * drew concentric rings around the night pole: out. The sea (radius 1) shows where
      * the carve exceeds r - 1.
      */
     private static org.fractalizer.graph.GraphNode land(float r) {
-        org.fractalizer.graph.GraphNode land = SceneBuilder.erode(sphere(r), 0.8f, 4.0f, 2.0f, 2);   // continents
-        land = SceneBuilder.erode(land, 0.9f, 4.0f, 0.5f, 3);                                        // mountains
+        org.fractalizer.graph.GraphNode land = SceneBuilder.erode(sphere(r), 0.4f, 4.0f, 2.0f, 2);   // continents
+        land = SceneBuilder.erode(land, 0.45f, 4.0f, 0.5f, 3);                                       // mountains
         land.setName("Land");
         return land;
     }
@@ -306,32 +311,101 @@ public class PresetForge {
 
     /**
      * Land and sea with their colours. The land is one eroded sphere cut into altitude
-     * bands by spheres: green up to 1.026, brown to 1.038, snow above.
-     * The sea is cut in two by the land raised 0.0015: where that raised land reaches the
+     * bands by spheres: green up to 1.013, brown to 1.019, snow above.
+     * The sea is cut in two by the land raised 0.0007 (0.0015 at twice the relief): where that raised land reaches the
      * sea surface the water is shallow, turquoise; elsewhere deep blue. Every band is a
      * disjoint piece, so no two materials compete for one surface point.
      */
     private static org.fractalizer.graph.GraphNode colouredGlobe() {
-        org.fractalizer.graph.GraphNode lowland = material(SceneBuilder.intersect(land(LAND_R), sphere(1.026f)), 0.16f, 0.34f, 0.13f, 0.85f, 0f);
+        org.fractalizer.graph.GraphNode lowland = material(SceneBuilder.intersect(land(LAND_R), sphere(1.013f)), 0.16f, 0.34f, 0.13f, 0.85f, 0f);
         lowland.setName("Lowland");
-        org.fractalizer.graph.GraphNode highland = material(SceneBuilder.intersect(SceneBuilder.subtract(land(LAND_R), sphere(1.026f)), sphere(1.038f)), 0.50f, 0.40f, 0.26f, 0.9f, 0f);
+        org.fractalizer.graph.GraphNode highland = material(SceneBuilder.intersect(SceneBuilder.subtract(land(LAND_R), sphere(1.013f)), sphere(1.019f)), 0.50f, 0.40f, 0.26f, 0.9f, 0f);
         highland.setName("Highland");
-        org.fractalizer.graph.GraphNode snow = material(SceneBuilder.subtract(land(LAND_R), sphere(1.038f)), 0.93f, 0.95f, 0.98f, 0.8f, 0f);
+        org.fractalizer.graph.GraphNode snow = material(SceneBuilder.subtract(land(LAND_R), sphere(1.019f)), 0.93f, 0.95f, 0.98f, 0.8f, 0f);
         snow.setName("Snow");
         org.fractalizer.graph.GraphNode landBands = SceneBuilder.union(lowland, SceneBuilder.union(highland, snow));
 
-        org.fractalizer.graph.GraphNode shallow = material(SceneBuilder.intersect(sphere(1.0f), land(LAND_R + 0.0015f)), 0.12f, 0.40f, 0.50f, 0.15f, 0f);
+        org.fractalizer.graph.GraphNode shallow = material(SceneBuilder.intersect(sphere(1.0f), land(LAND_R + 0.0007f)), 0.12f, 0.40f, 0.50f, 0.15f, 0f);
         shallow.setName("Shallows");
-        org.fractalizer.graph.GraphNode deep = material(SceneBuilder.subtract(sphere(1.0f), land(LAND_R + 0.0015f)), 0.03f, 0.10f, 0.30f, 0.10f, 0f);
+        org.fractalizer.graph.GraphNode deep = material(SceneBuilder.subtract(sphere(1.0f), land(LAND_R + 0.0007f)), 0.03f, 0.10f, 0.30f, 0.10f, 0f);
         deep.setName("Ocean");
         return SceneBuilder.union(landBands, SceneBuilder.union(shallow, deep));
     }
 
-    /** Two slabs beyond |y| = 0.86: what they cut out of the globe is polar ice. */
-    private static org.fractalizer.graph.GraphNode polarSlabs() {
-        return SceneBuilder.union(
-                SceneBuilder.translate(box(2.0f, 0.40f, 2.0f), 0f, 1.26f, 0f),
-                SceneBuilder.translate(box(2.0f, 0.40f, 2.0f), 0f, -1.26f, 0f));
+    /**
+     * Two slabs whose bottom face starts at |y| = 0.80; what they cut out of the globe is
+     * polar ice. The face is carved by the continents' thermal noise at scale 0.5, up to
+     * 0.15 deep (K = 0.35 x 20 x 1 x 0.5 x 0.05), so the edge of the ice wanders between
+     * |y| = 0.80 and 0.95 in about nine lobes around the cap, with a fine weathering pass
+     * on top: a fractal line, not the lid a flat cut gave. A first try at 0.06 deep read
+     * as a straight line from orbit; the carve only recedes, so the slab starts low.
+     */
+    private static org.fractalizer.graph.GraphNode polarCaps() {
+        return SceneBuilder.union(polarCap(1f), polarCap(-1f));
+    }
+
+    private static org.fractalizer.graph.GraphNode polarCap(float sign) {
+        org.fractalizer.graph.GraphNode slab = SceneBuilder.erode(box(2.0f, 0.40f, 2.0f), 1.0f, 20.0f, 0.5f, 2);
+        slab = SceneBuilder.erode(slab, 0.9f, 4.0f, 0.15f, 3);
+        return SceneBuilder.translate(slab, 0f, sign * 1.20f, 0f);
+    }
+
+    /**
+     * City lights. A skin 0.003 thick on the land (the land raised 0.003, minus the land)
+     * kept where three masks agree, then lit. The fine mask is the land itself carved by
+     * the signed weathering noise at scale 0.10 (+-0.009): where the noise is below its
+     * zero the mask surface rises above the land and the skin survives, as blobs a few
+     * hundredths wide with the irregular outlines of towns, about four tenths of the
+     * ground; a lattice of spheres tried first read as a grid. The coarse mask is a sphere
+     * of radius 1.05 carved by the thermal noise at scale 0.7, 0.10 deep (K = 0.35 x 8 x 1
+     * x 0.7 x 0.05): clusters, and more of them in the lowlands, since its surface is
+     * above the low ground far more often than above the plateaus (a 0.15 carve left one
+     * town in a hundred). The third is the night side of the terminator. Above the sea,
+     * and emissive sodium orange, so the dark half of the world is not empty.
+     */
+    private static org.fractalizer.graph.GraphNode cityLights() {
+        org.fractalizer.graph.GraphNode skin = SceneBuilder.subtract(land(LAND_R + 0.003f), land(LAND_R));
+        org.fractalizer.graph.GraphNode towns = SceneBuilder.erode(land(LAND_R), 1.0f, 20.0f, 0.10f, 3);
+        org.fractalizer.graph.GraphNode clusters = SceneBuilder.erode(sphere(1.05f), 1.0f, 8.0f, 0.7f, 2);
+        org.fractalizer.graph.GraphNode lights = SceneBuilder.intersect(skin, towns);
+        lights = SceneBuilder.intersect(lights, clusters);
+        lights = SceneBuilder.intersect(lights, nightSide(0.10f));
+        lights = SceneBuilder.subtract(lights, sphere(1.0015f));
+        lights = material(lights, 1.0f, 0.45f, 0.12f, 0.5f, 1.0f);
+        lights.setName("City lights");
+        return lights;
+    }
+
+    /**
+     * The half-space {@code dot(p, sun) < -margin}: a box of half-size 2 whose local +x
+     * axis is turned onto the sun direction, pushed 2 + margin away from it. The transform
+     * node rotates the position about X, then Y, then Z, so the local x axis in world
+     * space is (cz*cy, -sz, cz*sy): ry = atan2(sun.z, sun.x), rz = -asin(sun.y).
+     */
+    private static org.fractalizer.graph.GraphNode nightSide(float margin) {
+        double len = Math.sqrt(SUN[0] * SUN[0] + SUN[1] * SUN[1] + SUN[2] * SUN[2]);
+        double lx = SUN[0] / len, ly = SUN[1] / len, lz = SUN[2] / len;
+        float ry = (float) Math.toDegrees(Math.atan2(lz, lx));
+        float rz = (float) Math.toDegrees(-Math.asin(ly));
+        org.fractalizer.graph.GraphNode half = SceneBuilder.translate(box(2f, 3f, 3f), -(2f + margin), 0f, 0f);
+        return SceneBuilder.rotate(half, 0f, ry, rz);
+    }
+
+    /**
+     * The moon, on the same line of sight from the shipped camera as before but five
+     * times farther and five times larger, so it keeps its size in the frame while the
+     * silhouette glow, a fixed width in world units, shrinks from an atmosphere it has
+     * no right to into a thin line. Craters by the weathering noise, scaled with it.
+     */
+    private static org.fractalizer.graph.GraphNode moon() {
+        float k = 5f;
+        org.fractalizer.graph.GraphNode ball = SceneBuilder.erode(sphere(0.27f * k), 1.0f, 6.0f, 0.4f * k, 3);
+        // camera (1.0, 0.6, -2.55) -> old moon (-1.55, 0.95, -0.55), extended k times
+        org.fractalizer.graph.GraphNode moon = material(SceneBuilder.translate(ball,
+                1.0f + k * (-1.55f - 1.0f), 0.6f + k * (0.95f - 0.6f), -2.55f + k * (-0.55f + 2.55f)),
+                0.30f, 0.29f, 0.28f, 0.95f, 0f);
+        moon.setName("Moon");
+        return moon;
     }
 
     private static org.fractalizer.graph.PrimitiveNode sphere(float radius) {
@@ -446,7 +520,8 @@ public class PresetForge {
         String only = args.length > 4 ? args[4] : null;
 
         new File(outDir).mkdirs();
-        new File(previewDir).mkdirs();
+        boolean previews = !previewDir.equals("-");   // "-": write the .frac files only
+        if (previews) new File(previewDir).mkdirs();
 
         Map<String, Supplier<SceneBuilder>> specs = presets();
         List<String> written = new ArrayList<>();
@@ -456,6 +531,7 @@ public class PresetForge {
             written.add(e.getKey());
         }
         System.out.printf("wrote %d presets to %s%n", written.size(), new File(outDir).getAbsolutePath());
+        if (!previews) return;   // render them with ShaderCompileProbe --render, which skips the built-in shaders
 
         CountDownLatch latch = new CountDownLatch(1);
         Platform.startup(latch::countDown);

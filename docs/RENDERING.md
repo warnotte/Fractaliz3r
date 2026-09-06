@@ -378,7 +378,7 @@ Common parameters: `strength` (0-1), `time` (0-20), `scale` (0.1-5).
 ```
 
 - **Proximity gating**: Displacement only computed when `DE < maxDisplacement + 0.1` — skips 80-90% of ray steps
-- **Full vs Light**: `DE()` uses full-quality functions, `DE_simple()` uses lightweight `*LightP()` variants
+- **Full vs Light**: in the node graph, `DE()` and `DE_simple()` emit the **same** `*P()` call, with the erosion type baked in as a literal so the compiler drops the unused noise families. `DE_simple` used to call the `*LightP()` variants, a cheaper noise that describes a different surface: normals, shadows and AO on a surface the eye ray never hit. On a planet whose land relief was 0.044 the two differed by up to 0.04, which read as a golf-ball ocean and dark fringes along every coast near the terminator. The light variants remain in the legacy global-effects path of the built-in shaders, where making them full pushed the compile past the driver's limit (NVIDIA `C9999`); measure with `ShaderCompileProbe`.
 - **Stacking**: Effects can wrap other effects (e.g., Erosion wrapping Crystal wrapping Mandelbulb)
 
 ### Files
@@ -475,6 +475,7 @@ reliable than re-reading the path it covers:
 | `ResizeProbe` | framebuffer cost of a preview↔full switch |
 | `ResponsivenessProbe` | worst tick = delay before a cancel can interrupt a render |
 | `ExportProgressProbe` | how far ahead of the work an export progress bar runs |
+| `ShaderCompileProbe` | how long each shader takes to compile, and which one never returns: the built-ins (7-10 s each here), then any `.frac` |
 | `ExportAfterPreviewProbe` | the cheap preview must not leak into an export |
 | `ExploreProbe` | the app's Explore button, headless: scored views or parameter variations from any camera, time per view |
 | `ThumbnailForge` | the Presets & Chains browser's thumbnails, every chain and preset; `install` ships them as resources |

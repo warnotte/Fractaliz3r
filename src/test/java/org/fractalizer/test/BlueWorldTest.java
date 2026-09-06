@@ -20,12 +20,11 @@ import static org.junit.jupiter.api.Assertions.*;
 class BlueWorldTest {
 
     @Test
-    void theWorldCompilesWithItsSevenMaterials() {
+    void theWorldCompilesWithItsEightMaterials() {
         GraphNode world = PresetForge.blueWorld();
         String glsl = assertDoesNotThrow(() -> new GraphCompiler().compile(world));
         assertTrue(glsl.contains("float DE(vec3 pos, out OrbitTrap trap)"));
-        // lowland, highland, ocean, ice, moon
-        assertEquals(7, LabyrinthWorldTest.countMaterials(world), "lowland, highland, snow, shallows, ocean, ice, moon");
+        assertEquals(8, LabyrinthWorldTest.countMaterials(world), "lowland, highland, snow, shallows, ocean, ice, city lights, moon");
     }
 
     @Test

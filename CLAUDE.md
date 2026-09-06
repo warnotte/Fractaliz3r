@@ -56,6 +56,8 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DeepZoomLab" -Dexec
 # limits the forge to the presets whose name contains it (presets on disk may be hand-tuned;
 # rebuilding one must not rewrite the others), e.g. LABYRINTH, the node-graph world.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PresetForge" -Dexec.args="presets out/presets_preview 960x540 48"
+#   A preview dir of "-" writes the .frac files and stops (no GPU); render one with
+#   ShaderCompileProbe --render, which skips the two-minute compile of the built-in shaders.
 
 # Gallery: render every .frac in a directory exactly as the app shows it (params + gradient +
 # post-processing chain). This is where docs/gallery/*.jpg come from (1280x720, 128 spp).
@@ -98,6 +100,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ThumbnailForge" -De
 # How far ahead of the work an export progress bar runs: time of the first 100%% report
 # against the moment the export future actually completes.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportProgressProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 2600x1600 128"
+# How long each shader takes to compile, and which one never returns: the built-ins first (7-10 s
+# each on the dev machine), then any .frac given. Run it before blaming a hang or an NVIDIA C9999
+# on anything else; a shader that grows past the driver's budget shows up here by name.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ShaderCompileProbe" -Dexec.args="presets/ALBEDO_039.frac presets/LABYRINTH.frac"
 ```
 
 ## Project Architecture
@@ -195,6 +201,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ResizeProbe.java             # framebuffer cost of a preview<->full switch
 ├── ResponsivenessProbe.java     # worst tick = delay before a cancel can land
 ├── ExportProgressProbe.java     # how far ahead of the work a progress bar runs
+├── ShaderCompileProbe.java      # compile time per shader, built-ins then any .frac; names the one that hangs
 ├── ExportAfterPreviewProbe.java # the cheap preview must not leak into an export
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them

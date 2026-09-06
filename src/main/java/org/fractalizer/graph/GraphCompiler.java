@@ -794,11 +794,10 @@ public class GraphCompiler {
             uniforms.put(id + "_strength", en.getStrength());
             uniforms.put(id + "_time", en.getTime());
             uniforms.put(id + "_scale", en.getScale());
-            switch (en.getEffectType()) {
-                case EROSION -> uniforms.put(id + "_erosionType", en.getErosionType());
-                case CRYSTAL -> uniforms.put(id + "_sharpness", en.getSharpness());
-                default -> {}
-            }
+            // erosionType is baked into the GLSL (see emitEffectDE): a literal lets the
+            // compiler drop the two noise families the node does not use, which is what
+            // keeps a graph with twenty erosion nodes inside the driver's compile budget.
+            if (en.getEffectType() == EffectNode.EffectType.CRYSTAL) uniforms.put(id + "_sharpness", en.getSharpness());
             collectUniformsFromNode(en.getChild(), uniforms);
         } else if (node instanceof TransformNode tn) {
             String id = tn.id;
@@ -905,11 +904,7 @@ public class GraphCompiler {
             sb.append("uniform float ").append(id).append("_strength;\n");
             sb.append("uniform float ").append(id).append("_time;\n");
             sb.append("uniform float ").append(id).append("_scale;\n");
-            switch (ei.node.getEffectType()) {
-                case EROSION -> sb.append("uniform int ").append(id).append("_erosionType;\n");
-                case CRYSTAL -> sb.append("uniform float ").append(id).append("_sharpness;\n");
-                default -> {}
-            }
+            if (ei.node.getEffectType() == EffectNode.EffectType.CRYSTAL) sb.append("uniform float ").append(id).append("_sharpness;\n");
         }
         sb.append("\n");
         return sb.toString();
@@ -923,6 +918,16 @@ public class GraphCompiler {
         // Emit displacement with proximity gating inside a { } scope
         sb.append("    { // Effect ").append(eid).append(" (").append(en.getEffectType()).append(")\n");
 
+        // DE and DE_simple get the same displacement. The *LightP() variants in common.glsl
+        // are a cheaper noise (fewer octaves, other offsets, no hydraulic warp) and describe
+        // a different surface; using them for DE_simple meant normals were the gradient of a
+        // surface the eye ray never hit, shadow rays started inside it and AO darkened at
+        // random. On Albedo 0.39 the two surfaces differed by as much as the land relief:
+        // a golf-ball ocean, dark fringes along every coast near the terminator. The extra
+        // cost is paid back by baking the erosion type as a literal (below), which lets the
+        // compiler drop the two noise families the node does not use; making the light
+        // variants full in common.glsl instead pushed every built-in shader, which already
+        // takes 7-10 s to compile here, past the NVIDIA compiler's limit (C9999).
         switch (en.getEffectType()) {
             case EROSION -> {
                 sb.append("      float _emaxD = erosionMaxDisplacementP(")
@@ -930,21 +935,12 @@ public class GraphCompiler {
                   .append(eid).append("_time, ")
                   .append(eid).append("_scale);\n");
                 sb.append("      if (").append(dVar).append(" < _emaxD + 0.1) ");
-                if (full) {
-                    sb.append(dVar).append(" += getErosionDisplacementP(")
-                      .append(posVar).append(", ")
-                      .append(eid).append("_strength, ")
-                      .append(eid).append("_time, ")
-                      .append(eid).append("_scale, ")
-                      .append(eid).append("_erosionType);\n");
-                } else {
-                    sb.append(dVar).append(" += getErosionDisplacementLightP(")
-                      .append(posVar).append(", ")
-                      .append(eid).append("_strength, ")
-                      .append(eid).append("_time, ")
-                      .append(eid).append("_scale, ")
-                      .append(eid).append("_erosionType);\n");
-                }
+                sb.append(dVar).append(" += getErosionDisplacementP(")
+                  .append(posVar).append(", ")
+                  .append(eid).append("_strength, ")
+                  .append(eid).append("_time, ")
+                  .append(eid).append("_scale, ")
+                  .append(en.getErosionType()).append(");\n");
             }
             case CRYSTAL -> {
                 sb.append("      float _cmaxD = crystalMaxDisplacementP(")
@@ -952,21 +948,12 @@ public class GraphCompiler {
                   .append(eid).append("_time, ")
                   .append(eid).append("_scale);\n");
                 sb.append("      if (").append(dVar).append(" < _cmaxD + 0.1) ");
-                if (full) {
-                    sb.append(dVar).append(" += getCrystalDisplacementP(")
-                      .append(posVar).append(", ")
-                      .append(eid).append("_strength, ")
-                      .append(eid).append("_time, ")
-                      .append(eid).append("_scale, ")
-                      .append(eid).append("_sharpness);\n");
-                } else {
-                    sb.append(dVar).append(" += getCrystalDisplacementLightP(")
-                      .append(posVar).append(", ")
-                      .append(eid).append("_strength, ")
-                      .append(eid).append("_time, ")
-                      .append(eid).append("_scale, ")
-                      .append(eid).append("_sharpness);\n");
-                }
+                sb.append(dVar).append(" += getCrystalDisplacementP(")
+                  .append(posVar).append(", ")
+                  .append(eid).append("_strength, ")
+                  .append(eid).append("_time, ")
+                  .append(eid).append("_scale, ")
+                  .append(eid).append("_sharpness);\n");
             }
             case MOSS -> {
                 sb.append("      float _mmaxD = mossMaxDisplacementP(")
@@ -974,19 +961,11 @@ public class GraphCompiler {
                   .append(eid).append("_time, ")
                   .append(eid).append("_scale);\n");
                 sb.append("      if (").append(dVar).append(" < _mmaxD + 0.1) ");
-                if (full) {
-                    sb.append(dVar).append(" += getMossDisplacementP(")
-                      .append(posVar).append(", ")
-                      .append(eid).append("_strength, ")
-                      .append(eid).append("_time, ")
-                      .append(eid).append("_scale);\n");
-                } else {
-                    sb.append(dVar).append(" += getMossDisplacementLightP(")
-                      .append(posVar).append(", ")
-                      .append(eid).append("_strength, ")
-                      .append(eid).append("_time, ")
-                      .append(eid).append("_scale);\n");
-                }
+                sb.append(dVar).append(" += getMossDisplacementP(")
+                  .append(posVar).append(", ")
+                  .append(eid).append("_strength, ")
+                  .append(eid).append("_time, ")
+                  .append(eid).append("_scale);\n");
             }
         }
 
