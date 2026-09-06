@@ -29,12 +29,14 @@ class ExploreDialogTest {
         final List<Boolean> exploringChanges = new ArrayList<>();
         float[] flownEye, flownTarget;
         float flownFov = -1;
+        int paramsChanged = 0;
 
         @Override public AbstractFractalParams params() { return params; }
         @Override public void exploringChanged(boolean exploring) { exploringChanges.add(exploring); }
         @Override public void flyTo(float[] eye, float[] target, float fovDeg) {
             flownEye = eye; flownTarget = target; flownFov = fovDeg;
         }
+        @Override public void paramsChanged() { paramsChanged++; }
     }
 
     @BeforeAll
@@ -76,11 +78,36 @@ class ExploreDialogTest {
         assertTrue(shown.get(0).aesthetic() > shown.get(1).aesthetic());
         assertTrue(shown.get(1).aesthetic() > shown.get(2).aesthetic());
 
-        UiWiringTest.onFxThread(() -> { dialog.clickShown(0); return null; });
+        UiWiringTest.onFxThread(() -> { dialog.clickShown(0, 0); return null; });
         assertArrayEquals(new float[]{0, 0, -1f}, host.flownEye, "the click moved the camera to that view's eye");
         assertArrayEquals(new float[]{0, 0, 0}, host.flownTarget);
         assertEquals(50f, host.flownFov);
         assertTrue(host.exploringChanges.isEmpty(), "showing results never pauses the host; only a search does");
+    }
+
+    @Test
+    void variationsOfferTheScenesKnobsAndAClickWritesThatVariantIntoTheScene() throws Exception {
+        HostStub host = new HostStub();
+        ExploreDialog dialog = UiWiringTest.onFxThread(() -> new ExploreDialog(null, null, host));
+        UiWiringTest.onFxThread(() -> { dialog.refreshKnobs(); return null; });
+        List<String> names = dialog.knobNames();
+        assertTrue(names.contains("Power"), "a Mandelbulb's power is on offer: " + names);
+        assertTrue(names.stream().anyMatch(n -> n.startsWith("Julia")), names.toString());
+
+        List<org.fractalizer.explore.ParamKnobs.Knob> knobs = org.fractalizer.explore.ParamKnobs.of(host.params);
+        org.fractalizer.explore.ParamKnobs.Knob power = knobs.stream().filter(k -> k.name().equals("Power")).findFirst().orElseThrow();
+        List<org.fractalizer.explore.ParamKnobs.Knob> varied = List.of(power);
+        BufferedImage img = new BufferedImage(ExploreDialog.THUMB_W, ExploreDialog.THUMB_H, BufferedImage.TYPE_INT_RGB);
+        UiWiringTest.onFxThread(() -> {
+            dialog.offer(new org.fractalizer.explore.ParamExplorer.Variant("Current", new double[]{8.0}, new FrameScore(500, 0.55, 0.1), img), varied);
+            dialog.offer(new org.fractalizer.explore.ParamExplorer.Variant("Variant 1: Power 8.00→6.50", new double[]{6.5}, new FrameScore(900, 0.55, 0.1), img), varied);
+            return null;
+        });
+        assertEquals(8.0, power.value(), 1e-6, "offering results changes nothing");
+
+        UiWiringTest.onFxThread(() -> { dialog.clickShown(1, 0); return null; });   // best first: the variant
+        assertEquals(6.5, power.value(), 1e-6, "the click wrote the variant's value into the scene");
+        assertEquals(1, host.paramsChanged, "and told the host to refresh and re-render");
     }
 
     @Test
@@ -92,7 +119,9 @@ class ExploreDialogTest {
 
         assertNotNull(UiWiringTest.findButton(dialog.root(), "Explore from current view"), "labels: " + labels);
         assertNotNull(UiWiringTest.findButton(dialog.root(), "Cancel"));
-        for (String expected : List.of("Targets", "Steps", "Shrink", "Samples")) {
+        assertNotNull(UiWiringTest.findButton(dialog.root(), "Vary from current scene"), "labels: " + labels);
+        assertNotNull(UiWiringTest.findButton(dialog.root(), "Restore original"));
+        for (String expected : List.of("Targets", "Steps", "Shrink", "Samples", "Count", "Amplitude %", "Parameters to vary")) {
             assertTrue(labels.contains(expected), expected + " missing from " + labels);
         }
         assertFalse(dialog.isRunning());

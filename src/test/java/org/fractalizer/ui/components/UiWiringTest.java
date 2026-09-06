@@ -101,13 +101,27 @@ class UiWiringTest {
         return result.get();
     }
 
+    // A TabPane without a skin (no window shown) does not list its tabs' content among
+    // its children, so the walk descends into the tabs explicitly.
     static void collectLabels(Node n, List<String> out) {
         if (n instanceof Labeled l && l.getText() != null && !l.getText().isBlank()) out.add(l.getText());
+        if (n instanceof javafx.scene.control.TabPane tp) {
+            for (javafx.scene.control.Tab t : tp.getTabs()) {
+                if (t.getText() != null && !t.getText().isBlank()) out.add(t.getText());
+                if (t.getContent() != null) collectLabels(t.getContent(), out);
+            }
+        }
         if (n instanceof Parent p) for (Node c : p.getChildrenUnmodifiable()) collectLabels(c, out);
     }
 
     static Button findButton(Node n, String text) {
         if (n instanceof Button b && text.equals(b.getText())) return b;
+        if (n instanceof javafx.scene.control.TabPane tp) {
+            for (javafx.scene.control.Tab t : tp.getTabs()) {
+                Button found = t.getContent() == null ? null : findButton(t.getContent(), text);
+                if (found != null) return found;
+            }
+        }
         if (n instanceof Parent p) {
             for (Node c : p.getChildrenUnmodifiable()) {
                 Button found = findButton(c, text);

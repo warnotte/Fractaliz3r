@@ -36,16 +36,49 @@ Smooth interpolation between two parameter snapshots:
 - **Type safety**: Morph is disabled (slider grayed out) if A and B are different fractal types, with a warning label.
 - Uses the same recursive `IdentityHashMap` snapshot mechanism as the dice history.
 
+### Presets & Chains browser (status bar button, View › Presets & Chains…, Ctrl+B)
+
+Every shipped scene as a picture. Two tabs: the `presets/*.frac` files, rendered as File › Load
+would show them, and the hybrid chain library (`HybridPresets`), each framed at its
+`previewDist`. A click loads the preset (from the checkout's `presets/` folder when it is
+there, else from the copy bundled in the jar — the pom ships `presets/*.frac` as resources)
+or makes the chain the scene's node graph, camera placed as in its thumbnail, with the Node
+Graph editor showing its steps.
+
+The thumbnails are not rendered on open — thirty scenes with a shader compile each is not
+something to wait for. `test/ThumbnailForge` renders them (320×180, 16 spp) under `out/thumbs`
+and, with `install` as its last argument, copies them into `src/main/resources/thumbs`
+together with `presets/index.txt`, the list the browser reads (a jar cannot list its own
+resources). Two JUnit tests keep the shipped set honest: every chain in the library must have
+its thumbnail, and the index must match the `presets/` folder — add a chain or a preset and
+the suite says "rerun ThumbnailForge … install" until you do. A missing picture degrades to a
+dark tile with the name on it, never to a broken browser.
+
 ### Explore (status bar button, View › Explore…, Ctrl+E)
 
-The app looks for detailed views of the scene from where the camera is, and shows them as
-scored thumbnails. Click one and the camera flies there; explore again from there to go
+Two ways of asking the app what else there is to see, in one window.
+
+**Views.** The app looks for detailed views of the scene from where the camera is, and shows
+them as scored thumbnails. Click one and the camera flies there (an eased 1.2 s flight,
+`CameraFlight`: smoothstep on position and field of view, spherical interpolation on the
+orientation along the shorter arc; any key press lands it); explore again from there to go
 deeper. It is the `FractalNavigator` traveller (see [RENDERING.md](RENDERING.md) § Test
 Harnesses) running inside the app, on the GPU at thumbnail size, with one change: it keeps
 several targets instead of diving on the best one, so the answer is a set of framings rather
 than a single camera.
 
-What one run does, in order (`org.fractalizer.explore.CameraExplorer`):
+**Variations.** The camera stays; the scene's parameters are nudged instead. The tab lists
+the scene's numeric knobs (`ParamKnobs`: every fractal leaf's `@Animatable` floats — power,
+Julia constant, radiolaria — and, for a hybrid chain, its Julia constant plus the parameters
+each step actually reads; integer counts are not knobs, and bailouts are unticked by
+default). Each variant nudges every ticked knob by a Gaussian of *Amplitude %* × the knob's
+own scale (its magnitude, or half a unit near zero), renders it from the current camera and
+scores it like a view; the unchanged scene is always the first result, so the ranking says
+whether any variation beats what is there. Click one to make it the scene; *Restore
+original* puts the values back. The search is `ParamExplorer`, the prospector's
+render-score-rank loop applied to whatever the scene is.
+
+What a Views run does, in order (`org.fractalizer.explore.CameraExplorer`):
 1. **Pivot** — the surface point under the centre of the view; if the centre looks at
    nothing, the origin.
 2. **Auto-frame** — back off along the pivot→eye axis while the view is inside or overflowing
@@ -69,9 +102,11 @@ cancelled, or failed — the camera the user had is put back. Flying somewhere i
 click, never a side effect of searching.
 
 The decisions above are unit-tested against an analytic sphere on the CPU
-(`CameraExplorerTest`): backing off from inside, the pivot fallback, the ladder geometry,
-cancellation. `test/ExploreProbe` runs the same code on the GPU from any fractal or `.frac`
-and writes the scored sheet, best first, with the time per view.
+(`CameraExplorerTest`, `ParamExplorerTest`): backing off from inside, the pivot fallback, the
+ladder geometry, cancellation, variants bounded by the amplitude and every knob put back.
+`test/ExploreProbe` runs the same code on the GPU from any fractal or `.frac` and writes the
+scored sheet, best first, with the time per view; with `variations` as its 5th argument it
+runs the Variations tab instead.
 
 ### Parameter Persistence
 

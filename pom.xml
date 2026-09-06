@@ -273,6 +273,21 @@
   </dependencies>
 
   <build>
+    <!-- The shipped presets ride along as resources under /presets, so the in-app
+         "Presets & Chains" browser can open them from the jar and the jlink image, not
+         only from a checkout with the folder next to it. -->
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
+        <directory>presets</directory>
+        <targetPath>presets</targetPath>
+        <includes>
+          <include>*.frac</include>
+        </includes>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

@@ -476,7 +476,8 @@ reliable than re-reading the path it covers:
 | `ResponsivenessProbe` | worst tick = delay before a cancel can interrupt a render |
 | `ExportProgressProbe` | how far ahead of the work an export progress bar runs |
 | `ExportAfterPreviewProbe` | the cheap preview must not leak into an export |
-| `ExploreProbe` | the app's Explore button, headless: scored views from any camera, time per view |
+| `ExploreProbe` | the app's Explore button, headless: scored views or parameter variations from any camera, time per view |
+| `ThumbnailForge` | the Presets & Chains browser's thumbnails, every chain and preset; `install` ships them as resources |
 | `GalleryRender` | every `.frac` in a directory rendered as the app would show it (README gallery, release page) |
 
 The ones below have enough behaviour to need describing:

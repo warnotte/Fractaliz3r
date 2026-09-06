@@ -1193,7 +1193,7 @@ public class GraphCompiler {
     /** Uniform declarations a step type needs, with "$" standing for the per-step
      *  prefix. The same table drives {@link #collectHybridUniforms}, so a step cannot
      *  declare a uniform it never receives a value for. */
-    static List<String> stepUniforms(HybridNode.StepType t) {
+    public static List<String> stepUniforms(HybridNode.StepType t) {
         return switch (t) {
             case BULB, BULB_COSINE, COMPLEX_POWER -> List.of("float $power");
             case RIEMANN -> List.of("float $power", "float $scale");

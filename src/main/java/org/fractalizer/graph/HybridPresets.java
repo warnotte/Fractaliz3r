@@ -294,6 +294,19 @@ public final class HybridPresets {
         return p;
     }
 
+    /** File-safe identifier of a preset: "Bulb + inversion" -> "Bulb_inversion". Names the
+     *  thumbnail in the resources and the HybridLab output. */
+    public static String key(Preset p) {
+        return p.name().replaceAll("[^A-Za-z0-9]+", "_").replaceAll("^_|_$", "");
+    }
+
+    /** Camera that frames a chain the way its thumbnail was rendered: previewDist along one
+     *  fixed direction, looking at the origin. */
+    public static float[] previewEye(Preset p) {
+        float d = p.previewDist();
+        return new float[]{d * 0.42f, d * 0.30f, -d * 0.85f};
+    }
+
     /** Overwrite a node's chain in place, so the node keeps its identity in the graph. */
     public static void apply(HybridNode node, Preset preset) {
         node.getSteps().clear();

@@ -102,6 +102,10 @@ public class GLSLFractalizerApp extends Application {
     // so the preview loop and keyboard navigation stand down while it runs.
     private volatile boolean exploring = false;
     private org.fractalizer.ui.components.ExploreDialog exploreDialog;
+    private org.fractalizer.ui.components.SceneBrowser sceneBrowser;
+    // An eased flight to a chosen view, stepped by the render loop; any key press lands it.
+    private org.fractalizer.explore.CameraFlight flight;
+    private static final double FLIGHT_SECONDS = 1.2;
     
     // Eye Candy state
     private boolean turntableMode = false;
@@ -554,13 +558,78 @@ public class GLSLFractalizerApp extends Application {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
+        Button browseBtn = new Button("Presets & Chains…");
+        browseBtn.setTooltip(new Tooltip("Every shipped scene and hybrid chain as a picture; click one to load it (Ctrl+B)"));
+        browseBtn.setOnAction(e -> openBrowser());
+
         Button exploreBtn = new Button("Explore…");
         exploreBtn.setTooltip(new Tooltip("Let the app look for detailed views from here: "
                 + "scored thumbnails, click one to fly there (Ctrl+E)"));
         exploreBtn.setOnAction(e -> openExplore());
 
-        statusBar.getChildren().addAll(statusLabel, sampleLabel, spacer, exploreBtn, progressBar);
+        statusBar.getChildren().addAll(statusLabel, sampleLabel, spacer, browseBtn, exploreBtn, progressBar);
         return statusBar;
+    }
+
+    private void openBrowser() {
+        if (sceneBrowser == null) {
+            sceneBrowser = new org.fractalizer.ui.components.SceneBrowser(primaryStage,
+                    new org.fractalizer.ui.components.SceneBrowser.Host() {
+                @Override public void loadPreset(String name) { loadShippedPreset(name); }
+                @Override public void loadChain(org.fractalizer.graph.HybridPresets.Preset preset) { loadChain(preset); }
+            });
+        }
+        sceneBrowser.show();
+    }
+
+    /** A preset by name: the checkout's presets folder when it is there, else the copy
+     *  bundled in the jar. */
+    private void loadShippedPreset(String name) {
+        File onDisk = new File("presets", name + ".frac");
+        if (onDisk.isFile()) {
+            loadConfigFile(onDisk);
+            return;
+        }
+        try (var in = getClass().getResourceAsStream("/presets/" + name + ".frac")) {
+            if (in == null) {
+                showError("Load Error", "Preset " + name + " is neither in presets/ nor bundled.");
+                return;
+            }
+            String json = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            applyConfig(FractalConfigManager.fromJson(json), null, name + " (bundled)");
+        } catch (Exception ex) {
+            showError("Load Error", "Failed to load preset " + name + ": " + ex.getMessage());
+        }
+    }
+
+    /** Make a hybrid chain the scene: a node graph whose root is that chain, framed as
+     *  its thumbnail was, with the editor showing its steps. */
+    private void loadChain(org.fractalizer.graph.HybridPresets.Preset preset) {
+        flight = null;
+        if (controller.getFractalType() != FractalType.NODE_GRAPH) {
+            controller.setFractalType(FractalType.NODE_GRAPH);
+        }
+        AbstractFractalParams params = (AbstractFractalParams) controller.getParams();
+        NodeGraphParams ngp = (NodeGraphParams) params;
+        org.fractalizer.graph.HybridNode node = new org.fractalizer.graph.HybridNode();
+        org.fractalizer.graph.HybridPresets.apply(node, preset);
+        org.fractalizer.graph.GraphNodeNamer.ensureAllNamed(node);
+        ngp.setGraphRoot(node);
+        ngp.markDirty();
+
+        float[] eye = org.fractalizer.graph.HybridPresets.previewEye(preset);
+        Camera cam = params.getCamera();
+        cam.setPosition(eye[0], eye[1], eye[2]);
+        float[] q = org.fractalizer.test.CameraUtils.lookAt(eye, new float[]{0, 0, 0});
+        cam.setQuaternion(q[0], q[1], q[2], q[3]);
+        params.setFovDegrees(50f);
+
+        fractalPanel.setParams(params);
+        for (Refreshable pnl : refreshablePanels) pnl.refreshFromParams();
+        controller.updatePaletteTexture(params.getCustomGradient());
+        if (animationManager != null) animationManager.onNodeGraphChanged(ngp);
+        statusLabel.setText("Chain: " + preset.name());
+        requestRender();
     }
 
     private void openExplore() {
@@ -583,17 +652,28 @@ public class GLSLFractalizerApp extends Application {
                     }
                 }
                 @Override public void flyTo(float[] eye, float[] target, float fovDeg) {
-                    Camera cam = fractalPanel.getCamera();
-                    cam.setPosition(eye[0], eye[1], eye[2]);
-                    float[] q = org.fractalizer.test.CameraUtils.lookAt(eye, target);
-                    cam.setQuaternion(q[0], q[1], q[2], q[3]);
-                    fractalPanel.getParams().setFovDegrees(fovDeg);
-                    fractalPanel.updatePositionLabel();
+                    GLSLFractalizerApp.this.flyTo(eye, target, fovDeg);
+                }
+                @Override public void paramsChanged() {
+                    // Values were written straight into the params; the sliders catch up here.
+                    fractalPanel.refreshFromParams(true);
+                    for (Refreshable pnl : refreshablePanels) pnl.refreshFromParams();
                     requestRender();
                 }
             });
         }
         exploreDialog.show();
+    }
+
+    /** Ease the camera from where it is to {@code eye} looking at {@code target}. */
+    private void flyTo(float[] eye, float[] target, float fovDeg) {
+        Camera cam = fractalPanel.getCamera();
+        AbstractFractalParams params = fractalPanel.getParams();
+        var from = new org.fractalizer.explore.CameraFlight.Pose(cam.getPosition(), cam.getQuaternion(), params.getFov());
+        var to = new org.fractalizer.explore.CameraFlight.Pose(eye,
+                org.fractalizer.test.CameraUtils.lookAt(eye, target), (float) Math.toRadians(fovDeg));
+        flight = new org.fractalizer.explore.CameraFlight(from, to, FLIGHT_SECONDS);
+        requestRender();
     }
 
     private MenuBar createMenuBar() {
@@ -628,11 +708,15 @@ public class GLSLFractalizerApp extends Application {
         fullscreenItem.setAccelerator(new KeyCodeCombination(KeyCode.F11));
         fullscreenItem.setOnAction(e -> primaryStage.setFullScreen(!primaryStage.isFullScreen()));
 
+        MenuItem browseItem = new MenuItem("Presets & Chains…");
+        browseItem.setAccelerator(new KeyCodeCombination(KeyCode.B, KeyCombination.CONTROL_DOWN));
+        browseItem.setOnAction(e -> openBrowser());
+
         MenuItem exploreItem = new MenuItem("Explore…");
         exploreItem.setAccelerator(new KeyCodeCombination(KeyCode.E, KeyCombination.CONTROL_DOWN));
         exploreItem.setOnAction(e -> openExplore());
 
-        viewMenu.getItems().addAll(darkThemeItem, new SeparatorMenuItem(), exploreItem, fullscreenItem);
+        viewMenu.getItems().addAll(darkThemeItem, new SeparatorMenuItem(), browseItem, exploreItem, fullscreenItem);
 
         Menu helpMenu = new Menu("Help");
         MenuItem shortcutsItem = new MenuItem("Keyboard Shortcuts");
@@ -673,6 +757,7 @@ public class GLSLFractalizerApp extends Application {
                   Ctrl + S                Save configuration
 
                 View
+                  Ctrl + B                Presets & Chains browser
                   Ctrl + E                Explore: scored views from here
                   F11                       Toggle fullscreen
                   F1                         This dialog
@@ -706,6 +791,14 @@ public class GLSLFractalizerApp extends Application {
 
                 // Process keyboard input
                 if (navigation != null && navigation.processKeyboardInput()) {
+                    flight = null;                     // the user took over
+                    requestRender();
+                    fractalPanel.updatePositionLabel();
+                }
+
+                // A flight in progress moves the camera one eased step per frame.
+                if (flight != null) {
+                    if (flight.step(now, fractalPanel.getCamera(), fractalPanel.getParams())) flight = null;
                     requestRender();
                     fractalPanel.updatePositionLabel();
                 }
@@ -833,8 +926,19 @@ public class GLSLFractalizerApp extends Application {
 
     private void loadConfigFile(File file) {
         try {
-            // Load config from file
-            FractalConfig config = FractalConfigManager.load(file);
+            applyConfig(FractalConfigManager.load(file), file, file.getName());
+        } catch (IOException ex) {
+            showError("Load Error", "Failed to load configuration: " + ex.getMessage());
+        } catch (Exception ex) {
+            showError("Load Error", "Invalid configuration file: " + ex.getMessage());
+        }
+    }
+
+    /** Make a loaded configuration the scene: params, gradient, post chain, panels,
+     *  animation. {@code file} is null for a bundled preset. */
+    private void applyConfig(FractalConfig config, File file, String label) {
+        try {
+            flight = null;
 
             // Get fractal type and switch if needed
             FractalType type = config.getFractalTypeEnum();
@@ -877,16 +981,14 @@ public class GLSLFractalizerApp extends Application {
             }
 
             currentConfigFile = file;
-            statusLabel.setText("Loaded: " + file.getName());
-            primaryStage.setTitle("Fractaliz3r GLSL - " + file.getName());
+            statusLabel.setText("Loaded: " + label);
+            primaryStage.setTitle("Fractaliz3r GLSL - " + label);
 
             // Trigger render
             requestRender();
 
-        } catch (IOException ex) {
-            showError("Load Error", "Failed to load configuration: " + ex.getMessage());
         } catch (Exception ex) {
-            showError("Load Error", "Invalid configuration file: " + ex.getMessage());
+            showError("Load Error", "Invalid configuration: " + ex.getMessage());
         }
     }
 

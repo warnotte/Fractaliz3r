@@ -88,7 +88,11 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportAfterPreviewP
 # The app's Explore button, headless: CameraExplorer from a fractal's default camera (or a
 # .frac), scored thumbnails written as a sheet best first, time per view.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExploreProbe" -Dexec.args="MANDELBULB out/explore 320x180 4 3 4 0.6"
-#   (TYPE-or-.frac outDir WxH samples targets steps shrink)
+#   (TYPE-or-.frac outDir WxH samples targets steps shrink); "variations 12 0.2" as 5th..7th args
+#   runs the Variations tab instead (count, amplitude).
+# The Presets & Chains browser's thumbnails: every chain + every preset at 320x180. Rerun with
+# "install" whenever a chain or a preset is added — a JUnit test fails until the shipped set matches.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ThumbnailForge" -Dexec.args="out/thumbs 320x180 16 install"
 # How far ahead of the work an export progress bar runs: time of the first 100%% report
 # against the moment the export future actually completes.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportProgressProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 2600x1600 128"
@@ -131,6 +135,9 @@ org.fractalizer
 │   └── NodeGraphAnimationHelper.java # Bridge: graph nodes → animatable timeline parameters
 ├── explore/
 │   ├── CameraExplorer.java          # Scored views from the current camera: pivot, auto-frame, aim scan, dives
+│   ├── ParamExplorer.java           # Variations: knobs nudged at random, rendered from the same camera, scored
+│   ├── ParamKnobs.java              # which numeric parameters a scene has (fractal leaves' floats, hybrid steps)
+│   ├── CameraFlight.java            # eased flight between two poses (smoothstep + slerp), stepped by the render loop
 │   ├── FrameScorer.java             # detail / coverage / centring score shared with the navigator harness
 │   ├── ViewRenderer.java            # what the explorer needs from a renderer (GPU in the app, a sphere in tests)
 │   └── ControllerViewRenderer.java  # ViewRenderer over GLSLFractalizerController, in memory at thumbnail size
@@ -153,7 +160,8 @@ org.fractalizer
     │   ├── GradientEditor.java         # Visual gradient editor with draggable color stops
     │   ├── CustomShaderEditor.java     # GLSL editor with @param parsing, dynamic sliders
     │   ├── NodeGraphEditor.java        # Visual node graph editor: canvas + detail panel + undo/redo
-    │   └── ExploreDialog.java          # "Explore": scored thumbnails of detailed views from here, click to fly
+    │   ├── ExploreDialog.java          # "Explore": Views (scored framings, click to fly) + Variations (knobs nudged, click to apply)
+    │   └── SceneBrowser.java           # "Presets & Chains": every shipped .frac and hybrid chain as a thumbnail, click to load
     └── panels/
         ├── FractalPanel.java           # Fractal type and parameters
         ├── MaterialPanel.java          # Material type, physical props, artistic palettes
@@ -186,7 +194,8 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ResponsivenessProbe.java     # worst tick = delay before a cancel can land
 ├── ExportProgressProbe.java     # how far ahead of the work a progress bar runs
 ├── ExportAfterPreviewProbe.java # the cheap preview must not leak into an export
-├── ExploreProbe.java            # the app's Explore button, headless: scored views from any camera
+├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
+├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them
 └── GalleryRender.java           # every .frac in a dir rendered as the app shows it (README gallery)
 ```
 
