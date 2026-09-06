@@ -132,7 +132,7 @@ either an `.msi` or a plain folder:
 ```bash
 # Portable folder: target/installer/Fractaliz3r/Fractaliz3r.exe — no extra tools needed
 jpackage --type app-image --dest target/installer \
-  --name Fractaliz3r --app-version 3.0.0 --vendor "Renaud Warnotte" \
+  --name Fractaliz3r --app-version 3.1.0 --vendor "Renaud Warnotte" \
   --description "Real-time cinematic 3D fractal renderer" \
   --runtime-image target/image --module Fractaliz3r/org.fractalizer.Launcher \
   --icon src/main/resources/icons/fractaliz3r.ico \
@@ -157,8 +157,8 @@ pushed (WiX is installed with Chocolatey), then attaches `Fractaliz3r-<version>.
 `Fractaliz3r-<version>-windows.zip` to the release for that tag:
 
 ```bash
-git tag v3.0.0
-git push origin v3.0.0
+git tag v3.1.0
+git push origin v3.1.0
 ```
 
 The tag is the version. A manual run of the workflow (`workflow_dispatch`) builds the same two
