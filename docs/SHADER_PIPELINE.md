@@ -176,7 +176,10 @@ struct OrbitTrap {
 // 3. Full DE with orbit trap tracking (for coloring)
 float DE(vec3 pos, out OrbitTrap trap) { ... }
 
-// 4. Lightweight DE without traps (for shadows, AO, normals)
+// 4. The same DE without orbit traps (for shadows, AO, normals). Same geometry, not a
+//    cheaper approximation: a DE_simple that describes another surface gives normals of
+//    a surface the eye ray never hit and shadow rays that start inside it (see
+//    docs/RENDERING.md, Surface Effects, for the day it did).
 float DE_simple(vec3 pos) { ... }
 
 // 5. Convert traps to coloring factors

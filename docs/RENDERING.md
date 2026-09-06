@@ -457,7 +457,7 @@ that is simply absent from the saved file. Both had already got through twice. R
 suite on the module path also caught a third: a package Gson needs opened in `module-info`,
 which only bites when the app runs as a module (the jlink image), not from an IDE classpath.
 
-The **GPU harnesses** are thirteen headless tools in `org.fractalizer.test` (invocations in
+The **GPU harnesses** are sixteen headless tools in `org.fractalizer.test` (invocations in
 **[CLAUDE.md](../CLAUDE.md)** Build Commands), all writing under `out/` (gitignored). Most
 exist because a real bug got through a reading of the code — running one is faster and more
 reliable than re-reading the path it covers:
@@ -475,7 +475,7 @@ reliable than re-reading the path it covers:
 | `ResizeProbe` | framebuffer cost of a preview↔full switch |
 | `ResponsivenessProbe` | worst tick = delay before a cancel can interrupt a render |
 | `ExportProgressProbe` | how far ahead of the work an export progress bar runs |
-| `ShaderCompileProbe` | how long each shader takes to compile, and which one never returns: the built-ins (7-10 s each here), then any `.frac` |
+| `ShaderCompileProbe` | how long each shader takes to compile, and which one never returns: the built-ins (7-10 s each here), then any `.frac`; `--render WxH spp outDir scene.frac` skips the built-ins and renders one scene in ~15 s, the quickest look at a preset change |
 | `ExportAfterPreviewProbe` | the cheap preview must not leak into an export |
 | `ExploreProbe` | the app's Explore button, headless: scored views or parameter variations from any camera, time per view |
 | `ThumbnailForge` | the Presets & Chains browser's thumbnails, every chain and preset; `install` ships them as resources |
