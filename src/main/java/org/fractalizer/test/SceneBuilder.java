@@ -569,6 +569,13 @@ public class SceneBuilder {
         return this;
     }
 
+    /** Specular highlight of the classic shader: intensity and Phong power (sharpness). */
+    public SceneBuilder specular(float intensity, float power) {
+        config.rendering.specularIntensity = intensity;
+        config.rendering.specularPower = power;
+        return this;
+    }
+
     /** Camera movement speed per key press, in world units: small for tight corridors. */
     public SceneBuilder moveSpeed(float speed) {
         config.camera.moveSpeed = speed;

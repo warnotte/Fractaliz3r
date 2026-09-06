@@ -1,20 +1,20 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-06T01:20:44.913680800Z",
+  "timestamp": "2026-09-06T01:44:19.988668600Z",
   "name": null,
   "description": null,
   "fractalType": "NODE_GRAPH",
   "camera": {
     "position": [
-      0.0,
-      0.62,
-      -2.95
+      1.0,
+      0.6,
+      -2.55
     ],
     "quaternion": [
-      0.99410397,
-      0.10650906,
-      0.020210704,
-      -0.0021653906
+      0.9786876,
+      0.103442185,
+      -0.17641625,
+      0.018646281
     ],
     "fov": 48.0,
     "moveSpeed": 0.05
@@ -32,8 +32,8 @@
     "aoIntensity": 0.5,
     "glowIntensity": 0.25,
     "rimIntensity": 0.45,
-    "specularIntensity": 0.5,
-    "specularPower": 32.0
+    "specularIntensity": 1.0,
+    "specularPower": 90.0
   },
   "lighting": {
     "direction": [
@@ -153,11 +153,11 @@
     "skyType": 1,
     "cloudDensity": 0.5,
     "nebulaColor": [
-      0.05,
-      0.07,
-      0.16
+      0.02,
+      0.03,
+      0.09
     ],
-    "nebulaTint": 0.7,
+    "nebulaTint": 0.5,
     "skySpeed": 1.0,
     "skyTime": 0.0,
     "skyParallax": 0.25,
@@ -259,9 +259,9 @@
                 "type": "material",
                 "materialType": -1,
                 "colorMode": 1,
-                "colorR": 0.1899999976158142,
-                "colorG": 0.4000000059604645,
-                "colorB": 0.15000000596046448,
+                "colorR": 0.1599999964237213,
+                "colorG": 0.3400000035762787,
+                "colorB": 0.12999999523162842,
                 "roughness": 0.8500000238418579,
                 "metallic": 0.0,
                 "ior": -1.0,
@@ -275,7 +275,7 @@
                     "type": "effect",
                     "effectType": "EROSION",
                     "strength": 0.8999999761581421,
-                    "time": 5.0,
+                    "time": 4.0,
                     "scale": 0.5,
                     "erosionType": 3,
                     "sharpness": 2.0,
@@ -290,7 +290,7 @@
                       "child": {
                         "type": "primitive",
                         "primitiveType": "SPHERE",
-                        "sizeX": 1.0460000038146973,
+                        "sizeX": 1.0440000295639038,
                         "sizeY": 1.0,
                         "sizeZ": 1.0,
                         "rounding": 0.0,
@@ -310,27 +310,170 @@
                 }
               },
               "right": {
-                "name": "Highland",
+                "type": "csg",
+                "op": "UNION",
+                "blend": 0.0,
+                "left": {
+                  "name": "Highland",
+                  "type": "material",
+                  "materialType": -1,
+                  "colorMode": 1,
+                  "colorR": 0.5,
+                  "colorG": 0.4000000059604645,
+                  "colorB": 0.25999999046325684,
+                  "roughness": 0.8999999761581421,
+                  "metallic": 0.0,
+                  "ior": -1.0,
+                  "emission": 0.0,
+                  "child": {
+                    "type": "csg",
+                    "op": "INTERSECT",
+                    "blend": 0.0,
+                    "left": {
+                      "type": "csg",
+                      "op": "SUBTRACT",
+                      "blend": 0.0,
+                      "left": {
+                        "name": "Land",
+                        "type": "effect",
+                        "effectType": "EROSION",
+                        "strength": 0.8999999761581421,
+                        "time": 4.0,
+                        "scale": 0.5,
+                        "erosionType": 3,
+                        "sharpness": 2.0,
+                        "child": {
+                          "type": "effect",
+                          "effectType": "EROSION",
+                          "strength": 0.800000011920929,
+                          "time": 4.0,
+                          "scale": 2.0,
+                          "erosionType": 2,
+                          "sharpness": 2.0,
+                          "child": {
+                            "type": "primitive",
+                            "primitiveType": "SPHERE",
+                            "sizeX": 1.0440000295639038,
+                            "sizeY": 1.0,
+                            "sizeZ": 1.0,
+                            "rounding": 0.0,
+                            "shell": 0.0
+                          }
+                        }
+                      },
+                      "right": {
+                        "type": "primitive",
+                        "primitiveType": "SPHERE",
+                        "sizeX": 1.0260000228881836,
+                        "sizeY": 1.0,
+                        "sizeZ": 1.0,
+                        "rounding": 0.0,
+                        "shell": 0.0
+                      }
+                    },
+                    "right": {
+                      "type": "primitive",
+                      "primitiveType": "SPHERE",
+                      "sizeX": 1.0379999876022339,
+                      "sizeY": 1.0,
+                      "sizeZ": 1.0,
+                      "rounding": 0.0,
+                      "shell": 0.0
+                    }
+                  }
+                },
+                "right": {
+                  "name": "Snow",
+                  "type": "material",
+                  "materialType": -1,
+                  "colorMode": 1,
+                  "colorR": 0.9300000071525574,
+                  "colorG": 0.949999988079071,
+                  "colorB": 0.9800000190734863,
+                  "roughness": 0.800000011920929,
+                  "metallic": 0.0,
+                  "ior": -1.0,
+                  "emission": 0.0,
+                  "child": {
+                    "type": "csg",
+                    "op": "SUBTRACT",
+                    "blend": 0.0,
+                    "left": {
+                      "name": "Land",
+                      "type": "effect",
+                      "effectType": "EROSION",
+                      "strength": 0.8999999761581421,
+                      "time": 4.0,
+                      "scale": 0.5,
+                      "erosionType": 3,
+                      "sharpness": 2.0,
+                      "child": {
+                        "type": "effect",
+                        "effectType": "EROSION",
+                        "strength": 0.800000011920929,
+                        "time": 4.0,
+                        "scale": 2.0,
+                        "erosionType": 2,
+                        "sharpness": 2.0,
+                        "child": {
+                          "type": "primitive",
+                          "primitiveType": "SPHERE",
+                          "sizeX": 1.0440000295639038,
+                          "sizeY": 1.0,
+                          "sizeZ": 1.0,
+                          "rounding": 0.0,
+                          "shell": 0.0
+                        }
+                      }
+                    },
+                    "right": {
+                      "type": "primitive",
+                      "primitiveType": "SPHERE",
+                      "sizeX": 1.0379999876022339,
+                      "sizeY": 1.0,
+                      "sizeZ": 1.0,
+                      "rounding": 0.0,
+                      "shell": 0.0
+                    }
+                  }
+                }
+              }
+            },
+            "right": {
+              "type": "csg",
+              "op": "UNION",
+              "blend": 0.0,
+              "left": {
+                "name": "Shallows",
                 "type": "material",
                 "materialType": -1,
                 "colorMode": 1,
-                "colorR": 0.7799999713897705,
-                "colorG": 0.6600000262260437,
-                "colorB": 0.41999998688697815,
-                "roughness": 0.8999999761581421,
+                "colorR": 0.11999999731779099,
+                "colorG": 0.4000000059604645,
+                "colorB": 0.5,
+                "roughness": 0.15000000596046448,
                 "metallic": 0.0,
                 "ior": -1.0,
                 "emission": 0.0,
                 "child": {
                   "type": "csg",
-                  "op": "SUBTRACT",
+                  "op": "INTERSECT",
                   "blend": 0.0,
                   "left": {
+                    "type": "primitive",
+                    "primitiveType": "SPHERE",
+                    "sizeX": 1.0,
+                    "sizeY": 1.0,
+                    "sizeZ": 1.0,
+                    "rounding": 0.0,
+                    "shell": 0.0
+                  },
+                  "right": {
                     "name": "Land",
                     "type": "effect",
                     "effectType": "EROSION",
                     "strength": 0.8999999761581421,
-                    "time": 5.0,
+                    "time": 4.0,
                     "scale": 0.5,
                     "erosionType": 3,
                     "sharpness": 2.0,
@@ -345,46 +488,70 @@
                       "child": {
                         "type": "primitive",
                         "primitiveType": "SPHERE",
-                        "sizeX": 1.0460000038146973,
+                        "sizeX": 1.0455000400543213,
                         "sizeY": 1.0,
                         "sizeZ": 1.0,
                         "rounding": 0.0,
                         "shell": 0.0
                       }
                     }
-                  },
-                  "right": {
+                  }
+                }
+              },
+              "right": {
+                "name": "Ocean",
+                "type": "material",
+                "materialType": -1,
+                "colorMode": 1,
+                "colorR": 0.029999999329447746,
+                "colorG": 0.10000000149011612,
+                "colorB": 0.30000001192092896,
+                "roughness": 0.10000000149011612,
+                "metallic": 0.0,
+                "ior": -1.0,
+                "emission": 0.0,
+                "child": {
+                  "type": "csg",
+                  "op": "SUBTRACT",
+                  "blend": 0.0,
+                  "left": {
                     "type": "primitive",
                     "primitiveType": "SPHERE",
-                    "sizeX": 1.0260000228881836,
+                    "sizeX": 1.0,
                     "sizeY": 1.0,
                     "sizeZ": 1.0,
                     "rounding": 0.0,
                     "shell": 0.0
+                  },
+                  "right": {
+                    "name": "Land",
+                    "type": "effect",
+                    "effectType": "EROSION",
+                    "strength": 0.8999999761581421,
+                    "time": 4.0,
+                    "scale": 0.5,
+                    "erosionType": 3,
+                    "sharpness": 2.0,
+                    "child": {
+                      "type": "effect",
+                      "effectType": "EROSION",
+                      "strength": 0.800000011920929,
+                      "time": 4.0,
+                      "scale": 2.0,
+                      "erosionType": 2,
+                      "sharpness": 2.0,
+                      "child": {
+                        "type": "primitive",
+                        "primitiveType": "SPHERE",
+                        "sizeX": 1.0455000400543213,
+                        "sizeY": 1.0,
+                        "sizeZ": 1.0,
+                        "rounding": 0.0,
+                        "shell": 0.0
+                      }
+                    }
                   }
                 }
-              }
-            },
-            "right": {
-              "name": "Ocean",
-              "type": "material",
-              "materialType": -1,
-              "colorMode": 1,
-              "colorR": 0.029999999329447746,
-              "colorG": 0.11999999731779099,
-              "colorB": 0.36000001430511475,
-              "roughness": 0.11999999731779099,
-              "metallic": 0.0,
-              "ior": -1.0,
-              "emission": 0.0,
-              "child": {
-                "type": "primitive",
-                "primitiveType": "SPHERE",
-                "sizeX": 1.0,
-                "sizeY": 1.0,
-                "sizeZ": 1.0,
-                "rounding": 0.0,
-                "shell": 0.0
               }
             }
           },
@@ -471,7 +638,7 @@
                 "type": "effect",
                 "effectType": "EROSION",
                 "strength": 0.8999999761581421,
-                "time": 5.0,
+                "time": 4.0,
                 "scale": 0.5,
                 "erosionType": 3,
                 "sharpness": 2.0,
@@ -486,7 +653,7 @@
                   "child": {
                     "type": "primitive",
                     "primitiveType": "SPHERE",
-                    "sizeX": 1.0460000038146973,
+                    "sizeX": 1.0440000295639038,
                     "sizeY": 1.0,
                     "sizeZ": 1.0,
                     "rounding": 0.0,
@@ -581,9 +748,9 @@
           "mode": "STANDARD",
           "axis": 1,
           "offset": [
-            -2.299999952316284,
-            1.0499999523162842,
-            1.600000023841858
+            -1.5499999523162842,
+            0.949999988079071,
+            -0.550000011920929
           ],
           "rotation": [
             0.0,

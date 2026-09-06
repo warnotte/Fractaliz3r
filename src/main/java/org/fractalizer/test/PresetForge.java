@@ -235,15 +235,16 @@ public class PresetForge {
         // coastline is an iso-line of fbm; snow above one radius, ice beyond one latitude;
         // a single low sun draws the terminator; the rim light is the atmosphere.
         p.put("ALBEDO_039", () -> SceneBuilder.nodeGraph(blueWorld())
-                .camera(0f, 0.62f, -2.95f).lookAt(0.12f, -0.02f, 0f).fov(48)
+                .camera(1.0f, 0.6f, -2.55f).lookAt(0.02f, 0.0f, 0.08f).fov(48)
                 .moveSpeed(0.05f)
                 .maxRaySteps(300)
                 .gradient(SPECTRUM).coloringMode(0)
                 .pathTracing(false).rimIntensity(0.45f).skyType(1)
-                .nebula(0.05f, 0.07f, 0.16f, 0.7f)
+                .nebula(0.02f, 0.03f, 0.09f, 0.5f)
                 .lightDir(2.6f, 0.7f, 0.5f).lightColor(1.0f, 0.92f, 0.80f).lightIntensity(2.3f)
                 .ambientColor(0.16f, 0.28f, 0.60f).ambientIntensity(0.07f)
                 .glowIntensity(0.25f)
+                .specular(1.0f, 90f)
                 .colorStrength(1.0f).metalness(0.0f).roughness(0.7f));
 
         return p;
@@ -258,9 +259,8 @@ public class PresetForge {
      * The plateaus the noise leaves highest are deserts, ochre; the poles are white.
      */
     static org.fractalizer.graph.GraphNode blueWorld() {
-        // The graph is a tree, not a DAG: the ice branch and the temperate branch each get
-        // their own globe. A node used twice is serialized twice anyway, and the compiler
-        // would emit it twice.
+        // The graph is a tree, not a DAG: every branch builds its own copy of the land.
+        // A node used twice is serialized twice anyway, and the compiler would emit it twice.
         org.fractalizer.graph.GraphNode temperate = SceneBuilder.subtract(colouredGlobe(), polarSlabs());
         temperate.setName("Temperate");
         org.fractalizer.graph.GraphNode ice = material(SceneBuilder.intersect(globeShape(), polarSlabs()), 0.92f, 0.96f, 1.0f, 0.6f, 0f);
@@ -269,44 +269,62 @@ public class PresetForge {
         planet.setName("Planet");
 
         org.fractalizer.graph.GraphNode moonBall = SceneBuilder.erode(sphere(0.27f), 0.7f, 4.0f, 0.4f, 3);
-        org.fractalizer.graph.GraphNode moon = material(SceneBuilder.translate(moonBall, -2.3f, 1.05f, 1.6f), 0.55f, 0.53f, 0.50f, 0.95f, 0f);
+        org.fractalizer.graph.GraphNode moon = material(SceneBuilder.translate(moonBall, -1.55f, 0.95f, -0.55f), 0.55f, 0.53f, 0.50f, 0.95f, 0f);
         moon.setName("Moon");
 
-        // No cloud shell: tried three times. A shell carved by fbm comes out as thick
-        // white plates with smooth edges, ice floes rather than clouds, whatever the
-        // scale. Clouds need soft edges, which a distance field does not give.
-        // No glass atmosphere either: a sphere of glass around the planet turns it into
-        // a black disc under path tracing and a white ball under classic shading. The
-        // halo comes from the rim light.
+        // No clouds: a shell carved by fbm gives plates with smooth edges (ice floes), and
+        // the moss effect only fuzzes a surface it cannot open. A distance field has no
+        // soft edge to offer. No glass atmosphere either: a black disc under path tracing,
+        // a white ball under classic shading. The halo is the rim light.
         org.fractalizer.graph.GraphNode world = SceneBuilder.union(planet, moon);
         world.setName("Albedo 0.39");
         return world;
     }
 
-    /** The carved land: radius 1.046, continents by thermal noise, mountains by weathering.
-     *  Carve depth is fbm * K with K = 0.35 * time * strength * scale * 0.05 = 0.112, so the
-     *  sea (radius 1) shows where fbm > 0.41 and the deserts stay where fbm < 0.18. */
-    private static org.fractalizer.graph.GraphNode land() {
-        org.fractalizer.graph.GraphNode land = SceneBuilder.erode(sphere(1.046f), 0.8f, 4.0f, 2.0f, 2);   // continents
-        land = SceneBuilder.erode(land, 0.9f, 5.0f, 0.5f, 3);                                            // mountains
+    /** Land relief: sea level is radius 1. */
+    private static final float LAND_R = 1.044f;
+
+    /**
+     * The carved land on a base sphere of radius {@code r}. Two passes of the erosion
+     * effect, both position-based, so the same carve lands on any base radius: thermal
+     * noise at scale 2 for the continents (carve = fbm * 0.112), fine signed weathering
+     * for the mountains. A third pass at a middle scale was tried for hill ranges and
+     * drew concentric rings around the night pole: out. The sea (radius 1) shows where
+     * the carve exceeds r - 1.
+     */
+    private static org.fractalizer.graph.GraphNode land(float r) {
+        org.fractalizer.graph.GraphNode land = SceneBuilder.erode(sphere(r), 0.8f, 4.0f, 2.0f, 2);   // continents
+        land = SceneBuilder.erode(land, 0.9f, 4.0f, 0.5f, 3);                                        // mountains
         land.setName("Land");
         return land;
     }
 
     /** Land and sea, bare geometry. */
     private static org.fractalizer.graph.GraphNode globeShape() {
-        return SceneBuilder.union(land(), sphere(1.0f));
+        return SceneBuilder.union(land(LAND_R), sphere(1.0f));
     }
 
-    /** Land and sea with their colours: green lowland, ochre desert above 1.026, blue sea. */
+    /**
+     * Land and sea with their colours. The land is one eroded sphere cut into altitude
+     * bands by spheres: green up to 1.026, brown to 1.038, snow above.
+     * The sea is cut in two by the land raised 0.0015: where that raised land reaches the
+     * sea surface the water is shallow, turquoise; elsewhere deep blue. Every band is a
+     * disjoint piece, so no two materials compete for one surface point.
+     */
     private static org.fractalizer.graph.GraphNode colouredGlobe() {
-        org.fractalizer.graph.GraphNode lowland = material(SceneBuilder.intersect(land(), sphere(1.026f)), 0.19f, 0.40f, 0.15f, 0.85f, 0f);
+        org.fractalizer.graph.GraphNode lowland = material(SceneBuilder.intersect(land(LAND_R), sphere(1.026f)), 0.16f, 0.34f, 0.13f, 0.85f, 0f);
         lowland.setName("Lowland");
-        org.fractalizer.graph.GraphNode highland = material(SceneBuilder.subtract(land(), sphere(1.026f)), 0.78f, 0.66f, 0.42f, 0.9f, 0f);
+        org.fractalizer.graph.GraphNode highland = material(SceneBuilder.intersect(SceneBuilder.subtract(land(LAND_R), sphere(1.026f)), sphere(1.038f)), 0.50f, 0.40f, 0.26f, 0.9f, 0f);
         highland.setName("Highland");
-        org.fractalizer.graph.GraphNode sea = material(sphere(1.0f), 0.03f, 0.12f, 0.36f, 0.12f, 0f);
-        sea.setName("Ocean");
-        return SceneBuilder.union(SceneBuilder.union(lowland, highland), sea);
+        org.fractalizer.graph.GraphNode snow = material(SceneBuilder.subtract(land(LAND_R), sphere(1.038f)), 0.93f, 0.95f, 0.98f, 0.8f, 0f);
+        snow.setName("Snow");
+        org.fractalizer.graph.GraphNode landBands = SceneBuilder.union(lowland, SceneBuilder.union(highland, snow));
+
+        org.fractalizer.graph.GraphNode shallow = material(SceneBuilder.intersect(sphere(1.0f), land(LAND_R + 0.0015f)), 0.12f, 0.40f, 0.50f, 0.15f, 0f);
+        shallow.setName("Shallows");
+        org.fractalizer.graph.GraphNode deep = material(SceneBuilder.subtract(sphere(1.0f), land(LAND_R + 0.0015f)), 0.03f, 0.10f, 0.30f, 0.10f, 0f);
+        deep.setName("Ocean");
+        return SceneBuilder.union(landBands, SceneBuilder.union(shallow, deep));
     }
 
     /** Two slabs beyond |y| = 0.86: what they cut out of the globe is polar ice. */
