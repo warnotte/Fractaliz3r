@@ -212,7 +212,112 @@ public class PresetForge {
                 .palette(4).colorStrength(0.9f)
                 .metalness(0.4f).roughness(0.35f));
 
+        // --- The Labyrinth: a world to walk, not a view. An infinite stone maze (the
+        // Menger sponge, from inside) whose central junction is Jareth's Escher room:
+        // three staircases, each climbing under its own gravity, and the crystal ball.
+        // Walk with the arrow keys; the lantern is on the camera.
+        p.put("LABYRINTH", () -> SceneBuilder.nodeGraph(labyrinthWorld())
+                .camera(0f, -0.21f, -0.92f).lookAt(0f, -0.14f, 0f).fov(62)
+                .moveSpeed(0.02f)
+                .maxRaySteps(400)
+                .gradient(STONE).coloringMode(0)
+                .pathTracing(true).rimIntensity(0.0f).skyType(1)
+                .nebula(0.05f, 0.04f, 0.10f, 1.0f)
+                .lightDir(0.4f, 1.0f, -0.3f).lightIntensity(0.35f)
+                .ambientColor(0.42f, 0.36f, 0.30f).ambientIntensity(0.38f)
+                .lantern(4.0f, 2.0f, 1.0f, 0.82f, 0.62f)
+                .fog(0.10f).fogColor(0.30f, 0.24f, 0.18f)
+                .colorStrength(0.8f).metalness(0.05f).roughness(0.8f));
+
         return p;
+    }
+
+    /** Warm sandstone, for the parts of the labyrinth that keep the palette. */
+    private static final float[][] STONE = {
+        {0.00f, 0.22f, 0.17f, 0.12f}, {0.45f, 0.55f, 0.46f, 0.34f},
+        {0.80f, 0.72f, 0.64f, 0.50f}, {1.00f, 0.86f, 0.80f, 0.66f}};
+
+    /**
+     * The labyrinth's node graph. The maze is a Menger sponge of side 2, so its
+     * corridors are 2/3 wide and its central junction (|x|,|y|,|z| < 1/3) is a room with
+     * six doorways. The staircases live in that room: each is a box step repeated along
+     * a diagonal — a rotation, a 1D repetition along X, and the inverse rotation, so the
+     * steps stay axis-aligned while their line climbs — clipped to the room by an
+     * intersection. The same staircase turned about Z climbs under a sideways gravity,
+     * turned about X under a third; that is the Escher room. The crystal is an emissive
+     * sphere at the centre.
+     */
+    static org.fractalizer.graph.GraphNode labyrinthWorld() {
+        org.fractalizer.graph.FractalNode menger = SceneBuilder.fractal(FractalType.MENGER_SPONGE);
+        org.fractalizer.fractals.MengerSpongeParams mp = (org.fractalizer.fractals.MengerSpongeParams) menger.getFractalParams();
+        mp.setMaxIterations(6);
+        mp.setScale(3f);
+        mp.setOffset(1f, 1f, 1f);
+        org.fractalizer.graph.GraphNode walls = SceneBuilder.erode(menger, 0.02f, 1.5f, 2.5f);
+        walls = material(walls, 0.56f, 0.47f, 0.36f, 0.85f, 0f);
+        walls.setName("Stone maze");
+
+        org.fractalizer.graph.GraphNode stairsA = staircase();                     // climbs +Y along +X
+        stairsA = SceneBuilder.translate(stairsA, 0f, 0f, -0.16f);
+        org.fractalizer.graph.GraphNode stairsB = SceneBuilder.rotate(staircase(), 0f, 0f, 90f);   // gravity +X
+        stairsB = SceneBuilder.translate(stairsB, 0f, 0f, 0.16f);
+        org.fractalizer.graph.GraphNode stairsC = SceneBuilder.rotate(staircase(), 90f, 0f, 0f);   // gravity -Z
+        stairsC = SceneBuilder.translate(stairsC, 0.18f, 0f, 0f);
+        org.fractalizer.graph.GraphNode stairs = SceneBuilder.union(SceneBuilder.union(stairsA, stairsB), stairsC);
+        stairs = material(stairs, 0.74f, 0.68f, 0.56f, 0.7f, 0f);
+        stairs.setName("Escher stairs");
+
+        org.fractalizer.graph.PrimitiveNode orb = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.SPHERE);
+        orb.setSizeX(0.07f);
+        org.fractalizer.graph.GraphNode crystal = SceneBuilder.translate(orb, 0f, 0.10f, 0f);
+        crystal = material(crystal, 1.0f, 0.93f, 0.80f, 0.2f, 9f);
+        crystal.setName("Crystal");
+
+        // The plain the labyrinth stands on: walk out of any corridor and the whole
+        // building is there behind you, under the space sky. A plane sits at y = sizeX,
+        // and sizeX cannot go below 0.01, so it is pushed down by a translation.
+        org.fractalizer.graph.PrimitiveNode plain = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.PLANE);
+        plain.setSizeX(0.01f);
+        org.fractalizer.graph.GraphNode ground = SceneBuilder.translate(plain, 0f, -1.012f, 0f);
+        ground = material(ground, 0.34f, 0.29f, 0.22f, 0.95f, 0f);
+        ground.setName("Plain");
+
+        org.fractalizer.graph.GraphNode world = SceneBuilder.union(
+                SceneBuilder.union(SceneBuilder.union(walls, stairs), crystal), ground);
+        world.setName("Labyrinth");
+        return world;
+    }
+
+    /** Ten axis-aligned steps climbing the diagonal of the junction room, from its floor
+     *  at y = -1/3 up to y = +0.27, 0.2 wide. */
+    private static org.fractalizer.graph.GraphNode staircase() {
+        float rise = 0.06f, run = 0.06f;
+        float theta = (float) Math.toDegrees(Math.atan2(rise, run));
+        float period = (float) Math.sqrt(rise * rise + run * run);
+        org.fractalizer.graph.PrimitiveNode step = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.BOX);
+        step.setSizeX(run * 0.5f);
+        step.setSizeY(rise);          // twice the rise: each box overlaps the one below, a solid flight
+        step.setSizeZ(0.13f);
+        org.fractalizer.graph.GraphNode line = SceneBuilder.rotate(step, 0f, 0f, theta);          // inverse rotation: steps stay level
+        line = SceneBuilder.repeat1D(line, 0, period);                                            // along X
+        line = SceneBuilder.rotate(line, 0f, 0f, -theta);                                          // the line of steps climbs
+        org.fractalizer.graph.PrimitiveNode region = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.BOX);
+        region.setSizeX(0.30f);
+        region.setSizeY(0.30f);
+        region.setSizeZ(0.14f);
+        org.fractalizer.graph.GraphNode clipped = SceneBuilder.intersect(SceneBuilder.translate(region, 0f, -0.03f, 0f), line);
+        return clipped;
+    }
+
+    private static org.fractalizer.graph.MaterialNode material(org.fractalizer.graph.GraphNode child,
+                                                               float r, float g, float b, float roughness, float emission) {
+        org.fractalizer.graph.MaterialNode m = new org.fractalizer.graph.MaterialNode(child);
+        m.setColorMode(org.fractalizer.graph.MaterialNode.COLOR_SOLID);
+        m.setColorR(r); m.setColorG(g); m.setColorB(b);
+        m.setRoughness(roughness);
+        m.setMetallic(0f);
+        m.setEmission(emission);
+        return m;
     }
 
     public static void main(String[] args) throws Exception {
@@ -221,6 +326,10 @@ public class PresetForge {
         String[] res = (args.length > 2 ? args[2] : "640x360").split("x");
         int W = Integer.parseInt(res[0]), H = Integer.parseInt(res[1]);
         int samples = args.length > 3 ? Integer.parseInt(args[3]) : 24;
+        // Optional 5th arg: only the presets whose name contains it are written and
+        // rendered. Presets on disk may have been tuned by hand since they were forged;
+        // rebuilding one should not silently rewrite the others.
+        String only = args.length > 4 ? args[4] : null;
 
         new File(outDir).mkdirs();
         new File(previewDir).mkdirs();
@@ -228,6 +337,7 @@ public class PresetForge {
         Map<String, Supplier<SceneBuilder>> specs = presets();
         List<String> written = new ArrayList<>();
         for (var e : specs.entrySet()) {
+            if (only != null && !e.getKey().contains(only)) continue;
             e.getValue().get().writeTo(new File(outDir, e.getKey() + ".frac"));
             written.add(e.getKey());
         }

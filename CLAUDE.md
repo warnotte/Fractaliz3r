@@ -52,7 +52,9 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DeepZoomLab" -Dexec
 #   e.g. A/B any preset against itself: ... "presets/X.frac out/ab 640x360 24 scene rimIntensity=0.15,0.0"
 
 # Demo presets: build .frac files + render a preview of each so candidates can be judged.
-# Cameras come from FractalNavigator sweet spots, not default global framings.
+# Cameras come from FractalNavigator sweet spots, not default global framings. A 5th arg
+# limits the forge to the presets whose name contains it (presets on disk may be hand-tuned;
+# rebuilding one must not rewrite the others), e.g. LABYRINTH, the node-graph world.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PresetForge" -Dexec.args="presets out/presets_preview 960x540 48"
 
 # Gallery: render every .frac in a directory exactly as the app shows it (params + gradient +

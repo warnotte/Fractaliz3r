@@ -36,6 +36,35 @@ Smooth interpolation between two parameter snapshots:
 - **Type safety**: Morph is disabled (slider grayed out) if A and B are different fractal types, with a warning label.
 - Uses the same recursive `IdentityHashMap` snapshot mechanism as the dice history.
 
+### The Labyrinth: a world built from nodes (`presets/LABYRINTH.frac`)
+
+A place to walk rather than a view, and a demonstration of what the node graph composes.
+Built by `PresetForge.labyrinthWorld()` (rebuild it with `PresetForge presets
+out/presets_preview 640x360 48 LABYRINTH` — the 5th argument limits the forge to one preset,
+so the hand-tuned ones on disk are left alone):
+
+- **The maze** is a Menger sponge of side 2 (scale 3, six iterations), seen from inside. Its
+  corridors are 2/3 wide with a floor at y = −1/3, its doorways repeat at every scale, and the
+  central junction (|x|, |y|, |z| < 1/3) is a room with six exits. A light erosion effect
+  weathers the stone; a solid sandstone material replaces the palette.
+- **The Escher room** is three staircases in that junction. A staircase is one box step
+  repeated along a diagonal: rotate space by −θ about Z, repeat along X with period
+  √(rise² + run²), rotate back by +θ — the inner rotation undoes the outer one for each cell,
+  so every step stays axis-aligned while the line of steps climbs. An intersection with the
+  room's box clips the flight to ten steps. The same flight turned 90° about Z climbs under a
+  sideways gravity, turned 90° about X under a third.
+- **The crystal** is an emissive sphere at the centre (material emission 9), and lights the
+  hall under path tracing.
+- **The plain** is a plane at y = −1 under the whole building, for the walk outside.
+- **Light** is the lantern: a point light attached to the camera (`SceneBuilder.lantern`),
+  since no directional light reaches a corridor; a warm ambient; low volumetric dust.
+  The camera starts in the corridor at (0, −0.21, −0.92) facing the junction, move speed
+  0.02 per key press (`SceneBuilder.moveSpeed`).
+
+`LabyrinthWorldTest` compiles the graph, round-trips it through a save, checks the staircase
+repetition has a real period (the `repeat1D` helper once set it on the wrong field, which
+stacked every step on the first), and checks the shipped file starts inside the maze.
+
 ### Presets & Chains browser (status bar button, View › Presets & Chains…, Ctrl+B)
 
 Every shipped scene as a picture. Two tabs: the `presets/*.frac` files, rendered as File › Load

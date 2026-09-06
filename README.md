@@ -26,6 +26,20 @@ scene, live. All were rendered by the app at 1280×720 with 128 samples per pixe
 | ![Menger sponge wall against a procedural sky](docs/gallery/menger_wall.jpg) | ![Cornell box built from primitive nodes with per-node materials and a fractal inside](docs/gallery/node_cornel.jpg) | ![Julia constant found by the autonomous prospector](docs/gallery/julia_found_cluster.jpg) |
 | **Menger sponge**, cone tracing<br>[`MENGER_WALL.frac`](presets/MENGER_WALL.frac) | **Node graph**: primitives + materials + path tracing<br>[`NODE_CORNEL.frac`](presets/NODE_CORNEL.frac) | **Found by the prospector**, not by hand<br>[`JULIA_FOUND_CLUSTER.frac`](presets/JULIA_FOUND_CLUSTER.frac) |
 
+### A world to walk
+
+![The Labyrinth: a stone corridor of the Menger maze opening on the Escher room, three staircases climbing under three gravities around a glowing crystal](docs/gallery/labyrinth.jpg)
+
+**The Labyrinth** — [`LABYRINTH.frac`](presets/LABYRINTH.frac) — is not a view but a place. The maze is a
+Menger sponge seen from inside: corridors two thirds wide, doorways at every scale, and it goes
+on. At its heart, Jareth's Escher room: three staircases, each climbing under its own gravity,
+around a crystal that lights the hall. Outside, a plain under the space sky, with the whole
+building behind you. Open it from *Presets & Chains* and walk — arrow keys, mouse to look, the
+lantern is on the camera — or press *Explore* and let the app find the views. The whole world is
+one node graph: a fractal leaf, boxes repeated along a diagonal (a rotation, a 1D repetition,
+the inverse rotation, so the steps stay level while their line climbs), an emissive sphere, a
+plane, four materials.
+
 ---
 
 ## What sets it apart

@@ -261,7 +261,12 @@ public class SceneBuilder {
     }
 
     public static TransformNode repeat1D(GraphNode child, int axis, float period) {
-        TransformNode tn = new TransformNode(child, new float[]{0, 0, 0});
+        // The compiler reads the period from the offset component of the axis
+        // (GraphCompiler: id_period = offset[axis]); setting only the frequency, as this
+        // once did, left the period at 0 and the repetition degenerate.
+        float[] p = new float[3];
+        p[axis] = period;
+        TransformNode tn = new TransformNode(child, p);
         tn.setMode(TransformNode.Mode.REPETITION_1D);
         tn.setAxis(axis);
         tn.setFrequency(period);
@@ -549,6 +554,24 @@ public class SceneBuilder {
     public SceneBuilder fog(float density) {
         config.effects.volumetricFogEnabled = true;
         config.effects.fogDensity = density;
+        return this;
+    }
+
+    /** A point light carried by the camera — the lantern of an interior scene, where the
+     *  directional key light never reaches. */
+    public SceneBuilder lantern(float intensity, float range, float r, float g, float b) {
+        config.lighting.extraType = org.fractalizer.fractals.AbstractFractalParams.EXTRA_LIGHT_POINT;
+        config.lighting.extraAttachToCamera = true;
+        config.lighting.extraPosition = new float[]{0, 0, 0};
+        config.lighting.extraIntensity = intensity;
+        config.lighting.extraRange = range;
+        config.lighting.extraColor = new float[]{r, g, b};
+        return this;
+    }
+
+    /** Camera movement speed per key press, in world units: small for tight corridors. */
+    public SceneBuilder moveSpeed(float speed) {
+        config.camera.moveSpeed = speed;
         return this;
     }
 
