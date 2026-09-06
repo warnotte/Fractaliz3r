@@ -77,5 +77,10 @@ class PresetLoadTest {
         assertArrayEquals(HybridPresets.previewEye(p), fresh.getCamera().getPosition(), 1e-6f);
         assertFalse(fresh.isPathTracingEnabled(), "thumbnails are classic-shaded, so is the load");
         assertNotNull(root.getName(), "nodes are named, for the editor and the animation tracks");
+        // Not the monochrome defaults: a chain on coloring mode 0 with the stock gradient
+        // renders silver, which is what the first browser shipped.
+        assertEquals(10, fresh.getColoringMode(), "a multi-hue coloring mode");
+        assertEquals(5, fresh.getCustomGradient().getStops().size(), "the showcase gradient");
+        assertEquals(1, fresh.getSkyType(), "space sky with its own nebula tint");
     }
 }

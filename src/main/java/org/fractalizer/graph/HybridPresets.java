@@ -307,8 +307,8 @@ public final class HybridPresets {
         return new float[]{d * 0.42f, d * 0.30f, -d * 0.85f};
     }
 
-    /** A fresh scene whose node graph is this chain, camera at {@link #previewEye}: what
-     *  the browser loads and what its thumbnail was rendered from. */
+    /** A fresh scene whose node graph is this chain, camera at {@link #previewEye}, in the
+     *  showcase look: what the browser loads and what its thumbnail was rendered from. */
     public static org.fractalizer.fractals.NodeGraphParams toFreshParams(Preset p) {
         org.fractalizer.fractals.NodeGraphParams ngp = new org.fractalizer.fractals.NodeGraphParams();
         HybridNode node = new HybridNode();
@@ -316,13 +316,49 @@ public final class HybridPresets {
         GraphNodeNamer.ensureAllNamed(node);
         ngp.setGraphRoot(node);
         ngp.markDirty();
-        ngp.setPathTracingEnabled(false);
+        showcaseLook(ngp);
         float[] eye = previewEye(p);
         ngp.getCamera().setPosition(eye[0], eye[1], eye[2]);
         float[] q = org.fractalizer.test.CameraUtils.lookAt(eye, new float[]{0, 0, 0});
         ngp.getCamera().setQuaternion(q[0], q[1], q[2], q[3]);
         ngp.setFovDegrees(50f);
         return ngp;
+    }
+
+    /** The five-stop gradient the shipped HYBRID_*.frac presets use. */
+    private static final float[][] SPECTRUM = {
+        {0.00f, 0.08f, 0.12f, 0.47f}, {0.25f, 0.08f, 0.67f, 0.75f},
+        {0.50f, 0.94f, 0.78f, 0.24f}, {0.75f, 0.86f, 0.24f, 0.24f}, {1.00f, 0.59f, 0.16f, 0.67f}};
+
+    /**
+     * Colour and light for a chain that has none of its own. On the default parameters
+     * a chain is near-monochrome: coloring mode 0 walks one hue, and a chain carries no
+     * formula-specific orbit traps to spread it (see docs/NODE_GRAPH.md, "Colouring is
+     * weaker than a stand-alone formula"). This is the look PresetForge gives the shipped
+     * HYBRID_*.frac presets — a scale-invariant coloring mode, a five-stop gradient, a
+     * soft rim, a space sky with its own nebula tint — minus path tracing, so it stays
+     * interactive and the thumbnails render in milliseconds.
+     */
+    public static void showcaseLook(org.fractalizer.fractals.AbstractFractalParams params) {
+        java.util.List<org.fractalizer.fractals.GradientPalette.ColorStop> stops = new java.util.ArrayList<>();
+        for (float[] s : SPECTRUM) {
+            stops.add(new org.fractalizer.fractals.GradientPalette.ColorStop(s[0], javafx.scene.paint.Color.color(s[1], s[2], s[3])));
+        }
+        params.setCustomGradient(new org.fractalizer.fractals.GradientPalette(stops));
+        params.setColoringMode(10);
+        params.setColorStrength(1.0f);
+        params.setPaletteOffset(0.05f);
+        params.setRimIntensity(0.03f);
+        params.setSkyType(1);
+        params.setNebulaColor(0.16f, 0.20f, 0.72f);
+        params.setNebulaTint(1.0f);
+        params.setLightDirection(2f, 3f, -2f);
+        params.setLightIntensity(1.3f);
+        params.setAmbientColor(0.10f, 0.13f, 0.20f);
+        params.setAmbientIntensity(0.33f);
+        params.setMetalness(0.35f);
+        params.setRoughness(0.35f);
+        params.setPathTracingEnabled(false);
     }
 
     /** Overwrite a node's chain in place, so the node keeps its identity in the graph. */
