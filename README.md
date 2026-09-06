@@ -26,7 +26,18 @@ scene, live. All were rendered by the app at 1280×720 with 128 samples per pixe
 | ![Menger sponge wall against a procedural sky](docs/gallery/menger_wall.jpg) | ![Cornell box built from primitive nodes with per-node materials and a fractal inside](docs/gallery/node_cornel.jpg) | ![Julia constant found by the autonomous prospector](docs/gallery/julia_found_cluster.jpg) |
 | **Menger sponge**, cone tracing<br>[`MENGER_WALL.frac`](presets/MENGER_WALL.frac) | **Node graph**: primitives + materials + path tracing<br>[`NODE_CORNEL.frac`](presets/NODE_CORNEL.frac) | **Found by the prospector**, not by hand<br>[`JULIA_FOUND_CLUSTER.frac`](presets/JULIA_FOUND_CLUSTER.frac) |
 
-### A world to walk
+### Worlds
+
+![Albedo 0.39: a blue planet at dawn seen from orbit, green continents with fractal coastlines, polar ice, an atmospheric halo, a moon](docs/gallery/albedo_039.jpg)
+
+**Albedo 0.39** — [`ALBEDO_039.frac`](presets/ALBEDO_039.frac) — a world seen from orbit at dawn, the
+way astronauts describe it: one sphere, no borders. It is nothing but the engine's own pieces. The
+continents are a sphere carved by the fractal noise of the erosion effect, the sea a smooth sphere
+underneath, so every coastline is an iso-line of fBm and detailed at every zoom; the plateaus the
+noise leaves highest are deserts, the poles are ice; a single low sun draws the terminator; the
+rim light is the atmosphere; a cratered moon, the same noise again. You are in orbit, free to
+circle it, descend to a coast, or back away until it is a point. Named after the Vangelis album,
+which is named after the Earth's albedo.
 
 ![The Labyrinth: a stone corridor of the Menger maze opening on the Escher room, three staircases climbing under three gravities around a glowing crystal](docs/gallery/labyrinth.jpg)
 

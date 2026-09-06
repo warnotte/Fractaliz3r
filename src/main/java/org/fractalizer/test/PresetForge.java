@@ -229,7 +229,103 @@ public class PresetForge {
                 .fog(0.10f).fogColor(0.30f, 0.24f, 0.18f)
                 .colorStrength(0.8f).metalness(0.05f).roughness(0.8f));
 
+        // --- Albedo 0.39: a world seen from orbit at dawn. The overview effect, the thing
+        // astronauts come back with: one sphere, no borders. Continents are a sphere carved
+        // by the engine's fractal noise, the sea a smooth sphere underneath, so every
+        // coastline is an iso-line of fbm; snow above one radius, ice beyond one latitude;
+        // a single low sun draws the terminator; the rim light is the atmosphere.
+        p.put("ALBEDO_039", () -> SceneBuilder.nodeGraph(blueWorld())
+                .camera(0f, 0.62f, -2.95f).lookAt(0.12f, -0.02f, 0f).fov(48)
+                .moveSpeed(0.05f)
+                .maxRaySteps(300)
+                .gradient(SPECTRUM).coloringMode(0)
+                .pathTracing(false).rimIntensity(0.45f).skyType(1)
+                .nebula(0.05f, 0.07f, 0.16f, 0.7f)
+                .lightDir(2.6f, 0.7f, 0.5f).lightColor(1.0f, 0.92f, 0.80f).lightIntensity(2.3f)
+                .ambientColor(0.16f, 0.28f, 0.60f).ambientIntensity(0.07f)
+                .glowIntensity(0.25f)
+                .colorStrength(1.0f).metalness(0.0f).roughness(0.7f));
+
         return p;
+    }
+
+    /**
+     * The blue world. Radii: sea 1.00; land 1.05 carved down by fractal noise, so the
+     * basins fall below the sea and the plateaus stay above it; desert where the land is
+     * still above 1.026; ice caps beyond |y| = 0.86. A moon, cratered by the same noise.
+     * Two erosion passes on the land: thermal only (type 2, isotropic, low frequency)
+     * for the continents, weathering only (type 3, fine, signed) for the mountains.
+     * The plateaus the noise leaves highest are deserts, ochre; the poles are white.
+     */
+    static org.fractalizer.graph.GraphNode blueWorld() {
+        // The graph is a tree, not a DAG: the ice branch and the temperate branch each get
+        // their own globe. A node used twice is serialized twice anyway, and the compiler
+        // would emit it twice.
+        org.fractalizer.graph.GraphNode temperate = SceneBuilder.subtract(colouredGlobe(), polarSlabs());
+        temperate.setName("Temperate");
+        org.fractalizer.graph.GraphNode ice = material(SceneBuilder.intersect(globeShape(), polarSlabs()), 0.92f, 0.96f, 1.0f, 0.6f, 0f);
+        ice.setName("Ice");
+        org.fractalizer.graph.GraphNode planet = SceneBuilder.union(temperate, ice);
+        planet.setName("Planet");
+
+        org.fractalizer.graph.GraphNode moonBall = SceneBuilder.erode(sphere(0.27f), 0.7f, 4.0f, 0.4f, 3);
+        org.fractalizer.graph.GraphNode moon = material(SceneBuilder.translate(moonBall, -2.3f, 1.05f, 1.6f), 0.55f, 0.53f, 0.50f, 0.95f, 0f);
+        moon.setName("Moon");
+
+        // No cloud shell: tried three times. A shell carved by fbm comes out as thick
+        // white plates with smooth edges, ice floes rather than clouds, whatever the
+        // scale. Clouds need soft edges, which a distance field does not give.
+        // No glass atmosphere either: a sphere of glass around the planet turns it into
+        // a black disc under path tracing and a white ball under classic shading. The
+        // halo comes from the rim light.
+        org.fractalizer.graph.GraphNode world = SceneBuilder.union(planet, moon);
+        world.setName("Albedo 0.39");
+        return world;
+    }
+
+    /** The carved land: radius 1.046, continents by thermal noise, mountains by weathering.
+     *  Carve depth is fbm * K with K = 0.35 * time * strength * scale * 0.05 = 0.112, so the
+     *  sea (radius 1) shows where fbm > 0.41 and the deserts stay where fbm < 0.18. */
+    private static org.fractalizer.graph.GraphNode land() {
+        org.fractalizer.graph.GraphNode land = SceneBuilder.erode(sphere(1.046f), 0.8f, 4.0f, 2.0f, 2);   // continents
+        land = SceneBuilder.erode(land, 0.9f, 5.0f, 0.5f, 3);                                            // mountains
+        land.setName("Land");
+        return land;
+    }
+
+    /** Land and sea, bare geometry. */
+    private static org.fractalizer.graph.GraphNode globeShape() {
+        return SceneBuilder.union(land(), sphere(1.0f));
+    }
+
+    /** Land and sea with their colours: green lowland, ochre desert above 1.026, blue sea. */
+    private static org.fractalizer.graph.GraphNode colouredGlobe() {
+        org.fractalizer.graph.GraphNode lowland = material(SceneBuilder.intersect(land(), sphere(1.026f)), 0.19f, 0.40f, 0.15f, 0.85f, 0f);
+        lowland.setName("Lowland");
+        org.fractalizer.graph.GraphNode highland = material(SceneBuilder.subtract(land(), sphere(1.026f)), 0.78f, 0.66f, 0.42f, 0.9f, 0f);
+        highland.setName("Highland");
+        org.fractalizer.graph.GraphNode sea = material(sphere(1.0f), 0.03f, 0.12f, 0.36f, 0.12f, 0f);
+        sea.setName("Ocean");
+        return SceneBuilder.union(SceneBuilder.union(lowland, highland), sea);
+    }
+
+    /** Two slabs beyond |y| = 0.86: what they cut out of the globe is polar ice. */
+    private static org.fractalizer.graph.GraphNode polarSlabs() {
+        return SceneBuilder.union(
+                SceneBuilder.translate(box(2.0f, 0.40f, 2.0f), 0f, 1.26f, 0f),
+                SceneBuilder.translate(box(2.0f, 0.40f, 2.0f), 0f, -1.26f, 0f));
+    }
+
+    private static org.fractalizer.graph.PrimitiveNode sphere(float radius) {
+        org.fractalizer.graph.PrimitiveNode s = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.SPHERE);
+        s.setSizeX(radius);
+        return s;
+    }
+
+    private static org.fractalizer.graph.PrimitiveNode box(float hx, float hy, float hz) {
+        org.fractalizer.graph.PrimitiveNode b = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.BOX);
+        b.setSizeX(hx); b.setSizeY(hy); b.setSizeZ(hz);
+        return b;
     }
 
     /** Warm sandstone, for the parts of the labyrinth that keep the palette. */

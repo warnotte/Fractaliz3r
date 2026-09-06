@@ -36,6 +36,36 @@ Smooth interpolation between two parameter snapshots:
 - **Type safety**: Morph is disabled (slider grayed out) if A and B are different fractal types, with a warning label.
 - Uses the same recursive `IdentityHashMap` snapshot mechanism as the dice history.
 
+### Albedo 0.39: a planet built from nodes (`presets/ALBEDO_039.frac`)
+
+A world seen from orbit at dawn, built by `PresetForge.blueWorld()` (rebuild: `PresetForge
+presets out/presets_preview 640x360 48 ALBEDO`). Radii and thresholds are the whole design:
+
+- **Land** is a sphere of radius 1.046 carved by two erosion passes. The first is thermal
+  only (type 2: isotropic fBm at low frequency, noise scale 2) and makes the continents; the
+  carve depth is `fbm × K` with `K = 0.35 × time × strength × scale × 0.05 = 0.112`. The second
+  is weathering only (type 3: fine, signed, scale 0.5) and makes the mountains.
+- **Sea** is a smooth sphere of radius 1.0. Where the carve exceeds 0.046 the land falls
+  below it — the sea shows where `fbm > 0.41`, about half the globe — so every coastline is an
+  fBm iso-line, fractal at every zoom. The land/sea ratio is extremely sensitive to the land
+  radius: 1.05 gave three quarters land, 1.04 a water world.
+- **Deserts** are the land still above radius 1.026 (the plateaus the noise left highest),
+  ochre; the rest of the land is green. Both are the same eroded sphere split by a CSG
+  intersection and subtraction with a sphere, so the two never overlap.
+- **Ice** is whatever the globe is beyond |y| = 0.86: an intersection with two slabs, white,
+  and the complementary subtraction for the temperate globe.
+- **The moon** is a sphere of radius 0.27 cratered by the weathering noise.
+- **Light**: a single low sun from the side (`lightDir (2.6, 0.7, 0.5)`), so the terminator
+  crosses the disc; a faint blue ambient for the night side; **the rim light at 0.45 is the
+  atmosphere**, with the silhouette glow. This is why the preset ships with classic shading:
+  the path tracer has no rim term, and the halo is most of the beauty.
+
+Two things that did not work, kept out on purpose: a glass sphere as atmosphere (a black disc
+under path tracing, a white ball under classic shading), and a cloud layer as an fBm-carved
+shell (thick white plates with smooth edges — ice floes, not clouds; a distance field gives no
+soft edge). `BlueWorldTest` compiles the graph, round-trips it, and checks the shipped preset
+is in orbit with the atmosphere on.
+
 ### The Labyrinth: a world built from nodes (`presets/LABYRINTH.frac`)
 
 A place to walk rather than a view, and a demonstration of what the node graph composes.
