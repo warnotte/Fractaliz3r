@@ -105,7 +105,8 @@ public class HybridProspector {
      *  chains that are known to work (escape-time maps want a seed and the log estimator,
      *  IFS folds want the linear one, the Kleinian fold its plane trap), so the draw spends
      *  its time inside the region where shapes live instead of proving that a bare rotation
-     *  is not a fractal. */
+     *  is not a fractal. Every recipe yields at least two shape steps: one power map or one
+     *  fold, whatever is put around it, is a family that already has a name. */
     static Structure randomStructure(Random rnd) {
         List<Step> steps = new ArrayList<>();
         int recipe = rnd.nextInt(4);
@@ -115,17 +116,17 @@ public class HybridProspector {
         float bailout;
         boolean julia;
         switch (recipe) {
-            case 0 -> {   // escape-time: [transform] power [shaping fold] seed
+            case 0 -> {   // escape-time: [transform] power, shaping fold, seed
                 name = "power";
                 if (rnd.nextInt(3) == 0) steps.add(new Step(pick(rnd, TRANSFORMS)));
                 steps.add(new Step(pick(rnd, POWER_STEPS)));
-                if (rnd.nextInt(2) == 0) steps.add(new Step(pick(rnd, SHAPING_FOLDS)));
+                steps.add(new Step(pick(rnd, SHAPING_FOLDS)));
                 steps.add(new Step(StepType.ADD_C));
                 de = DEMode.LOG; iterations = 10 + rnd.nextInt(7); bailout = 4f; julia = rnd.nextInt(2) == 0;
             }
-            case 1 -> {   // IFS: one to three contracting folds with transforms between, no seed
+            case 1 -> {   // IFS: two or three contracting folds with transforms between, no seed
                 name = "ifs";
-                int n = 1 + rnd.nextInt(3);
+                int n = 2 + rnd.nextInt(2);
                 for (int i = 0; i < n; i++) {
                     steps.add(new Step(pick(rnd, IFS_FOLDS)));
                     if (i < n - 1 && rnd.nextInt(2) == 0) steps.add(new Step(pick(rnd, TRANSFORMS)));
@@ -133,10 +134,10 @@ public class HybridProspector {
                 if (rnd.nextInt(3) == 0) steps.add(new Step(pick(rnd, SHAPING_FOLDS)));
                 de = DEMode.LINEAR; iterations = 8 + rnd.nextInt(7); bailout = 100f; julia = false;
             }
-            case 2 -> {   // Mandelbox-like: fold(s), seed; the seed makes it a Mandelbrot-type set
+            case 2 -> {   // Mandelbox-like: a contracting fold, a second fold, seed
                 name = "boxlike";
                 steps.add(new Step(pick(rnd, IFS_FOLDS)));
-                if (rnd.nextInt(2) == 0) steps.add(new Step(pick(rnd, SHAPING_FOLDS)));
+                steps.add(new Step(rnd.nextInt(3) == 0 ? pick(rnd, IFS_FOLDS) : pick(rnd, SHAPING_FOLDS)));
                 if (rnd.nextInt(3) == 0) steps.add(new Step(pick(rnd, TRANSFORMS)));
                 steps.add(new Step(StepType.ADD_C));
                 de = DEMode.LINEAR; iterations = 8 + rnd.nextInt(7); bailout = 100f; julia = rnd.nextInt(3) == 0;
@@ -280,18 +281,47 @@ public class HybridProspector {
         return tot == 0 ? 0 : (double) hit / tot;
     }
 
-    /** Library chains by step signature, for the novelty mark. */
-    private static Map<String, String> librarySignatures() {
-        Map<String, String> m = new HashMap<>();
-        for (HybridPresets.Preset p : HybridPresets.all()) {
-            StringBuilder sb = new StringBuilder();
-            for (Step s : p.steps()) {
-                if (sb.length() > 0) sb.append('>');
-                sb.append(s.getType().name());
-            }
-            m.putIfAbsent(sb.toString(), p.name());
+    /** The steps that make a shape: power maps and folds, in order. Transforms, gating
+     *  and the seed are left out: a rotated Mandelbox is still a Mandelbox. */
+    static String canonical(List<Step> steps) {
+        StringBuilder sb = new StringBuilder();
+        for (Step s : steps) {
+            HybridNode.Family f = s.getType().getFamily();
+            if (f != HybridNode.Family.POWER && f != HybridNode.Family.FOLD) continue;
+            if (sb.length() > 0) sb.append('>');
+            sb.append(s.getType().name());
         }
+        return sb.toString();
+    }
+
+    /** Library chains by canonical signature, for the novelty mark. */
+    static Map<String, String> librarySignatures() {
+        Map<String, String> m = new HashMap<>();
+        for (HybridPresets.Preset p : HybridPresets.all()) m.putIfAbsent(canonical(p.steps()), p.name());
         return m;
+    }
+
+    /**
+     * What a chain is already known as, or null when it is new. Known: its shape steps are
+     * those of a library chain (whatever transforms, gating or seed differ), or there is
+     * only one of them (one power map or one fold is a family with a name, a Mandelbulb or
+     * a Mandelbox, however it is turned or scaled between passes). The first big run put
+     * "Box Fold -> Rotate per Iteration -> Add Seed" and a bare "ABox Mod" in its top
+     * twelve as discoveries; they are not.
+     */
+    static String knownAs(List<Step> steps, Map<String, String> library) {
+        String canon = canonical(steps);
+        String lib = library.get(canon);
+        if (lib != null) return lib;
+        int shapes = canon.isEmpty() ? 0 : canon.split(">").length;
+        if (shapes <= 1) {
+            for (Step s : steps) {
+                HybridNode.Family f = s.getType().getFamily();
+                if (f == HybridNode.Family.POWER || f == HybridNode.Family.FOLD) return "family: " + s.getType().getDisplayName();
+            }
+            return "no shape";
+        }
+        return null;
     }
 
     public static void main(String[] args) throws Exception {
@@ -334,7 +364,7 @@ public class HybridProspector {
             structures.add(st);
             HybridNode node = nodeFor(st);
             params.setGraphRoot(node);          // dirty: the next render compiles this structure
-            String known = library.get(st.signature());
+            String known = knownAs(node.getSteps(), library);
             System.out.printf("%n[%02d] %-8s %s  (%s, %d it%s)%n", si, st.recipe(), node.describeChain(),
                     st.deMode(), st.iterations(), known != null ? ", library: " + known : "");
             System.out.flush();

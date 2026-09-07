@@ -7,6 +7,7 @@ import org.fractalizer.graph.HybridNode;
 import org.fractalizer.graph.HybridNode.DEMode;
 import org.fractalizer.graph.HybridNode.Step;
 import org.fractalizer.graph.HybridNode.StepType;
+import org.fractalizer.graph.HybridPresets;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -43,6 +44,36 @@ class HybridProspectorTest {
             signatures.add(st.signature());
         }
         assertTrue(signatures.size() > 40, "the generator should not keep drawing the same chain: " + signatures.size());
+    }
+
+    @Test
+    void everyRecipeYieldsAtLeastTwoShapeSteps() {
+        Random rnd = new Random(19);
+        for (int i = 0; i < 200; i++) {
+            HybridProspector.Structure st = HybridProspector.randomStructure(rnd);
+            String canon = HybridProspector.canonical(st.steps());
+            assertTrue(canon.split(">").length >= 2, st.recipe() + ": " + canon);
+        }
+    }
+
+    @Test
+    void knownFamiliesAreNamedAndTrueHybridsAreNot() {
+        var library = HybridProspector.librarySignatures();
+        // a Mandelbox turned between passes is still a Mandelbox
+        java.util.List<Step> rotatedBox = java.util.List.of(new Step(StepType.BOX_FOLD), new Step(StepType.ROTATE_ITER), new Step(StepType.ADD_C));
+        assertNotNull(HybridProspector.knownAs(rotatedBox, library));
+        // a bare fold with no seed: a family
+        assertNotNull(HybridProspector.knownAs(java.util.List.of(new Step(StepType.ABOX_MOD)), library));   // the library has "ABox Mod, flattened"
+        // Buffalo from the library, under a different gating and an extra rotation, is still Buffalo
+        HybridPresets.Preset buffalo = HybridPresets.all().stream().filter(p -> p.name().equals("Buffalo")).findFirst().orElseThrow();
+        java.util.List<Step> dressed = new java.util.ArrayList<>();
+        for (Step s : buffalo.steps()) { Step c = s.copy(); c.setIterStart(1); dressed.add(c); }
+        dressed.add(0, new Step(StepType.ROTATE));
+        assertEquals("Buffalo", HybridProspector.knownAs(dressed, library));
+        // two shape steps the library does not pair: new
+        java.util.List<Step> cube = java.util.List.of(new Step(StepType.OCTA_FOLD), new Step(StepType.ABOX_MOD),
+                new Step(StepType.BOX_FOLD), new Step(StepType.ABS_FOLD));
+        assertNull(HybridProspector.knownAs(cube, library));
     }
 
     @Test
