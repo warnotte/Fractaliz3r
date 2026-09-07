@@ -326,10 +326,12 @@ public class HybridProspector {
         int empty = 0, solid = 0, flat = 0;
         long tAll = System.nanoTime(), compileTotal = 0;
         Set<String> seen = new HashSet<>();
+        List<Structure> structures = new ArrayList<>();
 
         for (int si = 0; si < nStructures; si++) {
             Structure st = randomStructure(rnd);
             if (!seen.add(st.signature() + "/" + st.deMode())) { si--; continue; }   // same structure twice: draw another
+            structures.add(st);
             HybridNode node = nodeFor(st);
             params.setGraphRoot(node);          // dirty: the next render compiles this structure
             String known = library.get(st.signature());
@@ -399,6 +401,11 @@ public class HybridProspector {
         double totalS = (System.nanoTime() - tAll) / 1e9;
         System.out.printf(Locale.ROOT, "%n%d candidates rendered, %d empty, %d solid, %d flat, in %.0f s (%.0f s of it compiling %d structures)%n",
                 scored.size(), empty, solid, flat, totalS, compileTotal / 1e9, nStructures);
+        // Which recipes pay: structures drawn, candidates that rendered, and the share of
+        // the top twelve, so the grammar can be tuned on numbers instead of impressions.
+        Map<String, int[]> perRecipe = new java.util.TreeMap<>();
+        for (Structure st : structures) perRecipe.computeIfAbsent(st.recipe(), k -> new int[3])[0]++;
+        for (Candidate c : scored) perRecipe.computeIfAbsent(c.structure().recipe(), k -> new int[3])[1]++;
 
         // Rank; at most two per structure so the sheet shows the variety of the space.
         scored.sort(Comparator.comparingDouble(Candidate::score).reversed());
@@ -409,6 +416,14 @@ public class HybridProspector {
             if (n >= 2) continue;
             perStructure.put(c.structureIndex(), n + 1);
             diverse.add(c);
+        }
+
+        for (int i = 0; i < Math.min(12, diverse.size()); i++) {
+            perRecipe.computeIfAbsent(diverse.get(i).structure().recipe(), k -> new int[3])[2]++;
+        }
+        System.out.printf("%n%-8s %10s %10s %6s%n", "recipe", "structures", "rendered", "top12");
+        for (var e : perRecipe.entrySet()) {
+            System.out.printf("%-8s %10d %10d %6d%n", e.getKey(), e.getValue()[0], e.getValue()[1], e.getValue()[2]);
         }
 
         try (PrintWriter pw = new PrintWriter(new File(outDir, "ranking.txt"))) {
