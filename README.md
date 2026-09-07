@@ -5,7 +5,7 @@ node graph, compiled into a single GLSL shader and rendered on the GPU with prog
 raymarching, path tracing and a full post-processing chain.
 
 [![CI](https://github.com/warnotte/Fractaliz3r/actions/workflows/ci.yml/badge.svg)](https://github.com/warnotte/Fractaliz3r/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-3.1.0-blue)
+![Version](https://img.shields.io/badge/version-3.2.0-blue)
 ![Java](https://img.shields.io/badge/Java-21+-orange)
 ![OpenGL](https://img.shields.io/badge/OpenGL-4.3-5586A4)
 [![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-red)](LICENSE)
