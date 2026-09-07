@@ -1,7 +1,15 @@
 package org.fractalizer.ui.components;
 
 import javafx.application.Platform;
+import org.fractalizer.explore.ChainProspector.Discovery;
+import org.fractalizer.explore.FrameScorer;
+import org.fractalizer.fractals.AbstractFractalParams;
+import org.fractalizer.fractals.FractalType;
+import org.fractalizer.fractals.NodeGraphParams;
+import org.fractalizer.graph.HybridNode;
 import org.fractalizer.graph.HybridPresets;
+
+import java.awt.image.BufferedImage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -24,8 +32,58 @@ class SceneBrowserTest {
     static final class HostStub implements SceneBrowser.Host {
         final List<String> loadedPresets = new ArrayList<>();
         final List<HybridPresets.Preset> loadedChains = new ArrayList<>();
+        final NodeGraphParams params = new NodeGraphParams(FractalType.MANDELBULB);
+        final List<Boolean> prospecting = new ArrayList<>();
+        final List<String> loadedDiscoveries = new ArrayList<>();
+        final List<NodeGraphParams> loadedScenes = new ArrayList<>();
         @Override public void loadPreset(String name) { loadedPresets.add(name); }
         @Override public void loadChain(HybridPresets.Preset preset) { loadedChains.add(preset); }
+        @Override public AbstractFractalParams params() { return params; }
+        @Override public void prospectingChanged(boolean on) { prospecting.add(on); }
+        @Override public void loadDiscovery(NodeGraphParams scene, String label) { loadedScenes.add(scene); loadedDiscoveries.add(label); }
+    }
+
+    static Discovery discovery(HybridPresets.Preset chain, double score, String known) {
+        HybridNode node = new HybridNode();
+        HybridPresets.apply(node, chain);
+        BufferedImage img = new BufferedImage(SceneBrowser.THUMB_W, SceneBrowser.THUMB_H, BufferedImage.TYPE_INT_RGB);
+        return new Discovery(0, "mixed", node, new float[]{0.5f, 0.3f, -3f}, score,
+                new FrameScorer.FrameScore(1000, 0.5, 0.1), 0.9, known, img);
+    }
+
+    @Test
+    void theDiscoveriesTabIsThereWithItsControls() throws Exception {
+        HostStub host = new HostStub();
+        SceneBrowser browser = UiWiringTest.onFxThread(() -> new SceneBrowser(null, null, host));
+        assertEquals(3, browser.tabCount(), "presets, chains, discoveries");
+        assertNotNull(UiWiringTest.findButton(browser.root(), "Prospect"));
+        assertNotNull(UiWiringTest.findButton(browser.root(), "Stop"));
+        assertEquals(0, browser.tileCount(2));
+    }
+
+    @Test
+    void discoveriesArriveBestFirstKnownOnesLeftOutAndAClickMakesOneTheScene() throws Exception {
+        HostStub host = new HostStub();
+        SceneBrowser browser = UiWiringTest.onFxThread(() -> new SceneBrowser(null, null, host));
+        List<HybridPresets.Preset> lib = HybridPresets.all();
+        UiWiringTest.onFxThread(() -> {
+            browser.offer(discovery(lib.get(4), 10, null));
+            browser.offer(discovery(lib.get(5), 30, null));
+            browser.offer(discovery(lib.get(6), 99, "Buffalo"));   // known: counted, never shown
+            return null;
+        });
+        assertEquals(2, browser.tileCount(2), "known families are left out");
+        HybridNode best = new HybridNode();
+        HybridPresets.apply(best, lib.get(5));
+        assertEquals(best.describeChain(), browser.discoveryLabels().get(0), "best first");
+        assertTrue(host.prospecting.isEmpty(), "offering results never pauses the host; only a search does");
+        UiWiringTest.onFxThread(() -> { browser.clickTile(2, 0); return null; });
+        assertEquals(List.of(best.describeChain()), host.loadedDiscoveries);
+        NodeGraphParams scene = host.loadedScenes.get(0);
+        assertInstanceOf(HybridNode.class, scene.getGraphRoot());
+        assertEquals(best.describeChain(), ((HybridNode) scene.getGraphRoot()).describeChain());
+        assertArrayEquals(new float[]{0.5f, 0.3f, -3f}, scene.getCamera().getPosition(), 1e-6f, "the camera the search settled on");
+        assertFalse(scene.isPathTracingEnabled(), "the showcase look, interactive");
     }
 
     @BeforeAll
@@ -43,7 +101,7 @@ class SceneBrowserTest {
     @Test
     void everyChainHasATileAndClickingItLoadsThatChain() throws Exception {
         HostStub host = new HostStub();
-        SceneBrowser browser = UiWiringTest.onFxThread(() -> new SceneBrowser(null, host));
+        SceneBrowser browser = UiWiringTest.onFxThread(() -> new SceneBrowser(null, null, host));
         List<HybridPresets.Preset> library = HybridPresets.all();
 
         assertEquals(library.size(), browser.tileCount(1), "one tile per chain");
@@ -55,7 +113,7 @@ class SceneBrowserTest {
     @Test
     void shippedPresetsAreListedAndClickingOneLoadsItByName() throws Exception {
         HostStub host = new HostStub();
-        SceneBrowser browser = UiWiringTest.onFxThread(() -> new SceneBrowser(null, host));
+        SceneBrowser browser = UiWiringTest.onFxThread(() -> new SceneBrowser(null, null, host));
         List<String> names = browser.presetNames();
 
         assertFalse(names.isEmpty(), "presets listed (from the shipped index, or presets/ on disk)");

@@ -71,7 +71,10 @@ plane, four materials.
   Behind both, a navigator travels from the global view to a fine-detail framing on any
   fractal, and a prospector searches Julia-constant space and scores what it finds. Several of
   the presets above were found this way. A *Presets & Chains* browser shows every shipped scene
-  and every hybrid chain as a picture; click to load.
+  and every hybrid chain as a picture; click to load. Its *Discoveries* tab (the *Discover*
+  button) goes further: the app draws random chains of the 28 hybrid steps, compiles and
+  renders them while you wait, leaves out the empty and the already-known, and shows the rest
+  best first, formulas nobody has made; click one to make it the scene.
 - **Measured, not eyeballed.** Bit-exact golden-image regression, deep-zoom detail metrics, colour
   probes per shading pass, and probes that catch a control missing from the UI or a setting missing
   from the save file. Rendering claims in the docs come with the harness that proved them.

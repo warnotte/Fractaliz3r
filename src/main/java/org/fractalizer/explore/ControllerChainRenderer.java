@@ -32,6 +32,13 @@ public final class ControllerChainRenderer implements ChainProspector.ChainRende
     @Override
     public void setChain(HybridNode chain) {
         params.setGraphRoot(chain);   // dirty: compiled on the next render
+        if (controller.getParams() != params) {
+            // First chain of a search run on a throw-away scene: make it the controller's
+            // current one now, so the compile that follows is this chain's and not the
+            // default graph's. A harness whose params are already current skips this.
+            controller.replaceParams(params);
+            controller.updatePaletteTexture(params.getCustomGradient());
+        }
     }
 
     @Override
