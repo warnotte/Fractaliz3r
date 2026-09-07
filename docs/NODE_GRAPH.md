@@ -433,6 +433,19 @@ to / every) for gating. Steps are added from a `+ Step` menu grouped by family. 
 removing, reordering or retyping a step, gating it or changing its axis changes which code
 is emitted, so those recompile; moving a slider only updates a value and does not.
 
+**Prospecting.** `test/HybridProspector` searches the space the editor opens. What is baked
+into a chain's GLSL (step types and order, gating, estimator, axes) is a *structure*; what is
+a uniform (every numeric parameter, the Julia seed) is a *draw*. The harness draws structures
+from four recipes that follow the grammar above (escape-time map + seed under the log
+estimator, IFS folds under the linear one, Mandelbox-like fold + seed, power map and fold in
+one loop), compiles each once (~12 s), sweeps parameter draws through it at a few
+milliseconds a frame, auto-frames each on the depth AOV (closer while empty, farther while
+filled or cut by the frame), scores it as FractalNavigator scores a framing, marks the ones
+whose step sequence is already in the library, and writes the best as `FOUND_NN.frac` in the
+showcase look, with a labelled contact sheet. `HybridProspectorTest` keeps the generator
+honest without a GPU: every drawn structure compiles, draws stay inside the clamps, a drawn
+chain survives its save.
+
 **Colouring is weaker than a stand-alone formula, by nature.** A formula ships orbit traps
 tuned to its own orbit — the Mandelbox tracks fold amount and sphere-fold hits, the
 Mandelbulb plane traps calibrated to a bailout of 2. A chain has no such thing, and generic

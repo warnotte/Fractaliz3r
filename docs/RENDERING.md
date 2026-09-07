@@ -457,7 +457,7 @@ that is simply absent from the saved file. Both had already got through twice. R
 suite on the module path also caught a third: a package Gson needs opened in `module-info`,
 which only bites when the app runs as a module (the jlink image), not from an IDE classpath.
 
-The **GPU harnesses** are sixteen headless tools in `org.fractalizer.test` (invocations in
+The **GPU harnesses** are seventeen headless tools in `org.fractalizer.test` (invocations in
 **[CLAUDE.md](../CLAUDE.md)** Build Commands), all writing under `out/` (gitignored). Most
 exist because a real bug got through a reading of the code — running one is faster and more
 reliable than re-reading the path it covers:
@@ -470,6 +470,7 @@ reliable than re-reading the path it covers:
 | `ColorDemo` | which coloring modes put more than one hue on an object |
 | `JuliaProspector` | autonomous search of Julia-constant space |
 | `HybridLab` | hybrid chains, with controls that must reproduce the stand-alone formulas |
+| `HybridProspector` | autonomous search of hybrid-chain space: random structures (types, gating, estimator) compiled once each, parameter draws swept as uniforms, auto-framed on the depth AOV, scored, library chains marked, winners as `.frac` |
 | `FractalNavigator` | global → fine-detail camera traveller |
 | `PresetForge` | build demo presets and render a preview of each |
 | `ResizeProbe` | framebuffer cost of a preview↔full switch |
