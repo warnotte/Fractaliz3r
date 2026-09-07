@@ -368,8 +368,8 @@ Both blocks must go **before** the `TestSceneParams` / `CornellBoxParams` blocks
 
 ## Dependencies
 
-- **LWJGL 3.4.1** — OpenGL bindings for GPU rendering
-- **JavaFX 25.0.1** — UI framework
+- **LWJGL 3.4.3** — OpenGL bindings for GPU rendering
+- **JavaFX 26.0.2** — UI framework
 - **JavaFX Media** — Audio playback and spectrum analysis
-- **JDK 24** to build and run from source (JavaFX 25 class files need 23+; `--release 21` remains the bytecode target; CI uses Temurin 24)
+- **JDK 24** to build and run from source (JavaFX 26 ships Java 24 class files, so 24 is the floor; `--release 21` remains the bytecode target; CI uses Temurin 24)
 - **FFmpeg** (optional) — MP4 video export and audio pre-analysis (must be in system PATH)

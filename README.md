@@ -136,7 +136,7 @@ primitive. Julia mode is available where the formula has a seed.
 | **GPU** | OpenGL 4.3 or newer (any recent NVIDIA, AMD or Intel GPU). |
 | **OS** | Windows or Linux. macOS is not supported: Apple stopped OpenGL at 4.1 and the renderer needs 4.3 features (SSBOs). |
 | **To run the installer** | Nothing else: the Windows installer ships its own Java runtime. |
-| **To build** | JDK 24 (JavaFX 25 ships Java 23 class files; the bytecode target stays 21), Maven. |
+| **To build** | JDK 24 (JavaFX 26 ships Java 24 class files; the bytecode target stays 21), Maven. |
 | **Optional** | FFmpeg on the PATH for video export and audio pre-analysis; ExifTool for 360 metadata. |
 
 ### Install (Windows)
