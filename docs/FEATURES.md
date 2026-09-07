@@ -138,6 +138,47 @@ its thumbnail, and the index must match the `presets/` folder — add a chain or
 the suite says "rerun ThumbnailForge … install" until you do. A missing picture degrades to a
 dark tile with the name on it, never to a broken browser.
 
+### Discoveries (third tab of Presets & Chains, *Discover…* status bar button)
+
+The prospector in the app. *Prospect* draws that many chain structures (ten by default, about
+two minutes), each a random composition of the 28 hybrid steps under one of four recipes, and
+for each: compiles it (about ten seconds on the dev machine, once per machine — the driver
+caches shaders), sweeps eight parameter draws through it as uniforms at a few milliseconds a
+frame, frames each draw on the depth AOV, scores it, and hands it over. Each candidate
+wears its own look, drawn from the same seed as its parameters (`explore/Look`: one of
+sixteen curated palettes, one of seven lighting schemes, a sky, a material, a multi-hue
+colouring mode, all uniforms or a texture, never a compile), so a sheet of finds is not one
+material photographed twelve times; the tile shows the look and the click loads it. New
+finds appear as tiles best first while the search runs; known families (a single power map or fold however
+it is turned, or the shape steps of a library chain) are counted in the status line and left
+out. A click makes a discovery the scene, a fresh node graph with the chain at its root in
+the showcase look, camera where the search settled; File › Save keeps it. *Stop* ends the
+run after the current draw and keeps what was found; clicking a tile during a run stops it,
+then loads.
+
+**Breed** is the other half. From the clicked discovery (or the scene's own chain when it
+is one) and, with Ctrl+click, a second parent, `explore/ChainBreeder` makes a generation of
+nine children: six *mutants* that keep the parent's structure and nudge its parameters, its
+Julia seed and its look (same shader, milliseconds each), and three structural children,
+each a compile: a *restructured* one (a shape step swapped within its family, a transform put
+in or taken out, a step's iteration gate toggled, an axis turned) or, with two parents, a
+*crossover* (the prefix of one chain and the suffix of the other, the estimator the result
+asks for, one seed kept at the end when it needs one). A generation takes about forty
+seconds; the parents stay pinned at the top, the children come in best first, each judged
+by the same `evaluate` as a find, framed from the parent's distance. Click a child to make
+it the scene and the parent of the next generation, breed again, and so on: artificial
+selection with your eye as the pressure. `test/HybridProspector --breed out/x A.frac [B.frac]`
+runs one generation from saved scenes and writes `_children.png` and `CHILD_NN.frac`.
+
+The search drives the GPU controller from a worker thread on a throw-away scene: the host
+pauses its preview loop as for Explore, the renderer makes the throw-away scene current on
+its first chain, and the user's scene is marked dirty and put back when the run ends,
+whatever happened — recompiled from the driver's cache in a moment. `test/ProspectSwapProbe`
+renders the user's scene before and after a search and requires the two frames identical
+pixel for pixel. The algorithm is `explore/ChainProspector` (see docs/NODE_GRAPH.md,
+"Prospecting"); `test/HybridProspector` is its command line, with contact sheets, a ranking
+file and `FOUND_NN.frac` output, which is how it was tuned before it got a tab.
+
 ### Explore (status bar button, View › Explore…, Ctrl+E)
 
 Two ways of asking the app what else there is to see, in one window.

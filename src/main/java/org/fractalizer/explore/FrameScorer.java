@@ -68,6 +68,42 @@ public final class FrameScorer {
         return score(rgb, depth, w, h);
     }
 
+    /**
+     * How much of a surface is surface and not dust. {@code solid} is the fraction of
+     * surface pixels whose four neighbours are surface too: isolated specks score zero.
+     * {@code smooth} is the fraction of those interior pixels whose depth differs from
+     * every neighbour by less than {@link #SMOOTH_STEP}: a continuous sheet scores one, a
+     * cloud of specks at unrelated depths scores near zero even where it is dense. The
+     * product is a factor in [0, 1] to weigh a detail score by. Without it the Laplacian
+     * variance rewards a ball of dust as much as a carved solid: both are busy.
+     */
+    public record Structure(double solid, double smooth) {
+        public double factor() { return solid * smooth; }
+    }
+
+    /** Largest depth step between neighbouring pixels still read as one surface, in the
+     *  AOV's encoding (1 - log(d + 0.1) / log 15): about eight pixel footprints at three
+     *  units, generous for a sheet, far below the jumps between specks. */
+    public static final double SMOOTH_STEP = 0.01;
+
+    public static Structure structure(float[] depth, int w, int h) {
+        long surf = 0, inner = 0, smoothN = 0;
+        for (int y = 1; y < h - 1; y++) for (int x = 1; x < w - 1; x++) {
+            int i = y * w + x;
+            float d = depth[i];
+            if (d <= BACKGROUND) continue;
+            surf++;
+            float l = depth[i - 1], r = depth[i + 1], u = depth[i - w], dn = depth[i + w];
+            if (l <= BACKGROUND || r <= BACKGROUND || u <= BACKGROUND || dn <= BACKGROUND) continue;
+            inner++;
+            float md = Math.max(Math.max(Math.abs(d - l), Math.abs(d - r)), Math.max(Math.abs(d - u), Math.abs(d - dn)));
+            if (md < SMOOTH_STEP) smoothN++;
+        }
+        double solid = surf == 0 ? 0 : (double) inner / surf;
+        double smooth = inner == 0 ? 0 : (double) smoothN / inner;
+        return new Structure(solid, smooth);
+    }
+
     /** Surface fraction of a depth map, on its own (the cheap probe). */
     public static double coverage(float[] depth) {
         if (depth.length == 0) return 0;

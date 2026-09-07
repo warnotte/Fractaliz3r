@@ -567,21 +567,53 @@ public class GLSLFractalizerApp extends Application {
                 + "scored thumbnails, click one to fly there (Ctrl+E)"));
         exploreBtn.setOnAction(e -> openExplore());
 
-        statusBar.getChildren().addAll(statusLabel, sampleLabel, spacer, browseBtn, exploreBtn, progressBar);
+        Button discoverBtn = new Button("Discover…");
+        discoverBtn.setTooltip(new Tooltip("Let the app look for fractals nobody has made: random hybrid chains, "
+                + "compiled and rendered while you wait, the good ones shown best first"));
+        discoverBtn.setOnAction(e -> openDiscoveries());
+        statusBar.getChildren().addAll(statusLabel, sampleLabel, spacer, browseBtn, exploreBtn, discoverBtn, progressBar);
         return statusBar;
     }
 
     private void openBrowser() {
         if (sceneBrowser == null) {
-            sceneBrowser = new org.fractalizer.ui.components.SceneBrowser(primaryStage,
+            sceneBrowser = new org.fractalizer.ui.components.SceneBrowser(primaryStage, controller,
                     new org.fractalizer.ui.components.SceneBrowser.Host() {
                 @Override public void loadPreset(String name) { loadShippedPreset(name); }
                 @Override public void loadChain(org.fractalizer.graph.HybridPresets.Preset preset) {
                     loadChainIntoScene(preset);
                 }
+                @Override public AbstractFractalParams params() {
+                    return (AbstractFractalParams) controller.getParams();
+                }
+                @Override public void prospectingChanged(boolean on) { searchingChanged(on, "Prospecting…"); }
+                @Override public void loadDiscovery(NodeGraphParams scene, String label) {
+                    loadNodeGraphIntoScene(scene, "Discovery: " + label);
+                }
             });
         }
         sceneBrowser.show();
+    }
+
+    /** The browser, open on its Discoveries tab. */
+    private void openDiscoveries() {
+        openBrowser();
+        sceneBrowser.showDiscoveries();
+    }
+
+    /** A search (Explore, Prospect) drives the scene from a worker thread: the preview
+     *  loop pauses for its duration and the viewport is put back afterwards. */
+    private void searchingChanged(boolean on, String message) {
+        exploring = on;
+        if (on) {
+            controller.cancelRender();
+            isHighQualityActive = false;
+            statusLabel.setText(message);
+        } else {
+            updateViewportSize();
+            fractalPanel.updatePositionLabel();
+            requestRender();
+        }
     }
 
     /** A preset by name: the checkout's presets folder when it is there, else the copy
@@ -608,8 +640,13 @@ public class GLSLFractalizerApp extends Application {
      *  as its thumbnail was, with the editor showing its steps. Fresh, so it renders as the
      *  thumbnail did, whatever palette or lighting the previous scene had. */
     private void loadChainIntoScene(org.fractalizer.graph.HybridPresets.Preset preset) {
+        loadNodeGraphIntoScene(org.fractalizer.graph.HybridPresets.toFreshParams(preset), "Chain: " + preset.name());
+    }
+
+    /** Make a fresh node graph the scene: a chain from the library or a discovery of the
+     *  prospector, already framed and in its look. */
+    private void loadNodeGraphIntoScene(NodeGraphParams ngp, String statusText) {
         flight = null;
-        NodeGraphParams ngp = org.fractalizer.graph.HybridPresets.toFreshParams(preset);
         controller.replaceParams(ngp);
         controller.getEngine().getPostProcessParams().reset();
 
@@ -617,7 +654,7 @@ public class GLSLFractalizerApp extends Application {
         for (Refreshable pnl : refreshablePanels) pnl.refreshFromParams();
         controller.updatePaletteTexture(ngp.getCustomGradient());
         if (animationManager != null) animationManager.onNodeGraphChanged(ngp);
-        statusLabel.setText("Chain: " + preset.name());
+        statusLabel.setText(statusText);
         requestRender();
     }
 
@@ -628,18 +665,7 @@ public class GLSLFractalizerApp extends Application {
                 @Override public AbstractFractalParams params() {
                     return (AbstractFractalParams) controller.getParams();
                 }
-                @Override public void exploringChanged(boolean on) {
-                    exploring = on;
-                    if (on) {
-                        controller.cancelRender();
-                        isHighQualityActive = false;
-                        statusLabel.setText("Exploring…");
-                    } else {
-                        updateViewportSize();
-                        fractalPanel.updatePositionLabel();
-                        requestRender();
-                    }
-                }
+                @Override public void exploringChanged(boolean on) { searchingChanged(on, "Exploring…"); }
                 @Override public void flyTo(float[] eye, float[] target, float fovDeg) {
                     GLSLFractalizerApp.this.flyTo(eye, target, fovDeg);
                 }

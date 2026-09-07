@@ -457,7 +457,7 @@ that is simply absent from the saved file. Both had already got through twice. R
 suite on the module path also caught a third: a package Gson needs opened in `module-info`,
 which only bites when the app runs as a module (the jlink image), not from an IDE classpath.
 
-The **GPU harnesses** are sixteen headless tools in `org.fractalizer.test` (invocations in
+The **GPU harnesses** are eighteen headless tools in `org.fractalizer.test` (invocations in
 **[CLAUDE.md](../CLAUDE.md)** Build Commands), all writing under `out/` (gitignored). Most
 exist because a real bug got through a reading of the code — running one is faster and more
 reliable than re-reading the path it covers:
@@ -470,6 +470,7 @@ reliable than re-reading the path it covers:
 | `ColorDemo` | which coloring modes put more than one hue on an object |
 | `JuliaProspector` | autonomous search of Julia-constant space |
 | `HybridLab` | hybrid chains, with controls that must reproduce the stand-alone formulas |
+| `HybridProspector` | command line over `explore/ChainProspector`, the autonomous search of hybrid-chain space: random structures (types, gating, estimator) compiled once each, parameter draws swept as uniforms, auto-framed on the depth AOV, scored (detail × structure factor, so dust does not win), library chains marked, winners as `.frac`; `--breed` runs one generation of `ChainBreeder` from saved parents |
 | `FractalNavigator` | global → fine-detail camera traveller |
 | `PresetForge` | build demo presets and render a preview of each |
 | `ResizeProbe` | framebuffer cost of a preview↔full switch |
@@ -477,6 +478,7 @@ reliable than re-reading the path it covers:
 | `ExportProgressProbe` | how far ahead of the work an export progress bar runs |
 | `ShaderCompileProbe` | how long each shader takes to compile, and which one never returns: the built-ins (7-10 s each here), then any `.frac`; `--render WxH spp outDir scene.frac` skips the built-ins and renders one scene in ~15 s, the quickest look at a preset change |
 | `ExportAfterPreviewProbe` | the cheap preview must not leak into an export |
+| `ProspectSwapProbe` | the Discoveries search runs on a throw-away scene; the user's scene must come back pixel-identical |
 | `ExploreProbe` | the app's Explore button, headless: scored views or parameter variations from any camera, time per view |
 | `ThumbnailForge` | the Presets & Chains browser's thumbnails, every chain and preset; `install` ships them as resources |
 | `GalleryRender` | every `.frac` in a directory rendered as the app would show it (README gallery, release page) |

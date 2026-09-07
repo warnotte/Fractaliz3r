@@ -68,6 +68,19 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.GalleryRender" -Dex
 # for diversity, and the winners written as .frac. ~180 candidates in ~6 s.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.JuliaProspector" -Dexec.args="out/prospect 180 320x180 6 8"
 
+# Autonomous discovery in hybrid-chain space: random chains (28 step types, gating, estimator)
+# compiled one shader per structure (~12 s each), many parameter draws per structure as uniforms
+# (milliseconds each), auto-framed on the depth AOV, scored, library chains marked, the best
+# written as FOUND_NN.frac with a labelled contact sheet. 20 x 8 = 160 candidates in ~5 min.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.HybridProspector" -Dexec.args="out/prospect_hybrid 20 8 320x180 6 8 1"
+#   (outDir structures drawsPerStructure WxH samples keep seed)
+# One generation of nine children from one or two saved chains, as the Breed button does it
+# (six parameter mutants on the parents' shaders, three structural children or crossovers, ~40 s):
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.HybridProspector" -Dexec.args="--breed out/breed out/prospect_hybrid/FOUND_01.frac out/prospect_hybrid/FOUND_02.frac"
+# The Discoveries tab runs the same search on a throw-away scene and puts the user's scene back:
+# render before, search, render after, require zero pixels different.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ProspectSwapProbe" -Dexec.args="320x180 2 out/prospect_swap"
+
 # Hybrid chains: several formulas composed inside one iteration loop (HybridNode), 28 step
 # types. The first entries are controls that must reproduce the stand-alone Mandelbulb,
 # Mandelbox and Bristorbrot exactly; they are compared on the depth AOV, not on colour.
@@ -144,11 +157,15 @@ org.fractalizer
 ├── explore/
 │   ├── CameraExplorer.java          # Scored views from the current camera: pivot, auto-frame, aim scan, dives
 │   ├── ParamExplorer.java           # Variations: knobs nudged at random, rendered from the same camera, scored
+│   ├── ChainProspector.java         # Discoveries: random hybrid chains, one compile per structure, draws as uniforms, framed, scored, known families marked
+│   ├── Look.java                    # a discovery's palette / light / sky / material, drawn from the seed, saved with it
+│   ├── ChainBreeder.java            # a generation from one or two parents: parameter mutants, structural moves, crossovers
 │   ├── ParamKnobs.java              # which numeric parameters a scene has (fractal leaves' floats, hybrid steps)
 │   ├── CameraFlight.java            # eased flight between two poses (smoothstep + slerp), stepped by the render loop
 │   ├── FrameScorer.java             # detail / coverage / centring score shared with the navigator harness
 │   ├── ViewRenderer.java            # what the explorer needs from a renderer (GPU in the app, a sphere in tests)
-│   └── ControllerViewRenderer.java  # ViewRenderer over GLSLFractalizerController, in memory at thumbnail size
+│   ├── ControllerViewRenderer.java  # ViewRenderer over GLSLFractalizerController, in memory at thumbnail size
+│   └── ControllerChainRenderer.java # ChainRenderer over the controller: a chain at the root, uniforms refreshed, depth + colour
 ├── audio/
 │   ├── AudioReactiveEngine.java     # Spectrum analysis, beat/onset detection
 │   └── AudioPreAnalyzer.java        # Offline FFT pre-analysis (FFmpeg decode)
@@ -169,7 +186,7 @@ org.fractalizer
     │   ├── CustomShaderEditor.java     # GLSL editor with @param parsing, dynamic sliders
     │   ├── NodeGraphEditor.java        # Visual node graph editor: canvas + detail panel + undo/redo
     │   ├── ExploreDialog.java          # "Explore": Views (scored framings, click to fly) + Variations (knobs nudged, click to apply)
-    │   └── SceneBrowser.java           # "Presets & Chains": every shipped .frac and hybrid chain as a thumbnail, click to load
+    │   └── SceneBrowser.java           # "Presets & Chains": every shipped .frac and hybrid chain as a thumbnail, click to load; Discoveries tab = the prospector live
     └── panels/
         ├── FractalPanel.java           # Fractal type and parameters
         ├── MaterialPanel.java          # Material type, physical props, artistic palettes
@@ -196,6 +213,8 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ColorDemo.java               # which coloring modes give more than one hue
 ├── JuliaProspector.java         # autonomous search of Julia-constant space
 ├── HybridLab.java               # hybrid chains + bit-exact controls; "presets" = the library
+├── HybridProspector.java        # command line over explore/ChainProspector: sheet, ranking, FOUND_NN.frac, per-recipe table; --breed = one generation
+├── ProspectSwapProbe.java       # the Discoveries search must leave the user's scene pixel-identical
 ├── FractalNavigator.java        # global -> fine-detail camera traveller
 ├── PresetForge.java             # build demo .frac files + preview each
 ├── ResizeProbe.java             # framebuffer cost of a preview<->full switch
@@ -255,7 +274,7 @@ it — several exist precisely because reading the code gave the wrong answer.
 |-------|------|----------|
 | Shader pipeline | [docs/SHADER_PIPELINE.md](docs/SHADER_PIPELINE.md) | Assembly modes, ShaderPreprocessor, uniform lifecycle, recompilation triggers |
 | Node graph | [docs/NODE_GRAPH.md](docs/NODE_GRAPH.md) | All node types incl. **HybridNode** (formulas composed inside one iteration loop) and its chain library, GraphCompiler phases, uniforms, animation, serialization, UI |
-| Rendering | [docs/RENDERING.md](docs/RENDERING.md) | Blue noise, cone tracing, adaptive sampling, cinematic pipeline, effects, coloring, spline camera, HUD. Also: **why colour looked flat** (rim light, palette-tinted sky, which coloring modes carry more than one hue), **deep zoom** (view-relative scales, iteration LOD, what the formula limits), **interactive preview vs full quality**, **progressive batching and interruptibility**, and the sixteen test harnesses |
+| Rendering | [docs/RENDERING.md](docs/RENDERING.md) | Blue noise, cone tracing, adaptive sampling, cinematic pipeline, effects, coloring, spline camera, HUD. Also: **why colour looked flat** (rim light, palette-tinted sky, which coloring modes carry more than one hue), **deep zoom** (view-relative scales, iteration LOD, what the formula limits), **interactive preview vs full quality**, **progressive batching and interruptibility**, and the eighteen test harnesses |
 | Features | [docs/FEATURES.md](docs/FEATURES.md) | EnhancedSlider, dice randomizer, morph crossfade, custom shader editor, boolean ops, nesting |
 | Export | [docs/EXPORT.md](docs/EXPORT.md) | VR/360, tiled rendering, AOV export, mesh export, video encoding, jlink release, visual regression test, **why an export progress bar can lie** |
 | Audio-reactive | [docs/AUDIO_REACTIVE.md](docs/AUDIO_REACTIVE.md) | Spectrum analysis, beat/onset detection, mappings, offline export pipeline |

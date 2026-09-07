@@ -433,6 +433,35 @@ to / every) for gating. Steps are added from a `+ Step` menu grouped by family. 
 removing, reordering or retyping a step, gating it or changing its axis changes which code
 is emitted, so those recompile; moving a slider only updates a value and does not.
 
+**Prospecting.** `explore/ChainProspector` searches the space the editor opens; the
+browser's Discoveries tab runs it on the app's controller and `test/HybridProspector` from
+the command line. What is baked into a chain's GLSL (step types and order, gating,
+estimator, axes) is a *structure*; what is a uniform (every numeric parameter, the Julia
+seed) is a *draw*. The prospector draws structures from four recipes that follow the grammar
+above (escape-time map + seed under the log estimator, IFS folds under the linear one,
+Mandelbox-like fold + seed, power map and fold in one loop; every recipe at least two shape
+steps), compiles each once (~12 s), sweeps parameter draws through it at a few milliseconds
+a frame via `NodeGraphParams.updateUniforms()`, auto-frames each on the depth AOV (closer
+while empty, farther while filled or cut by the frame), scores it as FractalNavigator scores
+a framing times a structure factor (`FrameScorer.structure`: the share of surface whose
+neighbours are surface at a continuous depth, because detail alone rates a ball of dust as
+high as a carved solid), and marks as known a chain whose shape steps are a library chain's
+or number one (a turned Mandelbox is still a Mandelbox). Each candidate is rendered under
+its own `Look` (palette, light, sky, material, colouring mode, drawn from the seed and saved
+with the find). It talks to a `ChainRenderer` (set a chain, say its uniforms changed, apply a
+look, render depth and colour); `ControllerChainRenderer` is the GPU one. `ChainProspectorTest` keeps it honest without a GPU: every drawn structure compiles,
+draws stay inside the clamps, a drawn chain survives its save, and the search itself run
+against an analytic sphere frames, scores, reports and stops when told.
+
+**Breeding.** `explore/ChainBreeder` makes a generation from one or two parents through the
+same renderer and the same `evaluate`: parameter mutants (every uniform a step reads is
+nudged, the seed and the iteration count too; setters clamp), structural mutants (one move:
+swap a shape step within its family, insert or remove a transform, toggle a gate, turn an
+axis; the shape count is kept so the child stays a hybrid) and crossovers (prefix of one
+chain, suffix of the other; the estimator follows the result, an escape-time child keeps
+one seed at its end, the constant travels with the seed). Looks are inherited and nudged
+(`Look.mutate`). `ChainBreederTest` covers the operators and a generation against the sphere.
+
 **Colouring is weaker than a stand-alone formula, by nature.** A formula ships orbit traps
 tuned to its own orbit — the Mandelbox tracks fold amount and sphere-fold hits, the
 Mandelbulb plane traps calibrated to a bailout of 2. A chain has no such thing, and generic
