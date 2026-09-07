@@ -156,6 +156,20 @@ the showcase look, camera where the search settled; File › Save keeps it. *Sto
 run after the current draw and keeps what was found; clicking a tile during a run stops it,
 then loads.
 
+**Breed** is the other half. From the clicked discovery (or the scene's own chain when it
+is one) and, with Ctrl+click, a second parent, `explore/ChainBreeder` makes a generation of
+nine children: six *mutants* that keep the parent's structure and nudge its parameters, its
+Julia seed and its look (same shader, milliseconds each), and three structural children,
+each a compile: a *restructured* one (a shape step swapped within its family, a transform put
+in or taken out, a step's iteration gate toggled, an axis turned) or, with two parents, a
+*crossover* (the prefix of one chain and the suffix of the other, the estimator the result
+asks for, one seed kept at the end when it needs one). A generation takes about forty
+seconds; the parents stay pinned at the top, the children come in best first, each judged
+by the same `evaluate` as a find, framed from the parent's distance. Click a child to make
+it the scene and the parent of the next generation, breed again, and so on: artificial
+selection with your eye as the pressure. `test/HybridProspector --breed out/x A.frac [B.frac]`
+runs one generation from saved scenes and writes `_children.png` and `CHILD_NN.frac`.
+
 The search drives the GPU controller from a worker thread on a throw-away scene: the host
 pauses its preview loop as for Explore, the renderer makes the throw-away scene current on
 its first chain, and the user's scene is marked dirty and put back when the run ends,

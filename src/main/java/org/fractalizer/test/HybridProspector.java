@@ -3,6 +3,8 @@ package org.fractalizer.test;
 import javafx.application.Platform;
 import org.fractalizer.config.FractalConfig;
 import org.fractalizer.config.FractalConfigManager;
+import org.fractalizer.explore.ChainBreeder;
+import org.fractalizer.explore.ChainBreeder.Parent;
 import org.fractalizer.explore.ChainProspector;
 import org.fractalizer.explore.ChainProspector.Discovery;
 import org.fractalizer.explore.ChainProspector.Result;
@@ -44,10 +46,16 @@ import java.util.concurrent.CountDownLatch;
  * search settled on. A structure costs a shader compile (~12 s here, once per machine:
  * the driver caches it); a draw costs milliseconds, so 20 x 8 is about four minutes.
  * No loadAllShaders: a node graph compiles its own program on the first render.
+ *
+ * Breeding, as the Discoveries tab does it:
+ *   -Dexec.args="--breed &lt;outDir&gt; &lt;parentA.frac&gt; [parentB.frac] [WxH] [samples] [seed]"
+ *   -Dexec.args="--breed out/breed out/prospect_hybrid/run6/FOUND_01.frac out/prospect_hybrid/run6/FOUND_03.frac"
+ * writes the nine children as CHILD_NN.frac and _children.png (parents first).
  */
 public class HybridProspector {
 
     public static void main(String[] args) throws Exception {
+        if (args.length > 0 && args[0].equals("--breed")) { breed(args); return; }
         String outDir = args.length > 0 ? args[0] : "out/prospect_hybrid";
         int nStructures = args.length > 1 ? Integer.parseInt(args[1]) : 20;
         int draws = args.length > 2 ? Integer.parseInt(args[2]) : 8;
@@ -161,6 +169,102 @@ public class HybridProspector {
         System.out.println("contact sheet -> " + new File(outDir, "_top.png").getAbsolutePath());
         System.out.println("presets       -> " + written + " FOUND_NN.frac in " + new File(outDir).getAbsolutePath());
         System.exit(0);
+    }
+
+    /** One generation from one or two saved scenes whose node graph is a chain. */
+    private static void breed(String[] args) throws Exception {
+        String outDir = args[1];
+        File fa = new File(args[2]);
+        int next = 3;
+        File fb = args.length > next && args[next].endsWith(".frac") ? new File(args[next++]) : null;
+        String[] res = (args.length > next ? args[next++] : "320x180").split("x");
+        int W = Integer.parseInt(res[0]), H = Integer.parseInt(res[1]);
+        int samples = args.length > next ? Integer.parseInt(args[next++]) : 6;
+        long seed = args.length > next ? Long.parseLong(args[next]) : 1L;
+        new File(outDir).mkdirs();
+
+        Parent a = Parent.of(FractalConfigManager.load(fa).toFreshParams());
+        Parent b = fb == null ? null : Parent.of(FractalConfigManager.load(fb).toFreshParams());
+        if (a == null || (fb != null && b == null)) {
+            System.err.println("a parent's node graph must be a hybrid chain");
+            System.exit(2);
+        }
+
+        CountDownLatch latch = new CountDownLatch(1);
+        Platform.startup(latch::countDown);
+        latch.await();
+        GLSLFractalizerController controller = new GLSLFractalizerController();
+        controller.setFractalType(FractalType.NODE_GRAPH);
+        NodeGraphParams params = (NodeGraphParams) controller.getParams();
+
+        System.out.printf("=== Breeding from %s%s (%dx%d, %d spp, seed %d) ===%n", a.label(),
+                b != null ? " and " + b.label() : "", W, H, samples, seed);
+        long t0 = System.nanoTime();
+        List<Discovery> children = new ArrayList<>();
+        ChainProspector.Listener listener = new ChainProspector.Listener() {
+            @Override public void found(Discovery d) {
+                children.add(d);
+                System.out.printf(Locale.ROOT, "  child %d  %-30s score %8.0f  solid %.2f  %s  |  %s%n", children.size(), d.recipe(),
+                        d.score(), d.solidity(), d.label(), d.look().name());
+                System.out.flush();
+            }
+            @Override public void status(double p, String message) { }
+        };
+        ControllerChainRenderer renderer = new ControllerChainRenderer(controller, params, () -> false);
+        Result r = new ChainBreeder(renderer, listener, () -> false)
+                .breed(a, b, new ChainBreeder.Settings(9, 3, samples, seed, W, H, 0.25f));
+        System.out.printf(Locale.ROOT, "%n%d children kept, %d empty, %d solid, %d flat, %d cut, in %.0f s%n",
+                r.discoveries().size(), r.empty(), r.solid(), r.flat(), r.cut(), (System.nanoTime() - t0) / 1e9);
+
+        // Parents first, then the children best first
+        List<Discovery> sheet = new ArrayList<>();
+        sheet.add(new Discovery(-1, "parent", a.chain(), a.eye(), 0, new org.fractalizer.explore.FrameScorer.FrameScore(0, 0, 0), 0, null, a.look(),
+                renderParent(controller, params, renderer, a, W, H, samples)));
+        if (b != null) sheet.add(new Discovery(-1, "parent", b.chain(), b.eye(), 0, new org.fractalizer.explore.FrameScorer.FrameScore(0, 0, 0), 0, null, b.look(),
+                renderParent(controller, params, renderer, b, W, H, samples)));
+        List<Discovery> sorted = new ArrayList<>(r.discoveries());
+        sorted.sort(Comparator.comparingDouble(Discovery::score).reversed());
+        sheet.addAll(sorted);
+        writeSheet(sheet, W, H, new File(outDir, "_children.png"), true);
+        int n = 0;
+        for (Discovery d : sorted) {
+            FractalConfigManager.save(FractalConfig.fromParams(ChainProspector.toParams(d)),
+                    new File(outDir, String.format(Locale.ROOT, "CHILD_%02d.frac", ++n)));
+        }
+        System.out.println("sheet    -> " + new File(outDir, "_children.png").getAbsolutePath());
+        System.out.println("children -> " + n + " CHILD_NN.frac in " + new File(outDir).getAbsolutePath());
+        System.exit(0);
+    }
+
+    private static BufferedImage renderParent(GLSLFractalizerController controller, NodeGraphParams params,
+                                              ControllerChainRenderer renderer, Parent p, int W, int H, int samples) {
+        renderer.setChain(ChainProspector.snapshot(p.chain()));
+        renderer.applyLook(p.look());
+        return renderer.colour(p.eye(), new float[]{0, 0, 0}, 50f, W, H, samples);
+    }
+
+    /** A labelled sheet, four across; a parent or a known chain in orange. */
+    private static void writeSheet(List<Discovery> items, int W, int H, File out, boolean numberFromParents) throws Exception {
+        int cols = 4, rows = (items.size() + cols - 1) / cols;
+        BufferedImage sheet = new BufferedImage(W * cols, H * Math.max(1, rows), BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = sheet.createGraphics();
+        g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(10, H / 14)));
+        int number = 0;
+        for (int i = 0; i < items.size(); i++) {
+            Discovery d = items.get(i);
+            int x = (i % cols) * W, y = (i / cols) * H;
+            g.drawImage(d.thumbnail(), x, y, null);
+            boolean parent = d.recipe().equals("parent");
+            String label = (parent ? "parent: " : (++number) + "  " + d.recipe() + ": ") + d.label();
+            if (label.length() > 52) label = label.substring(0, 51) + "…";
+            int fh = g.getFontMetrics().getHeight();
+            g.setColor(new Color(0, 0, 0, 160));
+            g.fillRect(x, y + H - fh - 4, W, fh + 4);
+            g.setColor(d.known() != null || parent ? new Color(255, 200, 120) : Color.WHITE);
+            g.drawString(label, x + 4, y + H - 6);
+        }
+        g.dispose();
+        ImageIO.write(sheet, "png", out);
     }
 
     private static final Map<Discovery, String> TAGS = new HashMap<>();

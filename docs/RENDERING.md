@@ -470,7 +470,7 @@ reliable than re-reading the path it covers:
 | `ColorDemo` | which coloring modes put more than one hue on an object |
 | `JuliaProspector` | autonomous search of Julia-constant space |
 | `HybridLab` | hybrid chains, with controls that must reproduce the stand-alone formulas |
-| `HybridProspector` | command line over `explore/ChainProspector`, the autonomous search of hybrid-chain space: random structures (types, gating, estimator) compiled once each, parameter draws swept as uniforms, auto-framed on the depth AOV, scored (detail × structure factor, so dust does not win), library chains marked, winners as `.frac` |
+| `HybridProspector` | command line over `explore/ChainProspector`, the autonomous search of hybrid-chain space: random structures (types, gating, estimator) compiled once each, parameter draws swept as uniforms, auto-framed on the depth AOV, scored (detail × structure factor, so dust does not win), library chains marked, winners as `.frac`; `--breed` runs one generation of `ChainBreeder` from saved parents |
 | `FractalNavigator` | global → fine-detail camera traveller |
 | `PresetForge` | build demo presets and render a preview of each |
 | `ResizeProbe` | framebuffer cost of a preview↔full switch |

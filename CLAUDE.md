@@ -74,6 +74,9 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.JuliaProspector" -D
 # written as FOUND_NN.frac with a labelled contact sheet. 20 x 8 = 160 candidates in ~5 min.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.HybridProspector" -Dexec.args="out/prospect_hybrid 20 8 320x180 6 8 1"
 #   (outDir structures drawsPerStructure WxH samples keep seed)
+# One generation of nine children from one or two saved chains, as the Breed button does it
+# (six parameter mutants on the parents' shaders, three structural children or crossovers, ~40 s):
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.HybridProspector" -Dexec.args="--breed out/breed out/prospect_hybrid/FOUND_01.frac out/prospect_hybrid/FOUND_02.frac"
 # The Discoveries tab runs the same search on a throw-away scene and puts the user's scene back:
 # render before, search, render after, require zero pixels different.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ProspectSwapProbe" -Dexec.args="320x180 2 out/prospect_swap"
@@ -156,6 +159,7 @@ org.fractalizer
 │   ├── ParamExplorer.java           # Variations: knobs nudged at random, rendered from the same camera, scored
 │   ├── ChainProspector.java         # Discoveries: random hybrid chains, one compile per structure, draws as uniforms, framed, scored, known families marked
 │   ├── Look.java                    # a discovery's palette / light / sky / material, drawn from the seed, saved with it
+│   ├── ChainBreeder.java            # a generation from one or two parents: parameter mutants, structural moves, crossovers
 │   ├── ParamKnobs.java              # which numeric parameters a scene has (fractal leaves' floats, hybrid steps)
 │   ├── CameraFlight.java            # eased flight between two poses (smoothstep + slerp), stepped by the render loop
 │   ├── FrameScorer.java             # detail / coverage / centring score shared with the navigator harness
@@ -209,7 +213,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ColorDemo.java               # which coloring modes give more than one hue
 ├── JuliaProspector.java         # autonomous search of Julia-constant space
 ├── HybridLab.java               # hybrid chains + bit-exact controls; "presets" = the library
-├── HybridProspector.java        # command line over explore/ChainProspector: sheet, ranking, FOUND_NN.frac, per-recipe table
+├── HybridProspector.java        # command line over explore/ChainProspector: sheet, ranking, FOUND_NN.frac, per-recipe table; --breed = one generation
 ├── ProspectSwapProbe.java       # the Discoveries search must leave the user's scene pixel-identical
 ├── FractalNavigator.java        # global -> fine-detail camera traveller
 ├── PresetForge.java             # build demo .frac files + preview each

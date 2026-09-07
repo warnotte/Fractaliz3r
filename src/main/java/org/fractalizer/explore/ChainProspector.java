@@ -93,6 +93,12 @@ public final class ChainProspector {
         void status(double progress, String message);
     }
 
+    /** What became of one candidate: a discovery, or the reason it was thrown away
+     *  ("empty", "solid", "flat", "cut"). */
+    public record Verdict(Discovery discovery, String rejection) {
+        public boolean kept() { return discovery != null; }
+    }
+
     // ------------------------------------------------------------------
     // Structures: what gets compiled
     // ------------------------------------------------------------------
@@ -384,6 +390,47 @@ public final class ChainProspector {
     }
 
     // ------------------------------------------------------------------
+    // One candidate
+    // ------------------------------------------------------------------
+
+    /**
+     * Frame, render and score the renderer's current chain (its parameters and look already
+     * applied), starting the framing at {@code startDistance} along the fixed view
+     * direction. The breeder and the search share this, so a child is judged exactly as a
+     * find is. The chain is copied into the discovery; {@code known} is passed through.
+     */
+    public Verdict evaluate(int structureIndex, String recipe, HybridNode node, Look look, float startDistance,
+                            String known, Settings s) {
+        int W = s.width(), H = s.height();
+        int dw = Math.max(32, W / 2), dh = Math.max(18, H / 2);
+        float d = startDistance;
+        double cov = 0, edge = 0;
+        float[] eye = null;
+        for (int t = 0; t < 6; t++) {
+            eye = eyeAt(d);
+            float[] depth = renderer.depth(eye, ORIGIN, FOV, dw, dh);
+            cov = FrameScorer.coverage(depth);
+            edge = edgeCoverage(depth, dw, dh);
+            if (cov < 0.04) d *= 0.55f;                          // nothing in view: come closer
+            else if (cov > 0.85 || edge > 0.25) d *= 1.6f;       // filled, or cut by the frame: back off
+            else if (cov < 0.12 && edge < 0.02) d *= 0.7f;       // small and whole: come closer
+            else break;
+        }
+        if (cov < 0.04) return new Verdict(null, "empty");
+        if (cov > 0.97) return new Verdict(null, "solid");
+        if (edge > 0.5) return new Verdict(null, "cut");     // still running off the frame after six tries: a Kleinian seen from inside
+
+        BufferedImage img = renderer.colour(eye, ORIGIN, FOV, W, H, s.samples());
+        float[] depth = renderer.depth(eye, ORIGIN, FOV, W, H);
+        FrameScorer.FrameScore fs = FrameScorer.score(img, depth);
+        if (fs.detail() < 1.0) return new Verdict(null, "flat");
+        FrameScorer.Structure stc = FrameScorer.structure(depth, W, H);
+        double solidity = Math.max(0.05, stc.factor());
+        double score = fs.aesthetic() * solidity * (known != null ? 0.5 : 1.0);
+        return new Verdict(new Discovery(structureIndex, recipe, snapshot(node), eye, score, fs, stc.factor(), known, look, img), null);
+    }
+
+    // ------------------------------------------------------------------
     // The search
     // ------------------------------------------------------------------
 
@@ -400,8 +447,6 @@ public final class ChainProspector {
     public Result prospect(Settings s) {
         Random rnd = new Random(s.seed());
         Map<String, String> library = librarySignatures();
-        int W = s.width(), H = s.height();
-        int dw = Math.max(32, W / 2), dh = Math.max(18, H / 2);   // depth passes for framing
         List<Discovery> found = new ArrayList<>();
         Map<String, int[]> perRecipe = new TreeMap<>();
         int empty = 0, solid = 0, flat = 0, cut = 0;
@@ -435,35 +480,23 @@ public final class ChainProspector {
                 Look look = Look.draw(rnd);
                 renderer.applyLook(look);
 
-                float d = st.deMode() == DEMode.LOG ? 3.2f : (st.deMode() == DEMode.PLANE ? 4.0f : 7.0f);
-                double cov = 0, edge = 0;
-                float[] eye = null;
-                for (int t = 0; t < 6; t++) {
-                    eye = eyeAt(d);
-                    float[] depth = renderer.depth(eye, ORIGIN, FOV, dw, dh);
-                    if (!compiled) {
-                        compileTotal += System.nanoTime() - tc;
-                        compiled = true;
-                    }
-                    cov = FrameScorer.coverage(depth);
-                    edge = edgeCoverage(depth, dw, dh);
-                    if (cov < 0.04) d *= 0.55f;                          // nothing in view: come closer
-                    else if (cov > 0.85 || edge > 0.25) d *= 1.6f;       // filled, or cut by the frame: back off
-                    else if (cov < 0.12 && edge < 0.02) d *= 0.7f;       // small and whole: come closer
-                    else break;
+                float d0 = st.deMode() == DEMode.LOG ? 3.2f : (st.deMode() == DEMode.PLANE ? 4.0f : 7.0f);
+                long te = System.nanoTime();
+                Verdict v = evaluate(si, st.recipe(), node, look, d0, known, s);
+                if (!compiled) {
+                    compileTotal += System.nanoTime() - tc;
+                    compiled = true;
                 }
-                if (cov < 0.04) { empty++; continue; }
-                if (cov > 0.97) { solid++; continue; }
-                if (edge > 0.5) { cut++; continue; }     // still running off the frame after six tries: a Kleinian seen from inside
-
-                BufferedImage img = renderer.colour(eye, ORIGIN, FOV, W, H, s.samples());
-                float[] depth = renderer.depth(eye, ORIGIN, FOV, W, H);
-                FrameScorer.FrameScore fs = FrameScorer.score(img, depth);
-                if (fs.detail() < 1.0) { flat++; continue; }
-                FrameScorer.Structure stc = FrameScorer.structure(depth, W, H);
-                double solidity = Math.max(0.05, stc.factor());
-                double score = fs.aesthetic() * solidity * (known != null ? 0.5 : 1.0);
-                Discovery disc = new Discovery(si, st.recipe(), snapshot(node), eye, score, fs, stc.factor(), known, look, img);
+                if (!v.kept()) {
+                    switch (v.rejection()) {
+                        case "empty" -> empty++;
+                        case "solid" -> solid++;
+                        case "flat" -> flat++;
+                        default -> cut++;
+                    }
+                    continue;
+                }
+                Discovery disc = v.discovery();
                 found.add(disc);
                 perRecipe.get(st.recipe())[1]++;
                 listener.found(disc);

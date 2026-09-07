@@ -453,6 +453,15 @@ look, render depth and colour); `ControllerChainRenderer` is the GPU one. `Chain
 draws stay inside the clamps, a drawn chain survives its save, and the search itself run
 against an analytic sphere frames, scores, reports and stops when told.
 
+**Breeding.** `explore/ChainBreeder` makes a generation from one or two parents through the
+same renderer and the same `evaluate`: parameter mutants (every uniform a step reads is
+nudged, the seed and the iteration count too; setters clamp), structural mutants (one move:
+swap a shape step within its family, insert or remove a transform, toggle a gate, turn an
+axis; the shape count is kept so the child stays a hybrid) and crossovers (prefix of one
+chain, suffix of the other; the estimator follows the result, an escape-time child keeps
+one seed at its end, the constant travels with the seed). Looks are inherited and nudged
+(`Look.mutate`). `ChainBreederTest` covers the operators and a generation against the sphere.
+
 **Colouring is weaker than a stand-alone formula, by nature.** A formula ships orbit traps
 tuned to its own orbit — the Mandelbox tracks fold amount and sphere-fold hits, the
 Mandelbulb plane traps calibrated to a bailout of 2. A chain has no such thing, and generic

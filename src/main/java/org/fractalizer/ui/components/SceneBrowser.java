@@ -21,6 +21,8 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.stage.Window;
+import org.fractalizer.explore.ChainBreeder;
+import org.fractalizer.explore.ChainBreeder.Parent;
 import org.fractalizer.explore.ChainProspector;
 import org.fractalizer.explore.ChainProspector.Discovery;
 import org.fractalizer.explore.ChainProspector.Settings;
@@ -52,6 +54,12 @@ import java.util.Locale;
  * shown best first as they arrive. A click makes one the scene. The search drives the
  * controller from a worker thread on a throw-away scene: the host pauses its preview loop
  * for the duration and the user's own scene is put back afterwards, as Explore does.
+ *
+ * <p><b>Breed</b> is the other half: from the clicked discovery (or the scene's own chain
+ * when it is one), and a second parent marked with Ctrl+click, {@link ChainBreeder} makes a
+ * generation of nine children, mostly parameter mutants on the parent's shader and a few
+ * structural children or crossovers. The parents stay pinned at the top, the children come
+ * in best first; click a child to make it the scene, breed again from it, and so on.
  */
 public class SceneBrowser {
 
@@ -88,7 +96,11 @@ public class SceneBrowser {
     private final FlowPane foundGrid = new FlowPane(8, 8);
     private final List<DiscoveryTile> foundTiles = new ArrayList<>();
     private final Button prospectBtn = new Button("Prospect");
+    private final Button breedBtn = new Button("Breed");
     private final Button stopBtn = new Button("Stop");
+    private final List<DiscoveryTile> pinned = new ArrayList<>();
+    private DiscoveryTile primary, second;
+    private String mode = "prospect";
     private final Spinner<Integer> structuresSpinner = new Spinner<>(1, 200, 10);
     private final ProgressBar progress = new ProgressBar(0);
     private final Label status = new Label("Nothing searched yet.");
@@ -163,13 +175,18 @@ public class SceneBrowser {
         Label hint = new Label("Let the app look for fractals nobody has made. It draws chains of the 28 hybrid steps, "
                 + "compiles and renders each on the GPU (about ten seconds a structure), keeps what is neither "
                 + "empty nor a known family, and shows the rest here best first as it goes. Click one to make it "
-                + "the scene; File > Save keeps it. The scene you had is put back when the search ends.");
+                + "the scene; File > Save keeps it. The scene you had is put back when the search ends. "
+                + "Breed makes a generation of children from the clicked one (Ctrl+click marks a second parent), "
+                + "or from the scene's own chain when nothing is clicked.");
         hint.setWrapText(true);
         hint.getStyleClass().add("hint-label");
         hint.setPadding(new Insets(8, 8, 0, 8));
 
         prospectBtn.setTooltip(new Tooltip("Search that many chain structures, eight parameter draws each"));
         prospectBtn.setOnAction(e -> startProspecting());
+        breedBtn.setTooltip(new Tooltip("A generation of nine children from the clicked discovery (or the scene's chain), "
+                + "and from a second parent marked with Ctrl+click: six parameter mutants, three structural children or crossovers"));
+        breedBtn.setOnAction(e -> startBreeding());
         stopBtn.setDisable(true);
         stopBtn.setOnAction(e -> { cancelled = true; status.setText("Stopping after this draw…"); });
         structuresSpinner.setEditable(true);
@@ -179,7 +196,7 @@ public class SceneBrowser {
         status.setWrapText(true);
         status.getStyleClass().add("small-label");
         HBox.setHgrow(status, Priority.ALWAYS);
-        HBox bar = new HBox(8, prospectBtn, stopBtn, new Label("structures:"), structuresSpinner, progress, status);
+        HBox bar = new HBox(8, prospectBtn, new Label("structures:"), structuresSpinner, breedBtn, stopBtn, progress, status);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(8));
 
@@ -201,17 +218,13 @@ public class SceneBrowser {
         HybridPresets.showcaseLook(search);
         int structures = structuresSpinner.getValue();
 
-        running = true;
-        cancelled = false;
-        pendingPick = null;
-        knownLeftOut = 0;
+        mode = "prospect";
+        beginRun();
+        pinned.clear();
+        primary = null;
+        second = null;
         foundGrid.getChildren().clear();
-        foundTiles.clear();
-        prospectBtn.setDisable(true);
-        stopBtn.setDisable(false);
-        progress.setProgress(0);
         status.setText("Starting…");
-        host.prospectingChanged(true);
 
         Settings settings = new Settings(structures, DRAWS, SAMPLES, System.nanoTime() & 0xFFFF, THUMB_W, THUMB_H);
         ChainProspector.Listener listener = new ChainProspector.Listener() {
@@ -246,24 +259,118 @@ public class SceneBrowser {
         worker.start();
     }
 
-    /** A find arrives: a new one becomes a tile, best first; a known family is counted and
-     *  left out. On the FX thread. */
+    private void beginRun() {
+        running = true;
+        cancelled = false;
+        pendingPick = null;
+        knownLeftOut = 0;
+        foundTiles.clear();
+        prospectBtn.setDisable(true);
+        breedBtn.setDisable(true);
+        stopBtn.setDisable(false);
+        progress.setProgress(0);
+        host.prospectingChanged(true);
+    }
+
+    /** A generation from the clicked discovery, or the scene's chain, and the second
+     *  parent if one is marked. Same worker, same throw-away scene, same restore. */
+    void startBreeding() {
+        if (running || controller == null) return;
+        Parent a = primary != null ? Parent.of(primary.discovery) : Parent.of(host.params());
+        if (a == null) {
+            status.setText("Click a discovery first, or make a hybrid chain the scene, then breed.");
+            return;
+        }
+        Parent b = second != null && second != primary ? Parent.of(second.discovery) : null;
+        AbstractFractalParams original = host.params();
+        NodeGraphParams search = new NodeGraphParams();
+
+        mode = "breed";
+        beginRun();
+        // The parents stay in view, at the top, so the lineage can be read.
+        pinned.clear();
+        if (primary != null) pinned.add(primary);
+        if (b != null) pinned.add(second);
+        for (DiscoveryTile t : pinned) t.setParentBadge(true);
+        foundGrid.getChildren().setAll(pinned);
+        status.setText("Breeding from " + a.label() + (b != null ? " and " + b.label() : "") + "…");
+
+        ChainBreeder.Settings settings = new ChainBreeder.Settings(9, 3, SAMPLES, System.nanoTime() & 0xFFFF, THUMB_W, THUMB_H, 0.25f);
+        ChainProspector.Listener listener = new ChainProspector.Listener() {
+            @Override public void found(Discovery d) { Platform.runLater(() -> offer(d)); }
+            @Override public void status(double p, String message) {
+                Platform.runLater(() -> { progress.setProgress(p); status.setText(message); });
+            }
+        };
+        Thread worker = new Thread(() -> {
+            String failure = null;
+            try {
+                ControllerChainRenderer renderer = new ControllerChainRenderer(controller, search, () -> cancelled);
+                new ChainBreeder(renderer, listener, () -> cancelled).breed(a, b, settings);
+            } catch (Exception ex) {
+                failure = ex.getMessage() == null ? ex.toString() : ex.getMessage();
+            } finally {
+                try {
+                    if (original instanceof NodeGraphParams ngp) ngp.markDirty();
+                    controller.replaceParams(original);
+                    controller.updatePaletteTexture(original.getCustomGradient());
+                    controller.restoreViewportSize();
+                } catch (Exception ignored) {
+                    // the host re-renders on prospectingChanged(false) either way
+                }
+            }
+            String err = failure;
+            Platform.runLater(() -> finish(err));
+        }, "breed");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    /** A find arrives: a new one becomes a tile, best first after the pinned parents; a
+     *  known family is counted and left out. On the FX thread. */
     void offer(Discovery d) {
         if (!d.isNew()) { knownLeftOut++; return; }
         foundTiles.add(new DiscoveryTile(d));
         foundTiles.sort((a, b) -> Double.compare(b.discovery.score(), a.discovery.score()));
-        foundGrid.getChildren().setAll(foundTiles);
+        List<DiscoveryTile> shown = new ArrayList<>(pinned);
+        shown.addAll(foundTiles);
+        foundGrid.getChildren().setAll(shown);
+    }
+
+    /** The clicked tile: the scene, and the first parent of the next generation. */
+    private void setPrimary(DiscoveryTile t) {
+        if (primary != null) primary.refreshStyle(false);
+        primary = t;
+        if (second == t) second = null;
+        t.refreshStyle(false);
+    }
+
+    /** Ctrl+click: the second parent, or not any more. */
+    private void toggleSecond(DiscoveryTile t) {
+        if (t == primary) return;
+        DiscoveryTile old = second;
+        second = (second == t) ? null : t;
+        if (old != null) old.refreshStyle(false);
+        t.refreshStyle(false);
+        status.setText(second != null ? "Second parent: " + second.discovery.label() + ". Breed crosses it with the clicked one."
+                : "Second parent cleared.");
     }
 
     private void finish(String failure) {
         running = false;
         prospectBtn.setDisable(false);
+        breedBtn.setDisable(false);
         stopBtn.setDisable(true);
         String known = knownLeftOut > 0 ? " (" + knownLeftOut + " known families left out)" : "";
-        if (failure != null) status.setText("Prospecting failed: " + failure);
+        boolean breeding = mode.equals("breed");
+        if (failure != null) status.setText((breeding ? "Breeding" : "Prospecting") + " failed: " + failure);
         else if (cancelled) status.setText("Stopped. " + foundTiles.size() + " found" + known + ". Click one to make it the scene.");
-        else if (foundTiles.isEmpty()) status.setText("Nothing worth keeping this time" + known + ". Prospect again: every run draws new chains.");
-        else status.setText(foundTiles.size() + " discoveries, best first" + known + ". Click one to make it the scene; File > Save keeps it.");
+        else if (foundTiles.isEmpty()) status.setText(breeding
+                ? "No child worth keeping this time" + known + ". Breed again: every generation draws anew."
+                : "Nothing worth keeping this time" + known + ". Prospect again: every run draws new chains.");
+        else status.setText(breeding
+                ? foundTiles.size() + " children, best first" + known + ". Click one to make it the scene, then Breed for the next generation."
+                : foundTiles.size() + " discoveries, best first" + known + ". Click one to make it the scene; File > Save keeps it, Breed makes children of it.");
         progress.setProgress(failure != null || cancelled ? 0 : 1);
         host.prospectingChanged(false);
         if (pendingPick != null) {
@@ -277,6 +384,8 @@ public class SceneBrowser {
      *  scene; during a search the search is stopped first and the load follows. */
     private final class DiscoveryTile extends VBox {
         final Discovery discovery;
+        private final Label score;
+        private final String scoreText;
 
         DiscoveryTile(Discovery d) {
             super(3);
@@ -287,22 +396,35 @@ public class SceneBrowser {
             Label label = new Label(d.label());
             label.setMaxWidth(THUMB_W);
             label.setWrapText(true);
-            Label score = new Label(String.format(Locale.ROOT, "%s  ·  score %.0f  ·  %d%% surface",
-                    d.look().name(), d.score(), Math.round(d.frame().coverage() * 100)));
+            scoreText = String.format(Locale.ROOT, "%s  ·  score %.0f  ·  %d%% surface  ·  %s",
+                    d.look().name(), d.score(), Math.round(d.frame().coverage() * 100), d.recipe());
+            score = new Label(scoreText);
             score.setMaxWidth(THUMB_W);
             score.setWrapText(true);
             score.getStyleClass().add("small-label");
             getChildren().addAll(view, label, score);
             setPadding(new Insets(3));
-            setStyle("-fx-border-color: transparent; -fx-border-width: 2;");
-            setOnMouseEntered(e -> setStyle("-fx-border-color: #00BCD4; -fx-border-width: 2;"));
-            setOnMouseExited(e -> setStyle("-fx-border-color: transparent; -fx-border-width: 2;"));
-            setOnMouseClicked(e -> pick());
-            Tooltip.install(this, new Tooltip("Click to make this the scene"));
+            refreshStyle(false);
+            setOnMouseEntered(e -> refreshStyle(true));
+            setOnMouseExited(e -> refreshStyle(false));
+            setOnMouseClicked(e -> { if (e != null && e.isControlDown()) toggleSecond(this); else pick(); });
+            Tooltip.install(this, new Tooltip("Click to make this the scene and the parent of the next generation; Ctrl+click for a second parent"));
             setUserData(d.label());
         }
 
+        void setParentBadge(boolean on) {
+            score.setText(on ? "parent  ·  " + scoreText : scoreText);
+        }
+
+        /** Cyan for the clicked one, magenta for the second parent, cyan on hover. */
+        void refreshStyle(boolean hover) {
+            String colour = this == primary ? "#00BCD4" : this == second ? "#E040FB" : hover ? "#00BCD4" : "transparent";
+            String width = this == primary || this == second ? "3" : "2";
+            setStyle("-fx-border-color: " + colour + "; -fx-border-width: " + width + ";");
+        }
+
         void pick() {
+            setPrimary(this);
             Runnable load = () -> host.loadDiscovery(ChainProspector.toParams(discovery), discovery.label());
             if (running) {
                 pendingPick = load;
@@ -401,12 +523,21 @@ public class SceneBrowser {
 
     int tabCount() { return tabs.getTabs().size(); }
 
-    /** The discoveries shown, in the order shown. */
+    /** The discoveries shown, in the order shown, after the pinned parents. */
     List<String> discoveryLabels() {
         List<String> out = new ArrayList<>();
         for (DiscoveryTile t : foundTiles) out.add(t.discovery.label());
         return out;
     }
+
+    /** Ctrl+click on the n-th tile shown. */
+    void markSecondParent(int index) {
+        toggleSecond((DiscoveryTile) foundGrid.getChildren().get(index));
+    }
+
+    String primaryLabel() { return primary == null ? null : primary.discovery.label(); }
+
+    String secondLabel() { return second == null ? null : second.discovery.label(); }
 
     private FlowPane grid(int tab) {
         return switch (tab) { case 0 -> presetGrid; case 1 -> chainGrid; default -> foundGrid; };

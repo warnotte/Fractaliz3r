@@ -102,6 +102,57 @@ public record Look(String palette, float[][] stops, float paletteOffset, int col
                 uni(rnd, 0f, .6f), uni(rnd, .2f, .7f), uni(rnd, .3f, 1.0f), uni(rnd, 20f, 90f));
     }
 
+    /** The look a scene wears now, so a chain loaded from anywhere can be bred with the
+     *  palette and light it has. Its parts are named for what they are. */
+    public static Look of(AbstractFractalParams p) {
+        List<GradientPalette.ColorStop> cs = p.getCustomGradient() == null ? List.of() : p.getCustomGradient().getStops();
+        float[][] st = new float[Math.max(2, cs.size())][];
+        if (cs.size() < 2) {
+            st[0] = new float[]{0f, .1f, .1f, .1f};
+            st[1] = new float[]{1f, .9f, .9f, .9f};
+        } else {
+            for (int i = 0; i < cs.size(); i++) {
+                GradientPalette.ColorStop c = cs.get(i);
+                st[i] = new float[]{(float) c.position(), (float) c.color().getRed(), (float) c.color().getGreen(), (float) c.color().getBlue()};
+            }
+        }
+        return new Look("scene palette", st, p.getPaletteOffset(), p.getColoringMode(), p.getColorStrength(),
+                "scene light", new float[]{p.getLightX(), p.getLightY(), p.getLightZ()},
+                new float[]{p.getLightR(), p.getLightG(), p.getLightB()}, p.getLightIntensity(),
+                new float[]{p.getAmbientR(), p.getAmbientG(), p.getAmbientB()}, p.getAmbientIntensity(),
+                p.getRimIntensity(), p.getGlowIntensity(),
+                "scene sky", p.getSkyType(), p.getNebulaColor(), p.getNebulaTint(),
+                p.getMetalness(), p.getRoughness(), p.getSpecularIntensity(), p.getSpecularPower());
+    }
+
+    private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    /** A child's look: the parent's, nudged. The palette scrolls a little, the light moves
+     *  a little, the metal and the roughness drift; one time in seven the palette is a new
+     *  one, one in seven the light, one in ten the sky or the colouring mode. */
+    public Look mutate(Random rnd) {
+        String pal = palette; float[][] st = stops;
+        if (rnd.nextInt(7) == 0) { Palette np = PALETTES[rnd.nextInt(PALETTES.length)]; pal = np.name(); st = np.stops(); }
+        String li = lighting; float[] dir = lightDir.clone(); float[] lc = lightColor; float lint = lightIntensity;
+        float[] amb = ambientColor; float ambI = ambientIntensity; float rim = rimIntensity;
+        if (rnd.nextInt(7) == 0) {
+            Lighting nl = LIGHTINGS[rnd.nextInt(LIGHTINGS.length)];
+            li = nl.name(); dir = nl.dir().clone(); lc = nl.colour(); lint = nl.intensity(); amb = nl.ambient(); ambI = nl.ambientIntensity(); rim = nl.rim();
+        }
+        for (int i = 0; i < 3; i++) dir[i] *= uni(rnd, .85f, 1.15f);
+        lint = clamp(lint * uni(rnd, .95f, 1.05f), 1.0f, 1.7f);
+        String skyName = sky; int skyT = skyType; float[] neb = nebulaColor;
+        if (rnd.nextInt(10) == 0) { Sky ns = SKIES[rnd.nextInt(SKIES.length)]; skyName = ns.name(); skyT = ns.type(); neb = NEBULAE[rnd.nextInt(NEBULAE.length)]; }
+        int mode = rnd.nextInt(10) == 0 ? MODES[rnd.nextInt(MODES.length)] : coloringMode;
+        float off = paletteOffset + (float) (rnd.nextGaussian() * 0.1);
+        off -= (float) Math.floor(off);
+        return new Look(pal, st, off, mode, clamp(colorStrength * uni(rnd, .95f, 1.05f), .8f, 1.2f),
+                li, dir, lc, lint, amb, ambI, rim, clamp(glowIntensity + (float) (rnd.nextGaussian() * 0.03), 0f, .15f),
+                skyName, skyT, neb, nebulaTint,
+                clamp(metalness + (float) (rnd.nextGaussian() * 0.1), 0f, .6f), clamp(roughness + (float) (rnd.nextGaussian() * 0.1), .2f, .7f),
+                clamp(specularIntensity * uni(rnd, .9f, 1.1f), .3f, 1f), clamp(specularPower * uni(rnd, .9f, 1.1f), 20f, 90f));
+    }
+
     /** The chain library's showcase look, as {@code HybridPresets.showcaseLook} sets it. */
     public static Look showcase() {
         return new Look("Spectrum", PALETTES[0].stops(), .05f, 10, 1.0f,

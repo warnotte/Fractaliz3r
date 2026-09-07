@@ -57,8 +57,39 @@ class SceneBrowserTest {
         SceneBrowser browser = UiWiringTest.onFxThread(() -> new SceneBrowser(null, null, host));
         assertEquals(3, browser.tabCount(), "presets, chains, discoveries");
         assertNotNull(UiWiringTest.findButton(browser.root(), "Prospect"));
+        assertNotNull(UiWiringTest.findButton(browser.root(), "Breed"));
         assertNotNull(UiWiringTest.findButton(browser.root(), "Stop"));
         assertEquals(0, browser.tileCount(2));
+    }
+
+    @Test
+    void aClickPicksTheFirstParentAndCtrlClickTheSecond() throws Exception {
+        HostStub host = new HostStub();
+        SceneBrowser browser = UiWiringTest.onFxThread(() -> new SceneBrowser(null, null, host));
+        List<HybridPresets.Preset> lib = HybridPresets.all();
+        UiWiringTest.onFxThread(() -> {
+            browser.offer(discovery(lib.get(4), 10, null));
+            browser.offer(discovery(lib.get(5), 30, null));
+            return null;
+        });
+        assertNull(browser.primaryLabel(), "nothing picked yet");
+        UiWiringTest.onFxThread(() -> { browser.clickTile(2, 1); return null; });   // the lower-scored one
+        HybridNode low = new HybridNode();
+        HybridPresets.apply(low, lib.get(4));
+        assertEquals(low.describeChain(), browser.primaryLabel(), "the click made it the first parent");
+        assertEquals(1, host.loadedDiscoveries.size(), "and the scene");
+        UiWiringTest.onFxThread(() -> { browser.markSecondParent(0); return null; });   // the best one
+        HybridNode best = new HybridNode();
+        HybridPresets.apply(best, lib.get(5));
+        assertEquals(best.describeChain(), browser.secondLabel());
+        UiWiringTest.onFxThread(() -> { browser.markSecondParent(0); return null; });
+        assertNull(browser.secondLabel(), "Ctrl+click again clears it");
+        UiWiringTest.onFxThread(() -> { browser.markSecondParent(1); return null; });
+        assertNull(browser.secondLabel(), "the first parent cannot be its own second");
+        assertTrue(host.prospecting.isEmpty(), "selecting never pauses the host");
+        // without a controller there is no GPU: Breed is a no-op, the host untouched
+        UiWiringTest.onFxThread(() -> { browser.startBreeding(); return null; });
+        assertTrue(host.prospecting.isEmpty());
     }
 
     @Test
