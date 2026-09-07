@@ -134,11 +134,13 @@ class ChainProspectorTest {
     /** A renderer that ignores the chain and shows a unit sphere at the origin, textured
      *  with a checkerboard so it has detail: enough to drive the search end to end. */
     static final class SphereRenderer implements ChainProspector.ChainRenderer {
-        int chainsSet = 0, paramChanges = 0, frames = 0;
+        int chainsSet = 0, paramChanges = 0, frames = 0, looks = 0;
         HybridNode lastChain;
+        Look lastLook;
 
         @Override public void setChain(HybridNode chain) { chainsSet++; lastChain = chain; }
         @Override public void chainParamsChanged() { paramChanges++; }
+        @Override public void applyLook(Look look) { looks++; lastLook = look; }
 
         private static double[] unit(double x, double y, double z) {
             double n = Math.sqrt(x * x + y * y + z * z);
@@ -200,6 +202,8 @@ class ChainProspectorTest {
 
         assertEquals(3, renderer.chainsSet, "one chain set per structure");
         assertEquals(6, renderer.paramChanges, "one uniform refresh per draw");
+        assertEquals(6, renderer.looks, "one look per draw");
+        assertTrue(r.discoveries().stream().map(d -> d.look().name()).distinct().count() > 1, "not everything wears the same look");
         assertEquals(3, r.structures());
         assertEquals(6, r.discoveries().size(), "a sphere renders every time: " + r.empty() + " empty, " + r.solid() + " solid, " + r.flat() + " flat");
         assertEquals(reported, r.discoveries(), "every find went to the listener, in order");
@@ -247,7 +251,10 @@ class ChainProspectorTest {
         assertEquals(d.label(), ((HybridNode) p.getGraphRoot()).describeChain());
         assertNotSame(d.chain(), p.getGraphRoot(), "a copy: the discovery keeps its own");
         assertArrayEquals(d.eye(), p.getCamera().getPosition(), 1e-6f);
-        assertFalse(p.isPathTracingEnabled(), "the showcase look, interactive");
+        assertFalse(p.isPathTracingEnabled(), "classic shading, interactive");
+        assertEquals(d.look().coloringMode(), p.getColoringMode(), "the look the thumbnail was rendered under");
+        assertEquals(d.look().skyType(), p.getSkyType());
+        assertEquals(d.look().stops().length, p.getCustomGradient().getStops().size(), "its palette");
         // and it survives a save, as File > Save would write it
         FractalConfig cfg = FractalConfig.fromParams(p);
         NodeGraphParams back = (NodeGraphParams) cfg.toFreshParams();
@@ -259,11 +266,12 @@ class ChainProspectorTest {
         BufferedImage img = new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB);
         HybridNode chain = new HybridNode();
         FrameScorer.FrameScore fs = new FrameScorer.FrameScore(1, 0.5, 0.1);
+        Look look = Look.showcase();
         List<Discovery> all = List.of(
-                new Discovery(0, "ifs", chain, new float[]{0, 0, 3}, 10, fs, 0.9, null, img),
-                new Discovery(0, "ifs", chain, new float[]{0, 0, 3}, 30, fs, 0.9, null, img),
-                new Discovery(0, "ifs", chain, new float[]{0, 0, 3}, 20, fs, 0.9, null, img),
-                new Discovery(1, "power", chain, new float[]{0, 0, 3}, 25, fs, 0.9, null, img));
+                new Discovery(0, "ifs", chain, new float[]{0, 0, 3}, 10, fs, 0.9, null, look, img),
+                new Discovery(0, "ifs", chain, new float[]{0, 0, 3}, 30, fs, 0.9, null, look, img),
+                new Discovery(0, "ifs", chain, new float[]{0, 0, 3}, 20, fs, 0.9, null, look, img),
+                new Discovery(1, "power", chain, new float[]{0, 0, 3}, 25, fs, 0.9, null, look, img));
         List<Discovery> d = ChainProspector.diverse(all, 2);
         assertEquals(List.of(30.0, 25.0, 20.0), d.stream().map(Discovery::score).toList());
     }

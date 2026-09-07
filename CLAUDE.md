@@ -155,6 +155,7 @@ org.fractalizer
 │   ├── CameraExplorer.java          # Scored views from the current camera: pivot, auto-frame, aim scan, dives
 │   ├── ParamExplorer.java           # Variations: knobs nudged at random, rendered from the same camera, scored
 │   ├── ChainProspector.java         # Discoveries: random hybrid chains, one compile per structure, draws as uniforms, framed, scored, known families marked
+│   ├── Look.java                    # a discovery's palette / light / sky / material, drawn from the seed, saved with it
 │   ├── ParamKnobs.java              # which numeric parameters a scene has (fractal leaves' floats, hybrid steps)
 │   ├── CameraFlight.java            # eased flight between two poses (smoothstep + slerp), stepped by the render loop
 │   ├── FrameScorer.java             # detail / coverage / centring score shared with the navigator harness

@@ -446,9 +446,10 @@ while empty, farther while filled or cut by the frame), scores it as FractalNavi
 a framing times a structure factor (`FrameScorer.structure`: the share of surface whose
 neighbours are surface at a continuous depth, because detail alone rates a ball of dust as
 high as a carved solid), and marks as known a chain whose shape steps are a library chain's
-or number one (a turned Mandelbox is still a Mandelbox). It talks to a `ChainRenderer` (set a
-chain, say its uniforms changed, render depth and colour); `ControllerChainRenderer` is the
-GPU one. `ChainProspectorTest` keeps it honest without a GPU: every drawn structure compiles,
+or number one (a turned Mandelbox is still a Mandelbox). Each candidate is rendered under
+its own `Look` (palette, light, sky, material, colouring mode, drawn from the seed and saved
+with the find). It talks to a `ChainRenderer` (set a chain, say its uniforms changed, apply a
+look, render depth and colour); `ControllerChainRenderer` is the GPU one. `ChainProspectorTest` keeps it honest without a GPU: every drawn structure compiles,
 draws stay inside the clamps, a drawn chain survives its save, and the search itself run
 against an analytic sphere frames, scores, reports and stops when told.
 

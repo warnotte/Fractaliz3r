@@ -287,8 +287,10 @@ public class SceneBrowser {
             Label label = new Label(d.label());
             label.setMaxWidth(THUMB_W);
             label.setWrapText(true);
-            Label score = new Label(String.format(Locale.ROOT, "score %.0f  ·  %d%% surface  ·  %s",
-                    d.score(), Math.round(d.frame().coverage() * 100), d.recipe()));
+            Label score = new Label(String.format(Locale.ROOT, "%s  ·  score %.0f  ·  %d%% surface",
+                    d.look().name(), d.score(), Math.round(d.frame().coverage() * 100)));
+            score.setMaxWidth(THUMB_W);
+            score.setWrapText(true);
             score.getStyleClass().add("small-label");
             getChildren().addAll(view, label, score);
             setPadding(new Insets(3));

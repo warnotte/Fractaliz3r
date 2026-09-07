@@ -85,8 +85,8 @@ public class HybridProspector {
                 } catch (Exception e) {
                     System.err.println("could not write " + tag + ": " + e.getMessage());
                 }
-                System.out.printf(Locale.ROOT, "     %s  score %8.0f  detail %8.0f  cov %3.0f%%  solid %.2f  d=%.2f%n",
-                        tag, d.score(), d.frame().detail(), 100 * d.frame().coverage(), d.solidity(), length(d.eye()));
+                System.out.printf(Locale.ROOT, "     %s  score %8.0f  detail %8.0f  cov %3.0f%%  solid %.2f  d=%.2f  %s%n",
+                        tag, d.score(), d.frame().detail(), 100 * d.frame().coverage(), d.solidity(), length(d.eye()), d.look().name());
                 System.out.flush();
             }
             @Override public void status(double p, String message) { }
@@ -112,11 +112,11 @@ public class HybridProspector {
         }
 
         try (PrintWriter pw = new PrintWriter(new File(outDir, "ranking.txt"))) {
-            pw.println("# rank tag score detail coverage solidity known chain");
+            pw.println("# rank tag score detail coverage solidity known chain | look");
             for (int i = 0; i < scored.size(); i++) {
                 Discovery d = scored.get(i);
-                pw.printf(Locale.ROOT, "%3d %s %10.0f %10.0f %5.2f %5.2f %-16s %s%n", i + 1, tag(d), d.score(),
-                        d.frame().detail(), d.frame().coverage(), d.solidity(), d.known() == null ? "-" : d.known(), d.label());
+                pw.printf(Locale.ROOT, "%3d %s %10.0f %10.0f %5.2f %5.2f %-16s %s | %s%n", i + 1, tag(d), d.score(),
+                        d.frame().detail(), d.frame().coverage(), d.solidity(), d.known() == null ? "-" : d.known(), d.label(), d.look().name());
             }
         }
 

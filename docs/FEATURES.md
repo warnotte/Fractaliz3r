@@ -144,8 +144,12 @@ The prospector in the app. *Prospect* draws that many chain structures (ten by d
 two minutes), each a random composition of the 28 hybrid steps under one of four recipes, and
 for each: compiles it (about ten seconds on the dev machine, once per machine — the driver
 caches shaders), sweeps eight parameter draws through it as uniforms at a few milliseconds a
-frame, frames each draw on the depth AOV, scores it, and hands it over. New finds appear as
-tiles best first while the search runs; known families (a single power map or fold however
+frame, frames each draw on the depth AOV, scores it, and hands it over. Each candidate
+wears its own look, drawn from the same seed as its parameters (`explore/Look`: one of
+sixteen curated palettes, one of seven lighting schemes, a sky, a material, a multi-hue
+colouring mode, all uniforms or a texture, never a compile), so a sheet of finds is not one
+material photographed twelve times; the tile shows the look and the click loads it. New
+finds appear as tiles best first while the search runs; known families (a single power map or fold however
 it is turned, or the shape steps of a library chain) are counted in the status line and left
 out. A click makes a discovery the scene, a fresh node graph with the chain at its root in
 the showcase look, camera where the search settled; File › Save keeps it. *Stop* ends the

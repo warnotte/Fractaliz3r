@@ -48,7 +48,7 @@ class SceneBrowserTest {
         HybridPresets.apply(node, chain);
         BufferedImage img = new BufferedImage(SceneBrowser.THUMB_W, SceneBrowser.THUMB_H, BufferedImage.TYPE_INT_RGB);
         return new Discovery(0, "mixed", node, new float[]{0.5f, 0.3f, -3f}, score,
-                new FrameScorer.FrameScore(1000, 0.5, 0.1), 0.9, known, img);
+                new FrameScorer.FrameScore(1000, 0.5, 0.1), 0.9, known, org.fractalizer.explore.Look.showcase(), img);
     }
 
     @Test
@@ -83,7 +83,8 @@ class SceneBrowserTest {
         assertInstanceOf(HybridNode.class, scene.getGraphRoot());
         assertEquals(best.describeChain(), ((HybridNode) scene.getGraphRoot()).describeChain());
         assertArrayEquals(new float[]{0.5f, 0.3f, -3f}, scene.getCamera().getPosition(), 1e-6f, "the camera the search settled on");
-        assertFalse(scene.isPathTracingEnabled(), "the showcase look, interactive");
+        assertFalse(scene.isPathTracingEnabled(), "classic shading, interactive");
+        assertEquals(10, scene.getColoringMode(), "the discovery's own look");
     }
 
     @BeforeAll

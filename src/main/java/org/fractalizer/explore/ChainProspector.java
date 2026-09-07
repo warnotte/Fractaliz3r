@@ -67,14 +67,18 @@ public final class ChainProspector {
         void setChain(HybridNode chain);
         /** The chain's parameters changed; the shader has not. */
         void chainParamsChanged();
+        /** Palette, light, sky and material for the next picture. Uniforms and a texture,
+         *  never a compile. */
+        void applyLook(Look look);
         float[] depth(float[] eye, float[] target, float fovDeg, int w, int h);
         BufferedImage colour(float[] eye, float[] target, float fovDeg, int w, int h, int samples);
     }
 
     /** One candidate that rendered. {@code known} names the library chain or family it
-     *  already is, or is null for a new one. The chain is a private copy. */
+     *  already is, or is null for a new one. The chain is a private copy; the look is the
+     *  one its thumbnail was rendered under and the one a click loads. */
     public record Discovery(int structureIndex, String recipe, HybridNode chain, float[] eye, double score,
-                            FrameScorer.FrameScore frame, double solidity, String known, BufferedImage thumbnail) {
+                            FrameScorer.FrameScore frame, double solidity, String known, Look look, BufferedImage thumbnail) {
         public String label() { return chain.describeChain(); }
         public boolean isNew() { return known == null; }
     }
@@ -348,13 +352,13 @@ public final class ChainProspector {
         return tot == 0 ? 0 : (double) hit / tot;
     }
 
-    /** A fresh scene that is this discovery: the chain as the node graph, the showcase
-     *  look, the camera the search settled on. What a click in the browser loads and what
-     *  the command line writes as a preset. */
+    /** A fresh scene that is this discovery: the chain as the node graph, the look its
+     *  thumbnail was rendered under, the camera the search settled on. What a click in the
+     *  browser loads and what the command line writes as a preset. */
     public static NodeGraphParams toParams(Discovery d) {
         NodeGraphParams p = new NodeGraphParams();
         p.setGraphRoot(snapshot(d.chain()));
-        HybridPresets.showcaseLook(p);
+        d.look().apply(p);
         float[] eye = d.eye();
         p.getCamera().setPosition(eye[0], eye[1], eye[2]);
         float[] q = CameraUtils.lookAt(eye, ORIGIN);
@@ -425,6 +429,11 @@ public final class ChainProspector {
                     node.setJuliaCx(0); node.setJuliaCy(0); node.setJuliaCz(0);
                 }
                 renderer.chainParamsChanged();
+                // Its own palette, light, sky and material, from the same stream as its
+                // parameters: every candidate wears something else, and the tile shows what
+                // the click will load.
+                Look look = Look.draw(rnd);
+                renderer.applyLook(look);
 
                 float d = st.deMode() == DEMode.LOG ? 3.2f : (st.deMode() == DEMode.PLANE ? 4.0f : 7.0f);
                 double cov = 0, edge = 0;
@@ -454,7 +463,7 @@ public final class ChainProspector {
                 FrameScorer.Structure stc = FrameScorer.structure(depth, W, H);
                 double solidity = Math.max(0.05, stc.factor());
                 double score = fs.aesthetic() * solidity * (known != null ? 0.5 : 1.0);
-                Discovery disc = new Discovery(si, st.recipe(), snapshot(node), eye, score, fs, stc.factor(), known, img);
+                Discovery disc = new Discovery(si, st.recipe(), snapshot(node), eye, score, fs, stc.factor(), known, look, img);
                 found.add(disc);
                 perRecipe.get(st.recipe())[1]++;
                 listener.found(disc);

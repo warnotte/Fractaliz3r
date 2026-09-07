@@ -46,6 +46,12 @@ public final class ControllerChainRenderer implements ChainProspector.ChainRende
         params.updateUniforms();
     }
 
+    @Override
+    public void applyLook(Look look) {
+        look.apply(params);
+        controller.updatePaletteTexture(params.getCustomGradient());
+    }
+
     private void aim(float[] eye, float[] target, float fovDeg) {
         Camera cam = params.getCamera();
         cam.setPosition(eye[0], eye[1], eye[2]);
