@@ -50,11 +50,13 @@ import java.util.concurrent.CountDownLatch;
  * milliseconds a frame. Twenty structures times ten draws is two hundred candidates in
  * about four minutes, nearly all of it compile time.
  *
- * Each candidate is framed automatically (back off while the view is filled, come closer
- * while it is empty, on the depth AOV), then scored like a framing in FractalNavigator:
- * fine-detail energy, surface coverage in a pleasing band, where the detail sits. A
- * candidate whose step sequence is one of the library's chains is kept but marked and
- * ranked down: the point is what the library does not have.
+ * Each candidate is framed automatically (back off while the view is filled or cut by the
+ * frame, come closer while it is empty, on the depth AOV), then scored like a framing in
+ * FractalNavigator (fine-detail energy, surface coverage in a pleasing band, where the
+ * detail sits) times a structure factor (FrameScorer.structure: surface whose neighbours
+ * are surface at a continuous depth), because detail alone scores a ball of dust as high
+ * as a carved solid. A candidate whose step sequence is one of the library's chains is kept
+ * but marked and ranked down: the point is what the library does not have.
  *
  * Usage:
  *   -Dexec.args="&lt;outDir&gt; &lt;structures&gt; &lt;drawsPerStructure&gt; &lt;WxH&gt; &lt;samples&gt; [keep] [seed]"
@@ -244,7 +246,7 @@ public class HybridProspector {
     // ------------------------------------------------------------------
 
     record Candidate(int structureIndex, Structure structure, HybridNode node, float[] eye,
-                     double score, double detail, double coverage, String known, String tag) {
+                     double score, double detail, double coverage, double solidity, String known, String tag) {
         String chain() { return node.describeChain(); }
     }
 
@@ -378,11 +380,17 @@ public class HybridProspector {
                 float[] depth = controller.renderDepthAOV(W, H);
                 FrameScorer.FrameScore fs = FrameScorer.score(img, depth);
                 if (fs.detail() < 1.0) { flat++; continue; }
-                double score = fs.aesthetic() * (known != null ? 0.5 : 1.0);
+                // Detail alone cannot tell a carved solid from a ball of dust: both are busy.
+                // The structure factor (surface whose neighbours are surface, at a continuous
+                // depth) is what separates them; the floor keeps a candidate visible in the
+                // ranking rather than deleting it on one metric.
+                FrameScorer.Structure stc = FrameScorer.structure(depth, W, H);
+                double solidity = Math.max(0.05, stc.factor());
+                double score = fs.aesthetic() * solidity * (known != null ? 0.5 : 1.0);
                 ImageIO.write(img, "png", new File(outDir, tag + ".png"));
-                scored.add(new Candidate(si, st, snapshot(node), eye, score, fs.detail(), fs.coverage(), known, tag));
-                System.out.printf(Locale.ROOT, "     %s  score %8.0f  detail %8.0f  cov %3.0f%%  edge %3.0f%%  d=%.2f%s%n",
-                        tag, score, fs.detail(), 100 * fs.coverage(), 100 * edge, d, st.julia() ? "  julia" : "");
+                scored.add(new Candidate(si, st, snapshot(node), eye, score, fs.detail(), fs.coverage(), stc.factor(), known, tag));
+                System.out.printf(Locale.ROOT, "     %s  score %8.0f  detail %8.0f  cov %3.0f%%  solid %.2f smooth %.2f  edge %3.0f%%  d=%.2f%s%n",
+                        tag, score, fs.detail(), 100 * fs.coverage(), stc.solid(), stc.smooth(), 100 * edge, d, st.julia() ? "  julia" : "");
             }
             if (!compiled) System.out.println("     (no draw reached a render)");
             System.out.flush();
@@ -404,11 +412,11 @@ public class HybridProspector {
         }
 
         try (PrintWriter pw = new PrintWriter(new File(outDir, "ranking.txt"))) {
-            pw.println("# rank tag score detail coverage known chain");
+            pw.println("# rank tag score detail coverage solidity known chain");
             for (int i = 0; i < scored.size(); i++) {
                 Candidate c = scored.get(i);
-                pw.printf(Locale.ROOT, "%3d %s %10.0f %10.0f %5.2f %-16s %s%n", i + 1, c.tag(), c.score(), c.detail(),
-                        c.coverage(), c.known() == null ? "-" : c.known(), c.chain());
+                pw.printf(Locale.ROOT, "%3d %s %10.0f %10.0f %5.2f %5.2f %-16s %s%n", i + 1, c.tag(), c.score(), c.detail(),
+                        c.coverage(), c.solidity(), c.known() == null ? "-" : c.known(), c.chain());
             }
         }
 
@@ -416,7 +424,7 @@ public class HybridProspector {
         System.out.println("top 12 (at most two per structure):");
         for (int i = 0; i < Math.min(12, diverse.size()); i++) {
             Candidate c = diverse.get(i);
-            System.out.printf(Locale.ROOT, "%3d %-8s %8.0f  %s%s%n", i + 1, c.tag(), c.score(), c.chain(),
+            System.out.printf(Locale.ROOT, "%3d %-8s %8.0f  solid %.2f  %s%s%n", i + 1, c.tag(), c.score(), c.solidity(), c.chain(),
                     c.known() != null ? "   [library: " + c.known() + "]" : "");
         }
 

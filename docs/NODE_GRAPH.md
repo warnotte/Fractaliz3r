@@ -440,9 +440,11 @@ from four recipes that follow the grammar above (escape-time map + seed under th
 estimator, IFS folds under the linear one, Mandelbox-like fold + seed, power map and fold in
 one loop), compiles each once (~12 s), sweeps parameter draws through it at a few
 milliseconds a frame, auto-frames each on the depth AOV (closer while empty, farther while
-filled or cut by the frame), scores it as FractalNavigator scores a framing, marks the ones
-whose step sequence is already in the library, and writes the best as `FOUND_NN.frac` in the
-showcase look, with a labelled contact sheet. `HybridProspectorTest` keeps the generator
+filled or cut by the frame), scores it as FractalNavigator scores a framing times a
+structure factor (`FrameScorer.structure`: the share of surface whose neighbours are surface
+at a continuous depth, because detail alone rates a ball of dust as high as a carved solid),
+marks the ones whose step sequence is already in the library, and writes the best as
+`FOUND_NN.frac` in the showcase look, with a labelled contact sheet. `HybridProspectorTest` keeps the generator
 honest without a GPU: every drawn structure compiles, draws stay inside the clamps, a drawn
 chain survives its save.
 
