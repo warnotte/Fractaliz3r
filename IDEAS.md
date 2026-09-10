@@ -105,3 +105,21 @@ What the Discoveries tab of the Presets & Chains browser still lacks, in the ord
 
 Do 1 and 2 together: small, and without them discoveries are lost.
 
+### 24. One Material Model (global material = the default material)
+**Status:** IDEA (parked 2026-09-11, raised by the user; a large reflection, not to be started on the side)
+
+Today a scene has two material vocabularies: the global material of the Material panel (the
+surfaces with no node, `matId` −1) and the `MaterialNode` of the graph (overrides per subtree
+through the SSBO, a sentinel for "inherit"). The model is sound as long as both sides carry the
+same properties, and they drift: IOR is per node, spectral dispersion (added the same day) is
+global only, so its checkbox lives in the global panel while the glass of the prism presets is
+a node. The user looked for it in the node.
+
+Rule until then: a new material property exists on both sides (global + node with an inherit
+sentinel) or is clearly global by nature.
+
+Direction when it is opened: the global material becomes literally a *default material*, the
+same record and the same editor component as a `MaterialNode`, one list of fields for the UI,
+the `.frac` and the SSBO (the default material could be slot 0). Then a property cannot exist on
+one side only, by construction.
+
