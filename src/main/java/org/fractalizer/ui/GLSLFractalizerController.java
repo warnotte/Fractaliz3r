@@ -59,6 +59,20 @@ public class GLSLFractalizerController implements RenderController {
     private String currentBooleanProgramKey = null;
     private final Map<String, String> preprocessedCache = new HashMap<>();
 
+    // A scene shader compiles on this thread when the request comes from the JavaFX thread,
+    // so the window keeps painting (7-10 s on a cold NVIDIA cache, ~50 s under WSL). The
+    // render that needed the program is re-issued on the FX thread once it exists.
+    private final java.util.concurrent.ExecutorService compileThread =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "SceneCompile");
+                t.setDaemon(true);
+                return t;
+            });
+    private volatile boolean compiling = false;
+    private volatile String lastCompileError;     // from the last node-graph compile, null on success
+    private Runnable renderAfterCompile;          // FX thread only
+    private Consumer<String> compileListener;     // message while compiling, null when done
+
     // Listeners
     private Consumer<WritableImage> imageListener;
     private Consumer<Double> progressListener;
@@ -168,9 +182,15 @@ public class GLSLFractalizerController implements RenderController {
      * Activate the correct shader program (boolean or normal).
      */
     private void activateCurrentProgram() {
+        // On the JavaFX thread a missing or stale program is not compiled here: the previous
+        // program stays active and the next renderPreview/renderFull defers the compile to
+        // the SceneCompile thread (see deferForCompile). Everywhere else (startup task,
+        // exports, harnesses, the compile thread itself) the compile is synchronous.
+        boolean mayCompile = !onFxThread();
+
         // Node Graph pipeline: compile on demand if dirty (covers all migrated types)
         if (currentParams instanceof NodeGraphParams ngp) {
-            if (ngp.isDirty() || !engine.hasProgram("nodegraph")) {
+            if (mayCompile && (ngp.isDirty() || !engine.hasProgram("nodegraph"))) {
                 String glsl = ngp.recompile();
                 if (glsl != null) {
                     // Deep-zoom LOD is compiled in only when enabled: the mutable global it
@@ -178,6 +198,7 @@ public class GLSLFractalizerController implements RenderController {
                     String defines = ngp.getDetailLOD() > 0f ? "#define DETAIL_LOD\n" : "";
                     long t0 = System.nanoTime();
                     String err = engine.loadCustomFractalShader("nodegraph", glsl, defines);
+                    lastCompileError = err;
                     if (err != null) {
                         System.err.println("Node graph shader error: " + err);
                     } else {
@@ -200,7 +221,7 @@ public class GLSLFractalizerController implements RenderController {
         if (currentParams instanceof AbstractFractalParams afp
                 && afp.isBooleanEnabled()
                 && afp.getBoolSecondaryType() != null) {
-            ensureBooleanShader(afp.getBoolSecondaryType());
+            if (mayCompile) ensureBooleanShader(afp.getBoolSecondaryType());
             String key = currentFractalType.getKernelName() + "+" + afp.getBoolSecondaryType();
             if (engine.hasProgram(key)) {
                 engine.setActiveProgram(key);
@@ -209,12 +230,75 @@ public class GLSLFractalizerController implements RenderController {
             }
         }
         currentBooleanProgramKey = null;
-        ensureBuiltinShader(currentFractalType);
+        if (mayCompile) ensureBuiltinShader(currentFractalType);
         String key = currentFractalType.getKernelName();
         if (engine.hasProgram(key)) {
             engine.setActiveProgram(key);
         }
     }
+
+    private static boolean onFxThread() {
+        try { return Platform.isFxApplicationThread(); }
+        catch (RuntimeException e) { return false; }   // toolkit not started (headless harness)
+    }
+
+    /** True when the scene as it stands has no up-to-date program to render with. */
+    private boolean sceneNeedsCompile() {
+        if (currentParams instanceof NodeGraphParams ngp) {
+            return ngp.isDirty() || !engine.hasProgram("nodegraph");
+        }
+        if (currentParams instanceof AbstractFractalParams afp
+                && afp.isBooleanEnabled() && afp.getBoolSecondaryType() != null) {
+            return !engine.hasProgram(currentFractalType.getKernelName() + "+" + afp.getBoolSecondaryType());
+        }
+        return hasBuiltinShader(currentFractalType) && !engine.hasProgram(currentFractalType.getKernelName());
+    }
+
+    /**
+     * Called first thing by the interactive renders. Off the JavaFX thread, or when the
+     * program is ready, it does nothing and returns false. On the JavaFX thread with a
+     * scene that needs compiling, it starts (or joins) the compile on the SceneCompile
+     * thread, remembers {@code retry} as the render to issue when it is done, and returns
+     * true so the caller returns at once. The viewport keeps its last image meanwhile and
+     * the compile listener, if any, gets a message at the start and null at the end.
+     */
+    private boolean deferForCompile(Runnable retry) {
+        if (!onFxThread() || !sceneNeedsCompile()) return false;
+        renderAfterCompile = retry;            // the latest request wins
+        if (compiling) return true;
+        compiling = true;
+        if (compileListener != null) compileListener.accept("Compiling scene shader...");
+        compileThread.submit(() -> {
+            String error = null;
+            try {
+                lastCompileError = null;
+                activateCurrentProgram();
+                error = lastCompileError;
+            } catch (Exception e) {
+                error = e.getMessage() == null ? e.toString() : e.getMessage();
+                System.err.println("Scene shader compile failed: " + error);
+            }
+            final String err = error;
+            Platform.runLater(() -> {
+                compiling = false;
+                if (compileListener != null) compileListener.accept(err == null ? null : "Shader error: " + err);
+                Runnable r = renderAfterCompile;
+                renderAfterCompile = null;
+                // A failed compile is not retried by itself (that would loop); the next user
+                // action asks again. A success re-issues the render that was waiting.
+                if (r != null && err == null) r.run();
+            });
+        });
+        return true;
+    }
+
+    /** Receives "Compiling scene shader..." when a deferred compile starts, then null (or
+     *  an error message) when it ends. Called on the JavaFX thread. */
+    public void setCompileListener(Consumer<String> listener) {
+        this.compileListener = listener;
+    }
+
+    public boolean isCompiling() { return compiling; }
 
     private void ensureBooleanShader(String secondaryKernelName) {
         String key = currentFractalType.getKernelName() + "+" + secondaryKernelName;
@@ -264,6 +348,7 @@ public class GLSLFractalizerController implements RenderController {
      */
     @Override
     public void renderPreview(Consumer<Image> onComplete, Consumer<Double> onProgress) {
+        if (deferForCompile(() -> renderPreview(onComplete, onProgress))) return;
         cancelRender();
 
         // Draw the moving viewport smaller and cheaper. Resolution is the larger lever —
@@ -321,6 +406,7 @@ public class GLSLFractalizerController implements RenderController {
     @Override
     public void renderFull(Consumer<Image> onComplete, Consumer<Double> onProgress,
                            Consumer<Object> onTileComplete) {
+        if (deferForCompile(() -> renderFull(onComplete, onProgress, onTileComplete))) return;
         cancelRender();
         engine.resize(viewportWidth, viewportHeight);
         activateCurrentProgram();

@@ -249,6 +249,15 @@ public class GLSLFractalizerApp extends Application {
 
         // Status bar - always at bottom, outside SplitPane
         HBox statusBar = createStatusBar();
+        // A scene shader compiling off the JavaFX thread: say so, keep the last image up.
+        controller.setCompileListener(msg -> {
+            if (msg != null) statusLabel.setText(msg);        // "Compiling scene shader..." or "Shader error: ..."
+            boolean busy = msg != null && !msg.startsWith("Shader error");
+            progressBar.setProgress(busy ? -1 : 0);          // indeterminate: a driver compile has no progress
+            if (primaryStage.getScene() != null) {
+                primaryStage.getScene().setCursor(busy ? javafx.scene.Cursor.WAIT : null);
+            }
+        });
 
         // Create menu bar
         MenuBar menuBar = createMenuBar();

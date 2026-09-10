@@ -10,7 +10,9 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -62,18 +64,28 @@ public class RenderRegression {
         return s;
     }
 
-    /** Load a named chain from the hybrid library as the graph root. */
+    /** Load a named chain from the hybrid library as the graph root. The node is built once
+     *  per chain and left in place: renderTo() applies the scene before every pass, and a
+     *  fresh root each time meant a shader compile inside every timed render (the bench
+     *  median for hybrid_boxbulb measured a compile, not a render). */
+    private static final Map<String, org.fractalizer.graph.HybridNode> HYBRID_ROOTS = new HashMap<>();
+
     private static Consumer<AbstractFractalParams> hybrid(String presetName) {
         return p -> {
             p.setPathTracingEnabled(false);
-            org.fractalizer.graph.HybridPresets.Preset preset = org.fractalizer.graph.HybridPresets.all().stream()
-                    .filter(x -> x.name().equals(presetName)).findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("no hybrid preset " + presetName));
-            org.fractalizer.graph.HybridNode node = new org.fractalizer.graph.HybridNode();
-            org.fractalizer.graph.HybridPresets.apply(node, preset);
             org.fractalizer.fractals.NodeGraphParams ngp = (org.fractalizer.fractals.NodeGraphParams) p;
-            ngp.setGraphRoot(node);
-            ngp.markDirty();
+            org.fractalizer.graph.HybridNode node = HYBRID_ROOTS.computeIfAbsent(presetName, name -> {
+                org.fractalizer.graph.HybridPresets.Preset preset = org.fractalizer.graph.HybridPresets.all().stream()
+                        .filter(x -> x.name().equals(name)).findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("no hybrid preset " + name));
+                org.fractalizer.graph.HybridNode n = new org.fractalizer.graph.HybridNode();
+                org.fractalizer.graph.HybridPresets.apply(n, preset);
+                return n;
+            });
+            if (ngp.getGraphRoot() != node) {
+                ngp.setGraphRoot(node);
+                ngp.markDirty();
+            }
         };
     }
 

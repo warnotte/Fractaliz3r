@@ -395,8 +395,20 @@ public class AnimationPanel extends VBox {
             newItems.add(sb.toString());
         }
 
-        keyframeList.getSelectionModel().clearSelection();
-        keyframeList.getItems().setAll(newItems);
+        // Unchanged content: leave the list alone (this runs on every timeline edit and
+        // during playback, and each setAll() resets cells and selection for nothing).
+        if (newItems.equals(keyframeList.getItems())) return;
+
+        // Never mutate the list from inside one of its own events. A double-click on a row
+        // reaches here through jumpToSelectedKeyframe() while the ListView is still
+        // dispatching that row's selection change; replacing the items in the middle of
+        // that dispatch is what threw IndexOutOfBoundsException from ListViewBehavior
+        // ("fromIndex: 0, toIndex: 1, size: 0") on the JavaFX thread. One pulse later the
+        // dispatch is over and the same replacement is harmless.
+        javafx.application.Platform.runLater(() -> {
+            keyframeList.getSelectionModel().clearSelection();
+            keyframeList.getItems().setAll(newItems);
+        });
     }
 
     /**

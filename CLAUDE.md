@@ -99,6 +99,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorDemo" -Dexec.a
 # delay before a cancel can interrupt a full-quality pass (= one progressive batch).
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResizeProbe" -Dexec.args="1920x1080 0.5 20"
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResponsivenessProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 1280x720 24"
+# Does a scene shader compile block the JavaFX thread? A preview asked from the FX thread with a
+# scene that needs a program must return at once (compile on the SceneCompile thread, status via
+# the compile listener, image later); from any other thread it must compile inside the call.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DeferredCompileProbe"
 # Proves the cheap interactive preview cannot leak into an export: same scene exported cold
 # and again straight after a preview, compared pixel for pixel.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportAfterPreviewProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 640x360 12"
@@ -222,6 +226,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ExportProgressProbe.java     # how far ahead of the work a progress bar runs
 ├── ShaderCompileProbe.java      # compile time per shader, built-ins then any .frac; names the one that hangs
 ├── ExportAfterPreviewProbe.java # the cheap preview must not leak into an export
+├── DeferredCompileProbe.java    # a scene compile asked from the FX thread must not block it
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them
 └── GalleryRender.java           # every .frac in a dir rendered as the app shows it (README gallery)
