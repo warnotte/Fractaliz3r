@@ -189,3 +189,37 @@ release; that is how a change to the build is checked before a tag. Before pushi
 PowerShell step can be parsed locally
 (`[System.Management.Automation.Language.Parser]::ParseFile`) and the portable build run against
 `target/image`; both take seconds, a failed run on GitHub takes minutes.
+
+### 4. The Linux build under WSL2: a smoke test, not a workstation
+
+Measured on 2026-09-10 (Windows 11, RTX 5070 Ti, driver 616.56, WSL 2.9.8 / WSLg 1.0.79,
+Ubuntu 24.04 with its Mesa 25.2 packages), with the tarball of a manual release run.
+
+- **Launch it with `GALLIUM_DRIVER=d3d12 ./bin/Fractaliz3r`.** Left to itself, Mesa 25 under
+  WSLg picks llvmpipe (software GL): `glxinfo -B` says `llvmpipe`, the app compiles one shader
+  per 65 s on the CPU and keeps about 1.2 GB per program. With the variable, `glxinfo -B`
+  says `D3D12 (NVIDIA GeForce RTX 5070 Ti)`, OpenGL 4.6.
+- **Rendering on the GPU is as fast as on Windows.** `RenderRegression bench` through the
+  bundled runtime (`lib/runtime/bin/java -Dorg.lwjgl.librarypath=lib/runtime/bin
+  -Dfractalizer.data=lib/app -m Fractaliz3r/org.fractalizer.test.RenderRegression bench`,
+  from a folder where `out/` may be written): Mandelbulb 25 ms against 15 ms native,
+  path-traced Mandelbulb 77 against 120, Menger 20 against 19, Mandelbox 31 against 33.
+- **Every shader compile costs about 50 s** (GLSL to DXIL in Mesa, then the NVIDIA D3D12
+  compiler) where the NVIDIA OpenGL driver on Windows takes 7-10 s cold and 30 ms from its
+  disk cache. Up to 3.2.1 the fifteen kernel programs compiled at startup: fifteen minutes,
+  twelve gigabytes, and an OOM kill in a 32 GB VM that also hosted a GitLab container.
+  Startup now compiles the initial scene only.
+- **The first draw of a program costs up to 90 s more.** `ResponsivenessProbe` at 1280x720,
+  24 samples, path traced: longest tick 88 s, then a mean of about 300 ms per batch,
+  against 126 ms and 97 ms on Windows. The D3D12 pipeline state is built at first use.
+  So every structural change to a scene (a preset, a graph edit, a chain) is followed by
+  two to three minutes of black viewport.
+- **JavaFX falls back to its software pipeline** ("System GPU doesn't meet the es2 pipe
+  requirement", seen with `JAVA_TOOL_OPTIONS=-Dprism.verbose=true`): the UI and the viewport
+  image are composited on the CPU, QuantumRenderer at 70 % of a core.
+- **Resizing the window from the Windows side killed the process** with glibc's
+  "double free or corruption (!prev)", inside the Mesa/GTK stack, not in Java.
+- Framebuffer reallocation (`ResizeProbe`) is fine: 3 ms either way, same as Windows.
+
+Verdict: WSL2 proves the tarball launches, compiles and renders on the GPU; it cannot judge
+interactivity. Validate that on a native Linux box with an NVIDIA or AMD driver.
