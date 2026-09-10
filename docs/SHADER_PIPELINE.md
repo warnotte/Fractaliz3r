@@ -337,6 +337,17 @@ For **Node Graph** mode, `NodeGraphParams.getUniformValues()` returns the map fr
 - **Node graph:** Single program key `"nodegraph"`. Recompiled when `NodeGraphParams.isDirty()` returns true (structural change sets dirty flag).
 - **Custom shaders:** Single program key per custom shader. Old program deleted before new one is compiled.
 
+### What compiles at startup
+
+One program: the initial Mandelbulb scene, as a node graph, behind the splash screen
+(`GLSLFractalizerController.loadAllShaders`). Every fractal type renders through the node
+graph, so the fifteen stand-alone kernel programs (Mode 1) are only needed when a graph fails
+to compile; `ensureBuiltinShader` builds the one kernel that is needed, when it is needed.
+Until 3.2.1 all fifteen were compiled eagerly at every launch: two minutes on an NVIDIA
+driver, and under WSL with Mesa's d3d12 driver fifteen minutes and twelve gigabytes, for
+programs that were never activated. `ShaderCompileProbe` still compiles them all on purpose,
+through `loadBuiltinShaders`, to time each one.
+
 ---
 
 ## Program Selection Flow

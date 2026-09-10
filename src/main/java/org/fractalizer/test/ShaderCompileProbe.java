@@ -60,7 +60,7 @@ public class ShaderCompileProbe {
             final long[] t0 = {System.nanoTime()};
             final String[] current = {null};
             System.out.println("=== built-in fractal shaders ===");
-            controller.loadAllShaders((msg, p) -> {
+            controller.loadBuiltinShaders((msg, p) -> {
                 long now = System.nanoTime();
                 if (current[0] != null) {
                     System.out.printf("  %-28s %6d ms%n", current[0], (now - t0[0]) / 1_000_000);

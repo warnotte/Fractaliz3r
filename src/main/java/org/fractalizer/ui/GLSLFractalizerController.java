@@ -74,28 +74,56 @@ public class GLSLFractalizerController implements RenderController {
     }
 
     /**
-     * Load all fractal shaders with progress reporting.
+     * Bring the engine to a renderable state: the initial scene (a Mandelbulb node graph)
+     * is compiled here so the splash screen covers it. That is the only shader compiled at
+     * startup. Every fractal type renders through the node graph, so the fifteen stand-alone
+     * kernel programs are not needed unless a graph fails to compile; they are built on demand
+     * by {@link #ensureBuiltinShader} in that case. Compiling them eagerly cost two minutes
+     * on an NVIDIA driver and fifteen minutes plus twelve gigabytes under Mesa's d3d12
+     * driver in WSL, for programs that were never activated.
      */
     public void loadAllShaders(java.util.function.BiConsumer<String, Double> progressCallback) {
-        FractalType[] types = FractalType.values();
-        for (int i = 0; i < types.length; i++) {
-            FractalType type = types[i];
-            if (type == FractalType.CUSTOM_SHADER || type == FractalType.NODE_GRAPH) continue; // no resource file
-            String name = type.getKernelName();
-            String path = "/shaders/fractals/" + name + ".glsl";
-
-            if (progressCallback != null) {
-                progressCallback.accept("Compiling " + type.getDisplayName() + "...", (double) i / types.length);
-            }
-
-            engine.loadFractalShader(name, path);
+        if (progressCallback != null) {
+            progressCallback.accept("Compiling the Mandelbulb scene...", 0.2);
         }
-        
+        setFractalType(FractalType.MANDELBULB);
+        activateCurrentProgram();   // the params exist now: compile the scene shader
         if (progressCallback != null) {
             progressCallback.accept("Ready", 1.0);
         }
-        
-        setFractalType(FractalType.MANDELBULB);
+    }
+
+    /**
+     * Compile every stand-alone kernel shader, in enum order, reporting each by name. Not
+     * called at startup any more; ShaderCompileProbe uses it to time the built-ins.
+     */
+    public void loadBuiltinShaders(java.util.function.BiConsumer<String, Double> progressCallback) {
+        FractalType[] types = FractalType.values();
+        for (int i = 0; i < types.length; i++) {
+            FractalType type = types[i];
+            if (!hasBuiltinShader(type)) continue;
+            if (progressCallback != null) {
+                progressCallback.accept("Compiling " + type.getDisplayName() + "...", (double) i / types.length);
+            }
+            ensureBuiltinShader(type);
+        }
+        if (progressCallback != null) {
+            progressCallback.accept("Ready", 1.0);
+        }
+    }
+
+    private static boolean hasBuiltinShader(FractalType type) {
+        return type != FractalType.CUSTOM_SHADER && type != FractalType.NODE_GRAPH; // no resource file
+    }
+
+    /** Compile the stand-alone kernel program of a type if it is not loaded yet. */
+    private void ensureBuiltinShader(FractalType type) {
+        if (!hasBuiltinShader(type)) return;
+        String name = type.getKernelName();
+        if (engine.hasProgram(name)) return;
+        long t0 = System.nanoTime();
+        engine.loadFractalShader(name, "/shaders/fractals/" + name + ".glsl");
+        System.out.printf("Built-in shader %s compiled in %d ms%n", name, (System.nanoTime() - t0) / 1_000_000);
     }
 
     private void loadAllShaders() {
@@ -148,9 +176,12 @@ public class GLSLFractalizerController implements RenderController {
                     // Deep-zoom LOD is compiled in only when enabled: the mutable global it
                     // needs is otherwise read inside every DE loop and blocks constant folding.
                     String defines = ngp.getDetailLOD() > 0f ? "#define DETAIL_LOD\n" : "";
+                    long t0 = System.nanoTime();
                     String err = engine.loadCustomFractalShader("nodegraph", glsl, defines);
                     if (err != null) {
                         System.err.println("Node graph shader error: " + err);
+                    } else {
+                        System.out.printf("Scene shader compiled in %d ms%n", (System.nanoTime() - t0) / 1_000_000);
                     }
                 }
             }
@@ -161,7 +192,10 @@ public class GLSLFractalizerController implements RenderController {
                 currentBooleanProgramKey = null;
                 return;
             }
+            // The graph failed to compile: fall back to the stand-alone kernel below.
         }
+
+        if (currentParams == null) return;   // startup, before any params exist: nothing to show yet
 
         if (currentParams instanceof AbstractFractalParams afp
                 && afp.isBooleanEnabled()
@@ -175,6 +209,7 @@ public class GLSLFractalizerController implements RenderController {
             }
         }
         currentBooleanProgramKey = null;
+        ensureBuiltinShader(currentFractalType);
         String key = currentFractalType.getKernelName();
         if (engine.hasProgram(key)) {
             engine.setActiveProgram(key);
