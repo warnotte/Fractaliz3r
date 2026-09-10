@@ -188,6 +188,7 @@ public class EnhancedSlider extends VBox {
     // --- Configuration API ---
 
     public Slider getSlider() { return slider; }
+    public String getTitle() { return title; }
 
     public boolean isInteger() { return isInteger; }
 

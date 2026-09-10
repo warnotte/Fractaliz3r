@@ -192,7 +192,17 @@ of camera motion, previewScale 0.5, fast shading):
 
 Before this work the last column was 128 ms on any scene (one 120 ms batch) and one whole
 sample on a heavy one: 800 ms to 4.5 s on Labyrinth at 1080p, whose full-quality sample
-costs 12 s. Exports do not go through the scheduler (`ExportAfterPreviewProbe`,
+costs 12 s.
+
+The controls are the other half of "as soon as I touch something". `SliderFluidityProbe`
+builds the app's panels (the node graph editor, Lighting, Material, Quality) against the
+real controller, in a real window, and drags one slider of each at 30 ticks a second on
+Albedo 0.39 at 1280x720: a tick holds the JavaFX thread for 0 ms (2 ms at most for the
+node editor, which redraws its canvas), the worst JavaFX stall while dragging is 17 ms for
+the node editor and 1 ms for the other panels, and each tick's preview reaches the
+viewport in about 30 ms, which is the preview step budget: the first image of a preview
+is one sample sized to fit it. Nothing on the slider path needed fixing; the probe stays
+as the guard. Exports do not go through the scheduler (`ExportAfterPreviewProbe`,
 `RenderRegression check`: bit-exact). `ResponsivenessProbe` guards the refinement's
 throughput: 41 ms a sample on the Julia bulb at 1280x720, 39 whole; 282 ms on Albedo 0.39
 at 1080p against 190-210 whole, the price of a resume within 60 ms there (`StripCostProbe`

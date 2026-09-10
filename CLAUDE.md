@@ -103,6 +103,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResponsivenessProbe
 # for N seconds; JavaFX held per call, worst FX stall, images/s, request->image latency, and how long a
 # move waits for its preview while the refinement pass runs. Scene = .frac or a FractalType name.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.NavigationFluidityProbe" -Dexec.args="presets/ALBEDO_039.frac 1920x1080 3"
+# The other half: the app's own panels (node editor, Lighting, Material, Quality) built against the
+# real controller, one slider of each dragged at 30 ticks/s; JavaFX held per tick, worst stall,
+# images/s, request->image. "window" puts them in a real window so layout and CSS passes count.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.SliderFluidityProbe" -Dexec.args="presets/ALBEDO_039.frac 1280x720 3 window"
 # A refinement sample drawn in scissored strips (abortable between them) must be the same sample
 # to the bit, and an aborted one must be cleared, not accumulated.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.BandedSampleProbe"
@@ -241,6 +245,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ExportAfterPreviewProbe.java # the cheap preview must not leak into an export
 ├── DeferredCompileProbe.java    # a scene compile asked from the FX thread must not block it
 ├── NavigationFluidityProbe.java # the viewport while the camera moves: FX held, images/s, latency, interrupt
+├── SliderFluidityProbe.java     # the viewport while a slider of each real panel moves; "window" for layout costs
 ├── BandedSampleProbe.java       # a sample drawn in strips is the same sample; an aborted one is cleared
 ├── StripCostProbe.java          # GPU cost of strips vs whole per sync pattern: why slices are 60 ms
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera

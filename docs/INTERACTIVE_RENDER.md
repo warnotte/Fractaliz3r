@@ -158,7 +158,8 @@ a still export ran while the preview loop kept resizing the engine.
 ## Proof
 
 - `NavigationFluidityProbe` and `DeferredCompileProbe` drive the new API (docs/RENDERING.md
-  § Since 3.2.2 for the numbers).
+  § Since 3.2.2 for the numbers); `SliderFluidityProbe` drives it through the app's own
+  panels, in a window.
 - `BandedSampleProbe` checks the slicing API: strips give the same sample to the bit, a
   discarded sample leaves nothing behind.
 - `RenderRegression check`, `ExportAfterPreviewProbe`: exports unchanged to the bit.

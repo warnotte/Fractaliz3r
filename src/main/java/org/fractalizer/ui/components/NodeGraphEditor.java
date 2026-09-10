@@ -599,6 +599,13 @@ public class NodeGraphEditor extends VBox {
         contextMenu.show(canvas, e.getScreenX(), e.getScreenY());
     }
 
+    /** Select a node as a click on it would: the detail panel shows its controls. */
+    public void selectNode(GraphNode node) {
+        selectedNode = node;
+        redrawCanvas();
+        refreshDetailPanel();
+    }
+
     private void buildNodeContextMenu(GraphNode node) {
         // Select the node under cursor
         selectedNode = node;
