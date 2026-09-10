@@ -1,6 +1,7 @@
 package org.fractalizer.ui.panels;
 
 import javafx.geometry.Insets;
+import org.fractalizer.config.DataDirs;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -303,6 +304,8 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
             new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg", "*.hdr"),
             new FileChooser.ExtensionFilter("All Files", "*.*")
         );
+        File hdri = DataDirs.of("hdri");
+        if (hdri.isDirectory()) fileChooser.setInitialDirectory(hdri);
 
         File file = fileChooser.showOpenDialog(getScene().getWindow());
         if (file != null) {

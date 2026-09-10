@@ -24,6 +24,7 @@ import javafx.util.Duration;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.concurrent.Task;
+import org.fractalizer.config.DataDirs;
 import org.fractalizer.config.FractalConfig;
 import org.fractalizer.config.FractalConfigManager;
 import org.fractalizer.engine.Camera;
@@ -619,7 +620,7 @@ public class GLSLFractalizerApp extends Application {
     /** A preset by name: the checkout's presets folder when it is there, else the copy
      *  bundled in the jar. */
     private void loadShippedPreset(String name) {
-        File onDisk = new File("presets", name + ".frac");
+        File onDisk = new File(DataDirs.of("presets"), name + ".frac");
         if (onDisk.isFile()) {
             loadConfigFile(onDisk);
             return;

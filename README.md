@@ -135,14 +135,16 @@ primitive. Julia mode is available where the formula has a seed.
 |---|---|
 | **GPU** | OpenGL 4.3 or newer (any recent NVIDIA, AMD or Intel GPU). |
 | **OS** | Windows or Linux. macOS is not supported: Apple stopped OpenGL at 4.1 and the renderer needs 4.3 features (SSBOs). |
-| **To run the installer** | Nothing else: the Windows installer ships its own Java runtime. |
+| **To run a release** | Nothing else: the Windows and Linux builds ship their own Java runtime. |
 | **To build** | JDK 24 (JavaFX 26 ships Java 24 class files; the bytecode target stays 21), Maven. |
 | **Optional** | FFmpeg on the PATH for video export and audio pre-analysis; ExifTool for 360 metadata. |
 
 ### Install (Windows)
 
-Download the latest `.msi` from the [Releases page](https://github.com/warnotte/Fractaliz3r/releases)
-and run it. A portable `.zip` of the same build is published next to it.
+Download the portable build for your system from the [Releases page](https://github.com/warnotte/Fractaliz3r/releases):
+`Fractaliz3r-<version>-windows.zip` (unzip, run `Fractaliz3r.exe`) or `Fractaliz3r-<version>-linux.tar.gz`
+(untar, run `bin/Fractaliz3r`). A Windows `.msi` installer of the same build is published next to
+them. The `hdri/` and `presets/` folders travel with the app.
 
 ### Run from source
 

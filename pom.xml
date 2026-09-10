@@ -95,7 +95,7 @@
       <id>release</id>
       <build>
         <plugins>
-          <!-- Step 1: Extract LWJGL native DLLs from classifier JARs -->
+          <!-- Step 1: Extract the LWJGL natives (DLLs on Windows, .so on Linux) from the classifier JARs of the running OS -->
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-dependency-plugin</artifactId>
@@ -113,37 +113,37 @@
                       <groupId>org.lwjgl</groupId>
                       <artifactId>lwjgl</artifactId>
                       <version>${lwjgl.version}</version>
-                      <classifier>natives-windows</classifier>
+                      <classifier>${lwjgl.natives}</classifier>
                       <type>jar</type>
                       <outputDirectory>${project.build.directory}/natives-tmp</outputDirectory>
-                      <includes>**/*.dll</includes>
+                      <includes>**/*.dll,**/*.so</includes>
                     </artifactItem>
                     <artifactItem>
                       <groupId>org.lwjgl</groupId>
                       <artifactId>lwjgl-glfw</artifactId>
                       <version>${lwjgl.version}</version>
-                      <classifier>natives-windows</classifier>
+                      <classifier>${lwjgl.natives}</classifier>
                       <type>jar</type>
                       <outputDirectory>${project.build.directory}/natives-tmp</outputDirectory>
-                      <includes>**/*.dll</includes>
+                      <includes>**/*.dll,**/*.so</includes>
                     </artifactItem>
                     <artifactItem>
                       <groupId>org.lwjgl</groupId>
                       <artifactId>lwjgl-opengl</artifactId>
                       <version>${lwjgl.version}</version>
-                      <classifier>natives-windows</classifier>
+                      <classifier>${lwjgl.natives}</classifier>
                       <type>jar</type>
                       <outputDirectory>${project.build.directory}/natives-tmp</outputDirectory>
-                      <includes>**/*.dll</includes>
+                      <includes>**/*.dll,**/*.so</includes>
                     </artifactItem>
                     <artifactItem>
                       <groupId>org.lwjgl</groupId>
                       <artifactId>lwjgl-stb</artifactId>
                       <version>${lwjgl.version}</version>
-                      <classifier>natives-windows</classifier>
+                      <classifier>${lwjgl.natives}</classifier>
                       <type>jar</type>
                       <outputDirectory>${project.build.directory}/natives-tmp</outputDirectory>
-                      <includes>**/*.dll</includes>
+                      <includes>**/*.dll,**/*.so</includes>
                     </artifactItem>
                   </artifactItems>
                 </configuration>
@@ -151,7 +151,7 @@
             </executions>
           </plugin>
 
-          <!-- Step 2: Copy DLLs flat into jlink bin/ and patch launcher script -->
+          <!-- Step 2: Copy the natives flat into jlink bin/ and patch the launcher script of the OS -->
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-antrun-plugin</artifactId>
@@ -170,13 +170,17 @@
                     <copy todir="${project.build.directory}/image/bin" flatten="true">
                       <fileset dir="${project.build.directory}/natives-tmp">
                         <include name="**/*.dll"/>
+                        <include name="**/*.so"/>
                       </fileset>
                     </copy>
                     <!-- Tell LWJGL to look for natives in bin/ instead of
                          trying to extract from JARs (which don't exist in jlink) -->
-                    <replace file="${project.build.directory}/image/bin/fractaliz3r.bat"
+                    <replace dir="${project.build.directory}/image/bin" includes="fractaliz3r.bat"
                              token="set JLINK_VM_OPTIONS="
                              value="set JLINK_VM_OPTIONS=-Dorg.lwjgl.librarypath=%~dp0"/>
+                    <replace dir="${project.build.directory}/image/bin" includes="fractaliz3r"
+                             token="JLINK_VM_OPTIONS="
+                             value="JLINK_VM_OPTIONS=-Dorg.lwjgl.librarypath=$(dirname &quot;$0&quot;)"/>
                   </target>
                 </configuration>
               </execution>

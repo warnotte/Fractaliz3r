@@ -1,6 +1,7 @@
 package org.fractalizer.ui.components;
 
 import javafx.application.Platform;
+import org.fractalizer.config.DataDirs;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -497,7 +498,7 @@ public class SceneBrowser {
         } catch (Exception ignored) {
             // fall through to the folder
         }
-        File[] files = new File("presets").listFiles((d, n) -> n.endsWith(".frac"));
+        File[] files = DataDirs.of("presets").listFiles((d, n) -> n.endsWith(".frac"));
         if (files != null) {
             java.util.Arrays.sort(files);
             for (File f : files) out.add(new PresetEntry(f.getName().replaceFirst("\\.frac$", ""), "", ""));

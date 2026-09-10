@@ -124,42 +124,68 @@ a plain `mvn package` failed on the missing launcher script.
 
 Zipping `target/image/` is already a portable distribution; no Java needed on the target.
 
-### 2. jpackage: installer and portable folder
+### 2. jpackage: portable folders and the Windows installer
 
 `jpackage` (part of the JDK) wraps the image in a native launcher with the icon, a version, and
-either an `.msi` or a plain folder:
+either a plain folder or an `.msi`. The data folders the app reads from disk, `hdri/` and
+`presets/`, are handed to it as `--input`: they land next to the launcher config (`app/` on
+Windows, `lib/app/` on Linux) and the app finds them through `-Dfractalizer.data=$APPDIR`
+(`org.fractalizer.config.DataDirs`; a folder in the working directory still wins, which is what a
+checkout relies on).
 
 ```bash
-# Portable folder: target/installer/Fractaliz3r/Fractaliz3r.exe — no extra tools needed
-jpackage --type app-image --dest target/installer \
+mkdir -p target/extras && cp -r hdri presets target/extras/
+
+# Windows, portable folder: target/portable/Fractaliz3r/Fractaliz3r.exe — no extra tools needed
+jpackage --type app-image --dest target/portable \
   --name Fractaliz3r --app-version 3.2.0 --vendor "Renaud Warnotte" \
   --description "Real-time cinematic 3D fractal renderer" \
   --runtime-image target/image --module Fractaliz3r/org.fractalizer.Launcher \
-  --icon src/main/resources/icons/fractaliz3r.ico \
-  --java-options '-Dorg.lwjgl.librarypath=$ROOTDIR\runtime\bin'
+  --icon src/main/resources/icons/fractaliz3r.ico --input target/extras \
+  --java-options '-Dorg.lwjgl.librarypath=$ROOTDIR\runtime\bin' \
+  --java-options '-Dfractalizer.data=$APPDIR'
 
-# Installer: same command with --type msi and the Windows options; needs WiX 3 (candle/light) on the PATH
-#   --win-menu --win-shortcut --win-dir-chooser --win-per-user-install --license-file LICENSE
+# Windows installer: same command with --type msi, --license-file LICENSE and the Windows
+# options; needs WiX 3 (candle/light) on the PATH
+#   --win-menu --win-shortcut --win-dir-chooser --win-per-user-install
+
+# Linux, portable folder: target/portable/Fractaliz3r/bin/Fractaliz3r (the image was built on Linux,
+# so the release profile copied the .so files instead of the DLLs)
+jpackage --type app-image --dest target/portable \
+  --name Fractaliz3r --app-version 3.2.0 --vendor "Renaud Warnotte" \
+  --description "Real-time cinematic 3D fractal renderer" \
+  --runtime-image target/image --module Fractaliz3r/org.fractalizer.Launcher \
+  --icon src/main/resources/icons/fractaliz3r_512.png --input target/extras \
+  --java-options '-Dorg.lwjgl.librarypath=$ROOTDIR/lib/runtime/bin' \
+  --java-options '-Dfractalizer.data=$APPDIR'
 ```
 
-Two things to know about the result:
+Things to know about the result:
 
-- The runtime image is copied whole into `runtime/`, DLLs included, so the LWJGL library path
-  must point there. `$ROOTDIR` is expanded by the launcher to the installation directory; the
-  launcher script's `%~dp0` trick from step 1 does not apply because the `.exe` never runs it.
-- The launcher reads `app/Fractaliz3r.cfg`; if a start-up option ever needs changing after the
-  fact, that file is where it lives.
+- The runtime image is copied whole into `runtime/` (Windows) or `lib/runtime/` (Linux), natives
+  included, so the LWJGL library path must point there. `$ROOTDIR` and `$APPDIR` are expanded by
+  the launcher; the launcher script's `%~dp0` trick from step 1 does not apply because the native
+  launcher never runs it.
+- `--license-file` is an installer option: jpackage refuses it for `--type app-image`.
+- The launcher reads `app/Fractaliz3r.cfg` (`lib/app/` on Linux); if a start-up option ever needs
+  changing after the fact, that file is where it lives.
+- A version for the MSI is three numbers with the last one below 65536; a date does not fit.
 
 ### 3. GitHub release
 
-`.github/workflows/release.yml` runs the two steps above on a Windows runner when a `v*` tag is
-pushed (WiX is installed with Chocolatey), then attaches `Fractaliz3r-<version>.msi` and
-`Fractaliz3r-<version>-windows.zip` to the release for that tag:
+`.github/workflows/release.yml` runs the two steps above on a Windows runner and on a Linux runner
+when a `v*` tag is pushed (WiX is installed with Chocolatey on Windows), then a third job attaches
+`Fractaliz3r-<version>-windows.zip`, `Fractaliz3r-<version>.msi` and
+`Fractaliz3r-<version>-linux.tar.gz` to the release for that tag:
 
 ```bash
 git tag v3.2.0
 git push origin v3.2.0
 ```
 
-The tag is the version. A manual run of the workflow (`workflow_dispatch`) builds the same two
-files and keeps them as a workflow artifact instead of publishing a release.
+The tag is the version. A manual run of the workflow (`workflow_dispatch`) builds the same files
+with version `0.0.<run number>` and keeps them as workflow artifacts instead of publishing a
+release; that is how a change to the build is checked before a tag. Before pushing a tag, the
+PowerShell step can be parsed locally
+(`[System.Management.Automation.Language.Parser]::ParseFile`) and the portable build run against
+`target/image`; both take seconds, a failed run on GitHub takes minutes.
