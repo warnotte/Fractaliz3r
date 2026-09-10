@@ -59,11 +59,5 @@ public interface RenderController {
      */
     String compileCustomShader(String source);
 
-    /**
-     * Compile a node graph composite shader.
-     * @return null on success, error message on failure
-     */
-    String compileNodeGraph(String source);
-
     void close();
 }

@@ -32,9 +32,10 @@ a harness, a resize) interleaves between steps and waits at most one step. There
 ## Vocabulary
 
 - **SceneSnapshot**: everything a render needs, frozen on the JavaFX thread: program key,
-  program source and defines when the scene is dirty (null when the engine already has
-  it), the uniform map, the material SSBO data, the viewport size, the scene's preview
-  ceiling (`previewScale`) and fast-shading flag, the sample targets. Immutable.
+  program source and defines (the engine compiles only if it does not hold exactly that
+  source), the uniform map without the size-dependent `pixelRadius` (derived from the
+  height actually rendered), the material SSBO data, the viewport size, the scene's
+  preview ceiling (`previewScale`) and fast-shading flag, the sample targets. Immutable.
 - **Request**: "the scene is now this snapshot; show it". `ViewportScheduler.request()` is
   the only entry point from the UI. The latest request wins; earlier unstarted ones are
   dropped (coalescing).
@@ -45,7 +46,7 @@ a harness, a resize) interleaves between steps and waits at most one step. There
     for the budget, first image after the first step.
   - `RefineJob`: renders `fullSamples` samples at the full viewport size and full quality;
     an image every `IMAGE_INTERVAL_NS` (200 ms) and at the end.
-- **Policy**, in one place (`ViewportScheduler.nextStep`):
+- **Policy**, in one place (`ViewportScheduler.step`):
   1. a newer request preempts a `RefineJob` at any step boundary;
   2. it preempts a `PreviewJob` only once that job has emitted its first image, so a
      stream of requests faster than one sample still shows images instead of cancelling
@@ -66,7 +67,14 @@ answers three questions:
   sample fits the budget. Quantised to 1/32 of the viewport with a dead band so
   consecutive frames share a framebuffer.
 - **Samples per step**: how many whole samples fit the budget (at most 8).
-- **Rows per strip**: when one sample exceeds the budget, how many rows of it fit.
+- **Rows per strip**: when one sample exceeds the budget, how many rows of it fit, never
+  more than twice the previous strip (the rows at the top of an image are sky and say
+  nothing about the fractal below: a first strip of 16 sky rows once sized the next one
+  at the whole remaining frame).
+
+Estimates are keyed by program name plus a hash of the program source: every node graph
+is compiled under the same name, and keying by name alone made a heavy scene inherit the
+estimate of the light one it replaced.
 
 Every GPU submission also costs a fixed round trip (`STEP_OVERHEAD_NS`, ~2.5 ms measured:
 107 strips of a 60 ms sample took 345 ms), so the planner aims at `budget - overhead` and
@@ -84,23 +92,30 @@ eight times the preview cost and measures.
 
 - `beginSample(uniforms)` opens a sample and fixes its per-sample uniforms (the `time`
   uniform included, so every strip belongs to the same sample);
-- `drawRows(y, h)` draws a scissored band of the open sample. It binds the whole pass
-  again every time: the strips of one sample are separate GL tasks and a readback or a
-  resize may have run between two of them (the first version assumed the state survived
-  and drew its strips into the default framebuffer, which the fence then reported as done
-  in 0 ms);
+- `drawRows(y, h)` draws a scissored band of the open sample. The strips of one sample
+  are separate GL tasks and a readback or a resize may run between two of them, so the
+  engine tracks whether the pass is still bound (`touchGLState()` in every other pass)
+  and binds it again only then: the first version assumed the state survived and drew its
+  strips into the default framebuffer, the second bound the pass before every strip and
+  paid 2-4 ms of GPU time each for it (`StripCostProbe`);
 - `commitSample()` counts the sample; `discardSample()` marks the accumulation for a
   clear (a partial sample must never be shown, and the viewport only reads frames between
   samples for the same reason);
-- `fence()` returns a `GpuFence` whose `await()` drains the GPU up to it. Every step waits
-  for its own fence: that costs a pipeline bubble of a few milliseconds per step, which
-  the cost model's overhead term accounts for, and buys a step that is really over when
-  the scheduler looks at the mailbox. Keeping a step in flight would hide the bubble at
-  the price of an abort one step later; not done yet, measured as not needed.
+- `fence()` returns a `GpuFence` whose `await()` drains the GPU up to it, and `timer()` a
+  `GpuTimer` (a `GL_TIME_ELAPSED` query) that gives the GPU time of a step for the cost
+  model. Every step waits for its own fence. **A sync between two draws costs the tail of
+  the draw before it**, 5 to 10 ms on a heavy scene: `StripCostProbe` on Albedo 0.39 at
+  1080p draws a 190 ms sample as 36 fenced strips in 380 ms, and keeping one or two strips
+  in flight, with or without a flush, changes nothing, while 36 strips in one submission
+  cost the same as the whole sample. So the price of interruptibility is one tail per
+  sync, and the slice length is what bounds both that price and the resume latency:
+  previews use `STEP_BUDGET_NS` (30 ms), the refinement `REFINE_SLICE_NS` (60 ms, about
+  10-20 % on the heaviest scene, where 30 ms cost up to 60 %).
 - `readViewportFrame()` runs the post-process and returns a `ViewportFrame` (BGRA bytes,
   size, sample count), converted to a JavaFX image by the listener on the JavaFX thread.
-  Read as bytes straight from the display framebuffer: the float readback plus two passes
-  over two million pixels was most of the cost of showing a refinement sample at 1080p.
+  Read as bytes straight from the display framebuffer (8 ms at 1080p; the float readback
+  plus two passes over two million pixels was 40-70). The refinement reads a frame every
+  200 ms or five readbacks' worth, whichever is longer, and only between samples.
 - `ensureProgram(key, source, defines)` compiles only if the engine does not already hold
   exactly that source under that key, so the editor and the startup task asking for the
   same scene compile it once.
@@ -148,3 +163,5 @@ a still export ran while the preview loop kept resizing the engine.
   discarded sample leaves nothing behind.
 - `RenderRegression check`, `ExportAfterPreviewProbe`: exports unchanged to the bit.
 - `ResponsivenessProbe`: the refinement's throughput and image cadence.
+- `StripCostProbe`: what a sample costs as strips against whole, on the GPU, per sync
+  pattern; the measurement behind the slice lengths.

@@ -184,17 +184,19 @@ of camera motion, previewScale 0.5, fast shading):
 
 | scene, viewport | images/s | request to image, median | JavaFX held per request | first preview after a move during refinement |
 |---|---|---|---|---|
-| Mandelbulb 1280x720 | 62 (one per frame) | 4 ms | 0 ms | 30 ms |
-| Julia bulb (path traced) 1280x720 | 62 | 5 ms | 0 ms | 34 ms |
-| Albedo 0.39 (29 effect nodes) 1280x720 | 41 | 8 ms | 0 ms | 78 ms |
-| Albedo 0.39 1920x1080 | 36 | 7 ms | 0 ms | 70 ms |
-| Labyrinth 1920x1080 | 40 | 7 ms | 0 ms | 49 ms |
+| Mandelbulb 1280x720 | 54 | 3 ms | 0 ms | 40 ms |
+| Julia bulb (path traced) 1280x720 | 58 | 5 ms | 0 ms | 28 ms |
+| Albedo 0.39 (29 effect nodes) 1280x720 | 41 | 8 ms | 0 ms | 61 ms |
+| Albedo 0.39 1920x1080 | 37 | 7 ms | 0 ms | 50 ms |
+| Labyrinth 1920x1080 | 39 | 10 ms | 0 ms | 59 ms |
 
 Before this work the last column was 128 ms on any scene (one 120 ms batch) and one whole
 sample on a heavy one: 800 ms to 4.5 s on Labyrinth at 1080p, whose full-quality sample
 costs 12 s. Exports do not go through the scheduler (`ExportAfterPreviewProbe`,
 `RenderRegression check`: bit-exact). `ResponsivenessProbe` guards the refinement's
-throughput: 40 ms a sample on the Julia bulb at 1280x720 with strips, 39 whole.
+throughput: 41 ms a sample on the Julia bulb at 1280x720, 39 whole; 282 ms on Albedo 0.39
+at 1080p against 190-210 whole, the price of a resume within 60 ms there (`StripCostProbe`
+for why: a sync between two draws costs the tail of the first).
 
 ## Why renders looked washed out (rim light)
 

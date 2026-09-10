@@ -106,6 +106,7 @@ public class GLSLEngine implements AutoCloseable {
     }
 
     public float[] evaluateSlice(Map<String, Object> uniforms, float zPos, float boundsHalf, int res) {
+        touchGLState();
         float[] result = new float[res * res * 4];
         runOnGLThread(() -> {
             if (evaluatorProgram == null) throw new IllegalStateException();
@@ -191,6 +192,7 @@ public class GLSLEngine implements AutoCloseable {
 
     public void setActiveProgram(String name) {
         if (!programs.containsKey(name)) return;
+        touchGLState();
         if (!name.equals(activeProgram)) { activeProgram = name; needsReset = true; }
     }
 
@@ -244,6 +246,7 @@ public class GLSLEngine implements AutoCloseable {
         postToGLThread(() -> {
             if (java.util.Arrays.equals(copy, materialSSBOData)) return;
             materialSSBOData = copy;
+            touchGLState();
             if (copy == null || copy.length == 0) {
                 if (materialSSBO != 0) { glDeleteBuffers(materialSSBO); materialSSBO = 0; }
                 return;
@@ -259,6 +262,7 @@ public class GLSLEngine implements AutoCloseable {
     // accumulation batch (FBO, blend, program, textures, SSBO, user uniforms). Bound
     // once per batch rather than once per sample. Must run on the GL thread.
     private void bindAccumPass(ShaderProgram program, Map<String, Object> uniforms) {
+        touchGLState();
         glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
         glViewport(0, 0, currentWidth, currentHeight);
         glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE);
@@ -342,6 +346,13 @@ public class GLSLEngine implements AutoCloseable {
     private ShaderProgram sliceProgram;   // non-null while a sliced sample is open
     private Map<String, Object> sliceUniforms;
     private float sliceTime;              // the sample's time uniform, the same for every strip
+    private boolean passBound;            // the accumulation pass of the open sample is bound
+
+    /** Any pass or state change other than a strip of the open sample: the next strip
+     *  binds the accumulation pass again. Binding it per strip regardless cost 2-4 ms of
+     *  GPU time each (measured by StripCostProbe: 36 strips of a 175 ms sample, 378 ms
+     *  rebinding every strip against 222 ms bound once). */
+    private void touchGLState() { passBound = false; }
 
     /** Open one accumulation sample. Rows are then drawn with {@link #drawRows} and the
      *  sample closed with {@link #commitSample} or {@link #discardSample}. The strips of
@@ -355,20 +366,42 @@ public class GLSLEngine implements AutoCloseable {
         sliceProgram = programs.get(activeProgram);
         sliceUniforms = uniforms;
         sliceTime = (float) glfwGetTime();
+        passBound = false;
     }
 
-    /** Draw rows {@code y .. y+h-1} of the open sample. */
+    /** Draw rows {@code y .. y+h-1} of the open sample. The pass stays bound between
+     *  strips; it is bound again only after something else touched the GL state. */
     public void drawRows(int y, int h) {
+        assertGLThread();
+        if (sliceProgram == null) throw new IllegalStateException("no open sample");
+        if (!passBound) {
+            bindAccumPass(sliceProgram, sliceUniforms);
+            sliceProgram.setUniform("sampleIndex", sampleCount);
+            sliceProgram.setUniform("time", sliceTime);
+            glEnable(GL_SCISSOR_TEST);
+            passBound = true;
+        }
+        glScissor(0, y, currentWidth, h);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
+
+    /** The open sample as {@code strips} scissored bands in one submission with the pass
+     *  bound once: the reference for what rebinding per strip costs (StripCostProbe). */
+    public void drawRowsBoundOnce(int y0, int rows, int strips) {
         assertGLThread();
         if (sliceProgram == null) throw new IllegalStateException("no open sample");
         bindAccumPass(sliceProgram, sliceUniforms);
         sliceProgram.setUniform("sampleIndex", sampleCount);
         sliceProgram.setUniform("time", sliceTime);
         glEnable(GL_SCISSOR_TEST);
-        glScissor(0, y, currentWidth, h);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        for (int b = 0; b < strips; b++) {
+            int a = y0 + rows * b / strips, z = y0 + rows * (b + 1) / strips;
+            glScissor(0, a, currentWidth, z - a);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        }
         glDisable(GL_SCISSOR_TEST);
         endAccumPass();
+        passBound = false;
     }
 
     /** Close the open sample and count it. */
@@ -387,15 +420,17 @@ public class GLSLEngine implements AutoCloseable {
     private void closeSample() {
         assertGLThread();
         if (sliceProgram == null) return;
+        if (passBound) { glDisable(GL_SCISSOR_TEST); endAccumPass(); }
         if (adaptiveSamplingEnabled) glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
         sliceProgram = null;
         sliceUniforms = null;
+        passBound = false;
     }
 
     /** A point in the GPU's command stream. */
     public final class GpuFence {
         private long handle;
-        private GpuFence() { handle = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0); glFlush(); }
+        private GpuFence(boolean flush) { handle = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0); if (flush) glFlush(); }
         /** Wait until the GPU has passed this point. */
         public void await() {
             if (handle == 0) return;
@@ -413,10 +448,41 @@ public class GLSLEngine implements AutoCloseable {
         public void discard() { if (handle != 0) { glDeleteSync(handle); handle = 0; } }
     }
 
-    /** Insert a fence after everything submitted so far. */
-    public GpuFence fence() {
+    /** Insert a fence after everything submitted so far, and flush so the GPU starts on it. */
+    public GpuFence fence() { return fence(true); }
+
+    /** A fence without a flush: the commands before it reach the GPU with the next flush
+     *  or wait (a wait with GL_SYNC_FLUSH_COMMANDS_BIT flushes everything queued since,
+     *  so several strips travel in one submission). */
+    public GpuFence fence(boolean flush) {
         assertGLThread();
-        return new GpuFence();
+        return new GpuFence(flush);
+    }
+
+    /**
+     * GPU time of the commands between {@link #begin} and {@link #end}, read after they
+     * are known to be done (a fence). Unlike wall clock on the CPU it does not include the
+     * wait for earlier work or the round trip to the driver, so it is what the cost model
+     * wants when one submission is kept in flight.
+     */
+    public final class GpuTimer {
+        private int id = glGenQueries();
+        private GpuTimer() {}
+        public void begin() { glBeginQuery(GL_TIME_ELAPSED, id); }
+        public void end() { glEndQuery(GL_TIME_ELAPSED); }
+        /** Nanoseconds of GPU time; blocks if the result is not yet available. Frees the query. */
+        public long elapsedNs() {
+            if (id == 0) return 0;
+            long ns = glGetQueryObjectui64(id, GL_QUERY_RESULT);
+            glDeleteQueries(id); id = 0;
+            return ns;
+        }
+        public void discard() { if (id != 0) { glDeleteQueries(id); id = 0; } }
+    }
+
+    public GpuTimer timer() {
+        assertGLThread();
+        return new GpuTimer();
     }
 
     /** The current accumulation as a display-ready frame: post-processed, BGRA bytes, top
@@ -506,6 +572,7 @@ public class GLSLEngine implements AutoCloseable {
     /** Bloom and post-process passes into the display framebuffer, which is left bound and
      *  finished for a readback. GL thread. */
     private void runPostProcess() {
+        touchGLState();
         {
             if (adaptiveSamplingEnabled) glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
             renderBloom();
@@ -614,6 +681,7 @@ public class GLSLEngine implements AutoCloseable {
     }
 
     private void recreateFramebuffer() {
+        touchGLState();
         glDeleteTextures(accumTexture); glDeleteFramebuffers(accumFBO);
         glDeleteTextures(displayTexture); glDeleteFramebuffers(displayFBO);
         glDeleteTextures(varianceTexture); glDeleteFramebuffers(varianceFBO);
@@ -625,6 +693,7 @@ public class GLSLEngine implements AutoCloseable {
     }
 
     private void clearAccumulation() {
+        touchGLState();
         glBindFramebuffer(GL_FRAMEBUFFER, accumFBO); glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
         glBindFramebuffer(GL_FRAMEBUFFER, varianceFBO); glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
         glBindFramebuffer(GL_FRAMEBUFFER, 0); sampleCount = 0;
@@ -727,6 +796,7 @@ public class GLSLEngine implements AutoCloseable {
     }
 
     public void updatePaletteTexture(float[] rgbData, int resolution) {
+        touchGLState();
         runOnGLThread(() -> {
             glBindTexture(GL_TEXTURE_2D, paletteTexture);
             FloatBuffer data = MemoryUtil.memAllocFloat(rgbData.length); data.put(rgbData).flip();
@@ -736,6 +806,7 @@ public class GLSLEngine implements AutoCloseable {
     }
 
     public void loadEnvironmentMap(String filePath) {
+        touchGLState();
         runOnGLThread(() -> {
             try {
                 IntBuffer width = MemoryUtil.memAllocInt(1), height = MemoryUtil.memAllocInt(1), channels = MemoryUtil.memAllocInt(1);
@@ -762,6 +833,7 @@ public class GLSLEngine implements AutoCloseable {
     }
 
     public void loadEnvironmentMapFromResource(String resourcePath) {
+        touchGLState();
         runOnGLThread(() -> {
             try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
                 if (is == null) return;
@@ -782,6 +854,7 @@ public class GLSLEngine implements AutoCloseable {
     }
 
     public void clearEnvironmentMap() {
+        touchGLState();
         runOnGLThread(() -> {
             glDeleteTextures(envMapTexture); createDefaultEnvMap();
             glDeleteTextures(envMarginalCDFTexture); glDeleteTextures(envConditionalCDFTexture); createDefaultCDFTextures();

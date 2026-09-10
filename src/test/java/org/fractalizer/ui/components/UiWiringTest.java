@@ -45,7 +45,6 @@ class UiWiringTest {
     /** A controller with no engine: the editor only needs a place to send compiled GLSL. */
     static final class StubController implements RenderController {
         final NodeGraphParams params = new NodeGraphParams(FractalType.MANDELBULB);
-        int compiles = 0;
 
         @Override public void setFractalType(FractalType type) { }
         @Override public FractalType getFractalType() { return FractalType.NODE_GRAPH; }
@@ -68,7 +67,6 @@ class UiWiringTest {
         @Override public String getDeviceName() { return "stub"; }
         @Override public String getDeviceType() { return "none"; }
         @Override public String compileCustomShader(String source) { return null; }
-        @Override public String compileNodeGraph(String source) { compiles++; return null; }
         @Override public void close() { }
     }
 

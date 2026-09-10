@@ -252,17 +252,6 @@ public class GLSLFractalizerController implements RenderController {
     }
 
     @Override
-    public String compileNodeGraph(String source) {
-        String defines = currentParams instanceof NodeGraphParams ngp ? nodeGraphDefines(ngp) : "";
-        String error = engine.ensureProgram("nodegraph", source, defines);
-        if (error == null) {
-            engine.setActiveProgram("nodegraph");
-            engine.resetAccumulation();
-        }
-        return error;
-    }
-
-    @Override
     public FractalType getFractalType() {
         return currentFractalType;
     }

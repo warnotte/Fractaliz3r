@@ -183,11 +183,16 @@ public final class ViewportScheduler {
         if (l != null) ui.accept(() -> l.onStatus(s));
     }
 
+    private long lastReadbackNs;              // what the last frame cost to read back and convert
+
     private void emitImage() {
         Listener l = listener;
         if (l == null) return;
+        long t0 = System.nanoTime();
         GLSLEngine.ViewportFrame f = engine.readViewportFrame();
         ViewportImage img = new ViewportImage(f.width(), f.height(), f.bgra(), f.samples());
+        lastReadbackNs = System.nanoTime() - t0;
+        if (DEBUG) System.out.printf("[viewport] readback %dx%d %d ms%n", f.width(), f.height(), lastReadbackNs / 1_000_000);
         ui.accept(() -> l.onImage(img));
     }
 
@@ -239,6 +244,7 @@ public final class ViewportScheduler {
      *  first step, whatever happens next. */
     private final class PreviewJob implements Job {
         private final SceneSnapshot scene;
+        private final String costKey;
         private final int w, h;
         private final Map<String, Object> uniforms;
         private int samples;
@@ -246,7 +252,8 @@ public final class ViewportScheduler {
 
         PreviewJob(SceneSnapshot scene) {
             this.scene = scene;
-            float scale = costs.previewScale(scene.programKey(), scene.viewportWidth(), scene.viewportHeight(),
+            this.costKey = CostModel.keyFor(scene);
+            float scale = costs.previewScale(costKey, scene.viewportWidth(), scene.viewportHeight(),
                     scene.previewScale(), previewScaleNow);
             previewScaleNow = scale;
             w = Math.max(160, Math.round(scene.viewportWidth() * scale));
@@ -257,11 +264,13 @@ public final class ViewportScheduler {
         }
 
         @Override public boolean step() {
-            int n = Math.min(costs.samplesPerStep(scene.programKey(), true, w, h), scene.previewSamples() - samples);
-            long t0 = System.nanoTime();
+            int n = Math.min(costs.samplesPerStep(costKey, true, w, h, CostModel.STEP_BUDGET_NS), scene.previewSamples() - samples);
+            GLSLEngine.GpuTimer timer = engine.timer();
+            timer.begin();
             engine.renderSamples(uniforms, n);
+            timer.end();
             engine.fence().await();
-            costs.record(scene.programKey(), true, (long) w * h * n, System.nanoTime() - t0);
+            costs.record(costKey, true, (long) w * h * n, timer.elapsedNs());
             samples += n;
             boolean done = samples >= scene.previewSamples();
             if (!shown || done) { emitImage(); shown = true; }
@@ -276,19 +285,28 @@ public final class ViewportScheduler {
         }
     }
 
-    /** Full size, full quality, many samples; each step is whole samples when they fit the
-     *  budget, else one strip of a sample; an image every {@link #IMAGE_INTERVAL_NS}. */
+    /**
+     * Full size, full quality, many samples. A step is whole samples when they fit the
+     * refinement slice, else one strip of a sample, waited for before the next: every
+     * sync between two draws costs the tail of the draw before it, and keeping a strip
+     * in flight did not hide it (StripCostProbe), so the slice is what bounds the price
+     * and the resume latency alike. Frames go out between samples only, every
+     * {@link #IMAGE_INTERVAL_NS} or five readbacks' worth, whichever is longer.
+     */
     private final class RefineJob implements Job {
         private final SceneSnapshot scene;
+        private final String costKey;
         private final int w, h;
         private final Map<String, Object> uniforms;
         private final long started = System.nanoTime();
         private long lastImage = 0, lastStatus = 0;
         private int samples;
-        private int stripY = -1;       // >= 0 while a sliced sample is open
+        private int stripY = -1;         // >= 0 while a sliced sample is open
+        private int lastRows = 0;
 
         RefineJob(SceneSnapshot scene) {
             this.scene = scene;
+            this.costKey = CostModel.keyFor(scene);
             w = scene.viewportWidth();
             h = scene.viewportHeight();
             uniforms = scene.uniformsFor(h, false);
@@ -297,32 +315,38 @@ public final class ViewportScheduler {
         }
 
         @Override public boolean step() {
-            long t0 = System.nanoTime();
-            String key = scene.programKey();
-            if (stripY < 0 && !costs.sampleExceedsStep(key, false, w, h)) {
-                int n = Math.min(costs.samplesPerStep(key, false, w, h), scene.fullSamples() - samples);
+            long slice = CostModel.REFINE_SLICE_NS;
+            GLSLEngine.GpuTimer timer = engine.timer();
+            long pixels;
+            timer.begin();
+            if (stripY < 0 && !costs.sampleExceedsStep(costKey, false, w, h, slice)) {
+                int n = Math.min(costs.samplesPerStep(costKey, false, w, h, slice), scene.fullSamples() - samples);
                 engine.renderSamples(uniforms, n);
-                engine.fence().await();
-                costs.record(key, false, (long) w * h * n, System.nanoTime() - t0);
+                pixels = (long) w * h * n;
                 samples += n;
+                lastRows = 0;
             } else {
                 if (stripY < 0) { engine.beginSample(uniforms); stripY = 0; }
-                int rows = Math.min(costs.rowsPerStrip(key, false, w, h), h - stripY);
+                int rows = Math.min(costs.rowsPerStrip(costKey, false, w, h, lastRows, slice), h - stripY);
                 engine.drawRows(stripY, rows);
-                engine.fence().await();
-                costs.record(key, false, (long) w * rows, System.nanoTime() - t0);
+                pixels = (long) w * rows;
                 stripY += rows;
+                lastRows = rows;
                 if (stripY >= h) { engine.commitSample(); stripY = -1; samples++; }
             }
+            timer.end();
+            engine.fence().await();
+            costs.record(costKey, false, pixels, timer.elapsedNs());
+
             boolean done = samples >= scene.fullSamples();
             long now = System.nanoTime();
-            // Images only between samples: the post-process divides by the samples counted,
-            // and the rows of an open sample would show one sample too many.
-            if (stripY < 0 && (done || now - lastImage >= IMAGE_INTERVAL_NS)) { emitImage(); lastImage = now; }
-            if (done) emit(Status.done(samples, (now - started) / 1_000_000));
+            long interval = Math.max(IMAGE_INTERVAL_NS, 5 * lastReadbackNs);
+            if (stripY < 0 && (done || now - lastImage >= interval)) { emitImage(); lastImage = System.nanoTime(); }
+            if (done) emit(Status.done(samples, (System.nanoTime() - started) / 1_000_000));
             else if (now - lastStatus >= STATUS_INTERVAL_NS) { emit(Status.refining(samples, scene.fullSamples())); lastStatus = now; }
             return done;
         }
+
         @Override public String toString() { return "refine " + w + "x" + h + " " + samples + "/" + scene.fullSamples() + (stripY >= 0 ? " row " + stripY : ""); }
         @Override public boolean preemptible() { return true; }
         @Override public void cancel() {

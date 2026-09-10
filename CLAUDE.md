@@ -106,6 +106,9 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.NavigationFluidityP
 # A refinement sample drawn in scissored strips (abortable between them) must be the same sample
 # to the bit, and an aborted one must be cleared, not accumulated.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.BandedSampleProbe"
+# What a sample costs as strips against whole, on the GPU, per sync pattern (bound once, rebound
+# each, fenced each, one or two in flight): the measurement behind the scheduler's slice lengths.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.StripCostProbe" -Dexec.args="presets/ALBEDO_039.frac 1920x1080"
 # Does a scene shader compile block the JavaFX thread? A preview asked from the FX thread with a
 # scene that needs a program must return at once (compile on the SceneCompile thread, status via
 # the compile listener, image later); from any other thread it must compile inside the call.
@@ -239,6 +242,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── DeferredCompileProbe.java    # a scene compile asked from the FX thread must not block it
 ├── NavigationFluidityProbe.java # the viewport while the camera moves: FX held, images/s, latency, interrupt
 ├── BandedSampleProbe.java       # a sample drawn in strips is the same sample; an aborted one is cleared
+├── StripCostProbe.java          # GPU cost of strips vs whole per sync pattern: why slices are 60 ms
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them
 └── GalleryRender.java           # every .frac in a dir rendered as the app shows it (README gallery)
