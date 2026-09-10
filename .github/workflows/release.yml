@@ -67,9 +67,8 @@ jobs:
             '--module', 'Fractaliz3r/org.fractalizer.Launcher',
             '--icon', 'src/main/resources/icons/fractaliz3r.ico',
             '--java-options', '-Dorg.lwjgl.librarypath=$ROOTDIR\runtime\bin',
-            '--license-file', 'LICENSE'
           )
-          jpackage --type msi --dest target/installer @common `
+          jpackage --type msi --dest target/installer @common --license-file LICENSE `
             --win-menu --win-shortcut --win-dir-chooser --win-per-user-install `
             --win-upgrade-uuid 6f1b3c2e-7a4d-4b8e-9c21-3d5e7f9a1b2c
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
