@@ -390,8 +390,9 @@ The Cornell Box scene (`cornellbox.glsl`) uses `#define HAS_PER_OBJECT_MATERIAL`
 
 A prism splits white light because the index of refraction depends on the wavelength. The
 path tracer can do the same. It is off by default and costs nothing while off:
-`dispersionEnabled` (Material panel, *Dispersion (path tracing)*, enabled for the glass
-type only) and `dispersion`, Cauchy's B coefficient in micrometres squared (crown glass
+`dispersionEnabled` (Material panel, *Physical Material* section, *Dispersion (path
+tracing)*; it applies to every glass surface, the global material or a MaterialNode's, so
+it is not greyed out when the global type is not glass) and `dispersion`, Cauchy's B coefficient in micrometres squared (crown glass
 0.004, flint 0.013; the slider goes to 0.05 because the effect is the point). Both are
 uniforms, saved in the `.frac` next to `ior`; no recompilation.
 

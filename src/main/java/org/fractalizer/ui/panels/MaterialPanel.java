@@ -354,8 +354,8 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         int type = materialTypeCombo.getSelectionModel().getSelectedIndex();
         metalnessSlider.setDisable(type != 1);
         iorSlider.setDisable(type != 2);
-        dispersionCheck.setDisable(type != 2);
-        dispersionSlider.setDisable(type != 2);
+        // Dispersion is not gated on the global type: it applies to every glass surface,
+        // and in a node graph the glass is usually a MaterialNode over a matte scene.
     }
 
     private void fireGradientChanged(GradientPalette gradient) {
