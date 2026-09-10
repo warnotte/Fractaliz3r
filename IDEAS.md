@@ -87,3 +87,24 @@ Approaches:
 - **GPU readback**: Render a 1-pixel DE query at camera pos, read back with `glReadPixels` — accurate but 1-frame latency
 - **CPU-side DE**: Re-implement a simplified DE on CPU — fast but must stay in sync with GPU shader
 - **Raycast ahead**: March a short ray in the movement direction, stop before hitting surface — natural "sliding" along the surface
+
+### 22. Discoveries Tab Follow-ups
+**Status:** IDEA (parked 2026-09-11; the tab itself, Prospect and Breed, shipped in 3.2.0)
+
+What the Discoveries tab of the Presets & Chains browser still lacks, in the order to do them:
+
+1. **Save from the tab.** A discovery only survives by being loaded, then saved as the scene.
+   A button on the tile that writes the `.frac` straight into a discoveries folder, with its
+   thumbnail.
+2. **Name discoveries.** They are FOUND_01, CHILD_03. A readable name derived from the chain
+   (its step types), editable by the user, written into the `.frac` and shown on the tile.
+3. **Lineage history.** Keep the successive generations of a breeding run, know which parents a
+   child came from, go back to an earlier generation. Turns Breed from a draw into a selection
+   tool.
+4. **IFS recipe.** The recipe without a seed rarely renders anything visible (the per-recipe
+   count says so on every run). Fix in the grammar, not in the score.
+5. **Novelty.** The rule "canonical signature = fold and power steps only" lets variants of
+   known families through. Refine once the rest is there.
+
+Do 1 and 2 together: small, and without them discoveries are lost.
+
