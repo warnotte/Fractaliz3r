@@ -72,5 +72,14 @@ public interface RenderController {
      */
     String compileNodeGraph(String source);
 
+    /**
+     * Same compile, but the caller (the node graph editor, on the JavaFX thread) is not
+     * held while the driver works: {@code onDone} receives null or the error message, on
+     * the JavaFX thread, when it is over. The default is the synchronous compile.
+     */
+    default void compileNodeGraphAsync(String source, Consumer<String> onDone) {
+        onDone.accept(compileNodeGraph(source));
+    }
+
     void close();
 }

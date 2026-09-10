@@ -93,7 +93,7 @@ public class GLSLFractalizerApp extends Application {
     private long lastInteractionTime = 0; // For auto-quality debounce
     private boolean isHighQualityActive = false; // To avoid restarting HQ render repeatedly
     
-    private static final long RENDER_DELAY_MS = 33; // ~30 FPS for preview
+    private static final long RENDER_DELAY_MS = 16; // preview cap ~60 FPS; the scene cost is the real limit
     private static final long HQ_DELAY_MS = 400;    // Wait 400ms before refining
     
     private boolean autoFullQuality = true;

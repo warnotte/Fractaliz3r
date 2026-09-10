@@ -235,8 +235,11 @@ public class GLSLEngine implements AutoCloseable {
 
     public void resetAccumulation() { needsReset = true; }
 
+    // Posted, not awaited: the GL thread runs its tasks in order, so the upload lands before
+    // any batch submitted after it, and the JavaFX thread does not wait behind the batch in
+    // flight (the previous behaviour, once per preview frame).
     public void updateMaterialSSBO(float[] data) {
-        runOnGLThread(() -> {
+        postToGLThread(() -> {
             if (data == null || data.length == 0) {
                 if (materialSSBO != 0) { glDeleteBuffers(materialSSBO); materialSSBO = 0; }
                 return;
@@ -322,6 +325,137 @@ public class GLSLEngine implements AutoCloseable {
             }
             endAccumPass();
         });
+    }
+
+    /**
+     * One accumulation sample drawn as {@code bands} horizontal strips, the GPU drained
+     * after each so {@code abort} is consulted at strip granularity. This is how a sample
+     * that costs hundreds of milliseconds (a heavy scene at full viewport size) stops
+     * holding the viewport when the user moves: the wait for the next preview is one
+     * strip, not one sample. An aborted sample leaves a partial accumulation, so the
+     * buffer is marked for a clear and the sample is not counted.
+     * @return true if the whole sample was drawn
+     */
+    private static final boolean DEBUG_BANDS = Boolean.getBoolean("fractalizer.debugRender");
+
+    public boolean renderSampleBanded(Map<String, Object> uniforms, int bands, java.util.function.BooleanSupplier abort) {
+        final boolean[] complete = {false};
+        runOnGLThread(() -> {
+            if (activeProgram == null) throw new IllegalStateException();
+            if (needsReset) { clearAccumulation(); needsReset = false; }
+            if (sampleCount >= maxSamples) { complete[0] = true; return; }
+            ShaderProgram program = programs.get(activeProgram);
+            bindAccumPass(program, uniforms);
+            program.setUniform("sampleIndex", sampleCount);
+            program.setUniform("time", (float) glfwGetTime());
+            int n = Math.max(1, Math.min(bands, currentHeight));
+            glEnable(GL_SCISSOR_TEST);
+            boolean aborted = false;
+            for (int b = 0; b < n; b++) {
+                int y0 = currentHeight * b / n, y1 = currentHeight * (b + 1) / n;
+                glScissor(0, y0, currentWidth, y1 - y0);
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                glFinish();
+                if (b < n - 1 && abort.getAsBoolean()) { aborted = true; break; }
+            }
+            glDisable(GL_SCISSOR_TEST);
+            if (adaptiveSamplingEnabled) glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+            if (aborted) needsReset = true;
+            else { sampleCount++; complete[0] = true; }
+            endAccumPass();
+        });
+        return complete[0];
+    }
+
+    /**
+     * As above, but adaptive: strips are sized so each holds about {@code targetStripNs} of
+     * GPU work. Every strip also costs a fixed {@link #STRIP_OVERHEAD_NS} or so of driver
+     * round trip whatever its size (measured: 107 strips of a 60 ms sample took 345 ms), so
+     * thin strips are ruinous and the sizing subtracts that overhead. The row cost comes
+     * from {@code hintNsPerRow} when the caller has one (the previous sample at this size),
+     * else from a four-row probe drawn first, and is raised whenever a strip proves dearer.
+     */
+    private static final long STRIP_OVERHEAD_NS = 2_500_000L;
+
+    public boolean renderSampleBanded(Map<String, Object> uniforms, long hintNsPerRow, long targetStripNs,
+                                      java.util.function.BooleanSupplier abort) {
+        final boolean[] complete = {false};
+        runOnGLThread(() -> {
+            if (activeProgram == null) throw new IllegalStateException();
+            if (needsReset) { clearAccumulation(); needsReset = false; }
+            if (sampleCount >= maxSamples) { complete[0] = true; return; }
+            ShaderProgram program = programs.get(activeProgram);
+            bindAccumPass(program, uniforms);
+            program.setUniform("sampleIndex", sampleCount);
+            program.setUniform("time", (float) glfwGetTime());
+            final int H = currentHeight, W = currentWidth;
+            glEnable(GL_SCISSOR_TEST);
+            long tStart = System.nanoTime();
+            int strips = 0, y = 0;
+            boolean aborted = false;
+            long nsPerRow = hintNsPerRow;
+
+            if (nsPerRow <= 0) {
+                // No hint: an eight-row probe, waited for. Its reading is pessimistic on a
+                // cheap scene because of the fixed cost, which only makes the first strips
+                // smaller than needed, and the sweep corrects that; on the dearest scene
+                // measured it is ~90 ms of work, abortable right after.
+                int h = Math.min(8, H);
+                long t0 = System.nanoTime();
+                glScissor(0, 0, W, h);
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                glFinish();
+                nsPerRow = Math.max(1L, (System.nanoTime() - t0 - STRIP_OVERHEAD_NS / 2) / h);
+                y = h; strips++;
+                if (y < H && abort.getAsBoolean()) aborted = true;
+            }
+
+            // The sweep, one strip kept in flight: after queuing strip k the CPU waits for the
+            // fence of strip k-1, so the GPU never idles and an abort is at most two strips
+            // late. A strip that proves dearer per row than expected raises the estimate.
+            if (!aborted) {
+                // One row is the floor. On the dearest scene measured a row at 1080p costs
+                // 70 ms, and so does a fraction of one: a ray there runs 70 ms of shader
+                // whatever its neighbours do, so column blocks bought nothing and the sizing
+                // spiralled. The abort granularity on such a scene is one row.
+                int rows = rowsFor(targetStripNs, nsPerRow, H);
+                int prevRows = 0;
+                long prevFence = 0, lastWait = System.nanoTime();
+                while (y < H) {
+                    int h = Math.min(rows, H - y);
+                    glScissor(0, y, W, h);
+                    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                    long fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+                    glFlush();
+                    y += h; strips++;
+                    if (prevFence != 0) {
+                        glClientWaitSync(prevFence, GL_SYNC_FLUSH_COMMANDS_BIT, 10_000_000_000L);
+                        glDeleteSync(prevFence);
+                        long now = System.nanoTime();
+                        long measured = Math.max(1L, (now - lastWait - STRIP_OVERHEAD_NS) / prevRows);
+                        if (measured > nsPerRow) { nsPerRow = measured; rows = rowsFor(targetStripNs, nsPerRow, H); }
+                        lastWait = now;
+                        if (y < H && abort.getAsBoolean()) { aborted = true; glDeleteSync(fence); fence = 0; break; }
+                    }
+                    prevRows = h;
+                    prevFence = fence;
+                }
+                if (!aborted && prevFence != 0) { glClientWaitSync(prevFence, GL_SYNC_FLUSH_COMMANDS_BIT, 10_000_000_000L); glDeleteSync(prevFence); }
+            }
+
+            if (DEBUG_BANDS) System.out.printf("[bands] %d strips, %s after %d ms (%dx%d, %.3f ms/row)%n", strips,
+                    aborted ? "ABORTED" : "complete", (System.nanoTime() - tStart) / 1_000_000, W, H, nsPerRow / 1e6);
+            glDisable(GL_SCISSOR_TEST);
+            if (adaptiveSamplingEnabled) glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+            if (aborted) needsReset = true;      // partial sample: clear before the next pass
+            else { sampleCount++; complete[0] = true; }
+            endAccumPass();
+        });
+        return complete[0];
+    }
+
+    private static int rowsFor(long targetStripNs, long nsPerRow, int height) {
+        return (int) Math.max(1L, Math.min(height, targetStripNs / Math.max(1L, nsPerRow)));
     }
 
     public int getSampleCount() { return sampleCount; }
@@ -688,6 +822,16 @@ public class GLSLEngine implements AutoCloseable {
     private void runOnGLThread(Runnable task) {
         if (Thread.currentThread().getName().equals("GLSLEngine-Thread")) task.run();
         else { try { glThread.submit(() -> { glfwMakeContextCurrent(window); task.run(); }).get(); } catch (Exception e) { throw new RuntimeException(e); } }
+    }
+
+    /** Queue a task on the GL thread without waiting for it. Order with respect to other
+     *  GL tasks is preserved (single-threaded executor). */
+    private void postToGLThread(Runnable task) {
+        if (Thread.currentThread().getName().equals("GLSLEngine-Thread")) { task.run(); return; }
+        glThread.submit(() -> {
+            glfwMakeContextCurrent(window);
+            try { task.run(); } catch (Exception e) { e.printStackTrace(); }
+        });
     }
 
     @Override

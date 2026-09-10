@@ -99,6 +99,13 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorDemo" -Dexec.a
 # delay before a cancel can interrupt a full-quality pass (= one progressive batch).
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResizeProbe" -Dexec.args="1920x1080 0.5 20"
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResponsivenessProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 1280x720 24"
+# How fluid is the viewport while the camera moves: one renderPreview per frame from the FX thread
+# for N seconds; JavaFX held per call, worst FX stall, images/s, request->image latency, and how long a
+# move waits for its preview while the refinement pass runs. Scene = .frac or a FractalType name.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.NavigationFluidityProbe" -Dexec.args="presets/ALBEDO_039.frac 1920x1080 3"
+# A refinement sample drawn in scissored strips (abortable between them) must be the same sample
+# to the bit, and an aborted one must be cleared, not accumulated.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.BandedSampleProbe"
 # Does a scene shader compile block the JavaFX thread? A preview asked from the FX thread with a
 # scene that needs a program must return at once (compile on the SceneCompile thread, status via
 # the compile listener, image later); from any other thread it must compile inside the call.
@@ -227,6 +234,8 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ShaderCompileProbe.java      # compile time per shader, built-ins then any .frac; names the one that hangs
 ├── ExportAfterPreviewProbe.java # the cheap preview must not leak into an export
 ├── DeferredCompileProbe.java    # a scene compile asked from the FX thread must not block it
+├── NavigationFluidityProbe.java # the viewport while the camera moves: FX held, images/s, latency, interrupt
+├── BandedSampleProbe.java       # a sample drawn in strips is the same sample; an aborted one is cleared
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them
 └── GalleryRender.java           # every .frac in a dir rendered as the app shows it (README gallery)

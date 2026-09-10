@@ -169,6 +169,60 @@ at 1080p, 24.8 ms at 4K — real, but minor next to the batch).
 
 ---
 
+### Since 3.2.2: fluid navigation, measured
+
+`NavigationFluidityProbe` drives the controller as the app does (one `renderPreview` per
+animation frame from the JavaFX thread while the camera turns) and reports what the user
+feels: time the JavaFX thread is held per call, its worst stall, images per second, request
+to image latency, and how long a camera move waits for its first preview while a
+full-quality pass runs. Before, on the default Mandelbulb at 1280x720 that last number was
+128 ms on any scene (one 120 ms batch), and on a heavy scene the wait was one whole sample
+(800 ms on Labyrinth at 1080p, 4.5 s when the first batch had grown). What changed:
+
+- **30 ms batches, in a loop.** `BATCH_TARGET_NS` went from 120 to 30 ms and the
+  fixed-rate schedule became a loop, since a 30 ms batch on a 100 ms period left the GPU
+  idle. Each run has its own cancel flag: with a shared one, a loop still finishing a batch
+  when the next `start()` came saw the flag drop back and carried on with stale uniforms.
+- **A sample dearer than two slices is drawn in strips** (`GLSLEngine.renderSampleBanded`),
+  each a scissored band with a fence, one strip kept in flight, an abort check between
+  them. Strip height comes from the cost of the previous refinement sample at that size,
+  else from an eight-row probe, and only ever shrinks. Every strip also costs ~2.5 ms of
+  driver round trip whatever its size (107 strips of a 60 ms sample took 345 ms), so the
+  sizing subtracts it; on the dearest scene measured a single row at 1080p is 70 ms, and
+  cutting rows into column blocks did not help (a ray costs what it costs), so one row is
+  the floor. `BandedSampleProbe` proves strips give the same sample to the bit and that an
+  aborted one is cleared, not accumulated.
+- **The refinement pass is abortable from its first sample**; a preview run is not: it
+  always finishes and shows its first sample, or a drag on a heavy scene (requests every
+  16 ms, sample 40 ms) cancels every sample before it lands and the viewport freezes
+  (measured 1 image a second; 40 with the rule).
+- **The preview shrinks to fit 30 ms.** `previewScale` is now the ceiling; when one sample
+  at that size costs more, the next preview is drawn smaller (the ImageView stretches it)
+  and grows back as the cost allows, in steps of 1/32 of the viewport with a dead band so
+  the framebuffers are not reallocated every frame. The refinement restores the detail.
+- **The JavaFX thread never waits for the GL thread on the preview path.** The material
+  SSBO upload before every frame was a round trip queued behind the batch in flight; it is
+  now posted, and only when the data changed. The scene shader compile moved to its own
+  thread (`DeferredCompileProbe`), for renders and for the node editor's own compile.
+- `RENDER_DELAY_MS` 33 to 16: the app asks for a preview up to 60 times a second; the
+  scene cost is the real limit.
+
+Measured with the probe, 3 s of camera motion, previewScale 0.5, fast shading:
+
+| scene, viewport | images/s | request to image, median | JavaFX held per call, max | first preview after a move during refinement |
+|---|---|---|---|---|
+| Mandelbulb 1280x720 | 124 | 6 ms | 4 ms | 25 ms |
+| Julia bulb (path traced) 1280x720 | 124 | 8 ms | 4 ms | 10 ms |
+| Albedo 0.39 (29 effect nodes) 1280x720 | 40 | 8 ms | 4 ms | 55 ms |
+| Albedo 0.39 1920x1080 | 44 | 8 ms | 25 ms | 61 ms |
+| Labyrinth 1920x1080 | 38 | 8 ms | 5 ms | 167 ms |
+
+Labyrinth's 167 ms is one 70 ms row plus the preview: its full-quality sample at 1080p is
+12 s, which no scheduling can hide; the fix there is the scene. Exports do not go through
+any of this (`ExportAfterPreviewProbe`, `RenderRegression check`: bit-exact), and the
+refinement's throughput is unchanged (`ResponsivenessProbe` mean tick 45 ms before and
+after).
+
 ## Why renders looked washed out (rim light)
 
 Colour had been flat across the whole project, and the cause was neither the palette nor

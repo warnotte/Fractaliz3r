@@ -70,6 +70,8 @@ public class GLSLFractalizerController implements RenderController {
             });
     private volatile boolean compiling = false;
     private volatile String lastCompileError;     // from the last node-graph compile, null on success
+    private float[] lastMaterialSSBO;             // what the engine holds; skip identical uploads
+    private volatile String lastNodeGraphSource;  // defines + GLSL of the program the engine holds
     private Runnable renderAfterCompile;          // FX thread only
     private Consumer<String> compileListener;     // message while compiling, null when done
 
@@ -202,12 +204,19 @@ public class GLSLFractalizerController implements RenderController {
                     if (err != null) {
                         System.err.println("Node graph shader error: " + err);
                     } else {
+                        lastNodeGraphSource = defines + glsl;
                         System.out.printf("Scene shader compiled in %d ms%n", (System.nanoTime() - t0) / 1_000_000);
                     }
                 }
             }
-            // Update material SSBO (tiny data, safe to call every activation)
-            engine.updateMaterialSSBO(ngp.getMaterialSSBOData());
+            // Material SSBO: uploaded only when its content changed. This runs before every
+            // preview frame on the JavaFX thread; an unconditional upload was a round trip
+            // to the GL thread per frame, queued behind whatever batch was in flight.
+            float[] ssbo = ngp.getMaterialSSBOData();
+            if (ssbo != lastMaterialSSBO && !java.util.Arrays.equals(ssbo, lastMaterialSSBO)) {
+                engine.updateMaterialSSBO(ssbo == null ? null : ssbo.clone());
+                lastMaterialSSBO = ssbo == null ? null : ssbo.clone();
+            }
             if (engine.hasProgram("nodegraph")) {
                 engine.setActiveProgram("nodegraph");
                 currentBooleanProgramKey = null;
@@ -300,6 +309,13 @@ public class GLSLFractalizerController implements RenderController {
 
     public boolean isCompiling() { return compiling; }
 
+    /** The uniform map a render of the current scene would use, program activated. For
+     *  harnesses that drive the engine directly (BandedSampleProbe). */
+    public Map<String, Object> buildUniformsForProbe() {
+        activateCurrentProgram();
+        return buildUniforms();
+    }
+
     private void ensureBooleanShader(String secondaryKernelName) {
         String key = currentFractalType.getKernelName() + "+" + secondaryKernelName;
         if (engine.hasProgram(key)) return;
@@ -327,12 +343,46 @@ public class GLSLFractalizerController implements RenderController {
 
     @Override
     public String compileNodeGraph(String source) {
-        String error = engine.loadCustomFractalShader("nodegraph", source);
+        // Same defines as activateCurrentProgram, or an editor compile would drop the
+        // deep-zoom LOD until the next dirty recompile.
+        String defines = (currentParams instanceof NodeGraphParams ngp && ngp.getDetailLOD() > 0f)
+                ? "#define DETAIL_LOD\n" : "";
+        String full = defines + source;
+        if (full.equals(lastNodeGraphSource) && engine.hasProgram("nodegraph")) {
+            // The editor recompiles on every structural event, including the load of a scene
+            // the startup task just compiled: same source, same program, nothing to do.
+            engine.setActiveProgram("nodegraph");
+            return null;
+        }
+        long t0 = System.nanoTime();
+        String error = engine.loadCustomFractalShader("nodegraph", source, defines);
         if (error == null) {
+            lastNodeGraphSource = full;
+            System.out.printf("Scene shader compiled in %d ms (editor)%n", (System.nanoTime() - t0) / 1_000_000);
             engine.setActiveProgram("nodegraph");
             engine.resetAccumulation();
         }
         return error;
+    }
+
+    /** The editor's compile on the SceneCompile thread; the status bar shows it like a
+     *  deferred render compile, and {@code onDone} runs on the JavaFX thread after. */
+    @Override
+    public void compileNodeGraphAsync(String source, Consumer<String> onDone) {
+        if (compileListener != null && onFxThread()) compileListener.accept("Compiling scene shader...");
+        compileThread.submit(() -> {
+            String error;
+            try {
+                error = compileNodeGraph(source);
+            } catch (Exception e) {
+                error = e.getMessage() == null ? e.toString() : e.getMessage();
+            }
+            final String err = error;
+            Platform.runLater(() -> {
+                if (compileListener != null) compileListener.accept(err == null ? null : "Shader error: " + err);
+                onDone.accept(err);
+            });
+        });
     }
 
     /**
@@ -356,12 +406,13 @@ public class GLSLFractalizerController implements RenderController {
         // shading is the other. engine.resize() is a no-op when the size is unchanged, so
         // continuous navigation stays at preview size and only reallocates on the way back
         // to full quality.
-        float scale = 1f;
+        float maxScale = 1f;
         boolean fast = false;
         if (currentParams instanceof AbstractFractalParams pp) {
-            scale = pp.getPreviewScale();
+            maxScale = pp.getPreviewScale();
             fast = pp.isPreviewFastShading();
         }
+        float scale = adaptivePreviewScale(maxScale);
         int pw = Math.max(160, Math.round(viewportWidth * scale));
         int ph = Math.max(90, Math.round(viewportHeight * scale));
         engine.resize(pw, ph);
@@ -382,6 +433,32 @@ public class GLSLFractalizerController implements RenderController {
         progressiveRenderer.setOnRenderComplete(null);
 
         progressiveRenderer.start(uniforms, previewSamples);
+        lastPreviewScale = scale;
+        lastPreviewPixels = (long) pw * ph;
+    }
+
+    // The moving preview aims at a fixed time per sample: the scene's previewScale is the
+    // ceiling, and when one sample at that size costs more than PREVIEW_TARGET_NS the next
+    // preview is drawn smaller (the ImageView stretches it), then grows back as the cost
+    // allows. A drag stays fluid on any scene; the refinement pass restores the detail.
+    private static final long PREVIEW_TARGET_NS = 30_000_000L;   // ~30 fps of fresh frames
+    private static final float MIN_PREVIEW_SCALE = 0.12f;
+    private float lastPreviewScale = 0f;
+    private long lastPreviewPixels = 0;
+
+    private float adaptivePreviewScale(float maxScale) {
+        long ns = progressiveRenderer.getLastMeasuredNsPerSample();
+        if (lastPreviewScale <= 0f || ns <= 0 || lastPreviewPixels <= 0) return maxScale;
+        // cost scales with pixels, pixels with scale squared
+        double ratio = Math.sqrt((double) PREVIEW_TARGET_NS / ns);
+        double wanted = lastPreviewScale * ratio;
+        // move at most a step per frame, and not for small differences (each size change
+        // reallocates the framebuffers)
+        if (ratio > 0.85 && ratio < 1.35) wanted = lastPreviewScale;
+        wanted = Math.max(lastPreviewScale * 0.6, Math.min(lastPreviewScale * 1.5, wanted));
+        float scale = (float) Math.max(MIN_PREVIEW_SCALE, Math.min(maxScale, wanted));
+        // quantise to 1/32 of the viewport so consecutive frames share a size
+        return Math.max(MIN_PREVIEW_SCALE, Math.round(scale * 32f) / 32f);
     }
 
     /** Cheapen a preview frame without touching the scene's own settings — the values are
@@ -424,7 +501,7 @@ public class GLSLFractalizerController implements RenderController {
             if (completeListener != null) completeListener.run();
         });
 
-        progressiveRenderer.start(uniforms, fullSamples);
+        progressiveRenderer.start(uniforms, fullSamples, true);   // the preview is on screen: abortable at once
     }
 
     /**
