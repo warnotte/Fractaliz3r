@@ -59,6 +59,16 @@ uniform int adaptiveSampling;
 
 // Lens Effects
 uniform sampler2D lensDirtTexture;
+// Droste: the frame contains itself in a spiral. Escher's map in log-polar coordinates:
+// the annulus inner..outer (radii in half-heights, centred) tiles the plane under a scaling
+// by outer/inner, and a rotation by atan(periodicity * log(outer/inner) / 2pi) makes the
+// copies join without a seam. Phase slides along the spiral: animated, an endless zoom.
+uniform int drosteEnabled;
+uniform float drosteInner;
+uniform float drosteOuter;
+uniform float drostePeriodicity;
+uniform float drostePhase;
+
 uniform int lensEffectsEnabled;
 uniform float lensDirtIntensity;
 uniform float starburstIntensity;
@@ -279,12 +289,34 @@ float bayerDither(vec2 fragCoord) {
 // Main
 // ============================================================================
 
+vec2 drosteUV(vec2 screen) {
+    const float TWO_PI = 6.28318530718;
+    float aspect = resolution.x / resolution.y;
+    vec2 z = (screen - 0.5) * vec2(2.0 * aspect, 2.0);       // half-height units, centred
+    float r1 = max(drosteInner, 0.001);
+    float r2 = max(drosteOuter, r1 * 1.01);
+    float L = log(r2 / r1);
+    float alpha = atan(drostePeriodicity * L / TWO_PI);
+    // log-polar, radius relative to the inner circle
+    vec2 w = vec2(log(max(length(z), 1e-6)) - log(r1), atan(z.y, z.x));
+    // the inverse of Escher's twist: divide by cos(alpha) * e^(i alpha)
+    float c = cos(alpha), s = sin(alpha);
+    w = vec2(w.x * c + w.y * s, w.y * c - w.x * s) / c;
+    // one annulus width along the radial axis, slid by the phase
+    w.x = mod(w.x + drostePhase * L, L);
+    float r = r1 * exp(w.x);
+    vec2 back = r * vec2(cos(w.y), sin(w.y));
+    return back / vec2(2.0 * aspect, 2.0) + 0.5;
+}
+
 void main() {
     vec2 texelSize = 1.0 / resolution;
+    // where the frame is sampled: the screen position, or its Droste image
+    vec2 suv = (drosteEnabled != 0 && renderMode == 0) ? drosteUV(uv) : uv;
 
     // AOV modes: pass through raw data without post-processing
     if (renderMode != 0) {
-        vec3 color = texture(accumTexture, uv).rgb;
+        vec3 color = texture(accumTexture, suv).rgb;
         color /= float(max(sampleCount, 1));
         FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
         return;
@@ -294,14 +326,14 @@ void main() {
     vec3 color;
 
     if (chromaticAberrationEnabled != 0 && chromaticAberrationIntensity > 0.0001) {
-        color = chromaticAberration(accumTexture, uv, chromaticAberrationIntensity);
+        color = chromaticAberration(accumTexture, suv, chromaticAberrationIntensity);
     } else {
-        color = texture(accumTexture, uv).rgb;
+        color = texture(accumTexture, suv).rgb;
     }
 
     // Normalize by sample count (per-pixel when adaptive sampling is on)
     float sampleDivisor = (adaptiveSampling != 0)
-        ? max(texture(varianceTex, uv).b, 1.0)
+        ? max(texture(varianceTex, suv).b, 1.0)
         : float(max(sampleCount, 1));
     color /= sampleDivisor;
 
@@ -311,13 +343,13 @@ void main() {
     // Add bloom
     vec3 bloom = vec3(0.0);
     if (bloomEnabled != 0 && bloomIntensity > 0.0001) {
-        bloom = texture(bloomTexture, uv).rgb;
+        bloom = texture(bloomTexture, suv).rgb;
         color += bloom * bloomIntensity;
     }
 
     // Apply Lens Effects (Dirt & Starburst)
     if (lensEffectsEnabled != 0 && (lensDirtIntensity > 0.0001 || starburstIntensity > 0.0001)) {
-        color = applyLensEffects(color, bloom, uv);
+        color = applyLensEffects(color, bloom, suv);
     }
 
     // Only apply effects for final render mode
@@ -340,11 +372,11 @@ void main() {
 
         // Sharpening (unsharp mask in display-referred space, after tone map + gamma)
         if (sharpenEnabled != 0 && sharpenIntensity > 0.0001) {
-            vec3 cC = toDisplayReferred(uv, sampleDivisor);
-            vec3 blur = toDisplayReferred(uv + vec2(-texelSize.x, 0.0), sampleDivisor)
-                      + toDisplayReferred(uv + vec2( texelSize.x, 0.0), sampleDivisor)
-                      + toDisplayReferred(uv + vec2(0.0, -texelSize.y), sampleDivisor)
-                      + toDisplayReferred(uv + vec2(0.0,  texelSize.y), sampleDivisor);
+            vec3 cC = toDisplayReferred(suv, sampleDivisor);
+            vec3 blur = toDisplayReferred(suv + vec2(-texelSize.x, 0.0), sampleDivisor)
+                      + toDisplayReferred(suv + vec2( texelSize.x, 0.0), sampleDivisor)
+                      + toDisplayReferred(suv + vec2(0.0, -texelSize.y), sampleDivisor)
+                      + toDisplayReferred(suv + vec2(0.0,  texelSize.y), sampleDivisor);
             color += (cC - blur * 0.25) * sharpenIntensity * 0.5;
         }
 

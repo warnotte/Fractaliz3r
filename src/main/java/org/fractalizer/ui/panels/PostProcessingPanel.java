@@ -47,6 +47,10 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
     private CheckBox chromaticCheck;
     private EnhancedSlider chromaticIntensitySlider;
 
+    // Droste
+    private CheckBox drosteCheck;
+    private EnhancedSlider drosteInnerSlider, drosteOuterSlider, drostePeriodicitySlider, drostePhaseSlider;
+
     // Vignette
     private CheckBox vignetteCheck;
     private EnhancedSlider vignetteIntensitySlider;
@@ -100,8 +104,11 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
         TitledPane sharpenPane = new TitledPane("Sharpening", createSharpeningSection());
         sharpenPane.setExpanded(false);
 
+        TitledPane drostePane = new TitledPane("Droste", createDrosteSection());
+        drostePane.setExpanded(false);
+
         panel.getChildren().addAll(presetsPane, tonePane, gradingPane, bloomPane,
-            lensPane, chromaticPane, vignettePane, grainPane, sharpenPane);
+            lensPane, chromaticPane, vignettePane, grainPane, sharpenPane, drostePane);
 
         return panel;
     }
@@ -350,6 +357,38 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
         return section;
     }
 
+    /** The frame contains itself in a spiral (Escher's Print Gallery): the annulus between
+     *  the two radii repeats inward and outward, with a twist that joins the copies. Phase
+     *  slides along the spiral; swept from 0 to 1 it is an endless zoom. */
+    private VBox createDrosteSection() {
+        VBox section = new VBox(5);
+
+        drosteCheck = new CheckBox("Droste spiral");
+        drosteCheck.setSelected(params.drosteEnabled);
+        drosteCheck.setOnAction(e -> {
+            params.drosteEnabled = drosteCheck.isSelected();
+            onUpdate.run();
+        });
+
+        drosteInnerSlider = new EnhancedSlider("Inner radius", 0.02, 0.9, params.drosteInner, false);
+        drosteInnerSlider.setPrecision(2);
+        drosteInnerSlider.setOnAction(v -> { params.drosteInner = v.floatValue(); onUpdate.run(); });
+
+        drosteOuterSlider = new EnhancedSlider("Outer radius", 0.2, 2.0, params.drosteOuter, false);
+        drosteOuterSlider.setPrecision(2);
+        drosteOuterSlider.setOnAction(v -> { params.drosteOuter = v.floatValue(); onUpdate.run(); });
+
+        drostePeriodicitySlider = new EnhancedSlider("Twist", -3, 3, params.drostePeriodicity, true);
+        drostePeriodicitySlider.setOnAction(v -> { params.drostePeriodicity = v.floatValue(); onUpdate.run(); });
+
+        drostePhaseSlider = new EnhancedSlider("Phase", 0.0, 1.0, params.drostePhase, false);
+        drostePhaseSlider.setPrecision(3);
+        drostePhaseSlider.setOnAction(v -> { params.drostePhase = v.floatValue(); onUpdate.run(); });
+
+        section.getChildren().addAll(drosteCheck, drosteInnerSlider, drosteOuterSlider, drostePeriodicitySlider, drostePhaseSlider);
+        return section;
+    }
+
     private VBox createSharpeningSection() {
         VBox section = new VBox(5);
 
@@ -423,6 +462,11 @@ public class PostProcessingPanel extends ScrollPane implements Refreshable {
         vignetteCheck.setSelected(params.vignetteEnabled);
         vignetteIntensitySlider.setValue(params.vignetteIntensity);
         vignetteSoftnessSlider.setValue(params.vignetteSoftness);
+        drosteCheck.setSelected(params.drosteEnabled);
+        drosteInnerSlider.setValue(params.drosteInner);
+        drosteOuterSlider.setValue(params.drosteOuter);
+        drostePeriodicitySlider.setValue(params.drostePeriodicity);
+        drostePhaseSlider.setValue(params.drostePhase);
 
         filmGrainCheck.setSelected(params.filmGrainEnabled);
         filmGrainIntensitySlider.setValue(params.filmGrainIntensity);

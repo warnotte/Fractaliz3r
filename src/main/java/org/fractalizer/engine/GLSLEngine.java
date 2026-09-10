@@ -579,6 +579,12 @@ public class GLSLEngine implements AutoCloseable {
             glBindFramebuffer(GL_FRAMEBUFFER, displayFBO); glViewport(0, 0, currentWidth, currentHeight); glClear(GL_COLOR_BUFFER_BIT);
             postProcessProgram.use();
             glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, accumTexture); postProcessProgram.setUniform("accumTexture", 0);
+            // Droste reads the accumulation at arbitrary positions, magnified up to outer/inner
+            // times: nearest sampling shows the texels as blocks. Everything else reads it at
+            // texel centres, where linear and nearest agree, but nearest is kept there so a
+            // frame without the effect stays bit-exact with the goldens.
+            int accumFilter = postProcessParams.drosteEnabled ? GL_LINEAR : GL_NEAREST;
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, accumFilter); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, accumFilter);
             glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, bloomTexture1); postProcessProgram.setUniform("bloomTexture", 1);
             glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, lensDirtTexture); postProcessProgram.setUniform("lensDirtTexture", 2);
             glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, varianceTexture); postProcessProgram.setUniform("varianceTex", 5);
@@ -608,6 +614,11 @@ public class GLSLEngine implements AutoCloseable {
             postProcessProgram.setUniform("starburstIntensity", pp.starburstIntensity);
             postProcessProgram.setUniform("colorGradingMode", pp.colorGradingMode);
             postProcessProgram.setUniform("colorGradingIntensity", pp.colorGradingIntensity);
+            postProcessProgram.setUniform("drosteEnabled", pp.drosteEnabled ? 1 : 0);
+            postProcessProgram.setUniform("drosteInner", pp.drosteInner);
+            postProcessProgram.setUniform("drosteOuter", pp.drosteOuter);
+            postProcessProgram.setUniform("drostePeriodicity", pp.drostePeriodicity);
+            postProcessProgram.setUniform("drostePhase", pp.drostePhase);
             glBindVertexArray(quadVAO); glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             glFinish();
         }
@@ -1005,6 +1016,8 @@ public class GLSLEngine implements AutoCloseable {
         public float saturation = 1.0f;
         public boolean lensEffectsEnabled = false; public float lensDirtIntensity = 0.5f, starburstIntensity = 0.3f;
         public int colorGradingMode = 0; public float colorGradingIntensity = 1.0f;
+        // Droste: the frame contains itself in a spiral (radii in half-heights, centred)
+        public boolean drosteEnabled = false; public float drosteInner = 0.3f, drosteOuter = 1.0f, drostePeriodicity = 1.0f, drostePhase = 0.0f;
         public transient float audioDeltaExposure = 0f, audioDeltaSaturation = 0f, audioDeltaVignette = 0f, audioDeltaCA = 0f;
         public transient boolean audioForceVignette = false, audioForceCA = false;
         public PostProcessParams() {}
@@ -1017,6 +1030,8 @@ public class GLSLEngine implements AutoCloseable {
             c.sharpenEnabled = this.sharpenEnabled; c.sharpenIntensity = this.sharpenIntensity; c.saturation = this.saturation;
             c.lensEffectsEnabled = this.lensEffectsEnabled; c.lensDirtIntensity = this.lensDirtIntensity; c.starburstIntensity = this.starburstIntensity;
             c.colorGradingMode = this.colorGradingMode; c.colorGradingIntensity = this.colorGradingIntensity;
+            c.drosteEnabled = this.drosteEnabled; c.drosteInner = this.drosteInner; c.drosteOuter = this.drosteOuter;
+            c.drostePeriodicity = this.drostePeriodicity; c.drostePhase = this.drostePhase;
             c.audioDeltaExposure = this.audioDeltaExposure; c.audioDeltaSaturation = this.audioDeltaSaturation;
             c.audioDeltaVignette = this.audioDeltaVignette; c.audioDeltaCA = this.audioDeltaCA;
             c.audioForceVignette = this.audioForceVignette; c.audioForceCA = this.audioForceCA;
@@ -1040,6 +1055,8 @@ public class GLSLEngine implements AutoCloseable {
             lensEffectsEnabled = o.lensEffectsEnabled; lensDirtIntensity = o.lensDirtIntensity;
             starburstIntensity = o.starburstIntensity;
             colorGradingMode = o.colorGradingMode; colorGradingIntensity = o.colorGradingIntensity;
+            drosteEnabled = o.drosteEnabled; drosteInner = o.drosteInner; drosteOuter = o.drosteOuter;
+            drostePeriodicity = o.drostePeriodicity; drostePhase = o.drostePhase;
         }
 
         public void applyCinematicPreset() {
@@ -1064,6 +1081,7 @@ public class GLSLEngine implements AutoCloseable {
             chromaticAberrationEnabled = false; chromaticAberrationIntensity = 0.005f; vignetteEnabled = false; vignetteIntensity = 0.3f; vignetteSoftness = 0.5f;
             filmGrainEnabled = false; filmGrainIntensity = 0.03f; sharpenEnabled = false; sharpenIntensity = 0.3f; saturation = 1.0f;
             lensEffectsEnabled = false; lensDirtIntensity = 0.0f; starburstIntensity = 0.0f; colorGradingMode = 0; colorGradingIntensity = 1.0f;
+            drosteEnabled = false; drosteInner = 0.3f; drosteOuter = 1.0f; drostePeriodicity = 1.0f; drostePhase = 0.0f;
             audioDeltaExposure = 0f; audioDeltaSaturation = 0f; audioDeltaVignette = 0f; audioDeltaCA = 0f; audioForceVignette = false; audioForceCA = false;
         }
     }

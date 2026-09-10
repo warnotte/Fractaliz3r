@@ -19,6 +19,7 @@ Creative feature ideas for Fractaliz3r. Status: IDEA (not started), IN PROGRESS,
 | 10 | Cone Tracing | Pixel-aware adaptive epsilon |
 | 11 | Per-Node Materials | MaterialNode with SSBO, per-node PBR overrides (color, roughness, metallic, IOR, emission) |
 | 12 | IFS Base Primitive | 5 shapes (Sphere, Box, Octahedron, Torus, Rounded Box) |
+| 15 | Droste Effect | Post-process, FX tab: the frame contains itself in Escher's spiral; inner/outer radius, twist, phase (an endless zoom when swept). Best on a centred object over a dark sky (the Albedo planet). See docs/RENDERING.md § Droste |
 
 ## Rejected
 
@@ -52,11 +53,6 @@ Exotic fractal types to expand the formula library:
 - **Appell** — Appell Polynomials / Clifford Analysis, skeleton-like patterns
 - **Borromean** — 3 interlocking complex planes, tetrahedral symmetries
 - ~~**JuliaMorph**~~ — DONE as a hybrid chain (Complex Power -> Twist -> Add Seed, Julia mode)
-
-### 15. Droste Effect
-**Status:** IDEA
-
-Post-process recursive spiral — the rendered image contains itself in a spiral zoom. Parameters: tiling, inner/outer radius, periodicity, strands, twist. Could be a post-process pass on the final framebuffer.
 
 ### 16. Procedural Texturing
 **Status:** IDEA
