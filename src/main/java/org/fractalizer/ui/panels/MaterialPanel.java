@@ -40,6 +40,8 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider roughnessSlider;
     private EnhancedSlider metalnessSlider;
     private EnhancedSlider iorSlider;
+    private CheckBox dispersionCheck;
+    private EnhancedSlider dispersionSlider;
 
     // Specular
     private EnhancedSlider specularIntensitySlider;
@@ -202,6 +204,23 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             }
         });
 
+        // Spectral dispersion (glass, path tracing): the rainbow fringes of a prism
+        dispersionCheck = new CheckBox("Dispersion (path tracing)");
+        dispersionCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setDispersionEnabled(dispersionCheck.isSelected());
+                renderCallback.requestRender();
+            }
+        });
+        dispersionSlider = new EnhancedSlider("Dispersion", 0.0, 0.05, 0.01, false);
+        dispersionSlider.setPrecision(3);
+        dispersionSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setDispersion(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
         // === SPECULAR SECTION ===
 
         specularIntensitySlider = new EnhancedSlider("Intensity", 0, 2, 0.5, false);
@@ -260,7 +279,7 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         TitledPane palettePane = new TitledPane("Color Palette", paletteBox);
         palettePane.setExpanded(true);
 
-        VBox physBox = new VBox(5, typeBox, roughnessSlider, metalnessSlider, iorSlider);
+        VBox physBox = new VBox(5, typeBox, roughnessSlider, metalnessSlider, iorSlider, dispersionCheck, dispersionSlider);
         TitledPane physPane = new TitledPane("Physical Material", physBox);
         physPane.setExpanded(true);
 
@@ -335,6 +354,8 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         int type = materialTypeCombo.getSelectionModel().getSelectedIndex();
         metalnessSlider.setDisable(type != 1);
         iorSlider.setDisable(type != 2);
+        dispersionCheck.setDisable(type != 2);
+        dispersionSlider.setDisable(type != 2);
     }
 
     private void fireGradientChanged(GradientPalette gradient) {
@@ -365,6 +386,8 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             roughnessSlider.setValue(p.getRoughness());
             metalnessSlider.setValue(p.getMetalness());
             iorSlider.setValue(p.getIor());
+            dispersionCheck.setSelected(p.isDispersionEnabled());
+            dispersionSlider.setValue(p.getDispersion());
 
             // Specular
             specularIntensitySlider.setValue(p.getSpecularIntensity());

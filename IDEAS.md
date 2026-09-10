@@ -19,6 +19,7 @@ Creative feature ideas for Fractaliz3r. Status: IDEA (not started), IN PROGRESS,
 | 10 | Cone Tracing | Pixel-aware adaptive epsilon |
 | 11 | Per-Node Materials | MaterialNode with SSBO, per-node PBR overrides (color, roughness, metallic, IOR, emission) |
 | 12 | IFS Base Primitive | 5 shapes (Sphere, Box, Octahedron, Torus, Rounded Box) |
+| 23 | Spectral dispersion through glass | One wavelength per path, Cauchy index, CIE tint; off by default and bit-exact when off. Presets PRISM_GEM and PRISM_LENS. See docs/RENDERING.md § Spectral dispersion |
 
 ## Rejected
 

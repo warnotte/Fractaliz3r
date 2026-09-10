@@ -1005,6 +1005,9 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
     vec3 throughput = vec3(1.0);  // Path throughput (accumulated BRDF)
     vec3 radiance = vec3(0.0);    // Accumulated light
     const float FIREFLY_CLAMP = 8.0; // Limit maximum intensity per bounce
+    float lambda = 0.0;                // this path's wavelength, nm, when dispersion is on
+    bool dispersed = false;            // tinted by it yet
+    if (dispersionEnabled != 0) lambda = 400.0 + 300.0 * random(seed);
 
     Ray currentRay = ray;
 
@@ -1130,6 +1133,11 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                 throughput *= mix(vec3(1.0), albedo, 0.05);
             } else {
                 // Transmission — refract entry, march interior, refract exit
+                if (dispersionEnabled != 0) {
+                    // this wavelength's index, and the path takes its colour once
+                    localIor = dispersedIor(localIor, lambda);
+                    if (!dispersed) { throughput *= spectralTint(lambda); dispersed = true; }
+                }
                 float entryEta = entering ? (1.0 / localIor) : localIor;
                 vec3 refractedDir;
 
@@ -1300,6 +1308,9 @@ vec3 pathTrace(Ray ray, inout uint seed) {
     vec3 throughput = vec3(1.0);
     vec3 radiance = vec3(0.0);
     const float FIREFLY_CLAMP = 8.0;
+    float lambda = 0.0;                // this path's wavelength, nm, when dispersion is on
+    bool dispersed = false;            // tinted by it yet
+    if (dispersionEnabled != 0) lambda = 400.0 + 300.0 * random(seed);
     float lastBsdfPdf = 0.0; // Track BSDF pdf for MIS on escape
     bool lastWasSpecular = false; // Glass/mirror bounces have delta pdf
 
@@ -1437,6 +1448,11 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 currentRay.direction = normalize(reflectDir);
                 throughput *= mix(vec3(1.0), albedo, 0.05);
             } else {
+                if (dispersionEnabled != 0) {
+                    // this wavelength's index, and the path takes its colour once
+                    localIor = dispersedIor(localIor, lambda);
+                    if (!dispersed) { throughput *= spectralTint(lambda); dispersed = true; }
+                }
                 float entryEta = entering ? (1.0 / localIor) : localIor;
                 vec3 refractedDir;
 

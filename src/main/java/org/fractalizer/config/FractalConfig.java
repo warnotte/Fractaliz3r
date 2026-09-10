@@ -120,6 +120,8 @@ public class FractalConfig {
         public int type = 0;  // 0=Lambertian, 1=Metallic, 2=Glass
         public float metalness = 0.9f;
         public float ior = 1.5f;
+        public boolean dispersionEnabled = false;
+        public float dispersion = 0.01f;
         public List<GradientStopConfig> gradientStops;
 
         // Advanced Effects
@@ -339,6 +341,8 @@ public class FractalConfig {
         config.material.type = params.getMaterialType();
         config.material.metalness = params.getMetalness();
         config.material.ior = params.getIor();
+        config.material.dispersionEnabled = params.isDispersionEnabled();
+        config.material.dispersion = params.getDispersion();
 
         // Advanced Effects
         config.material.reflectionIntensity = params.getReflectionIntensity();
@@ -513,6 +517,8 @@ public class FractalConfig {
         params.setMaterialType(material.type);
         params.setMetalness(material.metalness);
         params.setIor(material.ior);
+        params.setDispersionEnabled(material.dispersionEnabled);
+        params.setDispersion(material.dispersion);
 
         // Advanced Effects
         params.setReflectionIntensity(material.reflectionIntensity);

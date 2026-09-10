@@ -386,6 +386,47 @@ Variance-based convergence detection that skips already-converged pixels during 
 
 The Cornell Box scene (`cornellbox.glsl`) uses `#define HAS_PER_OBJECT_MATERIAL` for per-object material assignment via `getObjectMaterial(OrbitTrap)`. Glass refraction in path tracing uses a two-surface approach: entry refraction + interior march using `abs(DE_simple)` + exit refraction, solving the SDF negative-distance problem inside glass bodies.
 
+### Spectral dispersion (after 3.2.2)
+
+A prism splits white light because the index of refraction depends on the wavelength. The
+path tracer can do the same. It is off by default and costs nothing while off:
+`dispersionEnabled` (Material panel, *Dispersion (path tracing)*, enabled for the glass
+type only) and `dispersion`, Cauchy's B coefficient in micrometres squared (crown glass
+0.004, flint 0.013; the slider goes to 0.05 because the effect is the point). Both are
+uniforms, saved in the `.frac` next to `ior`; no recompilation.
+
+How it works (`common.glsl`, both path-tracing entry points of `raytracer.glsl`):
+
+- each path draws one wavelength, uniform in 400-700 nm. The draw happens only when the
+  effect is on, so a render without dispersion consumes the same random sequence as before
+  and is bit-exact with the goldens (RenderRegression);
+- at a glass surface the index becomes n(λ) = n_d + B (1/λ² − 1/λ_d²), λ in micrometres,
+  λ_d = 0.5876 µm (the d line, where n equals the material's IOR). Blue bends more than red;
+- at the first dispersive refraction the path's throughput is multiplied by the colour of
+  its wavelength: the Wyman, Sloan and Shirley multi-lobe fit of the CIE 1931 matching
+  functions, XYZ to linear sRGB, negatives clamped, divided by the mean over the band
+  (0.587, 0.384, 0.363) so that the average over wavelengths is white. A path that never
+  meets glass is never tinted, so the effect exists only behind glass and the rest of the
+  frame is unchanged (an A/B of `PRISM_GEM` with the box ticked and unticked, rendered by
+  GalleryRender from two copies of the `.frac`, differs inside the octahedron only).
+
+Two shipped presets show it:
+
+- `presets/PRISM_GEM.frac`: a glass octahedron (IOR 1.7, B 0.03) in front of a near-white
+  Mandelbulb under the nebula sky. The fractal is grey on purpose: every colour in the
+  image is the dispersion of the glass, blue on one side and orange on the other of each
+  edge seen through the gem.
+- `presets/PRISM_LENS.frac`: the same fractal, coloured this time, behind a glass sphere
+  (IOR 1.5, B 0.03): a lens, the detail magnified and smeared into a rainbow whorl.
+
+Why the presets put the glass in front of the fractal rather than making the fractal glass:
+a transmitted path inside a Mandelbulb or a Menger sponge is folded many times before it
+finds a way out, most of them die within the bounce budget, and the object renders black
+whatever the dispersion. Convex glass with a detailed object behind it is the case for the
+effect. The wavelength is one more dimension of the integral, so glass needs more samples
+than the same scene without it (the previews above are 128-160 spp at 960x540); flat colour
+seen through glass is the noisiest case, fine detail behind it the cleanest.
+
 ---
 
 ## Surface Effects (Per-Node via EffectNode)

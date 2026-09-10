@@ -107,8 +107,9 @@ primitive. Julia mode is available where the formula has a seed.
 
 - Cone tracing with a pixel-aware epsilon: stable detail at every resolution, no flicker on distant
   structure, deep-zoom LOD.
-- Path tracing (NEE + MIS, GGX), Lambertian / metallic / glass materials, subsurface scattering,
-  13 colouring modes (9 orbit-trap, 4 scale-invariant), adaptive sampling.
+- Path tracing (NEE + MIS, GGX), Lambertian / metallic / glass materials with spectral
+  dispersion, subsurface scattering, 13 colouring modes (9 orbit-trap, 4 scale-invariant),
+  adaptive sampling.
 - Lights: key light, an additional light with spot cone and area radius, HDRI maps, procedural
   environments (clouds, deep space, ocean, studio).
 - Volumetric fog and god rays (Henyey-Greenstein), depth of field with 9 bokeh presets, anamorphic

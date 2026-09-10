@@ -42,6 +42,10 @@ class ConfigRoundTripTest {
         written.setJuliaCx(0.41f);
         written.setJuliaCy(-0.19f);
         written.setJuliaCz(0.28f);
+        written.setMaterialType(2);
+        written.setIor(1.62f);
+        written.setDispersionEnabled(true);
+        written.setDispersion(0.017f);
 
         FractalConfig config = FractalConfig.fromParams(written);
 
@@ -84,6 +88,10 @@ class ConfigRoundTripTest {
         assertEquals(written.getDetailLODMax(), reloaded.getDetailLODMax(), "detailLODMax");
         assertEquals(written.getPreviewScale(), reloaded.getPreviewScale(), "previewScale");
         assertEquals(written.isPreviewFastShading(), reloaded.isPreviewFastShading(), "previewFastShading");
+        assertEquals(written.getMaterialType(), reloaded.getMaterialType(), "materialType");
+        assertEquals(written.getIor(), reloaded.getIor(), "ior");
+        assertEquals(written.isDispersionEnabled(), reloaded.isDispersionEnabled(), "dispersionEnabled");
+        assertEquals(written.getDispersion(), reloaded.getDispersion(), "dispersion");
     }
 
     @Test

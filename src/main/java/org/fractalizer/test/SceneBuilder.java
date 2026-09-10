@@ -635,6 +635,18 @@ public class SceneBuilder {
         return this;
     }
 
+    public SceneBuilder ior(float ior) {
+        config.material.ior = ior;
+        return this;
+    }
+
+    /** Spectral dispersion through glass, Cauchy B in micrometres squared; enables it. */
+    public SceneBuilder dispersion(float b) {
+        config.material.dispersionEnabled = true;
+        config.material.dispersion = b;
+        return this;
+    }
+
     public SceneBuilder reflectionIntensity(float r) {
         config.material.reflectionIntensity = r;
         return this;
@@ -661,6 +673,11 @@ public class SceneBuilder {
     public SceneBuilder lensDirt(float intensity) {
         config.effects.lensEffectsEnabled = true;
         config.effects.lensDirtIntensity = intensity;
+        return this;
+    }
+
+    public SceneBuilder maxBounces(int bounces) {
+        config.effects.maxBounces = bounces;
         return this;
     }
 

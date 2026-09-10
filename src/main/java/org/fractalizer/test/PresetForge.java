@@ -45,6 +45,10 @@ public class PresetForge {
     private static final float[][] ICE = {
         {0.00f, 0.01f, 0.03f, 0.09f}, {0.35f, 0.06f, 0.30f, 0.55f},
         {0.65f, 0.40f, 0.78f, 0.95f}, {1.00f, 0.92f, 0.99f, 1.00f}};
+    /** Clear glass: a near-white palette, so the prism presets tint nothing themselves and
+     *  every colour on them comes from dispersion. */
+    private static final float[][] CRYSTAL = {
+        {0.00f, 0.90f, 0.94f, 1.00f}, {0.50f, 0.97f, 0.98f, 1.00f}, {1.00f, 1.00f, 1.00f, 1.00f}};
     private static final float[][] VIOLET = {
         {0.00f, 0.03f, 0.00f, 0.10f}, {0.30f, 0.32f, 0.04f, 0.45f},
         {0.60f, 0.85f, 0.25f, 0.62f}, {1.00f, 1.00f, 0.86f, 0.96f}};
@@ -255,7 +259,47 @@ public class PresetForge {
                 .specular(1.0f, 90f)
                 .colorStrength(1.0f).metalness(0.0f).roughness(0.7f));
 
+        // --- Prisms: the demo scenes for spectral dispersion. A fractal made of glass is a
+        // poor prism: light entering its folds crosses surface after surface and the path is
+        // exhausted before it comes out (the first two attempts, a glass Mandelbulb and a
+        // glass Menger sponge, rendered black). So the gem is a convex primitive of glass,
+        // and the fractal is what is seen through it, refracted and dispersed. Dispersion
+        // is set high enough to read at a glance (flint glass is 0.013).
+        p.put("PRISM_GEM", () -> SceneBuilder.nodeGraph(prismGem(org.fractalizer.graph.PrimitiveNode.PrimitiveType.OCTAHEDRON, 0.5f, 1.7f))
+                .camera(0f, 0.2f, -3.0f).lookAt(0f, 0f, 0f).fov(40)
+                .gradient(CRYSTAL).coloringMode(0)
+                .materialType(0).ior(1.7f).dispersion(0.030f).roughness(0.5f)
+                .pathTracing(true).maxBounces(8).rimIntensity(0.0f).skyType(1)
+                .nebula(0.02f, 0.02f, 0.05f, 0.3f)
+                .lightDir(1.5f, 2.5f, -2.5f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(3.0f)
+                .ambientColor(0.4f, 0.45f, 0.55f).ambientIntensity(0.25f)
+                .colorStrength(1.0f).metalness(0.0f));
+
+        // The same fractal behind a glass sphere: a lens, the detail magnified and fringed.
+        p.put("PRISM_LENS", () -> SceneBuilder.nodeGraph(prismGem(org.fractalizer.graph.PrimitiveNode.PrimitiveType.SPHERE, 0.55f, 1.5f))
+                .camera(0f, 0.2f, -3.0f).lookAt(0f, 0f, 0f).fov(40)
+                .gradient(SPECTRUM).coloringMode(9)
+                .materialType(0).ior(1.5f).dispersion(0.030f).roughness(0.5f)
+                .pathTracing(true).maxBounces(8).rimIntensity(0.0f).skyType(1)
+                .nebula(0.02f, 0.02f, 0.05f, 0.3f)
+                .lightDir(1.5f, 2.5f, -2.5f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(3.0f)
+                .ambientColor(0.4f, 0.45f, 0.55f).ambientIntensity(0.25f)
+                .colorStrength(1.0f).metalness(0.0f));
+
         return p;
+    }
+
+    /** A glass primitive in front of a matte Mandelbulb: the fractal seen through a prism,
+     *  refracted and dispersed, with the rest of it visible around the glass. */
+    static org.fractalizer.graph.GraphNode prismGem(org.fractalizer.graph.PrimitiveNode.PrimitiveType shape, float radius, float ior) {
+        org.fractalizer.graph.PrimitiveNode gem = new org.fractalizer.graph.PrimitiveNode(shape);
+        gem.setSizeX(radius);
+        org.fractalizer.graph.MaterialNode glass = material(SceneBuilder.rotate(gem, 0.35f, 0.6f, 0.15f), 1f, 1f, 1f, 0.02f, 0f);
+        glass.setMaterialType(2);
+        glass.setIor(ior);
+        org.fractalizer.graph.GraphNode gemInFront = SceneBuilder.translate(glass, 0.15f, -0.05f, -1.0f);
+        org.fractalizer.graph.GraphNode bulb = SceneBuilder.translate(SceneBuilder.scale(SceneBuilder.fractal(org.fractalizer.fractals.FractalType.MANDELBULB), 1.15f), 0f, 0f, 0.9f);
+        return SceneBuilder.union(gemInFront, bulb);
     }
 
     /**

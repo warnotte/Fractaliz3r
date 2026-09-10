@@ -204,6 +204,8 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected int materialType;
     protected float metalness;       // For metallic: blend between dielectric and metal (0-1)
     protected float ior;             // Index of refraction for glass (typically 1.5)
+    protected boolean dispersionEnabled;   // spectral dispersion through glass (path tracing)
+    protected float dispersion;            // Cauchy B, micrometres squared (crown 0.004, flint 0.013)
 
     // Advanced Effects
     protected float reflectionIntensity;  // 0-1, ray-marched reflections (classic mode)
@@ -386,6 +388,8 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.materialType = MATERIAL_LAMBERTIAN;
         this.metalness = 0.9f;
         this.ior = 1.5f;  // Glass IOR
+        this.dispersionEnabled = false;
+        this.dispersion = 0.01f;
 
         // Advanced Effects (all disabled by default)
         this.reflectionIntensity = 0.0f;
@@ -530,6 +534,8 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.materialType = this.materialType;
         target.metalness = this.metalness;
         target.ior = this.ior;
+        target.dispersionEnabled = this.dispersionEnabled;
+        target.dispersion = this.dispersion;
 
         // Copy Advanced Effects
         target.reflectionIntensity = this.reflectionIntensity;
@@ -964,6 +970,10 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setMetalness(float metalness) { this.metalness = Math.max(0, Math.min(1, metalness)); }
     public float getIor() { return ior; }
     public void setIor(float ior) { this.ior = Math.max(1.0f, Math.min(3.0f, ior)); }
+    public boolean isDispersionEnabled() { return dispersionEnabled; }
+    public void setDispersionEnabled(boolean on) { this.dispersionEnabled = on; }
+    public float getDispersion() { return dispersion; }
+    public void setDispersion(float b) { this.dispersion = Math.max(0f, Math.min(0.05f, b)); }
 
     // Advanced Effects
     public float getReflectionIntensity() { return reflectionIntensity; }

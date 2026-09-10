@@ -117,6 +117,38 @@ uniform float indirectMultiplier;
 uniform int materialType;
 uniform float metalness;
 uniform float ior;
+// Spectral dispersion (path tracing only): each path carries one wavelength, glass bends
+// it by Cauchy's n(l) = n_d + B (1/l^2 - 1/l_d^2) with l in micrometres and l_d the d
+// line (587.6 nm), and the first dispersive refraction tints the path by the colour of
+// its wavelength, normalised so the mean over 400-700 nm is white. Off: no draw, no branch
+// taken, bit-exact with the plain render.
+uniform int dispersionEnabled;
+uniform float dispersion;          // Cauchy B, micrometres squared: crown glass 0.004, flint 0.013
+
+float dispersedIor(float nD, float lambdaNm) {
+    float l = lambdaNm * 0.001;
+    return nD + dispersion * (1.0 / (l * l) - 1.0 / (0.5876 * 0.5876));
+}
+
+float cmfLobe(float l, float mu, float s1, float s2) {
+    float s = l < mu ? s1 : s2;
+    float t = (l - mu) / s;
+    return exp(-0.5 * t * t);
+}
+
+// Linear sRGB response of one wavelength: Wyman, Sloan and Shirley's multi-lobe fit of the
+// CIE 1931 matching functions, XYZ to linear sRGB, negatives clamped, divided by the mean
+// over 400-700 nm (0.58696, 0.38446, 0.36258) so a uniformly drawn wavelength averages to
+// white.
+vec3 spectralTint(float l) {
+    float x = 1.056 * cmfLobe(l, 599.8, 37.9, 31.0) + 0.362 * cmfLobe(l, 442.0, 16.0, 26.7) - 0.065 * cmfLobe(l, 501.1, 20.4, 26.2);
+    float y = 0.821 * cmfLobe(l, 568.8, 46.9, 40.5) + 0.286 * cmfLobe(l, 530.9, 16.3, 31.1);
+    float z = 1.217 * cmfLobe(l, 437.0, 11.8, 36.0) + 0.681 * cmfLobe(l, 459.0, 26.0, 13.8);
+    vec3 rgb = vec3( 3.2406 * x - 1.5372 * y - 0.4986 * z,
+                    -0.9689 * x + 1.8758 * y + 0.0415 * z,
+                     0.0557 * x - 0.2040 * y + 1.0570 * z);
+    return max(rgb, 0.0) / vec3(0.58696, 0.38446, 0.36258);
+}
 
 uniform sampler2D envMap;
 uniform int useEnvMap;
