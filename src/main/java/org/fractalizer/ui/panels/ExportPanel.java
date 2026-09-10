@@ -983,6 +983,7 @@ public class ExportPanel extends ScrollPane {
 
         long startTime = System.currentTimeMillis();
         Thread meshThread = new Thread(() -> {
+            controller.pauseViewport();   // the evaluator resizes the engine per slice
             try {
                 controller.prepareGPUEvaluator();
 
@@ -1043,6 +1044,8 @@ public class ExportPanel extends ScrollPane {
                     statusCallback.accept("Mesh export failed");
                     exportMeshBtn.setDisable(false);
                 });
+            } finally {
+                controller.resumeViewport();
             }
         });
 

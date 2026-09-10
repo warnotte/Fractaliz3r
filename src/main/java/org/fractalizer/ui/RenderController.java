@@ -35,23 +35,16 @@ public interface RenderController {
     int getExportWidth();
     int getExportHeight();
 
-    // Rendering (preview uses viewport size, export uses export size)
-    void renderPreview(Consumer<Image> onComplete, Consumer<Double> onProgress);
-    void renderFull(Consumer<Image> onComplete, Consumer<Double> onProgress, Consumer<Object> onTileComplete);
-
+    // Rendering. The interactive viewport is driven through the RenderCallback the app hands
+    // to the panels; exports use the export size and pause the viewport while they run.
     CompletableFuture<Void> exportToPNG(File file, Consumer<Double> onProgress);
     CompletableFuture<Void> exportToPNG(File file, int samples, Consumer<Double> onProgress);
     CompletableFuture<Void> exportToPNG(File file, int samples, Consumer<Double> onProgress, Supplier<Boolean> cancelCheck);
-
-    /**
-     * Export an AOV pass (depth or normals) to a PNG file.
-     * @param file       Output PNG file
-     * @param renderMode 1 = Normals, 2 = Depth
-     */
     void exportAOV(File file, int renderMode);
 
-    void cancelRender();
-    boolean isRendering();
+    /** Stop the viewport while the caller uses the engine directly (a mesh export); nestable. */
+    void pauseViewport();
+    void resumeViewport();
 
     // GPU Evaluation for Marching Cubes / Point Cloud
     void prepareGPUEvaluator();
@@ -71,15 +64,6 @@ public interface RenderController {
      * @return null on success, error message on failure
      */
     String compileNodeGraph(String source);
-
-    /**
-     * Same compile, but the caller (the node graph editor, on the JavaFX thread) is not
-     * held while the driver works: {@code onDone} receives null or the error message, on
-     * the JavaFX thread, when it is over. The default is the synchronous compile.
-     */
-    default void compileNodeGraphAsync(String source, Consumer<String> onDone) {
-        onDone.accept(compileNodeGraph(source));
-    }
 
     void close();
 }

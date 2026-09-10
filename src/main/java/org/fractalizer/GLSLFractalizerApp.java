@@ -87,16 +87,8 @@ public class GLSLFractalizerApp extends Application {
     // Animation manager (handles timeline and keyframes)
     private AnimationManager animationManager;
 
-    // Rendering state
-    private boolean needsRender = true;
-    private long lastRenderTime = 0;
-    private long lastInteractionTime = 0; // For auto-quality debounce
-    private boolean isHighQualityActive = false; // To avoid restarting HQ render repeatedly
-    
-    private static final long RENDER_DELAY_MS = 16; // preview cap ~60 FPS; the scene cost is the real limit
-    private static final long HQ_DELAY_MS = 400;    // Wait 400ms before refining
-    
-    private boolean autoFullQuality = true;
+    // Rendering: the viewport scheduler owns the preview-then-refine policy
+    // (docs/INTERACTIVE_RENDER.md); the app posts requests and shows what comes back.
     private volatile boolean exportingAnimation = false;
 
     // Explore: the search drives the scene camera and the engine size on its own thread,
@@ -249,15 +241,6 @@ public class GLSLFractalizerApp extends Application {
 
         // Status bar - always at bottom, outside SplitPane
         HBox statusBar = createStatusBar();
-        // A scene shader compiling off the JavaFX thread: say so, keep the last image up.
-        controller.setCompileListener(msg -> {
-            if (msg != null) statusLabel.setText(msg);        // "Compiling scene shader..." or "Shader error: ..."
-            boolean busy = msg != null && !msg.startsWith("Shader error");
-            progressBar.setProgress(busy ? -1 : 0);          // indeterminate: a driver compile has no progress
-            if (primaryStage.getScene() != null) {
-                primaryStage.getScene().setCursor(busy ? javafx.scene.Cursor.WAIT : null);
-            }
-        });
 
         // Create menu bar
         MenuBar menuBar = createMenuBar();
@@ -333,9 +316,12 @@ public class GLSLFractalizerApp extends Application {
         });
         exportPanel.setExportStateCallback(exporting -> {
             this.exportingAnimation = exporting;
-            if (!exporting) {
+            if (exporting) {
+                controller.pauseViewport();
+            } else {
                 updateViewportSize();
-                needsRender = true;
+                controller.resumeViewport();
+                requestRender();
             }
         });
 
@@ -347,6 +333,7 @@ public class GLSLFractalizerApp extends Application {
         setupViewportSizeListener();
 
         // Start render loop
+        wireViewportEvents();
         startRenderLoop();
 
         // Upload initial gradient texture to GPU
@@ -361,7 +348,7 @@ public class GLSLFractalizerApp extends Application {
                 updateViewportSize();
                 // Initial load of NodeGraphEditor (Scene exists now, safe to compile)
                 fractalPanel.refreshFromParams(false);
-                renderPreview();
+                requestRender();
             });
         });
     }
@@ -374,8 +361,8 @@ public class GLSLFractalizerApp extends Application {
     private void setupViewportSizeListener() {
         // Listen for layout bounds changes (single listener for both dimensions)
         imageContainer.layoutBoundsProperty().addListener((obs, old, bounds) -> {
-            // Ignore size changes during animation export
-            if (exportingAnimation) return;
+            // A paused viewport (export, search) keeps its size until it resumes
+            if (exportingAnimation || controller.getViewport().isPaused()) return;
 
             if (bounds.getWidth() > 0 && bounds.getHeight() > 0) {
                 updateViewportSize();
@@ -491,7 +478,7 @@ public class GLSLFractalizerApp extends Application {
         qualityPanel = new QualityPanel(
             () -> fractalPanel.getParams(),
             this::requestRender,
-            auto -> this.autoFullQuality = auto
+            auto -> controller.getViewport().setAutoRefine(auto)
         );
         qualityPanel.setFullSamplesCallbacks(
             controller::setFullSamples,
@@ -616,12 +603,12 @@ public class GLSLFractalizerApp extends Application {
     private void searchingChanged(boolean on, String message) {
         exploring = on;
         if (on) {
-            controller.cancelRender();
-            isHighQualityActive = false;
+            controller.pauseViewport();
             statusLabel.setText(message);
         } else {
             updateViewportSize();
             fractalPanel.updatePositionLabel();
+            controller.resumeViewport();
             requestRender();
         }
     }
@@ -795,22 +782,22 @@ public class GLSLFractalizerApp extends Application {
         dialog.showAndWait();
     }
 
+    /** The scene changed: the viewport shows it. Never blocks; the scheduler coalesces. */
     private void requestRender() {
-        needsRender = true;
-        isHighQualityActive = false; // Stop HQ accumulation
-        lastInteractionTime = System.currentTimeMillis();
-        controller.cancelRender();
+        controller.requestRender();
         if (primaryStage.getScene() != null) {
             primaryStage.getScene().setCursor(null); // Clear busy cursor
         }
     }
 
+    /**
+     * Per-frame producers: keyboard navigation, a camera flight, timeline playback, the
+     * HUD. Each changes the scene and requests; the scheduler decides what to draw.
+     */
     private void startRenderLoop() {
         AnimationTimer timer = new AnimationTimer() {
             @Override
             public void handle(long now) {
-                long currentTime = System.currentTimeMillis();
-
                 // The explorer owns the camera and the engine while it runs.
                 if (exploring) return;
 
@@ -838,78 +825,68 @@ public class GLSLFractalizerApp extends Application {
                     float currentFov = (float) Math.toDegrees(fractalPanel.getParams().getFov());
                     viewportHUD.draw(fractalPanel.getCamera(), currentFov);
                 }
-
-                // 1. Preview Render (Interactive) — skip during any export to avoid engine resize races
-                boolean audioExporting = (audioPanel != null && audioPanel.isExporting());
-                if (needsRender && !exportingAnimation && !audioExporting
-                        && (currentTime - lastRenderTime > RENDER_DELAY_MS)) {
-                    renderPreview();
-                    needsRender = false;
-                    lastRenderTime = currentTime;
-                    // Reset HQ trigger
-                    lastInteractionTime = currentTime;
-                    isHighQualityActive = false;
-                }
-                
-                // Audio-reactive: force continuous preview when audio is playing (not during offline export)
-                if (audioPanel != null && audioPanel.isAudioPlaying() && !audioPanel.isExporting()) {
-                    if (!needsRender && (currentTime - lastRenderTime > RENDER_DELAY_MS)) {
-                        needsRender = true;
-                    }
-                }
-
-                // 2. Auto Full Quality (Refinement after idle)
-                if (!needsRender && !isHighQualityActive && autoFullQuality && !exportingAnimation) {
-                    // Don't start HQ render if animation or audio is playing
-                    boolean isPlaying = (animationManager != null && animationManager.isPlaying());
-                    boolean isAudioPlaying = (audioPanel != null && audioPanel.isAudioPlaying());
-
-                    if (!isPlaying && !isAudioPlaying && (currentTime - lastInteractionTime > HQ_DELAY_MS)) {
-                        // User stopped moving -> Start refining
-                        renderFull();
-                        isHighQualityActive = true;
-                    }
-                }
             }
         };
         timer.start();
     }
 
-    private void renderPreview() {
-        controller.renderPreview(this::updateImage, progress -> {
-            progressBar.setProgress(progress);
-            statusLabel.setText("Rendering preview...");
-        });
+    /** Space, or the Render button: refine now rather than after the idle delay. */
+    private void renderFull() {
+        controller.refineNow();
     }
 
-    private void renderFull() {
-        primaryStage.getScene().setCursor(javafx.scene.Cursor.WAIT);
-        renderStartTime = System.nanoTime();
-        controller.renderFull(this::updateImage, progress -> {
-            progressBar.setProgress(progress);
-            if (progress >= 1.0) {
-                primaryStage.getScene().setCursor(null);
-                long elapsedMs = (System.nanoTime() - renderStartTime) / 1_000_000;
-                String timeStr = elapsedMs < 1000
-                    ? elapsedMs + "ms"
-                    : String.format("%.1fs", elapsedMs / 1000.0);
-                statusLabel.setText("Rendered " + controller.getEngine().getSampleCount()
-                    + " samples in " + timeStr);
-            } else {
-                statusLabel.setText("Rendering high quality...");
+    /** What the viewport scheduler reports, on the JavaFX thread. */
+    private void wireViewportEvents() {
+        controller.setViewportListener(new org.fractalizer.render.ViewportEvent.Listener() {
+            @Override public void onImage(org.fractalizer.render.ViewportEvent.ViewportImage img) {
+                javafx.scene.image.WritableImage image = new javafx.scene.image.WritableImage(img.width(), img.height());
+                image.getPixelWriter().setPixels(0, 0, img.width(), img.height(),
+                        javafx.scene.image.PixelFormat.getByteBgraInstance(), img.bgra(), 0, img.width() * 4);
+                imageView.setImage(image);
+                sampleLabel.setText("Samples: " + img.samples());
             }
-        }, null);
+
+            @Override public void onStatus(org.fractalizer.render.ViewportEvent.Status st) {
+                javafx.scene.Scene scene = primaryStage.getScene();
+                switch (st.phase()) {
+                    case COMPILING -> {
+                        statusLabel.setText("Compiling scene shader...");
+                        progressBar.setProgress(-1);   // a driver compile has no progress
+                        if (scene != null) scene.setCursor(javafx.scene.Cursor.WAIT);
+                    }
+                    case PREVIEW -> {
+                        statusLabel.setText("Rendering preview...");
+                        progressBar.setProgress(0);
+                        if (scene != null) scene.setCursor(null);
+                    }
+                    case REFINING -> {
+                        statusLabel.setText("Rendering high quality...");
+                        progressBar.setProgress(st.progress());
+                        if (scene != null) scene.setCursor(javafx.scene.Cursor.WAIT);
+                    }
+                    case DONE -> {
+                        String timeStr = st.elapsedMs() < 1000 ? st.elapsedMs() + "ms"
+                                : String.format("%.1fs", st.elapsedMs() / 1000.0);
+                        statusLabel.setText("Rendered " + st.samples() + " samples in " + timeStr);
+                        progressBar.setProgress(1);
+                        if (scene != null) scene.setCursor(null);
+                    }
+                    case ERROR -> {
+                        statusLabel.setText("Shader error: " + st.message());
+                        progressBar.setProgress(0);
+                        if (scene != null) scene.setCursor(null);
+                        if (fractalPanel != null) fractalPanel.getNodeGraphEditor().showGpuError(st.message());
+                    }
+                    case PAUSED -> progressBar.setProgress(0);
+                }
+            }
+        });
     }
 
     private void resetCamera() {
         fractalPanel.getCamera().reset();
         requestRender();
         fractalPanel.updatePositionLabel();
-    }
-
-    private void updateImage(javafx.scene.image.Image image) {
-        imageView.setImage(image);
-        sampleLabel.setText("Samples: " + controller.getEngine().getSampleCount());
     }
 
     private void showError(String title, String message) {

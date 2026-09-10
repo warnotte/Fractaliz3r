@@ -2582,21 +2582,21 @@ public class NodeGraphEditor extends VBox {
             return;
         }
 
-        // The driver compile runs off the JavaFX thread (seconds on a cold cache); the
-        // editor stays usable and the label reports when it is over.
-        final int uniformCount = currentParams.getUniformValues().size();
-        controller.compileNodeGraphAsync(glsl, error -> {
-            if (error != null) {
-                statusLabel.setText("GPU error: " + error);
-                statusLabel.getStyleClass().removeAll("success", "error");
-                statusLabel.getStyleClass().add("error");
-            } else {
-                statusLabel.setText(String.format("Compiled OK \u2014 %d chars, %d uniforms",
-                    glsl.length(), uniformCount));
-                statusLabel.getStyleClass().removeAll("success", "error");
-                statusLabel.getStyleClass().add("success");
-                renderCallback.requestRender();
-            }
-        });
+        // Code generation only: the driver compile is the viewport scheduler's job, on the
+        // GL thread, when the render requested below arrives (docs/INTERACTIVE_RENDER.md).
+        // A driver error comes back through showGpuError.
+        int uniformCount = currentParams.getUniformValues().size();
+        statusLabel.setText(String.format("Compiled OK \u2014 %d chars, %d uniforms",
+            glsl.length(), uniformCount));
+        statusLabel.getStyleClass().removeAll("success", "error");
+        statusLabel.getStyleClass().add("success");
+        renderCallback.requestRender();
+    }
+
+    /** The viewport scheduler could not build the program for the current graph. */
+    public void showGpuError(String message) {
+        statusLabel.setText("GPU error: " + message);
+        statusLabel.getStyleClass().removeAll("success", "error");
+        statusLabel.getStyleClass().add("error");
     }
 }

@@ -95,8 +95,8 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorProbe" -Dexec.
 # as a labelled sheet with a hue-spread count. Modes 0-8 give one hue, 9-12 give several.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ColorDemo" -Dexec.args="presets/HYBRID_BOXBULB.frac out/colordemo 400x225 20"
 
-# Interaction cost: framebuffer reallocation on a preview<->full resize, and the worst-case
-# delay before a cancel can interrupt a full-quality pass (= one progressive batch).
+# Interaction cost: framebuffer reallocation on a preview<->full resize, and the refinement
+# pass's throughput (ms per sample) and image cadence through the viewport scheduler.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResizeProbe" -Dexec.args="1920x1080 0.5 20"
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResponsivenessProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 1280x720 24"
 # How fluid is the viewport while the camera moves: one renderPreview per frame from the FX thread
@@ -181,7 +181,10 @@ org.fractalizer
 │   ├── AudioReactiveEngine.java     # Spectrum analysis, beat/onset detection
 │   └── AudioPreAnalyzer.java        # Offline FFT pre-analysis (FFmpeg decode)
 ├── render/
-│   ├── ProgressiveRenderer.java     # Progressive sample accumulation
+│   ├── ViewportScheduler.java       # The interactive viewport: requests -> bounded steps on the GL thread, one preemption policy
+│   ├── SceneSnapshot.java           # A scene frozen for one render (program source, uniforms, sizes, preview policy)
+│   ├── CostModel.java               # ns per pixel per program: preview size, samples per step, rows per strip
+│   ├── ViewportEvent.java           # images and typed status to the UI
 │   └── FFmpegExporter.java          # MP4 video export via FFmpeg
 ├── animation/
 │   ├── Timeline.java                # Animation timeline with tracks
@@ -229,7 +232,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── FractalNavigator.java        # global -> fine-detail camera traveller
 ├── PresetForge.java             # build demo .frac files + preview each
 ├── ResizeProbe.java             # framebuffer cost of a preview<->full switch
-├── ResponsivenessProbe.java     # worst tick = delay before a cancel can land
+├── ResponsivenessProbe.java     # the refinement's throughput (ms/sample) and image cadence
 ├── ExportProgressProbe.java     # how far ahead of the work a progress bar runs
 ├── ShaderCompileProbe.java      # compile time per shader, built-ins then any .frac; names the one that hangs
 ├── ExportAfterPreviewProbe.java # the cheap preview must not leak into an export
@@ -288,6 +291,7 @@ it — several exist precisely because reading the code gave the wrong answer.
 |-------|------|----------|
 | Shader pipeline | [docs/SHADER_PIPELINE.md](docs/SHADER_PIPELINE.md) | Assembly modes, ShaderPreprocessor, uniform lifecycle, recompilation triggers |
 | Node graph | [docs/NODE_GRAPH.md](docs/NODE_GRAPH.md) | All node types incl. **HybridNode** (formulas composed inside one iteration loop) and its chain library, GraphCompiler phases, uniforms, animation, serialization, UI |
+| Interactive viewport | [docs/INTERACTIVE_RENDER.md](docs/INTERACTIVE_RENDER.md) | The viewport scheduler: threads, snapshots, jobs and steps, the preemption policy, the cost model, what the app keeps |
 | Rendering | [docs/RENDERING.md](docs/RENDERING.md) | Blue noise, cone tracing, adaptive sampling, cinematic pipeline, effects, coloring, spline camera, HUD. Also: **why colour looked flat** (rim light, palette-tinted sky, which coloring modes carry more than one hue), **deep zoom** (view-relative scales, iteration LOD, what the formula limits), **interactive preview vs full quality**, **progressive batching and interruptibility**, and the eighteen test harnesses |
 | Features | [docs/FEATURES.md](docs/FEATURES.md) | EnhancedSlider, dice randomizer, morph crossfade, custom shader editor, boolean ops, nesting |
 | Export | [docs/EXPORT.md](docs/EXPORT.md) | VR/360, tiled rendering, AOV export, mesh export, video encoding, jlink release, visual regression test, **why an export progress bar can lie** |

@@ -1,27 +1,27 @@
 package org.fractalizer.test;
 
 import javafx.application.Platform;
+import org.fractalizer.engine.GLSLEngine;
 import org.fractalizer.fractals.AbstractFractalParams;
 import org.fractalizer.fractals.FractalType;
 import org.fractalizer.ui.GLSLFractalizerController;
 
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A sample drawn in strips must be the same sample.
  *
- * {@code GLSLEngine.renderSampleBanded} draws one accumulation sample as N scissored
- * strips with an abort check between them; the progressive renderer uses it for samples
- * dearer than its batch slice so a camera move is not stuck behind a whole sample. This
- * probe renders the same first sample whole and in 1, 3, 8 and 16 strips and compares the
- * raw accumulation buffers, then aborts a banded sample after its first strip and checks
- * that the buffer is cleared before the next sample rather than left half-accumulated.
+ * The viewport scheduler draws a refinement sample dearer than its step budget through the
+ * engine's slicing API ({@code beginSample}, {@code drawRows}, {@code commitSample} /
+ * {@code discardSample}) so it can change its mind between strips. This probe renders the
+ * same first sample whole and in 1, 3, 8 and 16 strips and compares the raw accumulation
+ * buffers, then discards a sample after its first strip and checks that the next sample
+ * starts from a cleared buffer rather than on top of the partial one.
  *
  *   mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.BandedSampleProbe"
  *
- * Exit code 1 on any pixel difference or a partial sample surviving an abort.
+ * Exit code 1 on any pixel difference or a partial sample surviving a discard.
  */
 public class BandedSampleProbe {
 
@@ -37,42 +37,55 @@ public class BandedSampleProbe {
         AbstractFractalParams params = (AbstractFractalParams) controller.getParams();
         params.setPathTracingEnabled(true);          // the noisiest path: per-sample jitter must match too
         controller.renderStill(32, 18, 1, () -> false);   // compile
-        var engine = controller.getEngine();
+        GLSLEngine engine = controller.getEngine();
         engine.resize(320, 180);
         Map<String, Object> uniforms = controller.buildUniformsForProbe();
+        final int H = 180;
 
         boolean ok = true;
         engine.resetAccumulation();
         engine.renderSamples(uniforms, 1);
         float[] whole = engine.readRawImage();
         System.out.println("=== BandedSampleProbe: one sample, whole vs strips, 320x180 Mandelbox path traced ===");
-        for (int bands : new int[]{1, 3, 8, 16}) {
+        for (int strips : new int[]{1, 3, 8, 16}) {
             engine.resetAccumulation();
-            boolean complete = engine.renderSampleBanded(uniforms, bands, () -> false);
+            final int n = strips;
+            engine.postAndWait(() -> {
+                engine.beginSample(uniforms);
+                for (int b = 0; b < n; b++) {
+                    int y0 = H * b / n, y1 = H * (b + 1) / n;
+                    engine.drawRows(y0, y1 - y0);
+                    engine.fence().await();
+                }
+                engine.commitSample();
+            });
             float[] banded = engine.readRawImage();
             int diff = 0;
             for (int i = 0; i < whole.length; i++) if (whole[i] != banded[i]) diff++;
-            System.out.printf("  %2d strips: complete=%s  differing values %d / %d  samples=%d%n",
-                    bands, complete, diff, whole.length, engine.getSampleCount());
-            ok &= complete && diff == 0 && engine.getSampleCount() == 1;
+            System.out.printf("  %2d strips: differing values %d / %d  samples=%d%n", strips, diff, whole.length, engine.getSampleCount());
+            ok &= diff == 0 && engine.getSampleCount() == 1;
         }
 
-        // Abort after the first strip: the count must not move, and the next whole sample
+        // Discard after the first strip: the count must not move, and the next whole sample
         // must start from a cleared buffer (equal to a fresh single sample).
         engine.resetAccumulation();
-        AtomicInteger calls = new AtomicInteger();
-        boolean complete = engine.renderSampleBanded(uniforms, 8, () -> calls.incrementAndGet() >= 1);
-        int countAfterAbort = engine.getSampleCount();
+        engine.postAndWait(() -> {
+            engine.beginSample(uniforms);
+            engine.drawRows(0, H / 8);
+            engine.fence().await();
+            engine.discardSample();
+        });
+        int countAfterDiscard = engine.getSampleCount();
         engine.renderSamples(uniforms, 1);
-        float[] afterAbort = engine.readRawImage();
+        float[] afterDiscard = engine.readRawImage();
         int diff = 0;
-        for (int i = 0; i < whole.length; i++) if (whole[i] != afterAbort[i]) diff++;
-        System.out.printf("  abort after strip 1: complete=%s  samples after abort=%d  next sample differs in %d values%n",
-                complete, countAfterAbort, diff);
-        ok &= !complete && countAfterAbort == 0 && diff == 0 && engine.getSampleCount() == 1;
+        for (int i = 0; i < whole.length; i++) if (whole[i] != afterDiscard[i]) diff++;
+        System.out.printf("  discard after strip 1: samples after discard=%d  next sample differs in %d values%n",
+                countAfterDiscard, diff);
+        ok &= countAfterDiscard == 0 && diff == 0 && engine.getSampleCount() == 1;
 
         System.out.println(ok ? "RESULT: PASS" : "RESULT: FAIL");
-        engine.close();
+        controller.close();
         Platform.exit();
         System.exit(ok ? 0 : 1);
     }

@@ -57,14 +57,12 @@ class UiWiringTest {
         @Override public void setExportSize(int w, int h) { }
         @Override public int getExportWidth() { return 640; }
         @Override public int getExportHeight() { return 360; }
-        @Override public void renderPreview(Consumer<Image> onComplete, Consumer<Double> onProgress) { }
-        @Override public void renderFull(Consumer<Image> onComplete, Consumer<Double> onProgress, Consumer<Object> onTile) { }
         @Override public CompletableFuture<Void> exportToPNG(File f, Consumer<Double> p) { return CompletableFuture.completedFuture(null); }
         @Override public CompletableFuture<Void> exportToPNG(File f, int s, Consumer<Double> p) { return CompletableFuture.completedFuture(null); }
         @Override public CompletableFuture<Void> exportToPNG(File f, int s, Consumer<Double> p, Supplier<Boolean> c) { return CompletableFuture.completedFuture(null); }
         @Override public void exportAOV(File file, int renderMode) { }
-        @Override public void cancelRender() { }
-        @Override public boolean isRendering() { return false; }
+        @Override public void pauseViewport() { }
+        @Override public void resumeViewport() { }
         @Override public void prepareGPUEvaluator() { }
         @Override public float[] evaluateGPUSlice(float z, float half, int res) { return new float[0]; }
         @Override public String getDeviceName() { return "stub"; }

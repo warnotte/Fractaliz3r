@@ -9,7 +9,9 @@ import org.fractalizer.engine.GLSLEngine;
 import org.fractalizer.engine.ShaderPreprocessor;
 import org.fractalizer.fractals.*;
 import org.fractalizer.graph.GraphCompiler;
-import org.fractalizer.render.ProgressiveRenderer;
+import org.fractalizer.render.SceneSnapshot;
+import org.fractalizer.render.ViewportEvent;
+import org.fractalizer.render.ViewportScheduler;
 import org.fractalizer.util.ImageWriterHelper;
 
 import org.fractalizer.fractals.GradientPalette;
@@ -35,7 +37,8 @@ import java.util.function.Supplier;
 public class GLSLFractalizerController implements RenderController {
 
     private final GLSLEngine engine;
-    private final ProgressiveRenderer progressiveRenderer;
+    // The viewport: requests in, images and status out. See docs/INTERACTIVE_RENDER.md.
+    private final ViewportScheduler viewport;
 
     private final Map<FractalType, FractalParams> paramsCache = new HashMap<>();
     private FractalParams currentParams;
@@ -59,30 +62,12 @@ public class GLSLFractalizerController implements RenderController {
     private String currentBooleanProgramKey = null;
     private final Map<String, String> preprocessedCache = new HashMap<>();
 
-    // A scene shader compiles on this thread when the request comes from the JavaFX thread,
-    // so the window keeps painting (7-10 s on a cold NVIDIA cache, ~50 s under WSL). The
-    // render that needed the program is re-issued on the FX thread once it exists.
-    private final java.util.concurrent.ExecutorService compileThread =
-            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "SceneCompile");
-                t.setDaemon(true);
-                return t;
-            });
-    private volatile boolean compiling = false;
-    private volatile String lastCompileError;     // from the last node-graph compile, null on success
-    private float[] lastMaterialSSBO;             // what the engine holds; skip identical uploads
-    private volatile String lastNodeGraphSource;  // defines + GLSL of the program the engine holds
-    private Runnable renderAfterCompile;          // FX thread only
-    private Consumer<String> compileListener;     // message while compiling, null when done
-
-    // Listeners
-    private Consumer<WritableImage> imageListener;
-    private Consumer<Double> progressListener;
-    private Runnable completeListener;
-
     public GLSLFractalizerController() throws IOException {
         this.engine = new GLSLEngine(viewportWidth, viewportHeight);
-        this.progressiveRenderer = new ProgressiveRenderer(engine);
+        this.viewport = new ViewportScheduler(engine, r -> {
+            try { Platform.runLater(r); }
+            catch (IllegalStateException e) { r.run(); }   // no toolkit (headless harness)
+        });
     }
 
     public void setAudioPanel(org.fractalizer.ui.panels.AudioPanel panel) {
@@ -156,7 +141,6 @@ public class GLSLFractalizerController implements RenderController {
         AbstractFractalParams oldParams = (currentParams instanceof AbstractFractalParams afp) ? afp : null;
         
         this.currentFractalType = type;
-        activateCurrentProgram();
 
         // Try to get from cache
         currentParams = paramsCache.get(type);
@@ -183,40 +167,23 @@ public class GLSLFractalizerController implements RenderController {
     /**
      * Activate the correct shader program (boolean or normal).
      */
+    /**
+     * Make the engine's active program the one for the current scene, compiling it if the
+     * engine does not hold it. Synchronous: this is the path of exports, stills and
+     * harnesses, which run off the JavaFX thread. The viewport never calls it: its
+     * scheduler compiles from a {@link SceneSnapshot} on the GL thread.
+     */
     private void activateCurrentProgram() {
-        // On the JavaFX thread a missing or stale program is not compiled here: the previous
-        // program stays active and the next renderPreview/renderFull defers the compile to
-        // the SceneCompile thread (see deferForCompile). Everywhere else (startup task,
-        // exports, harnesses, the compile thread itself) the compile is synchronous.
-        boolean mayCompile = !onFxThread();
-
-        // Node Graph pipeline: compile on demand if dirty (covers all migrated types)
         if (currentParams instanceof NodeGraphParams ngp) {
-            if (mayCompile && (ngp.isDirty() || !engine.hasProgram("nodegraph"))) {
-                String glsl = ngp.recompile();
-                if (glsl != null) {
-                    // Deep-zoom LOD is compiled in only when enabled: the mutable global it
-                    // needs is otherwise read inside every DE loop and blocks constant folding.
-                    String defines = ngp.getDetailLOD() > 0f ? "#define DETAIL_LOD\n" : "";
-                    long t0 = System.nanoTime();
-                    String err = engine.loadCustomFractalShader("nodegraph", glsl, defines);
-                    lastCompileError = err;
-                    if (err != null) {
-                        System.err.println("Node graph shader error: " + err);
-                    } else {
-                        lastNodeGraphSource = defines + glsl;
-                        System.out.printf("Scene shader compiled in %d ms%n", (System.nanoTime() - t0) / 1_000_000);
-                    }
-                }
+            String glsl = ngp.isDirty() || ngp.getCompiledGLSL() == null ? ngp.recompile() : ngp.getCompiledGLSL();
+            if (glsl != null) {
+                long t0 = System.nanoTime();
+                boolean had = engine.hasProgram("nodegraph", glsl, nodeGraphDefines(ngp));
+                String err = engine.ensureProgram("nodegraph", glsl, nodeGraphDefines(ngp));
+                if (err != null) System.err.println("Node graph shader error: " + err);
+                else if (!had) System.out.printf("Scene shader compiled in %d ms%n", (System.nanoTime() - t0) / 1_000_000);
             }
-            // Material SSBO: uploaded only when its content changed. This runs before every
-            // preview frame on the JavaFX thread; an unconditional upload was a round trip
-            // to the GL thread per frame, queued behind whatever batch was in flight.
-            float[] ssbo = ngp.getMaterialSSBOData();
-            if (ssbo != lastMaterialSSBO && !java.util.Arrays.equals(ssbo, lastMaterialSSBO)) {
-                engine.updateMaterialSSBO(ssbo == null ? null : ssbo.clone());
-                lastMaterialSSBO = ssbo == null ? null : ssbo.clone();
-            }
+            engine.updateMaterialSSBO(ngp.getMaterialSSBOData());
             if (engine.hasProgram("nodegraph")) {
                 engine.setActiveProgram("nodegraph");
                 currentBooleanProgramKey = null;
@@ -230,7 +197,7 @@ public class GLSLFractalizerController implements RenderController {
         if (currentParams instanceof AbstractFractalParams afp
                 && afp.isBooleanEnabled()
                 && afp.getBoolSecondaryType() != null) {
-            if (mayCompile) ensureBooleanShader(afp.getBoolSecondaryType());
+            ensureBooleanShader(afp.getBoolSecondaryType());
             String key = currentFractalType.getKernelName() + "+" + afp.getBoolSecondaryType();
             if (engine.hasProgram(key)) {
                 engine.setActiveProgram(key);
@@ -239,75 +206,18 @@ public class GLSLFractalizerController implements RenderController {
             }
         }
         currentBooleanProgramKey = null;
-        if (mayCompile) ensureBuiltinShader(currentFractalType);
+        ensureBuiltinShader(currentFractalType);
         String key = currentFractalType.getKernelName();
         if (engine.hasProgram(key)) {
             engine.setActiveProgram(key);
         }
     }
 
-    private static boolean onFxThread() {
-        try { return Platform.isFxApplicationThread(); }
-        catch (RuntimeException e) { return false; }   // toolkit not started (headless harness)
+    /** Deep-zoom LOD is compiled in only when enabled: the mutable global it needs is
+     *  otherwise read inside every DE loop and blocks constant folding. */
+    private static String nodeGraphDefines(NodeGraphParams ngp) {
+        return ngp.getDetailLOD() > 0f ? "#define DETAIL_LOD\n" : "";
     }
-
-    /** True when the scene as it stands has no up-to-date program to render with. */
-    private boolean sceneNeedsCompile() {
-        if (currentParams instanceof NodeGraphParams ngp) {
-            return ngp.isDirty() || !engine.hasProgram("nodegraph");
-        }
-        if (currentParams instanceof AbstractFractalParams afp
-                && afp.isBooleanEnabled() && afp.getBoolSecondaryType() != null) {
-            return !engine.hasProgram(currentFractalType.getKernelName() + "+" + afp.getBoolSecondaryType());
-        }
-        return hasBuiltinShader(currentFractalType) && !engine.hasProgram(currentFractalType.getKernelName());
-    }
-
-    /**
-     * Called first thing by the interactive renders. Off the JavaFX thread, or when the
-     * program is ready, it does nothing and returns false. On the JavaFX thread with a
-     * scene that needs compiling, it starts (or joins) the compile on the SceneCompile
-     * thread, remembers {@code retry} as the render to issue when it is done, and returns
-     * true so the caller returns at once. The viewport keeps its last image meanwhile and
-     * the compile listener, if any, gets a message at the start and null at the end.
-     */
-    private boolean deferForCompile(Runnable retry) {
-        if (!onFxThread() || !sceneNeedsCompile()) return false;
-        renderAfterCompile = retry;            // the latest request wins
-        if (compiling) return true;
-        compiling = true;
-        if (compileListener != null) compileListener.accept("Compiling scene shader...");
-        compileThread.submit(() -> {
-            String error = null;
-            try {
-                lastCompileError = null;
-                activateCurrentProgram();
-                error = lastCompileError;
-            } catch (Exception e) {
-                error = e.getMessage() == null ? e.toString() : e.getMessage();
-                System.err.println("Scene shader compile failed: " + error);
-            }
-            final String err = error;
-            Platform.runLater(() -> {
-                compiling = false;
-                if (compileListener != null) compileListener.accept(err == null ? null : "Shader error: " + err);
-                Runnable r = renderAfterCompile;
-                renderAfterCompile = null;
-                // A failed compile is not retried by itself (that would loop); the next user
-                // action asks again. A success re-issues the render that was waiting.
-                if (r != null && err == null) r.run();
-            });
-        });
-        return true;
-    }
-
-    /** Receives "Compiling scene shader..." when a deferred compile starts, then null (or
-     *  an error message) when it ends. Called on the JavaFX thread. */
-    public void setCompileListener(Consumer<String> listener) {
-        this.compileListener = listener;
-    }
-
-    public boolean isCompiling() { return compiling; }
 
     /** The uniform map a render of the current scene would use, program activated. For
      *  harnesses that drive the engine directly (BandedSampleProbe). */
@@ -343,171 +253,77 @@ public class GLSLFractalizerController implements RenderController {
 
     @Override
     public String compileNodeGraph(String source) {
-        // Same defines as activateCurrentProgram, or an editor compile would drop the
-        // deep-zoom LOD until the next dirty recompile.
-        String defines = (currentParams instanceof NodeGraphParams ngp && ngp.getDetailLOD() > 0f)
-                ? "#define DETAIL_LOD\n" : "";
-        String full = defines + source;
-        if (full.equals(lastNodeGraphSource) && engine.hasProgram("nodegraph")) {
-            // The editor recompiles on every structural event, including the load of a scene
-            // the startup task just compiled: same source, same program, nothing to do.
-            engine.setActiveProgram("nodegraph");
-            return null;
-        }
-        long t0 = System.nanoTime();
-        String error = engine.loadCustomFractalShader("nodegraph", source, defines);
+        String defines = currentParams instanceof NodeGraphParams ngp ? nodeGraphDefines(ngp) : "";
+        String error = engine.ensureProgram("nodegraph", source, defines);
         if (error == null) {
-            lastNodeGraphSource = full;
-            System.out.printf("Scene shader compiled in %d ms (editor)%n", (System.nanoTime() - t0) / 1_000_000);
             engine.setActiveProgram("nodegraph");
             engine.resetAccumulation();
         }
         return error;
     }
 
-    /** The editor's compile on the SceneCompile thread; the status bar shows it like a
-     *  deferred render compile, and {@code onDone} runs on the JavaFX thread after. */
-    @Override
-    public void compileNodeGraphAsync(String source, Consumer<String> onDone) {
-        if (compileListener != null && onFxThread()) compileListener.accept("Compiling scene shader...");
-        compileThread.submit(() -> {
-            String error;
-            try {
-                error = compileNodeGraph(source);
-            } catch (Exception e) {
-                error = e.getMessage() == null ? e.toString() : e.getMessage();
-            }
-            final String err = error;
-            Platform.runLater(() -> {
-                if (compileListener != null) compileListener.accept(err == null ? null : "Shader error: " + err);
-                onDone.accept(err);
-            });
-        });
-    }
-
-    /**
-     * Get the current fractal type.
-     */
     @Override
     public FractalType getFractalType() {
         return currentFractalType;
     }
 
-    /**
-     * Start a preview render (uses viewport size for responsiveness).
-     */
-    @Override
-    public void renderPreview(Consumer<Image> onComplete, Consumer<Double> onProgress) {
-        if (deferForCompile(() -> renderPreview(onComplete, onProgress))) return;
-        cancelRender();
+    // ------------------------------------------------------------------------------------
+    // The viewport. The scene is frozen into a snapshot here, on the caller's thread (the
+    // JavaFX thread in the app), and everything after that happens on the GL thread inside
+    // the scheduler: compile if needed, a preview sized to the budget, then the refinement.
+    // ------------------------------------------------------------------------------------
 
-        // Draw the moving viewport smaller and cheaper. Resolution is the larger lever —
-        // half scale is a quarter of the pixels — and dropping path tracing for classic
-        // shading is the other. engine.resize() is a no-op when the size is unchanged, so
-        // continuous navigation stays at preview size and only reallocates on the way back
-        // to full quality.
-        float maxScale = 1f;
-        boolean fast = false;
-        if (currentParams instanceof AbstractFractalParams pp) {
-            maxScale = pp.getPreviewScale();
-            fast = pp.isPreviewFastShading();
+    /**
+     * The current scene, frozen for the scheduler. Null when the scene has no program
+     * source at all (a node graph whose code generation failed and no kernel to fall back
+     * to), in which case there is nothing to draw.
+     */
+    public SceneSnapshot snapshot() {
+        if (!(currentParams instanceof AbstractFractalParams params)) return null;
+        String key, source, defines = "";
+        float[] ssbo = null;
+        if (params instanceof NodeGraphParams ngp) {
+            String glsl = ngp.isDirty() || ngp.getCompiledGLSL() == null ? ngp.recompile() : ngp.getCompiledGLSL();
+            if (glsl != null) {
+                key = "nodegraph"; source = glsl; defines = nodeGraphDefines(ngp);
+                ssbo = ngp.getMaterialSSBOData();
+            } else if (hasBuiltinShader(currentFractalType)) {
+                key = currentFractalType.getKernelName();
+                source = engine.loadShaderSource("/shaders/fractals/" + key + ".glsl");
+            } else {
+                return null;
+            }
+        } else {
+            key = currentFractalType.getKernelName();
+            if (!hasBuiltinShader(currentFractalType)) return null;
+            source = engine.loadShaderSource("/shaders/fractals/" + key + ".glsl");
         }
-        float scale = adaptivePreviewScale(maxScale);
-        int pw = Math.max(160, Math.round(viewportWidth * scale));
-        int ph = Math.max(90, Math.round(viewportHeight * scale));
-        engine.resize(pw, ph);
-        activateCurrentProgram();
-
         Map<String, Object> uniforms = buildUniforms();
-        if (fast) {
-            applyFastPreviewOverrides(uniforms);
-        }
-
-        // ProgressiveRenderer already calls Platform.runLater, so callbacks run on FX thread
-        progressiveRenderer.setOnImageUpdate(image -> {
-            if (onComplete != null) onComplete.accept(image);
-        });
-        progressiveRenderer.setOnProgressUpdate(p -> {
-            if (onProgress != null) onProgress.accept(p.progress());
-        });
-        progressiveRenderer.setOnRenderComplete(null);
-
-        progressiveRenderer.start(uniforms, previewSamples);
-        lastPreviewScale = scale;
-        lastPreviewPixels = (long) pw * ph;
+        uniforms.remove("pixelRadius");   // follows the rendered height: SceneSnapshot.uniformsFor
+        float coneTan = params.isConeTracingEnabled() ? (float) Math.tan(params.getFov() * 0.5) : 0f;
+        return new SceneSnapshot(key, source, defines, uniforms, coneTan, ssbo,
+                viewportWidth, viewportHeight, params.getPreviewScale(), params.isPreviewFastShading(),
+                previewSamples, fullSamples);
     }
 
-    // The moving preview aims at a fixed time per sample: the scene's previewScale is the
-    // ceiling, and when one sample at that size costs more than PREVIEW_TARGET_NS the next
-    // preview is drawn smaller (the ImageView stretches it), then grows back as the cost
-    // allows. A drag stays fluid on any scene; the refinement pass restores the detail.
-    private static final long PREVIEW_TARGET_NS = 30_000_000L;   // ~30 fps of fresh frames
-    private static final float MIN_PREVIEW_SCALE = 0.12f;
-    private float lastPreviewScale = 0f;
-    private long lastPreviewPixels = 0;
-
-    private float adaptivePreviewScale(float maxScale) {
-        long ns = progressiveRenderer.getLastMeasuredNsPerSample();
-        if (lastPreviewScale <= 0f || ns <= 0 || lastPreviewPixels <= 0) return maxScale;
-        // cost scales with pixels, pixels with scale squared
-        double ratio = Math.sqrt((double) PREVIEW_TARGET_NS / ns);
-        double wanted = lastPreviewScale * ratio;
-        // move at most a step per frame, and not for small differences (each size change
-        // reallocates the framebuffers)
-        if (ratio > 0.85 && ratio < 1.35) wanted = lastPreviewScale;
-        wanted = Math.max(lastPreviewScale * 0.6, Math.min(lastPreviewScale * 1.5, wanted));
-        float scale = (float) Math.max(MIN_PREVIEW_SCALE, Math.min(maxScale, wanted));
-        // quantise to 1/32 of the viewport so consecutive frames share a size
-        return Math.max(MIN_PREVIEW_SCALE, Math.round(scale * 32f) / 32f);
+    /** The scene changed: show it. Never blocks. */
+    public void requestRender() {
+        SceneSnapshot scene = snapshot();
+        if (scene != null) viewport.request(scene);
     }
 
-    /** Cheapen a preview frame without touching the scene's own settings — the values are
-     *  overridden in the uniform map only, so the next full-quality pass is unaffected.
-     *  Path tracing is the dominant cost (126 ms against 16 ms for classic shading on the
-     *  benchmark Mandelbulb); the step counts and DoF are what remain after that. */
-    private void applyFastPreviewOverrides(Map<String, Object> uniforms) {
-        uniforms.put("pathTracingEnabled", 0);
-        uniforms.put("dofEnabled", 0);
-        uniforms.put("detailLOD", 0f);            // extra DE iterations are for stills
-        uniforms.put("volumetricFogEnabled", 0);
-        Object steps = uniforms.get("maxRaySteps");
-        if (steps instanceof Integer n) uniforms.put("maxRaySteps", Math.max(60, n / 2));
-        Object sh = uniforms.get("shadowSteps");
-        if (sh instanceof Integer n) uniforms.put("shadowSteps", Math.max(16, n / 4));
-        uniforms.put("aoSteps", 2);
-    }
+    /** Refine the scene on screen now, without the idle delay (Space). */
+    public void refineNow() { viewport.refineNow(); }
 
-    /**
-     * Start a full quality render (uses viewport size for interactive display).
-     */
-    @Override
-    public void renderFull(Consumer<Image> onComplete, Consumer<Double> onProgress,
-                           Consumer<Object> onTileComplete) {
-        if (deferForCompile(() -> renderFull(onComplete, onProgress, onTileComplete))) return;
-        cancelRender();
-        engine.resize(viewportWidth, viewportHeight);
-        activateCurrentProgram();
+    /** Stop the viewport while something else uses the engine (an export, a search);
+     *  nestable. {@link #resumeViewport} puts the scene back. */
+    public void pauseViewport() { viewport.pause(); }
+    public void resumeViewport() { viewport.resume(); }
 
-        Map<String, Object> uniforms = buildUniforms();
+    public void setViewportListener(ViewportEvent.Listener listener) { viewport.setListener(listener); }
 
-        // ProgressiveRenderer already calls Platform.runLater, so callbacks run on FX thread
-        progressiveRenderer.setOnImageUpdate(image -> {
-            if (onComplete != null) onComplete.accept(image);
-        });
-        progressiveRenderer.setOnProgressUpdate(p -> {
-            if (onProgress != null) onProgress.accept(p.progress());
-        });
-        progressiveRenderer.setOnRenderComplete(() -> {
-            if (completeListener != null) completeListener.run();
-        });
+    public ViewportScheduler getViewport() { return viewport; }
 
-        progressiveRenderer.start(uniforms, fullSamples, true);   // the preview is on screen: abortable at once
-    }
-
-    /**
-     * Export the current render to a file (PNG or JPG).
-     * Automatically injects 360 metadata if projection mode is Equirectangular.
-     */
     @Override
     public CompletableFuture<Void> exportToPNG(File file, Consumer<Double> onProgress) {
         return exportToPNG(file, fullSamples * 2, onProgress);
@@ -520,10 +336,11 @@ public class GLSLFractalizerController implements RenderController {
 
     @Override
     public CompletableFuture<Void> exportToPNG(File file, int samples, Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
-        if (exportWidth > MAX_TILE_SIZE || exportHeight > MAX_TILE_SIZE) {
-            return exportTiledToPNG(file, samples, onProgress, cancelCheck);
-        }
-        return exportSingleToPNG(file, samples, onProgress, cancelCheck);
+        viewport.pause();
+        CompletableFuture<Void> export = (exportWidth > MAX_TILE_SIZE || exportHeight > MAX_TILE_SIZE)
+                ? exportTiledToPNG(file, samples, onProgress, cancelCheck)
+                : exportSingleToPNG(file, samples, onProgress, cancelCheck);
+        return export.whenComplete((v, e) -> viewport.resume());
     }
 
     private static final int MAX_TILE_SIZE = 4096;
@@ -545,7 +362,6 @@ public class GLSLFractalizerController implements RenderController {
     private CompletableFuture<Void> exportSingleToPNG(File file, int samples, Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         return CompletableFuture.runAsync(() -> {
             try {
-                cancelRender();
                 engine.resize(exportWidth, exportHeight);
                 activateCurrentProgram();
                 engine.resetAccumulation();
@@ -607,7 +423,6 @@ public class GLSLFractalizerController implements RenderController {
     private CompletableFuture<Void> exportTiledToPNG(File file, int samples, Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         return CompletableFuture.runAsync(() -> {
             try {
-                cancelRender();
 
                 int fullW = exportWidth;
                 int fullH = exportHeight;
@@ -731,6 +546,13 @@ public class GLSLFractalizerController implements RenderController {
      * @return The rendered image for display
      */
     public WritableImage exportAnimationFrame(File file, int width, int height, int samples,
+                                               Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
+        viewport.pause();
+        try { return exportAnimationFrameNow(file, width, height, samples, onProgress, cancelCheck); }
+        finally { viewport.resume(); }
+    }
+
+    private WritableImage exportAnimationFrameNow(File file, int width, int height, int samples,
                                                Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         if (width > MAX_TILE_SIZE || height > MAX_TILE_SIZE) {
             return exportAnimationFrameTiled(file, width, height, samples, onProgress, cancelCheck);
@@ -914,6 +736,16 @@ public class GLSLFractalizerController implements RenderController {
      * Export a single animation frame with motion blur, per-sample progress and cancel support.
      */
     public WritableImage exportAnimationFrameWithMotionBlur(
+            File file, int width, int height, int samples,
+            double frameTime, double fps, float shutterAngle,
+            Consumer<Double> timeApplier,
+            Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
+        viewport.pause();
+        try { return exportAnimationFrameWithMotionBlurNow(file, width, height, samples, frameTime, fps, shutterAngle, timeApplier, onProgress, cancelCheck); }
+        finally { viewport.resume(); }
+    }
+
+    private WritableImage exportAnimationFrameWithMotionBlurNow(
             File file, int width, int height, int samples,
             double frameTime, double fps, float shutterAngle,
             Consumer<Double> timeApplier,
@@ -1125,6 +957,12 @@ public class GLSLFractalizerController implements RenderController {
      * @param renderMode 1 = Normals (RGB), 2 = Depth (16-bit grayscale)
      */
     public void exportAOV(File file, int renderMode) {
+        viewport.pause();
+        try { exportAOVNow(file, renderMode); }
+        finally { viewport.resume(); }
+    }
+
+    private void exportAOVNow(File file, int renderMode) {
         if (exportWidth > MAX_TILE_SIZE || exportHeight > MAX_TILE_SIZE) {
             exportTiledAOV(file, renderMode);
         } else {
@@ -1140,6 +978,12 @@ public class GLSLFractalizerController implements RenderController {
 
     /** Depth AOV of the current scene, one value per pixel in [0, 1], row-major. */
     public float[] renderDepthAOV(int width, int height) {
+        viewport.pause();
+        try { return renderDepthAOVNow(width, height); }
+        finally { viewport.resume(); }
+    }
+
+    private float[] renderDepthAOVNow(int width, int height) {
         engine.resize(width, height);
         activateCurrentProgram();
         engine.resetAccumulation();
@@ -1154,7 +998,12 @@ public class GLSLFractalizerController implements RenderController {
 
     /** Colour render of the current scene; null if {@code cancelCheck} turned true. */
     public BufferedImage renderStill(int width, int height, int samples, Supplier<Boolean> cancelCheck) {
-        cancelRender();
+        viewport.pause();
+        try { return renderStillNow(width, height, samples, cancelCheck); }
+        finally { viewport.resume(); }
+    }
+
+    private BufferedImage renderStillNow(int width, int height, int samples, Supplier<Boolean> cancelCheck) {
         engine.resize(width, height);
         activateCurrentProgram();
         engine.resetAccumulation();
@@ -1301,21 +1150,6 @@ public class GLSLFractalizerController implements RenderController {
         }
     }
 
-    /**
-     * Cancel current rendering.
-     */
-    @Override
-    public void cancelRender() {
-        progressiveRenderer.stop();
-    }
-
-    /**
-     * Check if currently rendering.
-     */
-    @Override
-    public boolean isRendering() {
-        return progressiveRenderer.isRendering();
-    }
 
     // ========================================================================
     // Uniform building from FractalParams
@@ -1848,11 +1682,9 @@ public class GLSLFractalizerController implements RenderController {
      * which is right for the panels and wrong for a load.)
      */
     public void replaceParams(AbstractFractalParams fresh) {
-        cancelRender();
         this.currentFractalType = fresh.getType();
         this.currentParams = fresh;
         paramsCache.put(fresh.getType(), fresh);
-        activateCurrentProgram();
     }
 
     @Override
@@ -1964,9 +1796,6 @@ public class GLSLFractalizerController implements RenderController {
     /**
      * Get progressive renderer for advanced use.
      */
-    public ProgressiveRenderer getProgressiveRenderer() {
-        return progressiveRenderer;
-    }
 
     @Override
     public void prepareGPUEvaluator() {
@@ -1984,7 +1813,7 @@ public class GLSLFractalizerController implements RenderController {
 
     @Override
     public void close() {
-        progressiveRenderer.shutdown();
+        viewport.close();
         engine.close();
     }
 }

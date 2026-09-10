@@ -61,12 +61,19 @@ public class ExportAfterPreviewProbe {
         params.setPreviewScale(0.35f);
         params.setPreviewFastShading(true);
         controller.setViewportSize(1280, 720);
+        controller.getViewport().setAutoRefine(false);   // leave the engine at preview size
         CountDownLatch previewed = new CountDownLatch(1);
-        controller.renderPreview(img -> previewed.countDown(), p -> {});
+        int[] previewSize = new int[2];
+        controller.setViewportListener(new org.fractalizer.render.ViewportEvent.Listener() {
+            @Override public void onImage(org.fractalizer.render.ViewportEvent.ViewportImage img) {
+                previewSize[0] = img.width(); previewSize[1] = img.height(); previewed.countDown();
+            }
+            @Override public void onStatus(org.fractalizer.render.ViewportEvent.Status st) {}
+        });
+        Platform.runLater(controller::requestRender);
         previewed.await(30, java.util.concurrent.TimeUnit.SECONDS);
-        controller.cancelRender();
-        System.out.printf("  preview ran at %dx%d (engine now %dx%d)%n",
-                Math.round(1280 * 0.35f), Math.round(720 * 0.35f),
+        Thread.sleep(300);
+        System.out.printf("  preview ran at %dx%d (engine now %dx%d)%n", previewSize[0], previewSize[1],
                 controller.getEngine().getWidth(), controller.getEngine().getHeight());
 
         controller.setExportSize(W, H);
