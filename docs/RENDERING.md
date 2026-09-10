@@ -379,28 +379,6 @@ Variance-based convergence detection that skips already-converged pixels during 
 4. **Color Grading**: Procedural LUT styles (Cinema, Vintage, Matrix, Neon, Noir) for instant professional looks.
 5. **Monte Carlo Path Tracing**: NEE + MIS, GGX microfacet BRDF.
 6. **Advanced Lighting**: Spot light with configurable cone angle and edge softness.
-7. **Droste**: the frame contains itself in a spiral (FX tab, "Droste"). See below.
-
-### Droste
-
-Escher's Print Gallery as a post-process: the finished frame is read again through a map
-of the plane onto itself, so the annulus between two radii (in half-heights, centred)
-repeats inward and outward, scaled by outer/inner each time, and a twist joins the copies
-without a seam. In `postprocess.glsl`, `drosteUV` takes the fragment's position to
-log-polar coordinates relative to the inner circle, applies the inverse of the twist (a
-division by cos α·e^{iα} with α = atan(twist·log(outer/inner)/2π); an integer twist is what
-makes the 2π seam of the angle land exactly one annulus width away), tiles the radial
-coordinate to one annulus width, and comes back; every texture read of the frame uses that
-position while the vignette and the film grain stay on the screen. Phase slides the tiling
-along the spiral: swept from 0 to 1 it is an endless zoom into the picture. The
-accumulation is sampled linearly while the effect is on (its copies are magnified up to
-outer/inner times; nearest sampling showed the texels as blocks) and nearest otherwise, so
-a frame without it stays bit-exact.
-
-It wants a centred object over a dark sky, with the annulus mostly inside the frame: the
-Albedo planet is the case for it (`DrosteProbe presets/ALBEDO_039.frac` renders the
-comparison); a scene that fills the frame gives a pile of surfaces instead. The phase is
-not a timeline track yet: post-processing parameters are not animatable.
 
 ---
 

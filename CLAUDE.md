@@ -110,9 +110,6 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.SliderFluidityProbe
 # A refinement sample drawn in scissored strips (abortable between them) must be the same sample
 # to the bit, and an aborted one must be cleared, not accumulated.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.BandedSampleProbe"
-# The Droste post-process rendered to judge: one preset without it, then the same accumulation re-read
-# under six settings (inner radius, twist, phase) -> out/droste/. The planet preset is the best case.
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DrosteProbe" -Dexec.args="presets/ALBEDO_039.frac out/droste 960x540 24"
 # What a sample costs as strips against whole, on the GPU, per sync pattern (bound once, rebound
 # each, fenced each, one or two in flight): the measurement behind the scheduler's slice lengths.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.StripCostProbe" -Dexec.args="presets/ALBEDO_039.frac 1920x1080"
@@ -251,7 +248,6 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── SliderFluidityProbe.java     # the viewport while a slider of each real panel moves; "window" for layout costs
 ├── BandedSampleProbe.java       # a sample drawn in strips is the same sample; an aborted one is cleared
 ├── StripCostProbe.java          # GPU cost of strips vs whole per sync pattern: why slices are 60 ms
-├── DrosteProbe.java             # the Droste post-process under six settings, same accumulation, to judge
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them
 └── GalleryRender.java           # every .frac in a dir rendered as the app shows it (README gallery)

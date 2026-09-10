@@ -60,11 +60,6 @@ class ConfigRoundTripTest {
         ppWritten.sharpenIntensity = 0.23f;
         ppWritten.colorGradingMode = 4;
         ppWritten.colorGradingIntensity = 0.66f;
-        ppWritten.drosteEnabled = true;
-        ppWritten.drosteInner = 0.27f;
-        ppWritten.drosteOuter = 1.15f;
-        ppWritten.drostePeriodicity = 2f;
-        ppWritten.drostePhase = 0.41f;
         ppWritten.audioDeltaExposure = 999f;   // transient: must NOT reach the file
         config.postProcess = ppWritten;
 
@@ -117,11 +112,6 @@ class ConfigRoundTripTest {
         assertEquals(ppWritten.sharpenIntensity, ppReloaded.sharpenIntensity, "sharpenIntensity");
         assertEquals(ppWritten.colorGradingMode, ppReloaded.colorGradingMode, "colorGradingMode");
         assertEquals(ppWritten.colorGradingIntensity, ppReloaded.colorGradingIntensity, "colorGradingIntensity");
-        assertEquals(ppWritten.drosteEnabled, ppReloaded.drosteEnabled, "drosteEnabled");
-        assertEquals(ppWritten.drosteInner, ppReloaded.drosteInner, "drosteInner");
-        assertEquals(ppWritten.drosteOuter, ppReloaded.drosteOuter, "drosteOuter");
-        assertEquals(ppWritten.drostePeriodicity, ppReloaded.drostePeriodicity, "drostePeriodicity");
-        assertEquals(ppWritten.drostePhase, ppReloaded.drostePhase, "drostePhase");
     }
 
     @Test

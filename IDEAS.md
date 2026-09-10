@@ -19,7 +19,6 @@ Creative feature ideas for Fractaliz3r. Status: IDEA (not started), IN PROGRESS,
 | 10 | Cone Tracing | Pixel-aware adaptive epsilon |
 | 11 | Per-Node Materials | MaterialNode with SSBO, per-node PBR overrides (color, roughness, metallic, IOR, emission) |
 | 12 | IFS Base Primitive | 5 shapes (Sphere, Box, Octahedron, Torus, Rounded Box) |
-| 15 | Droste Effect | Post-process, FX tab: the frame contains itself in Escher's spiral; inner/outer radius, twist, phase (an endless zoom when swept). Best on a centred object over a dark sky (the Albedo planet). See docs/RENDERING.md § Droste |
 
 ## Rejected
 
@@ -27,6 +26,7 @@ Creative feature ideas for Fractaliz3r. Status: IDEA (not started), IN PROGRESS,
 |---|---------|--------|
 | 2 | Fractal Portals | Implemented and reverted — visually uninteresting |
 | 20 | Raymarched Reflections | Already covered by path tracing |
+| 15 | Droste Effect | Implemented as a post-process (fb9e3f9, 2026-09-11), judged and reverted the same day: a picture-in-picture spiral is a gimmick that adds nothing to a fractal renderer. Do not re-suggest |
 
 ---
 
