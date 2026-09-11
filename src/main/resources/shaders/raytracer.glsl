@@ -594,11 +594,9 @@ float calcExtraLightVisibility(vec3 hitPos, vec3 normal, vec3 lightDirNorm, floa
         return 1.0;
     }
 
-    // Self-hit due to numerical precision: keep light visible.
-    if (shDist <= shadowBias * 2.0) {
-        return 1.0;
-    }
-
+    // No self-hit allowance: the origin already sits a bias above the surface, and a hit
+    // within two biases was let through, which lit the floor at the foot of a box a beam
+    // grazed along (a bright wedge at the corner, as if the beam went through the box).
     // Directional light: any blocker means shadowed.
     if (maxDistance <= 0.0) {
         return 0.0;
