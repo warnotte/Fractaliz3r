@@ -878,6 +878,13 @@ public class GraphCompiler {
         return data;
     }
 
+    /** The graph's MaterialNodes in the order of their SSBO index (matId). */
+    public static List<MaterialNode> materialNodes(GraphNode root) {
+        List<MaterialNode> mats = new ArrayList<>();
+        collectMaterialNodes(root, mats);
+        return mats;
+    }
+
     private static void collectMaterialNodes(GraphNode node, List<MaterialNode> result) {
         if (node instanceof MaterialNode mn) {
             result.add(mn);

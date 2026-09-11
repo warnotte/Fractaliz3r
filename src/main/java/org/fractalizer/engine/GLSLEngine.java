@@ -192,9 +192,10 @@ public class GLSLEngine implements AutoCloseable {
             try {
                 String vertexSource = loadResource("/shaders/fullscreen.vert");
                 String commonSource = stripVersion(loadResource("/shaders/common.glsl"));
+                String lightsSource = stripVersion(loadResource("/shaders/lights.glsl"));   // empty unless HAS_EMITTERS or BIDIR
                 String raytracerSource = stripVersion(loadResource("/shaders/raytracer.glsl"));
                 String fragmentSource = "#version 430 core\n" + extraDefines + (photon ? "#define PHOTON_PASS\n" : "")
-                        + commonSource + "\n" + userSource + "\n" + raytracerSource
+                        + commonSource + "\n" + lightsSource + "\n" + userSource + "\n" + raytracerSource
                         + (photon ? "\n" + stripVersion(loadResource("/shaders/photon.glsl")) : "");
                 ShaderProgram old = programs.remove(name);
                 if (old != null) old.delete();
@@ -256,6 +257,26 @@ public class GLSLEngine implements AutoCloseable {
     public void resetAccumulation() { needsReset = true; }
 
     private float[] materialSSBOData;   // what the buffer holds, to skip identical uploads
+    private int lightSSBO = 0;
+    private float[] lightSSBOData;
+
+    /** The light table (LightList, lights.glsl), binding 7; as {@link #updateMaterialSSBO}. */
+    public void updateLightSSBO(float[] data) {
+        final float[] copy = data == null ? null : data.clone();
+        postToGLThread(() -> {
+            if (java.util.Arrays.equals(copy, lightSSBOData)) return;
+            lightSSBOData = copy;
+            touchGLState();
+            if (copy == null || copy.length == 0) {
+                if (lightSSBO != 0) { glDeleteBuffers(lightSSBO); lightSSBO = 0; }
+                return;
+            }
+            if (lightSSBO == 0) lightSSBO = glGenBuffers();
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightSSBO);
+            glBufferData(GL_SHADER_STORAGE_BUFFER, copy, GL_DYNAMIC_DRAW);
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        });
+    }
 
     /** Posted, not awaited: the GL thread runs its tasks in order, so the upload lands
      *  before any batch submitted after it. Identical data is not uploaded again. */
@@ -309,6 +330,7 @@ public class GLSLEngine implements AutoCloseable {
         }
         if (adaptiveSamplingEnabled) glBindImageTexture(5, varianceTexture, 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
         if (materialSSBO != 0) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, materialSSBO);
+        if (lightSSBO != 0) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, lightSSBO);
         for (Map.Entry<String, Object> entry : uniforms.entrySet()) { setUniformValue(program, entry.getKey(), entry.getValue()); }
     }
 
@@ -1146,6 +1168,7 @@ public class GLSLEngine implements AutoCloseable {
             glDeleteTextures(envMapTexture); glDeleteTextures(envMarginalCDFTexture); glDeleteTextures(envConditionalCDFTexture);
             glDeleteTextures(paletteTexture); glDeleteTextures(blueNoiseTexture);
             if (materialSSBO != 0) glDeleteBuffers(materialSSBO);
+            if (lightSSBO != 0) glDeleteBuffers(lightSSBO);
             deletePhotonBuffers();
             if (splatProgram != null) {
                 splatProgram.delete(); glDeleteVertexArrays(photonVAO);

@@ -124,6 +124,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportAfterPreviewP
 # land without meeting glass; the ratio must be 1, with and without the emission map), the cost of a
 # photon pass, and a glass ball and a smooth metal Mandelbulb with and without caustics.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.CausticProbe" -Dexec.args="out/caustic 640x360 64"
+# Emitter sampling (lights.glsl): the built-in slab scene rendered with the graph's emitters found by
+# chance and drawn directly must converge to the same image; noise removed at 32 spp; time per sample.
+# Any .frac renders the same comparison without a verdict (a bright emitter is clamped when found by chance).
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.EmitterProbe" -Dexec.args="slab out/emitter 640x360 1024 32"
 # The app's Explore button, headless: CameraExplorer from a fractal's default camera (or a
 # .frac), scored thumbnails written as a sheet best first, time per view.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExploreProbe" -Dexec.args="MANDELBULB out/explore 320x180 4 3 4 0.6"
@@ -196,6 +200,7 @@ org.fractalizer
 │   ├── SceneSnapshot.java           # A scene frozen for one render (program source, uniforms, sizes, preview policy)
 │   ├── CostModel.java               # ns per pixel per program: preview size, samples per step, rows per strip
 │   ├── ViewportEvent.java           # images and typed status to the UI
+│   ├── LightList.java               # the scene's lights as one table for the shaders (the graph's emitters today)
 │   └── FFmpegExporter.java          # MP4 video export via FFmpeg
 ├── animation/
 │   ├── Timeline.java                # Animation timeline with tracks
@@ -248,6 +253,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ShaderCompileProbe.java      # compile time per shader, built-ins then any .frac; names the one that hangs
 ├── ExportAfterPreviewProbe.java # the cheap preview must not leak into an export
 ├── CausticProbe.java            # caustics: photon energy against NEE, cost of a pass, pictures with and without
+├── EmitterProbe.java            # emitters drawn vs found by chance: same converged image, noise removed, cost
 ├── DeferredCompileProbe.java    # a scene compile asked from the FX thread must not block it
 ├── NavigationFluidityProbe.java # the viewport while the camera moves: FX held, images/s, latency, interrupt
 ├── SliderFluidityProbe.java     # the viewport while a slider of each real panel moves; "window" for layout costs
@@ -265,6 +271,7 @@ shaders/
 ├── raytracer.glsl         # Main raymarcher (fractal-agnostic)
 ├── common.glsl            # Common utilities, materials, artistic palettes
 ├── postprocess.glsl       # Bloom, tone mapping, color correction
+├── lights.glsl            # The light list (LightList.java), compiled in under HAS_EMITTERS or BIDIR
 ├── photon.glsl            # Caustics: the photon pass, the scene compiled once more under PHOTON_PASS
 ├── photon_splat.vert/frag # the photons as points into the accumulation and the emission map
 └── fractals/              # Individual fractal Distance Estimators

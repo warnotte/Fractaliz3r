@@ -18,6 +18,7 @@ import java.util.Map;
  * @param coneTan        tan(fov/2) when cone tracing is on, 0 when off: {@code pixelRadius}
  *                       is derived from it and the height actually rendered
  * @param materialSSBO   per-node material data for the SSBO, or null for none
+ * @param lightSSBO      the light table (LightList) for the SSBO, or null for none
  * @param viewportWidth  the viewport size the refinement renders at
  * @param viewportHeight
  * @param previewScale   the scene's ceiling for the preview size, 0..1
@@ -33,6 +34,7 @@ public record SceneSnapshot(String programKey,
                             Map<String, Object> uniforms,
                             float coneTan,
                             float[] materialSSBO,
+                            float[] lightSSBO,
                             int viewportWidth,
                             int viewportHeight,
                             float previewScale,

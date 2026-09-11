@@ -636,6 +636,43 @@ vec3 sampleExtraLightRadiance(vec3 hitPos, vec3 normal, float surfaceDist, inout
 }
 
 // Simplified shading for reflection bounce (no recursion, no volumetrics)
+#ifdef HAS_EMITTERS
+// A point on one of the scene's emitters (lights.glsl), seen from hitPos: one emitter
+// drawn by power, one point on it, the shadow march has to reach it. pdfArea is the
+// density of the draw over the emitter's surface, cosL the emitter's cosine, so a caller
+// adds f * Le * NdotL * cosL / (dist^2 * pdfArea), weighted against its own BSDF finding
+// the same point (powerHeuristic with the BSDF's area density, bsdfPdf * cosL / dist^2).
+struct EmitterSample { vec3 wi; vec3 Le; float dist; float cosL; float pdfArea; bool valid; };
+
+EmitterSample sampleEmitter(vec3 hitPos, vec3 faceNormal, float surfaceDist, inout uint seed) {
+    EmitterSample s;
+    s.valid = false;
+    if (lightCount == 0 || emitterPower <= 0.0) return s;
+    float pick;
+    int li = pickEmitter(seed, pick);
+    if (li < 0) return s;
+    vec3 lp, ln;
+    sampleEmitterPoint(li, seed, lp, ln);
+    vec3 toL = lp - hitPos;
+    float d2 = dot(toL, toL);
+    float d = sqrt(d2);
+    vec3 wi = toL / d;
+    float cosL = dot(ln, -wi);
+    if (cosL <= 0.0 || dot(faceNormal, wi) <= 0.0) return s;
+    Ray sr;
+    sr.origin = hitPos + faceNormal * surfaceBias(surfaceDist);
+    sr.direction = wi;
+    vec3 sp; float sd; int sm;
+    // The march stops a cone epsilon short of whatever it meets, further along the ray
+    // at grazing incidence: it reached the emitter when it stopped near the point drawn.
+    if (rayMarchSimple(sr, sp, sd, sm) && length(sp - lp) > 0.05 + 0.03 * d) return s;
+    s.wi = wi; s.dist = d; s.Le = emitterRadiance(li); s.cosL = cosL;
+    s.pdfArea = pick * emitterPdfArea(li);
+    s.valid = true;
+    return s;
+}
+#endif
+
 vec3 shadeSimple(vec3 hitPos, Ray ray, int matType) {
     if (matType == MAT_OCEAN) {
         vec3 normal = calcNormal(hitPos);
@@ -1417,7 +1454,25 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         if (localEmissive > 0.0) {
 #ifdef HAS_MATERIALS
             if (trap.matId >= 0) {
+#ifdef HAS_EMITTERS
+                // Found by a BSDF ray: weighted against the direct draw of the same point,
+                // which the previous vertex made unless it was specular or the camera.
+                float emitMis = 1.0;
+                if (bounce > 0 && !lastWasSpecular) {
+                    int li = lightOfMaterial(trap.matId);
+                    if (li >= 0) {
+                        float cosL = max(dot(faceNormal, -currentRay.direction), 0.0);
+                        float bsdfPdfArea = lastBsdfPdf * cosL / max(hitDist * hitDist, 1e-8);
+                        float neePdfArea = emitterPickPdf(li) * emitterPdfArea(li);
+                        emitMis = powerHeuristic(bsdfPdfArea, neePdfArea);
+                    }
+                }
+                if (emitterDebug == 1 && bounce > 0) emitMis = 0.0;
+                if (emitterDebug == 2) emitMis = 1.0;
+                radiance += clamp(throughput * albedo * localEmissive * emitMis, 0.0, FIREFLY_CLAMP);
+#else
                 radiance += clamp(throughput * albedo * localEmissive, 0.0, FIREFLY_CLAMP);
+#endif
                 break;
             }
 #endif
@@ -1540,6 +1595,26 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 }
             }
 
+#ifdef HAS_EMITTERS
+            // --- Emitter NEE + MIS ---
+            {
+                EmitterSample es = sampleEmitter(hitPos, faceNormal, hitDist, seed);
+                if (es.valid) {
+                    float NdotL_e = max(dot(faceNormal, es.wi), 0.001);
+                    vec3 H_e = normalize(es.wi + viewDir);
+                    float NdotH_e = max(dot(faceNormal, H_e), 0.0);
+                    float VdotH_e = max(dot(viewDir, H_e), 0.001);
+                    vec3 F_e = fresnelSchlickVec(VdotH_e, F0);
+                    float D_e = a2 / (PI * pow(NdotH_e * NdotH_e * (a2 - 1.0) + 1.0, 2.0));
+                    float G_e = smithG2GGX(NdotL_e, NdotV, a2);
+                    vec3 brdf_e = F_e * D_e * G_e / (4.0 * NdotV * NdotL_e);
+                    float bsdfPdfArea = (D_e * NdotH_e / (4.0 * VdotH_e)) * es.cosL / (es.dist * es.dist);
+                    float misW = powerHeuristic(es.pdfArea, bsdfPdfArea);
+                    radiance += clamp(throughput * brdf_e * es.Le * NdotL_e * es.cosL / (es.dist * es.dist * es.pdfArea) * misW, 0.0, FIREFLY_CLAMP);
+                }
+            }
+#endif
+
             // --- Environment NEE + MIS ---
             if (neeEnabled != 0 && useEnvMap != 0 && envMapWidth > 0) {
                 vec3 envColor; vec3 envDir; float envPdf;
@@ -1623,6 +1698,21 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     radiance += clamp(throughput * albedo * extraLightRadiance * extraNdotL / PI, 0.0, FIREFLY_CLAMP);
                 }
             }
+
+#ifdef HAS_EMITTERS
+            // --- Emitter NEE + MIS for Lambertian ---
+            {
+                EmitterSample es = sampleEmitter(hitPos, faceNormal, hitDist, seed);
+                if (es.valid) {
+                    float NdotL_e = max(dot(faceNormal, es.wi), 0.0);
+                    float bsdfPdfArea = (NdotL_e / PI) * es.cosL / (es.dist * es.dist);
+                    float misW = powerHeuristic(es.pdfArea, bsdfPdfArea);
+                    if (emitterDebug == 1) misW = 1.0;
+                    if (emitterDebug == 2) misW = 0.0;
+                    radiance += clamp(throughput * (albedo / PI) * es.Le * NdotL_e * es.cosL / (es.dist * es.dist * es.pdfArea) * misW, 0.0, FIREFLY_CLAMP);
+                }
+            }
+#endif
 
             // --- Environment NEE + MIS for Lambertian ---
             if (neeEnabled != 0 && useEnvMap != 0 && envMapWidth > 0) {

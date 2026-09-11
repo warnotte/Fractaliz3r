@@ -184,6 +184,7 @@ public class GLSLFractalizerController implements RenderController {
                 else if (!had) System.out.printf("Scene shader compiled in %d ms%n", (System.nanoTime() - t0) / 1_000_000);
             }
             engine.updateMaterialSSBO(ngp.getMaterialSSBOData());
+            engine.updateLightSSBO(lightTable(ngp).data());
             if (engine.hasProgram("nodegraph")) {
                 engine.setActiveProgram("nodegraph");
                 currentBooleanProgramKey = null;
@@ -241,9 +242,16 @@ public class GLSLFractalizerController implements RenderController {
     }
 
     /** Deep-zoom LOD is compiled in only when enabled: the mutable global it needs is
-     *  otherwise read inside every DE loop and blocks constant folding. */
+     *  otherwise read inside every DE loop and blocks constant folding. Emitter sampling
+     *  (lights.glsl) only when the graph has an emitter the list can describe. */
     private static String nodeGraphDefines(NodeGraphParams ngp) {
-        return ngp.getDetailLOD() > 0f ? "#define DETAIL_LOD\n" : "";
+        return (ngp.getDetailLOD() > 0f ? "#define DETAIL_LOD\n" : "")
+             + (org.fractalizer.render.LightList.hasEmitters(ngp.getGraphRoot()) ? "#define HAS_EMITTERS\n" : "");
+    }
+
+    /** The scene's light table: the graph's sampleable emitters. */
+    private static org.fractalizer.render.LightList.Table lightTable(NodeGraphParams ngp) {
+        return org.fractalizer.render.LightList.emitters(ngp.getGraphRoot());
     }
 
     /** The uniform map a render of the current scene would use, program activated. For
@@ -297,12 +305,13 @@ public class GLSLFractalizerController implements RenderController {
     public SceneSnapshot snapshot() {
         if (!(currentParams instanceof AbstractFractalParams params)) return null;
         String key, source, defines = "";
-        float[] ssbo = null;
+        float[] ssbo = null, lights = null;
         if (params instanceof NodeGraphParams ngp) {
             String glsl = ngp.isDirty() || ngp.getCompiledGLSL() == null ? ngp.recompile() : ngp.getCompiledGLSL();
             if (glsl != null) {
                 key = "nodegraph"; source = glsl; defines = nodeGraphDefines(ngp);
                 ssbo = ngp.getMaterialSSBOData();
+                lights = lightTable(ngp).data();
             } else if (hasBuiltinShader(currentFractalType)) {
                 key = currentFractalType.getKernelName();
                 source = engine.loadShaderSource("/shaders/fractals/" + key + ".glsl");
@@ -317,7 +326,7 @@ public class GLSLFractalizerController implements RenderController {
         Map<String, Object> uniforms = buildUniforms();
         uniforms.remove("pixelRadius");   // follows the rendered height: SceneSnapshot.uniformsFor
         float coneTan = params.isConeTracingEnabled() ? (float) Math.tan(params.getFov() * 0.5) : 0f;
-        return new SceneSnapshot(key, source, defines, uniforms, coneTan, ssbo,
+        return new SceneSnapshot(key, source, defines, uniforms, coneTan, ssbo, lights,
                 viewportWidth, viewportHeight, params.getPreviewScale(), params.isPreviewFastShading(),
                 previewSamples, fullSamples, causticsActive(params) ? params.getCausticPhotons() : 0);
     }
@@ -1276,10 +1285,16 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("pathTracingEnabled", params.isPathTracingEnabled() ? 1 : 0);
             uniforms.put("neeEnabled", params.isNeeEnabled() ? 1 : 0);
             uniforms.put("maxBounces", params.getMaxBounces());
+            // The light table (lights.glsl): its size and the emitters' power, for the draw
+            org.fractalizer.render.LightList.Table lights = params instanceof NodeGraphParams ngp
+                    ? lightTable(ngp) : org.fractalizer.render.LightList.Table.EMPTY;
+            uniforms.put("lightCount", lights.count());
+            uniforms.put("emitterPower", lights.emitterPower());
             // Caustics (photon.glsl): the emitting disk; the photon count is engine state
             uniforms.put("causticRadius", params.getCausticRadius());
             uniforms.put("causticCenter", params.getCausticCenter());
             uniforms.put("causticDebug", 0);
+            uniforms.put("emitterDebug", 0);
             uniforms.put("roughness", params.getRoughness());
             uniforms.put("skyIntensity", params.getSkyIntensity());
             uniforms.put("indirectMultiplier", params.getIndirectMultiplier());

@@ -498,6 +498,39 @@ Presets: `CAUSTIC_BALL`, a glass ball on a slab with the sun low, the crescent r
 the dispersion; `CAUSTIC_LENS`, a small glass ball beside the near-white Mandelbulb with
 the sun from the right, its focus on the fractal inside the ball's shadow.
 
+### Emitters sampled directly (after 3.2.2)
+
+An emissive node of the graph (a MaterialNode with an emission) used to be a light the path
+tracer found by chance: a bounce had to hit it. The Cornell box's lamp is such a node. Now
+the graph's emitters that have an analytic shape are listed (`LightList`, `lights.glsl`, an
+SSBO at binding 7): a MaterialNode with a solid colour and an emission over a sphere or a
+box, reached through standard transforms (translation, rotation, uniform scale) and unions.
+For those the path tracer, at every matte or metal vertex, draws one emitter by power and one
+point on it (uniform over its surface), marches to it, and adds its radiance through the
+BRDF; a bounce that still hits an emitter is weighted against that draw (power heuristic on
+area densities), so nothing is counted twice. Emissive fractals, palette-coloured emitters,
+primitives under a twist or a subtraction are not listed and stay found by chance.
+
+Compiled in under `HAS_EMITTERS`, a define the controller adds only when the list is not
+empty: a scene without an emitter compiles the same program as before, bit-exact. This is
+the first piece of the light list that the photon pass will draw from too, whatever the
+light (see IDEAS.md § 26).
+
+`EmitterProbe` is the proof. Its built-in slab scene (a matte slab and a box under a dim
+panel; nothing reaches the firefly clamp) rendered by chance and drawn must converge to the
+same image: 0.1 % apart at 1280x720, 1.6 % at 320x180, where the marcher's cone epsilon
+inflates the panel a bounce can hit by about that much of its area. The draw removes 2.6x
+the RMSE at 32 spp on the slab and 2.5x on the Cornell box, for 1.7x the time per sample.
+On the Cornell box the two references differ by 10 %: its lamp (emission 15) is clamped far
+more when found by chance (13.5 per hit against a clamp of 8) than when drawn, and the drawn
+image is the less wrong one; the probe gives no verdict on such a scene.
+
+The visibility test taught one thing. A march towards a point on an emitter stops a cone
+epsilon short of the surface, further along the ray at grazing incidence, and starts a bias
+above the shading point; comparing the distance it covered to the distance to the point
+rejected most of the floor. What says the emitter was reached is that the march stopped
+near the point drawn.
+
 ---
 
 ## Surface Effects (Per-Node via EffectNode)
@@ -630,6 +663,7 @@ reliable than re-reading the path it covers:
 | `ShaderCompileProbe` | how long each shader takes to compile, and which one never returns: the built-ins (7-10 s each here), then any `.frac`; `--render WxH spp outDir scene.frac` skips the built-ins and renders one scene in ~15 s, the quickest look at a preset change |
 | `ExportAfterPreviewProbe` | the cheap preview must not leak into an export |
 | `CausticProbe` | caustics: the photons' energy against NEE (must be 1, with and without the emission map), the cost of a pass, pictures with and without |
+| `EmitterProbe` | emitters drawn directly against found by chance: the same converged image (the slab scene), the noise removed, the cost |
 | `ProspectSwapProbe` | the Discoveries search runs on a throw-away scene; the user's scene must come back pixel-identical |
 | `ExploreProbe` | the app's Explore button, headless: scored views or parameter variations from any camera, time per view |
 | `ThumbnailForge` | the Presets & Chains browser's thumbnails, every chain and preset; `install` ships them as resources |

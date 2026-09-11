@@ -203,6 +203,7 @@ public final class ViewportScheduler {
         engine.resize(w, h);
         engine.setActiveProgram(scene.programKey());
         engine.updateMaterialSSBO(scene.materialSSBO());
+        engine.updateLightSSBO(scene.lightSSBO());
         engine.setCausticPhotons(causticPhotons);
         engine.resetAccumulation();
     }

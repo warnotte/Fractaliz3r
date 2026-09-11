@@ -124,8 +124,26 @@ same record and the same editor component as a `MaterialNode`, one list of field
 the `.frac` and the SSBO (the default material could be slot 0). Then a property cannot exist on
 one side only, by construction.
 
-### 26. Caustics Follow-ups
-**Status:** IDEA (the photon pass itself shipped after 3.2.2, see docs/RENDERING.md § Caustics)
+### 26. Caustics Follow-ups, and one light transport for every light
+**Status:** IN PROGRESS (the photon pass shipped after 3.2.2; the light list and emitter
+sampling followed, see docs/RENDERING.md § Emitters sampled directly)
+
+The direction decided on 2026-09-11: caustics must work from any light, the sun, a beam, the
+extra light, an emissive primitive, and the split rules (a photon lands only after glass, metal
+below roughness 0.1, direct light by the path tracer and light after glass by the photons) are
+to be replaced by MIS between the path tracer and the light tracer, both drawing from one
+light list, media included; then merging (VCM) for caustics seen through glass. The
+acceptance scene is a white beam through a prism fanning into a spectrum. Everything
+bidirectional compiles in under its own define: the fast path stays byte-identical. Steps:
+
+1. the light list and emitter sampling with MIS in the path tracer (done);
+2. a beam light (a directional light confined to a cylinder);
+3. the photon pass emitting from every light of the list, with MIS weights in both tracers
+   in place of the split rules;
+4. the medium: single scattering along camera rays from the list, and along photon paths;
+5. a triangular prism primitive and the beam-through-prism preset and probe.
+
+The follow-ups the photon pass alone leaves open:
 
 1. **Seen through glass.** A photon lands only where the camera sees it directly, so the
    focus of a lens right behind it is hidden. The fix is a gather: keep the landed photons in
