@@ -15,6 +15,18 @@ import java.util.Map;
  * 345 ms), so planning aims at the budget minus that, and a strip is not cut below
  * {@link #MIN_STRIP_WORK_NS} unless one row alone is dearer.
  *
+ * A strip also costs a latency that does not shrink with its size: the slowest ray in it,
+ * which on a heavy scene is far longer than the strip's share of the throughput (one row
+ * of the labyrinth at 1080p takes 70 ms, the whole 1080-row sample 800 ms). Planned from a
+ * per-pixel cost alone, such a scene is cut into strips that each pay the latency for a
+ * few rows' work, and a sample that takes under a second whole takes ten or more as
+ * strips: the refinement never seems to converge. So the full-quality cost is fitted as
+ * {@code latency + pixels * perPixel} over the last steps, and a scene whose latency is a
+ * quarter of the slice or more gets strips planned to {@link #STRIP_CEILING_NS} instead of
+ * the slice ({@link #rowsPerStrip}): a sample then costs half as much again as it does
+ * whole instead of many times. Until the fit has two sizes to work from, strips double so
+ * it gets them.
+ *
  * Used on the GL thread only.
  */
 public final class CostModel {
@@ -33,6 +45,19 @@ public final class CostModel {
     public static final long STEP_OVERHEAD_NS = 2_500_000L;
     /** A strip is not made cheaper than this so the overhead stays a fraction of it. */
     public static final long MIN_STRIP_WORK_NS = 20_000_000L;
+    /**
+     * The strip a latency-bound scene gets instead of the slice. On the labyrinth at 1080p
+     * (StripCostProbe: 6.9 s a whole sample, and a fenced strip pays about 100 ms of tail
+     * whatever its size: 12 strips 7.2 s, 36 strips 10.4 s) strips of the slice's work
+     * came out at 100-200 ms for 50 % of work and 15 s per sample; 300 ms strips carry
+     * about 65 % and put a sample near 11 s. The strip is also what a camera move waits
+     * for while the scene refines, so the ceiling is not higher.
+     */
+    public static final long STRIP_CEILING_NS = 5 * REFINE_SLICE_NS;
+    /** A scene is latency-bound when the fitted latency exceeds this share of the slice,
+     *  and stays so until it falls under {@link #LATENCY_BOUND_OFF} (hysteresis: the fit
+     *  moves with the strip sizes it is made of). */
+    static final double LATENCY_BOUND_ON = 0.25, LATENCY_BOUND_OFF = 0.15;
     /** Whole samples per step at most; beyond this the readback cadence is what matters. */
     public static final int MAX_SAMPLES_PER_STEP = 8;
     /** The refinement's first strip assumes full quality costs this much more than preview. */
@@ -41,9 +66,37 @@ public final class CostModel {
     public static final float MIN_PREVIEW_SCALE = 0.12f;
     private static final int SCALE_STEPS = 32;
 
+    /** Steps of full quality the latency fit looks back over. */
+    static final int FIT_WINDOW = 8;
+
     private static final class Estimate {
         double previewNsPerPixel = 0;   // 0 = unknown
-        double fullNsPerPixel = 0;
+        double fullNsPerPixel = 0;      // the plain average, what the fit falls back to
+        // the last full-quality steps, a ring: pixels drawn and GPU time
+        final double[] fitPixels = new double[FIT_WINDOW];
+        final double[] fitNs = new double[FIT_WINDOW];
+        int fitCount = 0, fitNext = 0;
+        double latencyNs = 0;           // the fit's intercept, 0 until it holds
+        double slopeNsPerPixel = 0;     // the fit's slope, 0 until it holds
+        long lastStepNs = 0;            // the last full-quality step's GPU time
+        boolean latencyBound = false;   // strips planned to the ceiling rather than the slice
+
+        /** Least squares of ns over pixels across the window. A window of one size, or one
+         *  whose cost does not grow with the size, says nothing: the fit before it, if any,
+         *  is kept (strips of a steady size fill the window once the plan has settled). */
+        void refit() {
+            if (fitCount < 2) return;
+            double mx = 0, my = 0;
+            for (int i = 0; i < fitCount; i++) { mx += fitPixels[i]; my += fitNs[i]; }
+            mx /= fitCount; my /= fitCount;
+            double sxx = 0, sxy = 0;
+            for (int i = 0; i < fitCount; i++) { sxx += (fitPixels[i] - mx) * (fitPixels[i] - mx); sxy += (fitPixels[i] - mx) * (fitNs[i] - my); }
+            if (sxx <= mx * mx * 1e-4) return;   // one size only
+            double slope = sxy / sxx;
+            if (slope <= 0) return;              // the cost did not grow with the size
+            slopeNsPerPixel = slope;
+            latencyNs = Math.max(0, my - slope * mx);
+        }
     }
 
     private final Map<String, Estimate> byProgram = new HashMap<>();
@@ -70,17 +123,38 @@ public final class CostModel {
         if (pixels <= 0 || gpuNs <= 0) return;
         double perPixel = (double) gpuNs / pixels;
         Estimate e = of(programKey);
-        if (preview) e.previewNsPerPixel = e.previewNsPerPixel == 0 ? perPixel : e.previewNsPerPixel * 0.7 + perPixel * 0.3;
-        else e.fullNsPerPixel = e.fullNsPerPixel == 0 ? perPixel : e.fullNsPerPixel * 0.7 + perPixel * 0.3;
+        if (preview) { e.previewNsPerPixel = e.previewNsPerPixel == 0 ? perPixel : e.previewNsPerPixel * 0.7 + perPixel * 0.3; return; }
+        e.fullNsPerPixel = e.fullNsPerPixel == 0 ? perPixel : e.fullNsPerPixel * 0.7 + perPixel * 0.3;
+        e.fitPixels[e.fitNext] = pixels;
+        e.fitNs[e.fitNext] = gpuNs;
+        e.fitNext = (e.fitNext + 1) % FIT_WINDOW;
+        e.fitCount = Math.min(FIT_WINDOW, e.fitCount + 1);
+        e.lastStepNs = gpuNs;
+        e.refit();
     }
 
-    /** Nanoseconds per pixel, or 0 when unknown. */
+    /** Nanoseconds per pixel, or 0 when unknown: at full quality the fit's slope when the
+     *  fit holds (the marginal cost, the latency taken out), else the plain average. */
     public double nsPerPixel(String programKey, boolean preview) {
         Estimate e = byProgram.get(programKey);
         if (e == null) return 0;
         if (preview) return e.previewNsPerPixel;
+        if (e.slopeNsPerPixel > 0) return e.slopeNsPerPixel;
         if (e.fullNsPerPixel > 0) return e.fullNsPerPixel;
         return e.previewNsPerPixel > 0 ? e.previewNsPerPixel * FULL_OVER_PREVIEW_GUESS : 0;
+    }
+
+    /** What a full-quality step costs whatever its size (the fit's intercept), 0 until the
+     *  fit holds or for a preview. */
+    public double latencyNs(String programKey, boolean preview) {
+        Estimate e = byProgram.get(programKey);
+        return e == null || preview ? 0 : e.latencyNs;
+    }
+
+    /** Whether the full-quality fit holds for this program. */
+    public boolean latencyKnown(String programKey) {
+        Estimate e = byProgram.get(programKey);
+        return e != null && e.slopeNsPerPixel > 0;
     }
 
     /**
@@ -108,32 +182,49 @@ public final class CostModel {
     public int samplesPerStep(String programKey, boolean preview, int w, int h, long budgetNs) {
         double ns = nsPerPixel(programKey, preview);
         if (ns <= 0) return 1;
-        double perSample = ns * w * h;
+        double perSample = ns * w * h + latencyNs(programKey, preview);
         return (int) Math.max(1, Math.min(MAX_SAMPLES_PER_STEP, (budgetNs - STEP_OVERHEAD_NS) / perSample));
     }
 
     /** True when one sample of a {@code w x h} frame is dearer than {@code budgetNs}. */
     public boolean sampleExceedsStep(String programKey, boolean preview, int w, int h, long budgetNs) {
         double ns = nsPerPixel(programKey, preview);
-        return ns > 0 && ns * w * h > budgetNs - STEP_OVERHEAD_NS;
+        return ns > 0 && ns * w * h + latencyNs(programKey, preview) > budgetNs - STEP_OVERHEAD_NS;
     }
 
     /**
      * Rows of a {@code w}-wide sample that fit one step: never fewer than one, never so few
-     * that the strip is cheaper than {@link #MIN_STRIP_WORK_NS} unless a row is, and never
-     * more than twice {@code previousRows} when there was a previous strip. The cap is what
-     * keeps a cheap strip from licensing a huge one: the rows at the top of an image are
-     * sky and say nothing about the fractal below, and a first strip of 16 sky rows once
-     * sized the next one at the whole remaining frame.
+     * that the strip is cheaper than {@link #MIN_STRIP_WORK_NS} unless a row is, never
+     * planned to the slice on a scene whose fitted latency is a quarter of it or more (the
+     * strip is planned to {@link #STRIP_CEILING_NS} then, so that it carries work and not
+     * only its tail), and never more than twice {@code previousRows} when there was a
+     * previous strip. The cap is what keeps a cheap strip from licensing a huge one: the
+     * rows at the top of an image are sky and say nothing about the fractal below, and a
+     * first strip of 16 sky rows once sized the next one at the whole remaining frame.
+     * While the latency is not known yet and the last strip was within the slice, the
+     * next one doubles: the fit needs two sizes, and a strip whose cost does not grow with
+     * its rows is all latency, which shrinking would only pay more often.
      */
     public int rowsPerStrip(String programKey, boolean preview, int w, int h, int previousRows, long budgetNs) {
         double ns = nsPerPixel(programKey, preview);
         int rows;
         if (ns <= 0) rows = Math.max(1, h / 64);
-        else {
+        else if (!preview && !latencyKnown(programKey) && previousRows > 0 && of(programKey).lastStepNs <= 2 * budgetNs) {
+            rows = Math.min(h, 2 * previousRows);
+        } else {
             double perRow = ns * w;
+            double latency = latencyNs(programKey, preview);
+            // the slice's work is planned as before (the fitted latency of a throughput-bound
+            // scene is the overhead already taken out; taking it out twice cost Albedo 7 %)
             long budget = Math.max(MIN_STRIP_WORK_NS, budgetNs - STEP_OVERHEAD_NS);
-            rows = (int) Math.max(1, Math.min(h, budget / perRow));
+            double wanted = budget / perRow;
+            if (!preview) {
+                Estimate e = of(programKey);
+                if (latency > LATENCY_BOUND_ON * budgetNs) e.latencyBound = true;
+                else if (latency < LATENCY_BOUND_OFF * budgetNs) e.latencyBound = false;
+                if (e.latencyBound) wanted = Math.max(wanted, (STRIP_CEILING_NS - STEP_OVERHEAD_NS - latency) / perRow);
+            }
+            rows = (int) Math.max(1, Math.min(h, wanted));
         }
         if (previousRows > 0) rows = Math.min(rows, 2 * previousRows);
         return rows;

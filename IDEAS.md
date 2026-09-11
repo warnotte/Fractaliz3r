@@ -106,6 +106,16 @@ What the Discoveries tab of the Presets & Chains browser still lacks, in the ord
 
 Do 1 and 2 together: small, and without them discoveries are lost.
 
+### 23b. The Labyrinth preset, as judged
+
+The user's verdict (2026-09-12), kept so it is not re-argued: the labyrinth is far too heavy
+for what it shows ("elle n'en vaut pas la peine, elle n'est pas extraordinaire comme je
+l'avais espérée, ça ne ressemble en fait à rien"), and it stays shipped for now. It is the
+heaviest preset by far (6.9 s a sample at 1080p, 5.2 s without the crystal's emitter
+sampling; 400 ray steps through a Menger maze with staircases and a crystal), and it is what
+exposed the viewport's two defects with heavy scenes (docs/INTERACTIVE_RENDER.md). If it is
+reworked, the brief comes first: a feeling, one visual reference, what the viewer does in it.
+
 ### 24. One Material Model (global material = the default material)
 **Status:** IDEA (parked 2026-09-11, raised by the user; a large reflection, not to be started on the side)
 

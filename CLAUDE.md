@@ -236,6 +236,7 @@ src/test/java/  (JUnit, no GPU — `mvn test`, run by CI)
 ├── config/ConfigRoundTripTest       # every setting a .frac carries, written and read back
 ├── engine/ShaderPreprocessorTest    # symbol prefixing for shader concatenation
 ├── engine/CameraTest                # quaternion camera: orthonormal, no drift, axes
+├── render/CostModelTest             # strip planning: a latency-bound scene is not cut into latency-only strips
 ├── animation/AnimationTrackTest     # keyframes, easing, Catmull-Rom, timeline
 ├── graph/GraphCompilerTest          # GLSL + uniforms for leaves, CSG, transforms
 ├── graph/MaterialSSBOTest           # SSBO layout, matId propagation, serialization

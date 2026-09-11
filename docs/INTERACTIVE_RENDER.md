@@ -53,14 +53,19 @@ a harness, a resize) interleaves between steps and waits at most one step. There
      every sample before it lands;
   3. a `CompileJob` is never preempted; the newest request waits for it;
   4. when a `PreviewJob` completes and no request arrives for `REFINE_DELAY_NS` (400 ms),
-     a `RefineJob` for the same snapshot starts; `refineNow()` skips the wait (Space);
+     a `RefineJob` for the same snapshot starts; `refineNow()` skips the wait (Space). Asked
+     while a compile or a preview runs, the request is kept and the refinement follows that
+     preview at once: it used to be dropped, which left a heavy scene (the labyrinth, whose
+     preview alone takes a second) on its preview when Space came too early and auto full
+     quality was off;
   5. `pause()` drops the current job and ignores requests until `resume()`, which replays
      the last request. Exports and the explorers pause the scheduler.
 
 ## Steps and the cost model
 
 `CostModel` keeps, per program key, two nanoseconds-per-pixel estimates: one for preview
-shading and one for full quality, exponentially averaged from every completed step. It
+shading and one for full quality, exponentially averaged from every completed step; at
+full quality it also fits the last eight steps as `latency + pixels * perPixel` (below). It
 answers three questions:
 
 - **Preview size**: the largest scale, at most the scene's `previewScale`, whose one
@@ -70,7 +75,8 @@ answers three questions:
 - **Rows per strip**: when one sample exceeds the budget, how many rows of it fit, never
   more than twice the previous strip (the rows at the top of an image are sky and say
   nothing about the fractal below: a first strip of 16 sky rows once sized the next one
-  at the whole remaining frame).
+  at the whole remaining frame), and never fewer than carry the strip's latency's worth
+  of work (below).
 
 Estimates are keyed by program name plus a hash of the program source: every node graph
 is compiled under the same name, and keying by name alone made a heavy scene inherit the
@@ -78,13 +84,33 @@ estimate of the light one it replaced.
 
 Every GPU submission also costs a fixed round trip (`STEP_OVERHEAD_NS`, ~2.5 ms measured:
 107 strips of a 60 ms sample took 345 ms), so the planner aims at `budget - overhead` and
-never cuts a strip below `MIN_STRIP_WORK_NS` unless a single row is dearer than that. On
-the dearest scene measured a row at 1080p costs 70 ms and a fraction of a row costs the
-same (a ray costs what it costs), so one row is the floor.
+never cuts a strip below `MIN_STRIP_WORK_NS` unless a single row is dearer than that.
 
-A step with no estimate yet (a program never rendered) is small: the preview renders at
-the scene's ceiling and measures; the refinement's first strip assumes full quality is
-eight times the preview cost and measures.
+**A strip also costs a latency that does not shrink with its size.** A strip lasts as long
+as its slowest ray, and on the labyrinth at 1080p that is about 100 ms whatever the strip
+(`StripCostProbe`: the whole 1080-row sample 6.9 s, 5.2 s without the crystal's emitter
+sampling; as 12 fenced strips 7.2 s, as 36 strips 10.4 s). Planned from a per-pixel cost
+alone the scene was cut into strips of a few rows, each paying the latency for a few
+milliseconds of work, and a sample took over 300 s instead of 7 (`ResponsivenessProbe`: not
+one sample in 600 s): the labyrinth "never converged", and until its first sample landed
+the viewport kept the preview (2026-09-12, reported as "stuck on the preview"; the first
+version's answer, one row as the floor because "a ray costs what it costs", was the wrong
+one). So the full-quality cost is fitted as `latency + pixels * perPixel` by least squares
+over the last eight steps (a fit holds once the window spans two sizes and the cost grows
+with the size; until then, a strip that stayed within the slice doubles so the fit gets its
+second size), and a scene whose fitted latency is a quarter of the slice or more is
+*latency-bound*: its strips are planned to `STRIP_CEILING_NS` (five slices, 300 ms) instead
+of the slice, with hysteresis so the fit's drift does not flap the plan. On the labyrinth at
+1080p a strip then carries about 30 rows, a sample costs about 11 s instead of over 300, and
+300 ms is what a camera move waits for while the scene refines. Two things were tried and
+are not it: a floor of one latency's worth of work per strip gave 200 ms strips and 16 s
+per sample, because on this scene a strip's tail grows with its size (the slowest of more
+rays), so the fit made from small strips reads a small latency and the floor was satisfied
+by small strips; and taking the fitted latency out of the slice's budget cost Albedo 0.39
+(about 5 ms of latency, 280-300 ms per sample) 7 % for nothing, so the slice's work is
+still planned as before and a throughput-bound scene keeps its 60 ms strips.
+`CostModelTest` simulates both scenes; the trace of the plan is
+`-Dfractalizer.debugRender=true` on `ResponsivenessProbe`.
 
 ## The engine's part
 

@@ -26,7 +26,8 @@ import java.util.function.Consumer;
  * <li>a newer request preempts a refinement at any step, a preview only once it has shown
  *     its first image, a compile never (compiles are atomic);</li>
  * <li>a completed preview is followed, after {@link #REFINE_DELAY_MS} without a request,
- *     by a refinement of the same scene; {@link #refineNow} skips the wait;</li>
+ *     by a refinement of the same scene; {@link #refineNow} skips the wait, and asked during
+ *     a compile or a preview it follows that preview at once;</li>
  * <li>while paused nothing runs and requests are kept; {@link #resume} replays the last.</li>
  * </ol>
  */
@@ -71,7 +72,8 @@ public final class ViewportScheduler {
         queueStep();
     }
 
-    /** Refine the scene on screen now, without waiting for the idle delay. */
+    /** Refine the scene on screen now, without waiting for the idle delay. Asked while a
+     *  compile or a preview runs, it follows that preview at once instead of being lost. */
     public void refineNow() {
         refineRequested = true;
         queueStep();
@@ -126,8 +128,10 @@ public final class ViewportScheduler {
             current = startJob(req);
         }
         if (refineRequested) {
-            refineRequested = false;
-            if (current == null && lastShown != null) current = new RefineJob(lastShown);
+            if (current instanceof RefineJob) refineRequested = false;                        // already under way
+            else if (current == null && lastShown != null) { refineRequested = false; current = new RefineJob(lastShown); }
+            else if (current == null && pending.get() == null) refineRequested = false;       // nothing to refine
+            // else a compile or a preview is running, or about to: the preview's end starts the refinement
         }
         if (current == null) return;
 
@@ -287,7 +291,8 @@ public final class ViewportScheduler {
         @Override public void cancel() {}
         @Override public void finished() {
             lastShown = scene;
-            scheduleRefine(scene);
+            if (refineRequested) { refineRequested = false; current = new RefineJob(scene); }   // asked for during this preview
+            else scheduleRefine(scene);
         }
     }
 
