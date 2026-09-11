@@ -93,4 +93,105 @@ int lightOfMaterial(int matId) {
     return -1;
 }
 
+#ifdef BIDIR
+// ============================================================================
+// Light tracing: what the photon pass draws from and what the path tracer needs to
+// know about it (its densities), so that both weight a path the same way.
+// ============================================================================
+
+uniform float lightPowerTotal;   // the sum of power over the lights that send photons
+uniform float causticRadius;     // half the side of the sun's emission square
+uniform vec3 causticCenter;      // the square is centred over this point, facing the sun
+// The square as a grid of cells: those whose photons met glass or metal, listed by index
+// and as a map, one snapshot (see GLSLEngine.refreshCellMap)
+uniform sampler2D causticCellList;
+uniform sampler2D causticCellActive;
+uniform int causticActiveCells;
+uniform int photonSide;          // the photon pass traces photonSide * photonSide photons per sample
+const int CAUSTIC_GRID = 64;
+const float CAUSTIC_EXPLORE = 0.25;   // the share of sun photons drawn over the whole square regardless
+const float LT_LAND = 0.5;            // at a matte or metal vertex, the photon's chance of landing there
+
+// The weights compare one camera path per pixel per sample against photonSide^2 photons
+// per sample spread over the whole image: a strategy's density counts as many times as it
+// is drawn, so the photon pass's densities carry the number of photons.
+float ltCount() { return float(photonSide * photonSide); }
+
+float lightPickPdf(int i) { return lights[i].power / max(lightPowerTotal, 1e-8); }
+
+/** One light, drawn with probability proportional to its power; -1 when none sends photons. */
+int pickLight(inout uint seed, out float pdf) {
+    float u = random(seed) * lightPowerTotal;
+    float acc = 0.0;
+    int last = -1;
+    for (int i = 0; i < lightCount; i++) {
+        if (lights[i].power <= 0.0) continue;
+        last = i;
+        acc += lights[i].power;
+        if (u < acc) break;
+    }
+    pdf = last >= 0 ? lightPickPdf(last) : 1.0;
+    return last;
+}
+
+int lightOfType(int t) {
+    for (int i = 0; i < lightCount; i++) if (int(lights[i].type) == t) return i;
+    return -1;
+}
+
+void sunFrame(out vec3 L, out vec3 u, out vec3 v) {
+    L = normalize(lightDir);
+    u = normalize(cross(abs(L.y) < 0.999 ? vec3(0, 1, 0) : vec3(1, 0, 0), L));
+    v = cross(L, u);
+}
+
+vec3 sunSquarePoint(vec2 sq, vec3 L, vec3 u, vec3 v) {
+    float side = 2.0 * causticRadius;
+    return causticCenter + L * (2.0 * causticRadius + 2.0) + u * (side * (sq.x - 0.5)) + v * (side * (sq.y - 0.5));
+}
+
+/** Where x projects on the square along the sun's direction, in [0,1]^2 when it is over it. */
+vec2 sunSquareUV(vec3 x, vec3 L, vec3 u, vec3 v) {
+    vec3 q = x - (causticCenter + L * (2.0 * causticRadius + 2.0));
+    q -= L * dot(q, L);
+    return vec2(dot(q, u), dot(q, v)) / (2.0 * causticRadius) + 0.5;
+}
+
+/** The density of the sun's draw at a point of the square: uniform, or the mixture of a
+ *  quarter uniform and three quarters over the active cells. Zero off the square. */
+float sunSquareDensity(vec2 sq) {
+    if (any(lessThan(sq, vec2(0.0))) || any(greaterThanEqual(sq, vec2(1.0)))) return 0.0;
+    float side = 2.0 * causticRadius;
+    float density = 1.0 / (side * side);
+    if (causticActiveCells > 0) {
+        float inList = texelFetch(causticCellActive, ivec2(sq * float(CAUSTIC_GRID)), 0).r;
+        float cellArea = (side / float(CAUSTIC_GRID)) * (side / float(CAUSTIC_GRID));
+        density = CAUSTIC_EXPLORE / (side * side) + (1.0 - CAUSTIC_EXPLORE) * inList / (float(causticActiveCells) * cellArea);
+    }
+    return density;
+}
+
+/** A point of the square by that mixture; returns its density. */
+float sunSquareDraw(inout uint seed, out vec2 sq) {
+    if (causticActiveCells > 0 && random(seed) >= CAUSTIC_EXPLORE) {
+        int i = min(int(random(seed) * float(causticActiveCells)), causticActiveCells - 1);
+        int k = int(texelFetch(causticCellList, ivec2(i, 0), 0).r + 0.5);
+        sq = (vec2(k % CAUSTIC_GRID, k / CAUSTIC_GRID) + vec2(random(seed), random(seed))) / float(CAUSTIC_GRID);
+    } else {
+        sq = vec2(random(seed), random(seed));
+    }
+    return sunSquareDensity(sq);
+}
+
+/** The GGX sampling density of direction b at a vertex of normal n seen from direction a
+ *  (both away from the vertex); symmetric in a and b. */
+float ggxPdf(vec3 n, vec3 a, vec3 b, float a2) {
+    vec3 h = normalize(a + b);
+    float NdotH = max(dot(n, h), 0.001);
+    float AdotH = max(dot(a, h), 0.001);
+    float D = a2 / (PI * pow(NdotH * NdotH * (a2 - 1.0) + 1.0, 2.0));
+    return D * NdotH / (4.0 * AdotH);
+}
+#endif
+
 #endif

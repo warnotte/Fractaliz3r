@@ -30,9 +30,10 @@ public final class LightList {
     public static final int FLOATS = 24;
     public static final int SUN = 0, BEAM = 1, POINT = 2, SPOT = 3, EMITTER_SPHERE = 4, EMITTER_BOX = 5;
 
-    /** The table, its size, and the sum of power over its emitters. */
-    public record Table(float[] data, int count, float emitterPower) {
-        public static final Table EMPTY = new Table(null, 0, 0f);
+    /** The table, its size, the sum of power over its emitters (the path tracer's draw)
+     *  and over every light that sends photons (the photon pass's draw). */
+    public record Table(float[] data, int count, float emitterPower, float powerTotal) {
+        public static final Table EMPTY = new Table(null, 0, 0f, 0f);
     }
 
     /** For the probe: leave the emitters to be found by chance, as before the list. */
@@ -41,21 +42,102 @@ public final class LightList {
     private LightList() {}
 
     public static Table emitters(GraphNode root) {
-        if (root == null || emittersDisabled) return Table.EMPTY;
-        List<MaterialNode> mats = GraphCompiler.materialNodes(root);
+        return build(null, null, null, root, false);
+    }
+
+    /**
+     * The scene's lights: the graph's emitters always; with {@code photons} (BIDIR) the sun
+     * and the beam too, the lights the photon pass draws from. Point and spot lights send
+     * no photons and are not listed: their draw stands alone. The additional light's
+     * position and axis are resolved here, camera-relative or fixed in the world, as the
+     * shader resolves them for its own draw.
+     */
+    public static Table build(org.fractalizer.fractals.AbstractFractalParams p, float[] camPos, float[] camQuatWxyz,
+                              GraphNode root, boolean photons) {
         List<float[]> entries = new ArrayList<>();
-        collect(root, IDENTITY, new float[3], 1f, true, mats, entries);
+        if (root != null && !emittersDisabled) {
+            List<MaterialNode> mats = GraphCompiler.materialNodes(root);
+            collect(root, IDENTITY, new float[3], 1f, true, mats, entries);
+        }
+        if (photons && p != null) {
+            float[] sun = sunEntry(p);
+            if (sun != null) entries.add(sun);
+            float[] beam = beamEntry(p, camPos, camQuatWxyz);
+            if (beam != null) entries.add(beam);
+        }
         if (entries.isEmpty()) return Table.EMPTY;
         float[] data = new float[entries.size() * FLOATS];
-        float power = 0f;
+        float emitterPower = 0f, total = 0f;
         for (int i = 0; i < entries.size(); i++) {
-            System.arraycopy(entries.get(i), 0, data, i * FLOATS, FLOATS);
-            power += entries.get(i)[18];
+            float[] e = entries.get(i);
+            System.arraycopy(e, 0, data, i * FLOATS, FLOATS);
+            if (e[0] >= EMITTER_SPHERE) emitterPower += e[18];
+            total += e[18];
         }
-        return new Table(data, entries.size(), power);
+        return new Table(data, entries.size(), emitterPower, total);
     }
 
     public static boolean hasEmitters(GraphNode root) { return emitters(root).count() > 0; }
+
+    private static float lum(float r, float g, float b) { return 0.2126f * r + 0.7152f * g + 0.0722f * b; }
+
+    /** The sun: its direction and irradiance; its photons leave the emission square, so its
+     *  power is that irradiance over the square's area. */
+    private static float[] sunEntry(org.fractalizer.fractals.AbstractFractalParams p) {
+        float[] c = {p.getLightR(), p.getLightG(), p.getLightB()};
+        float intensity = p.getLightIntensity();
+        if (intensity <= 0f) return null;
+        float[] d = {p.getLightX(), p.getLightY(), p.getLightZ()};
+        float len = (float) Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        if (len < 1e-6f) return null;
+        float[] e = new float[FLOATS];
+        e[0] = SUN;
+        e[4] = d[0] / len; e[5] = d[1] / len; e[6] = d[2] / len;
+        e[7] = c[0]; e[8] = c[1]; e[9] = c[2];
+        e[10] = intensity;
+        e[15] = p.getShadowSoftness();
+        float side = 2f * p.getCausticRadius();
+        e[18] = lum(c[0], c[1], c[2]) * intensity * side * side;
+        e[19] = -1f;
+        return e;
+    }
+
+    /** The additional light as a beam: its source point and axis in the world, its radius,
+     *  length and edge; its power the irradiance over the disk. */
+    private static float[] beamEntry(org.fractalizer.fractals.AbstractFractalParams p, float[] camPos, float[] q) {
+        if (p.getExtraLightType() != org.fractalizer.fractals.AbstractFractalParams.EXTRA_LIGHT_BEAM || p.getExtraLightIntensity() <= 0f) return null;
+        float[] pos = {p.getExtraLightX(), p.getExtraLightY(), p.getExtraLightZ()};
+        float[] dir = {p.getExtraLightDirX(), p.getExtraLightDirY(), p.getExtraLightDirZ()};
+        if (p.isExtraLightAttachToCamera()) {
+            if (camPos == null || q == null) return null;
+            float[] local = {dir[0] * 0.2f, dir[1] * 0.2f, dir[2]};
+            if (local[0] * local[0] + local[1] * local[1] + local[2] * local[2] < 1e-8f) local = new float[]{0f, 0f, 1f};
+            dir = rotate(local, q);
+            float[] off = rotate(new float[]{pos[0] * 0.1f, pos[1] * 0.1f, pos[2] * 0.1f}, q);
+            pos = new float[]{camPos[0] + off[0], camPos[1] + off[1], camPos[2] + off[2]};
+        }
+        float len = (float) Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+        if (len < 1e-6f) dir = new float[]{0f, 0f, 1f}; else dir = new float[]{dir[0] / len, dir[1] / len, dir[2] / len};
+        float radius = Math.max(p.getExtraLightAreaRadius(), 1e-4f);
+        float[] e = new float[FLOATS];
+        e[0] = BEAM;
+        e[1] = pos[0]; e[2] = pos[1]; e[3] = pos[2];
+        e[4] = dir[0]; e[5] = dir[1]; e[6] = dir[2];
+        e[7] = p.getExtraLightR(); e[8] = p.getExtraLightG(); e[9] = p.getExtraLightB();
+        e[10] = p.getExtraLightIntensity();
+        e[15] = radius; e[16] = p.getExtraLightRange(); e[17] = p.getExtraLightConeSoftness();
+        e[18] = (float) (lum(e[7], e[8], e[9]) * e[10] * Math.PI * radius * radius);
+        e[19] = -1f;
+        return e;
+    }
+
+    /** v rotated by the unit quaternion (w, x, y, z): rotateByQuaternion in common.glsl. */
+    private static float[] rotate(float[] v, float[] q) {
+        float w = q[0], x = q[1], y = q[2], z = q[3];
+        // t = 2 * cross(qv, v); v' = v + w * t + cross(qv, t)
+        float tx = 2f * (y * v[2] - z * v[1]), ty = 2f * (z * v[0] - x * v[2]), tz = 2f * (x * v[1] - y * v[0]);
+        return new float[]{v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)};
+    }
 
     // ---- the walk: A is the world-from-local rotation and scale, o the world centre ----------
 

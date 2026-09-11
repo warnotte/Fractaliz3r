@@ -302,6 +302,7 @@ public class GLSLEngine implements AutoCloseable {
     // once per batch rather than once per sample. Must run on the GL thread.
     private void bindAccumPass(ShaderProgram program, Map<String, Object> uniforms) {
         touchGLState();
+        if (photonSide > 0) ensurePhotonBuffers(photonSide);
         glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
         glViewport(0, 0, currentWidth, currentHeight);
         glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE);
@@ -331,6 +332,13 @@ public class GLSLEngine implements AutoCloseable {
         if (adaptiveSamplingEnabled) glBindImageTexture(5, varianceTexture, 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
         if (materialSSBO != 0) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, materialSSBO);
         if (lightSSBO != 0) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, lightSSBO);
+        if (photonSide > 0 && splatProgram != null) {
+            // the sun's emission map, read by the photon pass to draw and by the path tracer to weigh
+            glActiveTexture(GL_TEXTURE7); glBindTexture(GL_TEXTURE_2D, cellListTexture); program.setUniform("causticCellList", 7);
+            glActiveTexture(GL_TEXTURE8); glBindTexture(GL_TEXTURE_2D, cellActiveTexture); program.setUniform("causticCellActive", 8);
+            program.setUniform("causticActiveCells", activeCells);
+            program.setUniform("photonSide", photonSide);
+        }
         for (Map.Entry<String, Object> entry : uniforms.entrySet()) { setUniformValue(program, entry.getKey(), entry.getValue()); }
     }
 
@@ -632,9 +640,6 @@ public class GLSLEngine implements AutoCloseable {
         bindSceneState(photon, uniforms);
         photon.setUniform("photonSide", side);
         photon.setUniform("sampleIndex", passIndex);
-        glActiveTexture(GL_TEXTURE7); glBindTexture(GL_TEXTURE_2D, cellListTexture); photon.setUniform("causticCellList", 7);
-        glActiveTexture(GL_TEXTURE8); glBindTexture(GL_TEXTURE_2D, cellActiveTexture); photon.setUniform("causticCellActive", 8);
-        photon.setUniform("causticActiveCells", activeCells);
         photon.setUniform("time", (float) glfwGetTime());
         glBindVertexArray(quadVAO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);

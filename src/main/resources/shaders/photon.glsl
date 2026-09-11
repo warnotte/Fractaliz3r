@@ -1,59 +1,40 @@
 /**
- * Photon pass: caustics from the sun.
+ * Photon pass: light tracing from every light of the list (lights.glsl).
  *
- * Appended to the scene program (common + scene + raytracer) under PHOTON_PASS, in place
- * of the camera main. One fragment is one photon: emitted from a disk facing the sun over
- * the scene, marched like a camera ray, bent by glass (dispersed when dispersion is on)
- * and by smooth metal, and when it lands on a diffuse surface after at least one such
- * bounce, connected to the camera: the pixel it is seen in and the radiance it adds there
- * go out through the two attachments, and the splat pass adds them to the accumulation.
- *
- * What the path tracer cannot reach from the camera, a delta sun behind a chain of
- * specular surfaces, is exactly what lands here; what it does reach (direct light, rough
- * metal through its NEE) is left to it, so nothing is counted twice. See docs/RENDERING.md
- * "Caustics".
+ * Appended to the scene program (common + lights + scene + raytracer) under PHOTON_PASS
+ * and BIDIR, in place of the camera main. One fragment is one photon: a light is drawn by
+ * power, a point and a direction on it, then the photon is marched like a camera ray,
+ * refracted by glass (dispersed when dispersion is on), reflected by metal, scattered by
+ * matte surfaces. At each matte or metal vertex a coin decides whether the photon lands
+ * there, connected to the camera (the pixel that sees the point, a march back for
+ * visibility, the radiance it adds), or goes on. What it adds is weighted by multiple
+ * importance sampling against the path tracer's own ways of making the same path (a
+ * direct draw of the light from the last matte vertex, a BSDF ray hitting the emitter),
+ * with the same conventions the path tracer applies on its side under BIDIR, so every
+ * path is counted once whatever found it. See docs/RENDERING.md, "One light transport".
  */
 
-layout(location = 0) out vec4 photonPixel;   // xy: where on the tile, in [0,1]; zw: where on the emission square
+layout(location = 0) out vec4 photonPixel;   // xy: where on the tile, in [0,1]; zw: where on the sun's square
 layout(location = 1) out vec4 photonColor;   // rgb: the radiance it adds to that pixel; a: flags, 1 landed, 2 met glass or metal
 
-uniform int photonSide;          // the pass traces photonSide * photonSide photons
-uniform float causticRadius;     // half the side of the emitting square, scene units
-uniform vec3 causticCenter;      // the square is centred over this point, facing the sun
-uniform int causticDebug;        // 1: photons that met nothing specular land too (the energy check)
-
-// Where the previous passes found glass or metal: the emission square as a grid of cells,
-// those that produced a specular hit listed by index, and the same set as a map, both
-// snapshots taken together by the engine so the density below is exactly what was drawn.
-uniform sampler2D causticCellList;    // causticActiveCells indices, one per texel of row 0
-uniform sampler2D causticCellActive;  // CAUSTIC_GRID x CAUSTIC_GRID, 1 where the cell is in the list
-uniform int causticActiveCells;
-const int CAUSTIC_GRID = 64;
-const float CAUSTIC_EXPLORE = 0.25;   // the share of photons drawn over the whole square regardless
+uniform int causticDebug;        // CausticProbe: 1 = every landing weighted 1, whatever the path tracer could do
 
 bool gLanded = false;
 bool gSpecular = false;
 
-// Above this roughness a metal's reflection of the sun is what the path tracer's NEE at the
-// metal already computes; below it that estimate is a needle the firefly clamp flattens to
-// nothing, and the photons take over.
-const float CAUSTIC_METAL_ROUGHNESS = 0.1;
-
-// A single photon may not add more than this many times what a photon drawn uniformly
-// over the square adds to a pixel at the distance of the caustic centre: the fireflies of
-// a landing right under the camera are capped, ordinary landings (and the up to four
-// times heavier photons of the exploring quarter) never are.
+// A landing may not add more than this many times what a photon of average flux adds to a
+// pixel at the distance of the caustic centre: the fireflies of a landing right under the
+// camera, and nothing else.
 const float CAUSTIC_CLAMP = 64.0;
 
-// Connect x to the camera: which pixel sees it, is it visible from there, and what its
-// reflected radiance f (the BRDF already applied) adds to that pixel. The contribution of a
-// photon of flux phi seen by a pinhole is phi * f * cosX / (d^2 * A_pixel * cosCam^3): the
-// pixel's footprint on the surface is A_pixel * cosCam^3 * d^2 / cosX, and the radiance is
-// the flux per footprint area times the BRDF. With depth of field the eye is a point of the
-// lens and the pixel is the one whose centre ray meets the lens ray on the focal sphere,
-// as getCameraRayDOF builds its rays.
-void land(vec3 x, vec3 n, vec3 f, inout uint seed) {
-    if (projectionMode != 0) return;                       // no caustics in the 360 projection
+// Connect x to the camera: which pixel sees it, is it visible from there, and the camera
+// factor cosX / (d^2 * A_pixel * cosCam^3): the radiance a photon of flux phi adds to the
+// pixel is phi * f * that factor (the flux per pixel footprint times the BRDF), and the
+// factor is also the path tracer's density of x from the eye, in area measure. With depth
+// of field the eye is a point of the lens and the pixel the one whose centre ray meets the
+// lens ray on the focal sphere, as getCameraRayDOF builds its rays.
+bool connectToCamera(vec3 x, vec3 n, inout uint seed, out vec3 toCam, out float camFactor, out vec2 tileUV) {
+    if (projectionMode != 0) return false;                 // no caustics in the 360 projection
     vec3 forward = rotateByQuaternion(vec3(0, 0, 1), camQuat);
     vec3 right   = rotateByQuaternion(vec3(1, 0, 0), camQuat);
     vec3 up      = rotateByQuaternion(vec3(0, 1, 0), camQuat);
@@ -82,9 +63,9 @@ void land(vec3 x, vec3 n, vec3 f, inout uint seed) {
         float b = dot(oc, d);
         float c = dot(oc, oc) - focalDistance * focalDistance;
         float disc = b * b - c;
-        if (disc < 0.0) return;
+        if (disc < 0.0) return false;
         float s = -b + sqrt(disc);
-        if (s <= 0.0) return;
+        if (s <= 0.0) return false;
         imagePoint = eye + d * s;
     }
 
@@ -93,97 +74,165 @@ void land(vec3 x, vec3 n, vec3 f, inout uint seed) {
     float d = sqrt(d2);
     vec3 dir = toX / d;
     float cosCam = dot(dir, forward);
-    if (cosCam <= 0.001) return;
+    if (cosCam <= 0.001) return false;
     float cosX = dot(n, -dir);
-    if (cosX <= 0.0) return;
+    if (cosX <= 0.0) return false;
 
     vec3 ip = imagePoint - camPos;
     float z = dot(ip, forward);
-    if (z <= 0.0) return;
+    if (z <= 0.0) return false;
     float halfH = tan(radians(fov) * 0.5);
     float halfW = halfH * fullResolution.x / fullResolution.y;
     vec2 ndc = vec2(dot(ip, right) / (z * halfW), dot(ip, up) / (z * halfH));
-    vec2 tileUV = (ndc * 0.5 + 0.5 - tileOffset) / tileScale;
-    if (any(lessThan(tileUV, vec2(0.0))) || any(greaterThanEqual(tileUV, vec2(1.0)))) return;
+    tileUV = (ndc * 0.5 + 0.5 - tileOffset) / tileScale;
+    if (any(lessThan(tileUV, vec2(0.0))) || any(greaterThanEqual(tileUV, vec2(1.0)))) return false;
 
     Ray toEye;
     toEye.origin = x + n * surfaceBias(d);
     toEye.direction = -dir;
     vec3 vp; float vd; int vm;
-    if (rayMarchSimple(toEye, vp, vd, vm) && vd < d - 0.01) return;
+    if (rayMarchSimple(toEye, vp, vd, vm) && vd < d - 0.01) return false;
 
     float pixelArea = (2.0 * halfW / fullResolution.x) * (2.0 * halfH / fullResolution.y);
-    vec3 c = f * cosX / (d2 * pixelArea * cosCam * cosCam * cosCam);
-    float sceneD = max(length(causticCenter - camPos), 0.1);
-    float sunLum = dot(lightColor * lightIntensity, vec3(0.2126, 0.7152, 0.0722));
-    float reference = sunLum * 4.0 * causticRadius * causticRadius / float(photonSide * photonSide) / (PI * pixelArea * sceneD * sceneD);
-    float bound = CAUSTIC_CLAMP * reference;
-    photonPixel.xy = tileUV;
-    photonColor.rgb = min(c, vec3(bound));
-    gLanded = true;
+    camFactor = cosX / (d2 * pixelArea * cosCam * cosCam * cosCam);
+    toCam = -dir;
+    return true;
 }
 
-// The photon's flight, from the square to wherever it stops; sets the flags.
-void trace(Ray ray, vec3 flux, inout uint seed) {
+// The photon's flight from light li to where it lands or dies.
+void trace(int li, inout uint seed) {
+    LightData L = lights[li];
+    int ltype = int(L.type);
+    float pick = lightPickPdf(li);
+    bool emitter = isEmitter(li);
+
+    // ---- emission: a point and a direction on the light, the flux the draw stands for ----
+    Ray ray;
+    vec3 flux;
+    vec3 emitPos = vec3(0.0), emitN = vec3(0.0, 1.0, 0.0);
+    float rho = 0.0;               // sun and beam: the draw's density over the square or the disk
+    if (ltype == LIGHT_SUN) {
+        vec3 Ldir, u, v;
+        sunFrame(Ldir, u, v);
+        vec2 sq;
+        rho = sunSquareDraw(seed, sq);
+        photonPixel.zw = sq;
+        ray.origin = sunSquarePoint(sq, Ldir, u, v);
+        ray.direction = -jitterLightDir(Ldir, seed, shadowSoftness);
+        flux = vec3(L.r, L.g, L.b) * L.intensity / (rho * pick);
+    } else if (ltype == LIGHT_BEAM) {
+        vec3 axis = vec3(L.dx, L.dy, L.dz);
+        vec3 u = normalize(cross(abs(axis.y) < 0.999 ? vec3(0, 1, 0) : vec3(1, 0, 0), axis));
+        vec3 v = cross(axis, u);
+        float radius = max(L.sx, 1e-4);
+        float r = radius * sqrt(random(seed));
+        float phi = TAU * random(seed);
+        ray.origin = vec3(L.px, L.py, L.pz) + u * (r * cos(phi)) + v * (r * sin(phi));
+        ray.direction = axis;
+        float edge = clamp(L.sz, 0.0, 1.0);
+        float att = edge < 0.001 ? 1.0 : 1.0 - smoothstep(radius * (1.0 - edge), radius, r);
+        rho = 1.0 / (PI * radius * radius);
+        flux = vec3(L.r, L.g, L.b) * L.intensity * att / (rho * pick);
+    } else if (emitter) {
+        sampleEmitterPoint(li, seed, emitPos, emitN);
+        ray.origin = emitPos + emitN * 0.005;
+        ray.direction = randomCosineHemisphere(seed, emitN);
+        flux = emitterRadiance(li) * (PI * L.area) / pick;   // L_e, the point at 1/area, the direction at cos/pi
+    } else {
+        return;                    // point and spot lights send no photons: their draw stands alone
+    }
+    flux /= float(photonSide * photonSide);
     vec3 weight = vec3(1.0);
 
     float lambda = 0.0;
     bool dispersed = false;
     if (dispersionEnabled != 0) lambda = 400.0 + 300.0 * random(seed);
-    bool specular = false;
+
+    // ---- the bookkeeping: the path tracer's density of this path over ours --------------
+    // rA with the path tracer drawing the light from its last matte vertex, rB with its
+    // BSDF ray hitting the emitter: products over the segments of (path tracer density /
+    // photon density) in area measure, the coins included, a delta on either side as 1.
+    float rA = 0.0, rB = 0.0;
+    bool first = true;
+    float pendingLtPdf = 0.0;      // our bounce pdf at the vertex just left (solid angle)
+    float prevCosOut = 1.0;        // |n . dir| at that vertex along the segment, for the area density of it from here
+    bool prevDelta = false;
 
     for (int bounce = 0; bounce <= maxBounces; bounce++) {
         vec3 hitPos; float hitDist; int hitMat;
         if (!rayMarchSimple(ray, hitPos, hitDist, hitMat)) return;
-        if (bounce == 0 && hitDist < 1e-3) return;            // the disk started inside something
+        if (bounce == 0 && hitDist < 1e-3) return;            // the draw started inside something
 
         vec3 normal = calcNormal(hitPos);
         vec3 faceN = dot(ray.direction, normal) > 0.0 ? -normal : normal;
+        vec3 wIn = -ray.direction;                            // towards where the photon came from
+        float cosIn = max(dot(faceN, wIn), 0.001);
+        float d2 = max(hitDist * hitDist, 1e-8);
 
-        if (hitMat == MAT_OCEAN) {
-            float fr = fresnelDielectric(max(dot(-ray.direction, normal), 0.0), 1.33);
-            if (random(seed) < fr) {
+        // our density of this vertex, area measure
+        float ltHere;
+        if (first) {
+            if (emitter) {
+                float cosL = max(dot(emitN, ray.direction), 0.0);
+                ltHere = pick * emitterPdfArea(li) * (cosL / PI) * cosIn / d2;
+            } else {
+                ltHere = pick * rho / cosIn;                   // a parallel draw, projected
+            }
+        } else {
+            ltHere = prevDelta ? 1.0 : pendingLtPdf * cosIn / d2;
+        }
+        // the path tracer's densities of the light's point from here (the first segment)
+        float ptA = emitter ? emitterPickPdf(li) * emitterPdfArea(li) : 1.0;
+        float cosL = emitter ? max(dot(emitN, ray.direction), 0.0) : 0.0;
+
+        // ---- the material ------------------------------------------------------------
+        vec3 albedo; int localMatType; float localIor, localMetalness, safeRoughness, localEmissive;
+        bool ocean = hitMat == MAT_OCEAN;
+        if (ocean) {
+            albedo = oceanColor; localMatType = 0; localIor = 1.33; localMetalness = 0.0; safeRoughness = 0.02; localEmissive = 0.0;
+        } else {
+            OrbitTrap trap;
+            DE(hitPos, trap);
+            vec3 mf = getFactors(trap);
+#ifdef BOOLEAN_OPS
+            mf = morphFactors(hitPos, mf);
+#endif
+            albedo = applyMaterial(remapTrapFactors(mf, hitPos), hitPos, normal, ray.direction);
+            localMatType = materialType; localIor = ior; localMetalness = metalness;
+            safeRoughness = max(roughness, 0.02); localEmissive = emissiveIntensity;
+#ifdef HAS_MATERIALS
+            if (trap.matId >= 0) {
+                MaterialData mat = materials[trap.matId];
+                int mType = int(mat.type);
+                int mColorMode = int(mat.colorMode);
+                if (mColorMode == 1) albedo = vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+                else if (mColorMode == 2) albedo *= vec3(mat.albedoR, mat.albedoG, mat.albedoB);
+                if (mType >= 0) localMatType = mType;
+                if (mat.roughness >= 0.0) safeRoughness = max(mat.roughness, 0.02);
+                if (mat.metallic >= 0.0) localMetalness = mat.metallic;
+                if (mat.ior >= 0.0) localIor = mat.ior;
+                if (mat.emission >= 0.0) localEmissive = mat.emission;
+                if (localEmissive > 0.0) return;                  // a pure emitter, as the path tracer treats it
+            }
+#endif
+        }
+        float a = safeRoughness * safeRoughness;
+        float a2 = a * a;
+
+        // ---- specular: glass, and the ocean's reflection -------------------------------
+        bool delta = false;
+        vec3 outN = normal;                                       // the normal where the photon leaves a glass
+        if (ocean) {
+            if (random(seed) < fresnelDielectric(cosIn, 1.33)) {
                 ray.direction = reflect(ray.direction, normal);
                 ray.origin = hitPos + normal * 0.005;
                 weight *= 0.95;
-                specular = true; gSpecular = true;
-                continue;
+                delta = true;
             }
-            if (specular || causticDebug != 0) land(hitPos, faceN, flux * weight * oceanColor / PI, seed);
-            return;
-        }
-
-        OrbitTrap trap;
-        DE(hitPos, trap);
-        vec3 mf = getFactors(trap);
-#ifdef BOOLEAN_OPS
-        mf = morphFactors(hitPos, mf);
-#endif
-        vec3 albedo = applyMaterial(remapTrapFactors(mf, hitPos), hitPos, normal, ray.direction);
-        int localMatType = materialType;
-        float localIor = ior;
-        float localMetalness = metalness;
-        float safeRoughness = max(roughness, 0.02);
-        float localEmissive = emissiveIntensity;
-#ifdef HAS_MATERIALS
-        if (trap.matId >= 0) {
-            MaterialData mat = materials[trap.matId];
-            int mType = int(mat.type);
-            int mColorMode = int(mat.colorMode);
-            if (mColorMode == 1) albedo = vec3(mat.albedoR, mat.albedoG, mat.albedoB);
-            else if (mColorMode == 2) albedo *= vec3(mat.albedoR, mat.albedoG, mat.albedoB);
-            if (mType >= 0) localMatType = mType;
-            if (mat.roughness >= 0.0) safeRoughness = max(mat.roughness, 0.02);
-            if (mat.metallic >= 0.0) localMetalness = mat.metallic;
-            if (mat.ior >= 0.0) localIor = mat.ior;
-            if (mat.emission >= 0.0) localEmissive = mat.emission;
-            if (localEmissive > 0.0) return;                  // a pure emitter, as the path tracer treats it
-        }
-#endif
-
-        if (localMatType == MATERIAL_GLASS) {
+        } else if (localMatType == MATERIAL_GLASS) {
+            delta = true;
             bool entering = dot(ray.direction, normal) < 0.0;
-            float fr = fresnelDielectric(max(dot(-ray.direction, faceN), 0.0), localIor);
+            float fr = fresnelDielectric(cosIn, localIor);
             if (safeRoughness > 0.01) fr = mix(fr, 0.5, safeRoughness * 0.5);
             if (random(seed) < fr) {
                 vec3 reflectDir = reflect(ray.direction, faceN);
@@ -219,35 +268,124 @@ void trace(Ray ray, vec3 flux, inout uint seed) {
                     ray.direction = refractRay(interiorDir, exitFaceN, localIor, exitRefracted) ? normalize(exitRefracted) : interiorDir;
                     ray.origin = exitPos + exitNormal * 0.005;
                     weight *= vec3(0.98, 1.0, 1.02) * albedo;
+                    outN = exitNormal;
                 } else {
                     ray.origin = hitPos - faceN * 0.005;
                     ray.direction = normalize(refractedDir);
                     weight *= vec3(0.98, 1.0, 1.02) * albedo;
                 }
             }
-            specular = true; gSpecular = true;
-        } else if (localMatType == MATERIAL_METALLIC) {
-            if (safeRoughness > CAUSTIC_METAL_ROUGHNESS) return;   // the path tracer's estimate stands
-            vec3 viewDir = -ray.direction;
-            float NdotV = max(dot(viewDir, faceN), 0.001);
-            vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
-            vec3 H = randomGGX(seed, faceN, safeRoughness);
-            vec3 reflectDir = reflect(-viewDir, H);
-            float NdotH = max(dot(faceN, H), 0.001);
-            float VdotH = max(dot(viewDir, H), 0.001);
-            float NdotL = max(dot(faceN, reflectDir), 0.0);
-            float a = safeRoughness * safeRoughness;
-            float a2 = a * a;
-            vec3 F = fresnelSchlickVec(VdotH, F0);
-            float G = smithG2GGX(max(NdotL, 0.001), NdotV, a2);
-            weight *= F * G * VdotH / (NdotV * NdotH);
-            ray.origin = hitPos + faceN * 0.005;
-            ray.direction = normalize(reflectDir);
-            specular = true; gSpecular = true;
-        } else {
-            if (specular || causticDebug != 0) land(hitPos, faceN, flux * weight * albedo / PI, seed);
+        }
+
+        if (delta) {
+            gSpecular = true;
+            // the path tracer's density of the previous vertex from here is a delta (1); of
+            // the light's point from here, none by a draw, a delta by a BSDF ray
+            if (first) { rA = 0.0; rB = emitter ? 1.0 / ltHere : 0.0; first = false; }
+            else { rA *= 1.0 / ltHere; rB *= 1.0 / ltHere; }
+            prevDelta = true; pendingLtPdf = 0.0;
+            prevCosOut = max(abs(dot(outN, ray.direction)), 0.001);   // the segment's cosine where we leave
+            if (bounce >= 3) {
+                float p = max(weight.x, max(weight.y, weight.z));
+                if (random(seed) > p) return;
+                weight /= p;
+            }
+            continue;
+        }
+
+        // ---- matte or metal: land here, or go on ------------------------------------------
+        // The photon pass makes the paths with a glass, mirror or metal vertex between the
+        // light and the landing; direct and diffuse light are the path tracer's, whose draw
+        // has far less variance than a scatter of landings. So the coin is flipped only past
+        // such a vertex, and the path tracer counts the coins the same way.
+        bool metal = localMatType == MATERIAL_METALLIC;
+        vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
+        bool eligible = gSpecular || causticDebug != 0;             // the calibration check lands anywhere, weight one
+
+        if (eligible && random(seed) < LT_LAND) {
+            vec3 toCam; float camFactor; vec2 tileUV;
+            if (!connectToCamera(hitPos, faceN, seed, toCam, camFactor, tileUV)) return;
+            float NdotV = max(dot(faceN, toCam), 0.001);
+            vec3 f;
+            if (metal) {
+                vec3 H = normalize(toCam + wIn);
+                float NdotH = max(dot(faceN, H), 0.0);
+                float VdotH = max(dot(toCam, H), 0.001);
+                float D = a2 / (PI * pow(NdotH * NdotH * (a2 - 1.0) + 1.0, 2.0));
+                float G = smithG2GGX(cosIn, NdotV, a2);
+                f = fresnelSchlickVec(VdotH, F0) * D * G / (4.0 * NdotV * cosIn);
+            } else {
+                f = albedo / PI;
+            }
+            // the path tracer at this vertex comes from the eye and would sample towards
+            // where we came from: the density of the previous vertex (or the light) from here
+            float ptBack = (metal ? ggxPdf(faceN, toCam, wIn, a2) : cosIn / PI);
+            if (first) {
+                rA = ptA / ltHere;
+                rB = emitter ? (ptBack * cosL / d2) / ltHere : 0.0;
+            } else {
+                float pt = ptBack * prevCosOut / d2;
+                rA *= pt / ltHere;
+                rB *= pt / ltHere;
+            }
+            // the camera segment (the eye's density of this vertex, ours a delta) and the coin
+            rA *= camFactor / LT_LAND;
+            rB *= camFactor / LT_LAND;
+            float nA = rA / ltCount(), nB = rB / ltCount();       // one camera path against all our photons
+            float w = causticDebug != 0 ? 1.0 : 1.0 / (1.0 + nA * nA + nB * nB);
+            vec3 c = flux * weight * f * camFactor * w / LT_LAND;
+            float sceneD = max(length(causticCenter - camPos), 0.1);
+            float halfH = tan(radians(fov) * 0.5);
+            float halfW = halfH * fullResolution.x / fullResolution.y;
+            float pixelArea = (2.0 * halfW / fullResolution.x) * (2.0 * halfH / fullResolution.y);
+            float reference = lightPowerTotal / ltCount() / (PI * pixelArea * sceneD * sceneD);   // a photon of average flux, seen from the scene's distance
+            photonPixel.xy = tileUV;
+            photonColor.rgb = min(c, vec3(CAUSTIC_CLAMP * reference));
+            gLanded = true;
             return;
         }
+
+        // go on: a bounce, its pdf for the next segment, the coin in the densities
+        vec3 wOut;
+        float pdfOmega;
+        if (metal) {
+            vec3 H = randomGGX(seed, faceN, safeRoughness);
+            wOut = reflect(-wIn, H);
+            float NdotH = max(dot(faceN, H), 0.001);
+            float VdotH = max(dot(wIn, H), 0.001);
+            float NdotL = dot(faceN, wOut);
+            if (NdotL <= 0.0) return;
+            float G = smithG2GGX(max(NdotL, 0.001), cosIn, a2);
+            weight *= fresnelSchlickVec(VdotH, F0) * G * VdotH / (cosIn * NdotH);
+            float D = a2 / (PI * pow(NdotH * NdotH * (a2 - 1.0) + 1.0, 2.0));
+            pdfOmega = D * NdotH / (4.0 * VdotH);
+        } else {
+            wOut = randomCosineHemisphere(seed, faceN);
+            weight *= albedo;
+            pdfOmega = max(dot(faceN, wOut), 0.001) / PI;
+        }
+        // the path tracer at this vertex comes from where we go and samples where we came from
+        float ptBack = metal ? ggxPdf(faceN, wOut, wIn, a2) : cosIn / PI;
+        if (first) {
+            rA = ptA / ltHere;
+            rB = emitter ? (ptBack * cosL / d2) / ltHere : 0.0;
+            first = false;
+        } else {
+            float pt = ptBack * prevCosOut / d2;
+            rA *= pt / ltHere;
+            rB *= pt / ltHere;
+        }
+        if (eligible) {
+            rA /= (1.0 - LT_LAND);
+            rB /= (1.0 - LT_LAND);
+            weight /= (1.0 - LT_LAND);
+        }
+        if (metal) gSpecular = true;                             // past it, the next landing counts
+        pendingLtPdf = pdfOmega;
+        prevCosOut = max(dot(faceN, wOut), 0.001);
+        prevDelta = false;
+        ray.origin = hitPos + faceN * 0.005;
+        ray.direction = normalize(wOut);
 
         if (bounce >= 3) {
             float p = max(weight.x, max(weight.y, weight.z));
@@ -261,35 +399,8 @@ void main() {
     photonPixel = vec4(0.0);
     photonColor = vec4(0.0);
     uint seed = initRandom(gl_FragCoord.xy + vec2(0.5, 7919.0), sampleIndex);
-
-    // Emission: a point of the square facing the sun, sent the way the sun shines. A
-    // quarter of the photons are drawn over the whole square, the rest over the cells that
-    // have produced a specular hit so far; each carries the flux its draw stands for, so
-    // the estimate is the same whatever the map, only less noisy where it matters.
-    vec3 L = normalize(lightDir);
-    vec3 u = normalize(cross(abs(L.y) < 0.999 ? vec3(0, 1, 0) : vec3(1, 0, 0), L));
-    vec3 v = cross(L, u);
-    float side = 2.0 * causticRadius;
-    vec2 sq;
-    if (causticActiveCells > 0 && random(seed) >= CAUSTIC_EXPLORE) {
-        int i = min(int(random(seed) * float(causticActiveCells)), causticActiveCells - 1);
-        int k = int(texelFetch(causticCellList, ivec2(i, 0), 0).r + 0.5);
-        sq = (vec2(k % CAUSTIC_GRID, k / CAUSTIC_GRID) + vec2(random(seed), random(seed))) / float(CAUSTIC_GRID);
-    } else {
-        sq = vec2(random(seed), random(seed));
-    }
-    float density = 1.0 / (side * side);
-    if (causticActiveCells > 0) {
-        float inList = texelFetch(causticCellActive, ivec2(sq * float(CAUSTIC_GRID)), 0).r;
-        float cellArea = (side / float(CAUSTIC_GRID)) * (side / float(CAUSTIC_GRID));
-        density = CAUSTIC_EXPLORE / (side * side) + (1.0 - CAUSTIC_EXPLORE) * inList / (float(causticActiveCells) * cellArea);
-    }
-    photonPixel.zw = sq;
-    Ray ray;
-    ray.origin = causticCenter + L * (2.0 * causticRadius + 2.0) + u * (side * (sq.x - 0.5)) + v * (side * (sq.y - 0.5));
-    ray.direction = -jitterLightDir(L, seed, shadowSoftness);
-    vec3 flux = lightColor * lightIntensity / (density * float(photonSide * photonSide));
-
-    trace(ray, flux, seed);
+    float pick;
+    int li = pickLight(seed, pick);
+    if (li >= 0) trace(li, seed);
     photonColor.a = (gLanded ? 1.0 : 0.0) + (gSpecular ? 2.0 : 0.0);
 }

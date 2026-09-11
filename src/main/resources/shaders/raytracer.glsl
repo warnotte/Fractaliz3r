@@ -666,7 +666,7 @@ vec3 sampleExtraLightRadiance(vec3 hitPos, vec3 normal, float surfaceDist, inout
 // density of the draw over the emitter's surface, cosL the emitter's cosine, so a caller
 // adds f * Le * NdotL * cosL / (dist^2 * pdfArea), weighted against its own BSDF finding
 // the same point (powerHeuristic with the BSDF's area density, bsdfPdf * cosL / dist^2).
-struct EmitterSample { vec3 wi; vec3 Le; float dist; float cosL; float pdfArea; bool valid; };
+struct EmitterSample { vec3 wi; vec3 Le; float dist; float cosL; float pdfArea; int li; bool valid; };
 
 EmitterSample sampleEmitter(vec3 hitPos, vec3 faceNormal, float surfaceDist, inout uint seed) {
     EmitterSample s;
@@ -692,8 +692,33 @@ EmitterSample sampleEmitter(vec3 hitPos, vec3 faceNormal, float surfaceDist, ino
     if (rayMarchSimple(sr, sp, sd, sm) && length(sp - lp) > 0.05 + 0.03 * d) return s;
     s.wi = wi; s.dist = d; s.Le = emitterRadiance(li); s.cosL = cosL;
     s.pdfArea = pick * emitterPdfArea(li);
+    s.li = li;
     s.valid = true;
     return s;
+}
+#endif
+
+#ifdef BIDIR
+// The photon pass's density of x being the first hit of a photon from the sun or the beam,
+// in area measure: the light's pick, the draw over the square or the disk, projected.
+float ltDensitySun(vec3 x, vec3 n) {
+    int li = lightOfType(LIGHT_SUN);
+    if (li < 0) return 0.0;
+    vec3 L, u, v;
+    sunFrame(L, u, v);
+    float c = abs(dot(n, L));
+    if (c < 1e-4) return 0.0;
+    return lightPickPdf(li) * sunSquareDensity(sunSquareUV(x, L, u, v)) / c;
+}
+
+float ltDensityBeam(vec3 n) {
+    int li = lightOfType(LIGHT_BEAM);
+    if (li < 0) return 0.0;
+    LightData L = lights[li];
+    float c = abs(dot(n, vec3(L.dx, L.dy, L.dz)));
+    if (c < 1e-4) return 0.0;
+    float radius = max(L.sx, 1e-4);
+    return lightPickPdf(li) / (PI * radius * radius) / c;
 }
 #endif
 
@@ -1376,6 +1401,23 @@ vec3 pathTrace(Ray ray, inout uint seed) {
     if (dispersionEnabled != 0) lambda = 400.0 + 300.0 * random(seed);
     float lastBsdfPdf = 0.0; // Track BSDF pdf for MIS on escape
     bool lastWasSpecular = false; // Glass/mirror bounces have delta pdf
+#ifdef BIDIR
+    // Weights against the photon pass (photon.glsl): bdQ is its density of the path so far
+    // over ours, area measure, its landing and passing coins included, a delta on either
+    // side as 1; bdArrivePt our density of the current vertex from the previous one;
+    // bdPrevCosOut the previous vertex's cosine along the segment, for the reverse density.
+    float bdQ = 0.0;
+    float bdArrivePt = 1.0;
+    float bdPrevCosOut = 1.0;
+    bool bdPrevDelta = false;
+    bool bdLive = false;            // false once the photon pass cannot make this path
+    vec3 bdForward = rotateByQuaternion(vec3(0, 0, 1), camQuat);
+    float bdCosIn = 1.0, bdD2 = 1.0;
+    // The photon pass lands only past a glass, mirror or metal vertex and flips its coin
+    // only past one: bdMatte counts the matte and metal vertices after the first, bdCoins
+    // how many of them lie before the last such vertex (-1: none yet, the path is not its).
+    int bdMatte = 0, bdCoins = -1;
+#endif
 
     Ray currentRay = ray;
 
@@ -1404,23 +1446,65 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         if (hitMat == MAT_OCEAN) {
             vec3 normal = calcNormal(hitPos);
             vec3 viewDir = -currentRay.direction;
+#ifdef BIDIR
+            bdCosIn = max(dot(normal, viewDir), 0.001);
+            bdD2 = max(hitDist * hitDist, 1e-8);
+            if (bounce == 0) {
+                float cosCam = max(dot(currentRay.direction, bdForward), 0.001);
+                float halfH = tan(radians(fov) * 0.5);
+                float halfW = halfH * fullResolution.x / fullResolution.y;
+                float pixelArea = (2.0 * halfW / fullResolution.x) * (2.0 * halfH / fullResolution.y);
+                float pCam = bdCosIn / (bdD2 * pixelArea * cosCam * cosCam * cosCam);
+                bdQ = LT_LAND / pCam;
+                bdArrivePt = pCam;
+                bdLive = true;
+            } else {
+                bdArrivePt = bdPrevDelta ? 1.0 : lastBsdfPdf * bdCosIn / bdD2;
+            }
+#endif
             float fr = fresnelDielectric(max(dot(viewDir, normal), 0.0), 1.33);
             if (random(seed) < fr) {
                 currentRay.direction = reflect(currentRay.direction, normal);
                 currentRay.origin = hitPos + normal * 0.005;
                 throughput *= 0.95;
                 lastWasSpecular = true; lastBsdfPdf = 0.0;
+#ifdef BIDIR
+                if (bounce == 0) bdLive = false;          // nor on a mirror
+                if (bdLive) { bdQ *= 1.0 / bdArrivePt; bdPrevDelta = true; bdPrevCosOut = max(abs(dot(normal, currentRay.direction)), 0.001); bdCoins = bdMatte; }
+#endif
             } else {
                 throughput *= oceanColor;
                 currentRay.direction = randomCosineHemisphere(seed, normal);
                 currentRay.origin = hitPos + normal * 0.005;
                 lastWasSpecular = false; lastBsdfPdf = max(dot(normal, currentRay.direction), 0.001) / PI;
+#ifdef BIDIR
+                if (bdLive) {
+                    if (bounce > 0) { bdQ *= ((bdCosIn / PI) * bdPrevCosOut / bdD2) / bdArrivePt; bdMatte++; }
+                    bdPrevDelta = false; bdPrevCosOut = max(dot(normal, currentRay.direction), 0.001);
+                }
+#endif
             }
             continue;
         }
 
         vec3 normal = calcNormal(hitPos);
         vec3 faceNormal = (dot(currentRay.direction, normal) > 0.0) ? -normal : normal;
+#ifdef BIDIR
+        bdCosIn = max(dot(faceNormal, -currentRay.direction), 0.001);
+        bdD2 = max(hitDist * hitDist, 1e-8);
+        if (bounce == 0) {
+            float cosCam = max(dot(currentRay.direction, bdForward), 0.001);
+            float halfH = tan(radians(fov) * 0.5);
+            float halfW = halfH * fullResolution.x / fullResolution.y;
+            float pixelArea = (2.0 * halfW / fullResolution.x) * (2.0 * halfH / fullResolution.y);
+            float pCam = bdCosIn / (bdD2 * pixelArea * cosCam * cosCam * cosCam);
+            bdQ = 1.0 / pCam;               // the eye's density of the first vertex, against the photon's connection
+            bdArrivePt = pCam;
+            bdLive = true;
+        } else {
+            bdArrivePt = bdPrevDelta ? 1.0 : lastBsdfPdf * bdCosIn / bdD2;
+        }
+#endif
 
         OrbitTrap trap;
         DE(hitPos, trap);
@@ -1474,22 +1558,48 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         float a = safeRoughness * safeRoughness;
         float a2 = a * a;
 
+#ifdef BIDIR
+        // The photon pass's density of this vertex being a photon's first hit, from the sun
+        // and from the beam, for the weights of their draws below; and the weight of a draw
+        // from here: the segment to the previous vertex closed with the reverse density
+        // given the light's direction, this vertex's passing coin when it is not the first.
+        bool bdMetalHere = localMatType == MATERIAL_METALLIC;
+        float bdLtSun = bdLive ? ltDensitySun(hitPos, faceNormal) : 0.0;
+        float bdLtBeam = (bdLive && extraLightType == EXTRA_LIGHT_BEAM) ? ltDensityBeam(faceNormal) : 0.0;
+        // a draw from here is the photon pass's path too when a glass, mirror or metal lies
+        // between here and the light: this vertex itself when it is metal, else an earlier one
+        bool bdEligible = bounce > 0 && (bdMetalHere || bdCoins >= 0);
+        float bdCoinFactor = bdEligible ? LT_LAND * pow(1.0 - LT_LAND, float(bdMetalHere ? bdMatte : bdCoins)) : 0.0;
+#define BD_DRAW_WEIGHT(ltDens, ptDens, wLight) ( \
+            (bdLive && bdEligible && (ltDens) > 0.0) ? (1.0 / (1.0 + pow(bdQ * bdCoinFactor * \
+                ((bdMetalHere ? ggxPdf(faceNormal, (wLight), viewDir, a2) : bdCosIn / PI) * bdPrevCosOut / bdD2) / bdArrivePt \
+                * (ltDens) * ltCount() / (ptDens), 2.0))) : 1.0)
+        float bdSunW = BD_DRAW_WEIGHT(bdLtSun, 1.0, normalize(lightDir));
+        float bdBeamW = BD_DRAW_WEIGHT(bdLtBeam, 1.0, extraLightDirNorm);
+        if (extraLightType == EXTRA_LIGHT_BEAM) extraLightRadiance *= bdBeamW;
+#endif
+
         // Emissive
         if (localEmissive > 0.0) {
 #ifdef HAS_MATERIALS
             if (trap.matId >= 0) {
 #ifdef HAS_EMITTERS
                 // Found by a BSDF ray: weighted against the direct draw of the same point,
-                // which the previous vertex made unless it was specular or the camera.
+                // which the previous vertex made unless it was specular or the camera, and
+                // against the photon pass making this path.
                 float emitMis = 1.0;
-                if (bounce > 0 && !lastWasSpecular) {
+                {
                     int li = lightOfMaterial(trap.matId);
-                    if (li >= 0) {
+                    float aB = 0.0, cB = 0.0;
+                    if (li >= 0 && bounce > 0) {
                         float cosL = max(dot(faceNormal, -currentRay.direction), 0.0);
-                        float bsdfPdfArea = lastBsdfPdf * cosL / max(hitDist * hitDist, 1e-8);
-                        float neePdfArea = emitterPickPdf(li) * emitterPdfArea(li);
-                        emitMis = powerHeuristic(bsdfPdfArea, neePdfArea);
+                        float ptB = lastWasSpecular ? 1.0 : lastBsdfPdf * cosL / max(hitDist * hitDist, 1e-8);
+                        if (!lastWasSpecular) aB = emitterPickPdf(li) * emitterPdfArea(li) / ptB;
+#ifdef BIDIR
+                        if (bdLive && bdCoins >= 0) cB = bdQ * LT_LAND * pow(1.0 - LT_LAND, float(bdCoins)) * (lightPickPdf(li) * emitterPdfArea(li) * (cosL / PI) * bdPrevCosOut / max(hitDist * hitDist, 1e-8)) * ltCount() / ptB;
+#endif
                     }
+                    emitMis = 1.0 / (1.0 + aB * aB + cB * cB);
                 }
                 if (emitterDebug == 1 && bounce > 0) emitMis = 0.0;
                 if (emitterDebug == 2) emitMis = 1.0;
@@ -1518,6 +1628,9 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             float cosTheta = max(dot(viewDir, faceNormal), 0.0);
             float fr = fresnelDielectric(cosTheta, localIor);
             if (safeRoughness > 0.01) fr = mix(fr, 0.5, safeRoughness * 0.5);
+#ifdef BIDIR
+            vec3 bdOutN = normal;       // the normal where the ray leaves this glass: the exit's when it went through
+#endif
 
             if (random(seed) < fr) {
                 vec3 reflectDir = reflect(currentRay.direction, faceNormal);
@@ -1565,6 +1678,9 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     }
                     currentRay.origin = exitPos + exitNormal * 0.005;
                     throughput *= vec3(0.98, 1.0, 1.02) * albedo;
+#ifdef BIDIR
+                    bdOutN = exitNormal;
+#endif
                 } else {
                     currentRay.origin = hitPos - faceNormal * 0.005;
                     currentRay.direction = normalize(refractedDir);
@@ -1573,6 +1689,11 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             }
             lastWasSpecular = true; // Glass has delta-like pdf
             lastBsdfPdf = 0.0;
+#ifdef BIDIR
+            // a photon cannot land on glass: seen through it, nothing is the photon pass's
+            if (bounce == 0) bdLive = false;
+            if (bdLive) { bdQ *= 1.0 / bdArrivePt; bdPrevDelta = true; bdPrevCosOut = max(abs(dot(bdOutN, currentRay.direction)), 0.001); bdCoins = bdMatte; }
+#endif
         } else if (localMatType == MATERIAL_METALLIC) {
             // METALLIC with corrected GGX BRDF (Smith G2 geometry term)
             vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
@@ -1599,6 +1720,9 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                         float D = a2 / (PI * pow(NdotH * NdotH * (a2 - 1.0) + 1.0, 2.0));
                         float G = smithG2GGX(NdotL, NdotV, a2);
                         vec3 spec = F * D * G / (4.0 * NdotV) * lightColor * lightIntensity;
+#ifdef BIDIR
+                        spec *= bdSunW;
+#endif
                         radiance += clamp(throughput * spec, 0.0, FIREFLY_CLAMP);
                     }
                 }
@@ -1634,6 +1758,14 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     vec3 brdf_e = F_e * D_e * G_e / (4.0 * NdotV * NdotL_e);
                     float bsdfPdfArea = (D_e * NdotH_e / (4.0 * VdotH_e)) * es.cosL / (es.dist * es.dist);
                     float misW = powerHeuristic(es.pdfArea, bsdfPdfArea);
+#ifdef BIDIR
+                    {
+                        float ltDens = lightPickPdf(es.li) * emitterPdfArea(es.li) * (es.cosL / PI) * NdotL_e / (es.dist * es.dist);
+                        float cA = (bdLive && bdEligible) ? bdQ * bdCoinFactor * ((ggxPdf(faceNormal, es.wi, viewDir, a2) * bdPrevCosOut / bdD2) / bdArrivePt) * ltDens * ltCount() / es.pdfArea : 0.0;
+                        float bA = bsdfPdfArea / es.pdfArea;
+                        misW = 1.0 / (1.0 + bA * bA + cA * cA);
+                    }
+#endif
                     radiance += clamp(throughput * brdf_e * es.Le * NdotL_e * es.cosL / (es.dist * es.dist * es.pdfArea) * misW, 0.0, FIREFLY_CLAMP);
                 }
             }
@@ -1697,6 +1829,12 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 
             currentRay.origin = hitPos + faceNormal * 0.005;
             currentRay.direction = normalize(reflectDir);
+#ifdef BIDIR
+            if (bdLive) {
+                if (bounce > 0) { bdQ *= (ggxPdf(faceNormal, currentRay.direction, viewDir, a2) * bdPrevCosOut / bdD2) / bdArrivePt; bdCoins = bdMatte; bdMatte++; }
+                bdPrevDelta = false; bdPrevCosOut = max(dot(faceNormal, currentRay.direction), 0.001);
+            }
+#endif
         } else {
             // LAMBERTIAN
             // Sample + shade the sun disc along one consistent direction.
@@ -1711,7 +1849,11 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     shadowRay.direction = sunSampleDir;
                     vec3 shPos; float shDist; int shMat;
                     if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
+#ifdef BIDIR
+                        radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI * bdSunW, 0.0, FIREFLY_CLAMP);
+#else
                         radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI, 0.0, FIREFLY_CLAMP);
+#endif
                     }
                 }
             }
@@ -1731,6 +1873,14 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     float NdotL_e = max(dot(faceNormal, es.wi), 0.0);
                     float bsdfPdfArea = (NdotL_e / PI) * es.cosL / (es.dist * es.dist);
                     float misW = powerHeuristic(es.pdfArea, bsdfPdfArea);
+#ifdef BIDIR
+                    {
+                        float ltDens = lightPickPdf(es.li) * emitterPdfArea(es.li) * (es.cosL / PI) * NdotL_e / (es.dist * es.dist);
+                        float cA = (bdLive && bdEligible) ? bdQ * bdCoinFactor * (((bdCosIn / PI) * bdPrevCosOut / bdD2) / bdArrivePt) * ltDens * ltCount() / es.pdfArea : 0.0;
+                        float bA = bsdfPdfArea / es.pdfArea;
+                        misW = 1.0 / (1.0 + bA * bA + cA * cA);
+                    }
+#endif
                     if (emitterDebug == 1) misW = 1.0;
                     if (emitterDebug == 2) misW = 0.0;
                     radiance += clamp(throughput * (albedo / PI) * es.Le * NdotL_e * es.cosL / (es.dist * es.dist * es.pdfArea) * misW, 0.0, FIREFLY_CLAMP);
@@ -1782,6 +1932,9 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 throughput *= albedo / reflProb;
                 lastWasSpecular = true; // Glossy reflection
                 lastBsdfPdf = 0.0;
+#ifdef BIDIR
+                bdLive = false;         // the photon pass never takes this lobe
+#endif
             } else {
                 currentRay.direction = randomCosineHemisphere(seed, faceNormal);
                 throughput *= albedo;
@@ -1789,6 +1942,12 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 float bouncedNdotL = max(dot(faceNormal, currentRay.direction), 0.001);
                 lastBsdfPdf = bouncedNdotL / PI;
                 lastWasSpecular = false;
+#ifdef BIDIR
+                if (bdLive) {
+                    if (bounce > 0) { bdQ *= ((bdCosIn / PI) * bdPrevCosOut / bdD2) / bdArrivePt; bdMatte++; }
+                    bdPrevDelta = false; bdPrevCosOut = bouncedNdotL;
+                }
+#endif
             }
         }
 

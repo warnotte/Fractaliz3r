@@ -209,11 +209,24 @@ public class GLSLFractalizerController implements RenderController {
             }
         }
         currentBooleanProgramKey = null;
-        ensureBuiltinShader(currentFractalType);
         String key = currentFractalType.getKernelName();
+        AbstractFractalParams afp = currentParams instanceof AbstractFractalParams a ? a : null;
+        String defines = afp != null ? builtinDefines(afp) : "";
+        String source = hasBuiltinShader(currentFractalType) ? engine.loadShaderSource("/shaders/fractals/" + key + ".glsl") : null;
+        if (source != null && !defines.isEmpty()) {
+            // a define changes the program: built like a graph scene, once per source
+            boolean had = engine.hasProgram(key, source, defines);
+            long t0 = System.nanoTime();
+            String err = engine.ensureProgram(key, source, defines);
+            if (err != null) System.err.println("Scene shader error: " + err);
+            else if (!had) System.out.printf("Built-in shader %s compiled in %d ms%n", key, (System.nanoTime() - t0) / 1_000_000);
+        } else {
+            ensureBuiltinShader(currentFractalType);
+        }
+        if (afp != null) engine.updateLightSSBO(lightTable(afp).data());
         if (engine.hasProgram(key)) {
             engine.setActiveProgram(key);
-            activateCaustics(key, engine.loadShaderSource("/shaders/fractals/" + key + ".glsl"), "");
+            activateCaustics(key, source, defines);
         }
     }
 
@@ -243,15 +256,26 @@ public class GLSLFractalizerController implements RenderController {
 
     /** Deep-zoom LOD is compiled in only when enabled: the mutable global it needs is
      *  otherwise read inside every DE loop and blocks constant folding. Emitter sampling
-     *  (lights.glsl) only when the graph has an emitter the list can describe. */
+     *  (lights.glsl) only when the graph has an emitter the list can describe. BIDIR, the
+     *  photon pass and the path tracer's weights against it, only with caustics on: the
+     *  program of a scene without them is what it always was. */
     private static String nodeGraphDefines(NodeGraphParams ngp) {
         return (ngp.getDetailLOD() > 0f ? "#define DETAIL_LOD\n" : "")
-             + (org.fractalizer.render.LightList.hasEmitters(ngp.getGraphRoot()) ? "#define HAS_EMITTERS\n" : "");
+             + (org.fractalizer.render.LightList.hasEmitters(ngp.getGraphRoot()) ? "#define HAS_EMITTERS\n" : "")
+             + (causticsActive(ngp) ? "#define BIDIR\n" : "");
     }
 
-    /** The scene's light table: the graph's sampleable emitters. */
-    private static org.fractalizer.render.LightList.Table lightTable(NodeGraphParams ngp) {
-        return org.fractalizer.render.LightList.emitters(ngp.getGraphRoot());
+    /** The defines of a built-in kernel scene: BIDIR with caustics, nothing otherwise. */
+    private static String builtinDefines(AbstractFractalParams p) {
+        return causticsActive(p) ? "#define BIDIR\n" : "";
+    }
+
+    /** The scene's light table: the graph's emitters, and with caustics on the sun and the
+     *  beam the photon pass draws from. */
+    private org.fractalizer.render.LightList.Table lightTable(AbstractFractalParams p) {
+        org.fractalizer.graph.GraphNode root = p instanceof NodeGraphParams ngp ? ngp.getGraphRoot() : null;
+        float[] quat = p.getCamera().getQuaternion();
+        return org.fractalizer.render.LightList.build(p, p.getCamera().getPosition(), quat, root, causticsActive(p));
     }
 
     /** The uniform map a render of the current scene would use, program activated. For
@@ -315,6 +339,7 @@ public class GLSLFractalizerController implements RenderController {
             } else if (hasBuiltinShader(currentFractalType)) {
                 key = currentFractalType.getKernelName();
                 source = engine.loadShaderSource("/shaders/fractals/" + key + ".glsl");
+                defines = builtinDefines(params);
             } else {
                 return null;
             }
@@ -322,7 +347,9 @@ public class GLSLFractalizerController implements RenderController {
             key = currentFractalType.getKernelName();
             if (!hasBuiltinShader(currentFractalType)) return null;
             source = engine.loadShaderSource("/shaders/fractals/" + key + ".glsl");
+            defines = builtinDefines(params);
         }
+        if (lights == null) lights = lightTable(params).data();
         Map<String, Object> uniforms = buildUniforms();
         uniforms.remove("pixelRadius");   // follows the rendered height: SceneSnapshot.uniformsFor
         float coneTan = params.isConeTracingEnabled() ? (float) Math.tan(params.getFov() * 0.5) : 0f;
@@ -1285,11 +1312,11 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("pathTracingEnabled", params.isPathTracingEnabled() ? 1 : 0);
             uniforms.put("neeEnabled", params.isNeeEnabled() ? 1 : 0);
             uniforms.put("maxBounces", params.getMaxBounces());
-            // The light table (lights.glsl): its size and the emitters' power, for the draw
-            org.fractalizer.render.LightList.Table lights = params instanceof NodeGraphParams ngp
-                    ? lightTable(ngp) : org.fractalizer.render.LightList.Table.EMPTY;
+            // The light table (lights.glsl): its size and the powers, for the draws
+            org.fractalizer.render.LightList.Table lights = lightTable(params);
             uniforms.put("lightCount", lights.count());
             uniforms.put("emitterPower", lights.emitterPower());
+            uniforms.put("lightPowerTotal", lights.powerTotal());
             // Caustics (photon.glsl): the emitting disk; the photon count is engine state
             uniforms.put("causticRadius", params.getCausticRadius());
             uniforms.put("causticCenter", params.getCausticCenter());

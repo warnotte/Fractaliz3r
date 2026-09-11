@@ -428,71 +428,94 @@ effect. The wavelength is one more dimension of the integral, so glass needs mor
 than the same scene without it (the previews above are 128-160 spp at 960x540); flat colour
 seen through glass is the noisiest case, fine detail behind it the cleanest.
 
-### Caustics: photons from the sun (after 3.2.2)
+### Caustics, and one light transport for every light (after 3.2.2)
 
-Light concentrated by glass or a mirror onto a matte surface, the bright crescent under a
-glass ball, the spot a lens throws, is what a path tracer with next-event estimation cannot
-render: at a matte point it samples the sun directly and a shadow ray through glass is
-blocked; from the camera it never finds a delta sun behind a chain of specular surfaces. So
-the engine traces the other way too. Off by default; on with *Caustics (photons from the
-sun)* in the Quality panel's path-tracing section, and only with path tracing.
+Light concentrated by glass or a mirror onto a matte surface, the crescent under a glass
+ball, the spot a lens throws, is what a path tracer with next-event estimation cannot render:
+at a matte point it samples the light directly and a shadow ray through glass is blocked;
+from the camera it never finds a delta sun behind a chain of specular surfaces, and finds an
+area light behind one only by chance. So the engine traces the other way too, and the two
+directions are combined by multiple importance sampling: every path is counted once, by
+whichever way found it, weighted by how likely each way was to find it. Off by default; on
+with *Caustics (photons from the sun)* in the Quality panel's path-tracing section, and only
+with path tracing. Everything below is compiled in under `BIDIR`, a define present only
+then: the program of a scene without caustics is what it always was, byte for byte.
 
-How it works (`photon.glsl`, `photon_splat.vert`, `GLSLEngine.photonPass`):
+How it works (`lights.glsl`, `photon.glsl`, the `BIDIR` blocks of `pathTrace`,
+`GLSLEngine.photonPass`):
 
 - **A second program per scene.** The scene source compiled once more with `PHOTON_PASS`,
-  which takes the camera main out of `raytracer.glsl` and appends `photon.glsl`: one
-  fragment is one photon. Compiled only when caustics are on for that scene (2-3 s, the DE
-  code being shared), by the scheduler's compile job or by `activateCurrentProgram` for
-  exports. The scene program is untouched: a render without caustics is bit-exact.
+  which takes the camera main out of `raytracer.glsl` and appends `photon.glsl`: one fragment
+  is one photon. Compiled only when caustics are on for that scene, by the scheduler's
+  compile job or by `activateCurrentProgram` for exports.
+- **Every light of the list sends photons.** A light is drawn by power: the sun (from a square
+  facing it, centred on *Caustic Centre*, half a side of *Caustic Extent*, lifted above the
+  scene, with the sun disc's softness), the beam (from its disk), the emissive primitives
+  (a point uniform on the surface, a cosine-weighted direction). Each photon carries the flux
+  its draw stands for. Point and spot lights send none: their draw stands alone.
 - **One photon pass per sample.** After each accumulation sample the engine draws
   side x side photons (128 to 1024 a side, 512 by default) into two small attachments,
   where each landed and what it adds, then splats them as points with additive blending
   into the accumulation. The post-process divides by the sample count as before, so bloom,
   tone mapping, tiles and exports see caustics without knowing about them. Adaptive
-  sampling is off while caustics are on: a pixel that stopped sampling would keep receiving
-  splats and divide by too few.
-- **Emission.** From a square facing the sun, centred on *Caustic Centre*, half a side of
-  *Caustic Extent*, lifted above the scene; each photon leaves the way the sun shines (with
-  the sun disc's softness) carrying the flux its draw stands for: the sun's irradiance,
-  `lightColor * lightIntensity`, the same E the NEE term uses, over the density of the draw.
-- **The flight.** Marched with `rayMarchSimple` like a camera ray. Glass refracts it
-  (Fresnel choice, interior march, exit refraction, the path tracer's glass exactly, and
-  with dispersion on the photon has a wavelength, so the caustics are rainbows). Metal
-  reflects it through the same GGX sampling when its roughness is at most 0.1; rougher
-  metal absorbs it, because the path tracer's NEE at a rough metal already computes the
-  sun's reflection and counting it twice would be wrong (below 0.1 that estimate is a
-  needle the firefly clamp flattens, so the photons take over). The ocean reflects or
-  absorbs. A matte surface ends the flight: the photon lands if it has met glass or metal
-  before, otherwise it is direct light, which NEE has.
+  sampling is off while caustics are on.
+- **The flight.** Marched with `rayMarchSimple` like a camera ray. Glass refracts it (the
+  path tracer's glass exactly; with dispersion on the photon has a wavelength, so the
+  caustics are rainbows), metal reflects it through the same GGX sampling whatever the
+  roughness, the ocean reflects or scatters it, a matte surface scatters it. Once it has
+  passed a glass, a mirror or a metal, a coin (one in two) at every matte or metal vertex
+  decides whether it lands there or goes on; before that it only goes on. The photon pass
+  makes the paths with such a vertex between the light and the landing; direct and diffuse
+  light are the path tracer's, whose draw has far less variance than a scatter of landings
+  (with the photons allowed to land anywhere, the sun's emission cells showed through as
+  patches on a plain floor).
 - **The landing.** The photon is connected to the camera: the pixel that sees the point, a
-  march back to the eye for visibility, and the radiance it adds,
-  phi * f * cosX / (d² A_pixel cos³Cam): the pixel's footprint on the surface is
-  A_pixel cos³Cam d² / cosX and the radiance is the flux per footprint area times the
-  BRDF. With depth of field the eye is a point of the lens (the camera rays' disk, blades
-  and anamorphic ratio) and the pixel is the one whose centre ray meets the lens ray on
-  the focal sphere. The 360 projection has no caustics. A landing is capped at 64 times
-  what a photon drawn uniformly adds at the distance of the caustic centre: the fireflies
-  of a landing right under the camera, and nothing else.
-- **Where the photons go.** Most of the square sees no glass. The splat pass also marks, on
-  a 64 x 64 map of the square, the cells whose photons met glass or metal; the engine reads
-  it back after the first four passes and every sixteenth after, lists the active cells,
-  and the photon pass draws three quarters of its photons from that list and a quarter over
-  the whole square, each with the flux of its mixture density. Unbiased whatever the map
-  (the probe checks it), and on the ball preset a caustic that took hundreds of samples
-  takes a few dozen.
+  march back to the eye for visibility, and the radiance it adds, phi * f * cosX / (d²
+  A_pixel cos³Cam), f the BRDF for the camera's direction. With depth of field the eye is a
+  point of the lens and the pixel the one whose centre ray meets the lens ray on the focal
+  sphere. The 360 projection has no caustics. A landing is capped at 64 times what a photon of
+  average flux adds at the distance of the caustic centre: the fireflies of a landing right
+  under the camera, and nothing else.
+- **The weights.** A path from the camera to a light can be made three ways: by the path
+  tracer drawing the light from its last matte or metal vertex, by a path tracer ray hitting
+  an emitter, by a photon landing where the camera sees it. Both tracers compute, for every
+  path they make, the density of the other ways of making it, as a running product over the
+  path's segments of one density over the other (area measure; a delta on either side counts
+  as one; the photon's landing and passing coins count; the photon pass's densities count
+  as many times as it draws, side² per sample, against one camera path per pixel), and
+  weight their contribution by the power heuristic. The path tracer counts the coins the
+  photon would have flipped (the matte and metal vertices before the last specular or metal
+  one, seen from the light) and gives the photon pass nothing on a path without such a
+  vertex. The roughness threshold of the first version (metal below 0.1 only) is gone: where
+  the draw is the better way the photons weigh next to nothing, where the photons are the
+  only way (a delta light behind glass) they weigh one, and rough metal is shared
+  continuously. Two details that mattered: a photon cannot land on glass, so a path whose
+  first vertex is glass is the path tracer's alone; and the segment through a glass body is
+  one vertex on both sides, whose cosine is taken where the ray leaves it.
+- **Where the sun's photons go.** Most of the square sees no glass. The splat pass also marks,
+  on a 64 x 64 map of the square, the cells whose photons met glass or metal; the engine reads
+  it back after the first four passes and every sixteenth after, lists the active cells, and
+  the photon pass draws three quarters of the sun's photons from that list, a quarter over
+  the whole square, each with the flux of its mixture density; the path tracer reads the same
+  map for its weights.
 
-What it cannot do yet: a caustic seen *through* glass (a landing has to be visible from
-the camera, so the focus of a lens right behind it stays hidden), the extra light (sun
-only), photons from the sky (the path tracer has those already, through the glass it
-sees). See IDEAS.md.
+What it cannot do yet: a caustic seen *through* glass (a landing has to be visible from the
+camera; the focus of a lens right behind it stays hidden: that is a gather, see IDEAS.md
+§ 26), photons from the sky (the path tracer has those already, through the glass it sees),
+photons from the point and spot lights.
 
-`CausticProbe` is the proof: a matte slab under the sun with `causticDebug` on, so photons
-that met nothing specular land too, renders the sun's direct light twice, once by NEE and
-once by photons, and the ratio must be 1 (0.998 on the dev machine; 0.990 with a glass
-ball on the slab and the emission map active, on the pixels the ball leaves alone). It
-also prints the cost of a pass (2 ms on the slab, 50-90 ms with a Mandelbulb for the
-photons to march, at 512 x 512) and renders the ball and a smooth metal Mandelbulb with and
-without caustics.
+The proofs. `CausticProbe`: a matte slab under the sun with `causticDebug` on, so every
+landing weighs one, renders the sun's direct light twice, once by NEE and once by photons,
+and the ratio must be 1 (0.998 on the dev machine; 0.992 with a glass ball on the slab and
+the emission map active). `BidirProbe`: a glass ball on a slab under an emissive panel, no
+sun, a scene the path tracer alone reaches entirely (the caustic under the ball by chance),
+rendered by the path tracer alone and with the photon pass weighted against it: the
+converged images must agree, and do: 0.25 % apart at 320x180, 0.6 % over 8x8 blocks (the
+marcher's cone epsilon inflates the panel a ray can hit by about that); a smooth metal
+block instead of the ball checks the GGX bookkeeping (0.1 %, 0.3 % over blocks); the beam
+across the slab checks the beam's (0.02 %). The photons remove 1.2x the RMSE at 32 spp on
+the panel scene and 1.1x on the metal one, for 3x the time per sample; the caustic is where
+they earn it, the rest of the image is the path tracer's as before.
 
 Presets: `CAUSTIC_BALL`, a glass ball on a slab with the sun low, the crescent rimmed by
 the dispersion; `CAUSTIC_LENS`, a small glass ball beside the near-white Mandelbulb with
@@ -512,9 +535,8 @@ area densities), so nothing is counted twice. Emissive fractals, palette-coloure
 primitives under a twist or a subtraction are not listed and stay found by chance.
 
 Compiled in under `HAS_EMITTERS`, a define the controller adds only when the list is not
-empty: a scene without an emitter compiles the same program as before, bit-exact. This is
-the first piece of the light list that the photon pass will draw from too, whatever the
-light (see IDEAS.md § 26).
+empty: a scene without an emitter compiles the same program as before, bit-exact. The same
+list is what the photon pass draws from, whatever the light (above).
 
 `EmitterProbe` is the proof. Its built-in slab scene (a matte slab and a box under a dim
 panel; nothing reaches the firefly clamp) rendered by chance and drawn must converge to the
@@ -539,7 +561,8 @@ light's position along its direction, its radius is the *Area / Beam Radius*, it
 *Range*, and the *Spot Edge Softness* is the width of its soft edge. Inside the cylinder the
 irradiance is the intensity, with no falloff (it is collimated); a point is lit when nothing
 sits between it and the beam's source plane, marched back along the axis. Sun-like in the
-shading, so it works in classic and path-traced modes alike.
+shading, so it works in classic and path-traced modes alike; with caustics on it sends
+photons like the sun.
 
 For a beam aimed at something, the light has to stay put while the camera moves, so the
 additional light can now be *Fixed in the world*: position and direction are then scene
@@ -681,6 +704,7 @@ reliable than re-reading the path it covers:
 | `ExportAfterPreviewProbe` | the cheap preview must not leak into an export |
 | `CausticProbe` | caustics: the photons' energy against NEE (must be 1, with and without the emission map), the cost of a pass, pictures with and without |
 | `EmitterProbe` | emitters drawn directly against found by chance: the same converged image (the slab scene), the noise removed, the cost |
+| `BidirProbe` | the path tracer alone against the path tracer with the photon pass weighted against it: the same converged image (panel, metal, beam scenes), the noise, the cost |
 | `ProspectSwapProbe` | the Discoveries search runs on a throw-away scene; the user's scene must come back pixel-identical |
 | `ExploreProbe` | the app's Explore button, headless: scored views or parameter variations from any camera, time per view |
 | `ThumbnailForge` | the Presets & Chains browser's thumbnails, every chain and preset; `install` ships them as resources |

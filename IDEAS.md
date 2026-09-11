@@ -140,7 +140,7 @@ bidirectional compiles in under its own define: the fast path stays byte-identic
 2. a beam light (a directional light confined to a cylinder), and the additional light
    fixable in the world (done);
 3. the photon pass emitting from every light of the list, with MIS weights in both tracers
-   in place of the split rules;
+   in place of the split rules (done; BidirProbe is the proof);
 4. the medium: single scattering along camera rays from the list, and along photon paths;
 5. a triangular prism primitive and the beam-through-prism preset and probe.
 

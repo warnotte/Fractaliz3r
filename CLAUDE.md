@@ -128,6 +128,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.CausticProbe" -Dexe
 # chance and drawn directly must converge to the same image; noise removed at 32 spp; time per sample.
 # Any .frac renders the same comparison without a verdict (a bright emitter is clamped when found by chance).
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.EmitterProbe" -Dexec.args="slab out/emitter 640x360 1024 32"
+# One light transport (BIDIR): the path tracer alone and the path tracer with the photon pass weighted
+# against it must converge to the same image; panel = glass ball under an emissive panel, metal = a
+# smooth metal block, beam = the beam on the slab. Noise removed and time per sample too.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.BidirProbe" -Dexec.args="panel out/bidir 320x180 2048 32"
 # The app's Explore button, headless: CameraExplorer from a fractal's default camera (or a
 # .frac), scored thumbnails written as a sheet best first, time per view.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExploreProbe" -Dexec.args="MANDELBULB out/explore 320x180 4 3 4 0.6"
@@ -254,6 +258,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ExportAfterPreviewProbe.java # the cheap preview must not leak into an export
 ├── CausticProbe.java            # caustics: photon energy against NEE, cost of a pass, pictures with and without
 ├── EmitterProbe.java            # emitters drawn vs found by chance: same converged image, noise removed, cost
+├── BidirProbe.java              # path tracer alone vs with the photon pass weighted against it: same converged image
 ├── DeferredCompileProbe.java    # a scene compile asked from the FX thread must not block it
 ├── NavigationFluidityProbe.java # the viewport while the camera moves: FX held, images/s, latency, interrupt
 ├── SliderFluidityProbe.java     # the viewport while a slider of each real panel moves; "window" for layout costs
@@ -271,8 +276,8 @@ shaders/
 ├── raytracer.glsl         # Main raymarcher (fractal-agnostic)
 ├── common.glsl            # Common utilities, materials, artistic palettes
 ├── postprocess.glsl       # Bloom, tone mapping, color correction
-├── lights.glsl            # The light list (LightList.java), compiled in under HAS_EMITTERS or BIDIR
-├── photon.glsl            # Caustics: the photon pass, the scene compiled once more under PHOTON_PASS
+├── lights.glsl            # The light list (LightList.java) and the photon pass's draws and densities, under HAS_EMITTERS / BIDIR
+├── photon.glsl            # The photon pass: light tracing from every light, MIS-weighted; the scene compiled once more under PHOTON_PASS
 ├── photon_splat.vert/frag # the photons as points into the accumulation and the emission map
 └── fractals/              # Individual fractal Distance Estimators
     ├── mandelbulb.glsl, mandelbox.glsl, menger.glsl, kaleidoscopic.glsl
