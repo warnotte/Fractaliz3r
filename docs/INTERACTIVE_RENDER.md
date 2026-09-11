@@ -100,7 +100,12 @@ eight times the preview cost and measures.
   paid 2-4 ms of GPU time each for it (`StripCostProbe`);
 - `commitSample()` counts the sample; `discardSample()` marks the accumulation for a
   clear (a partial sample must never be shown, and the viewport only reads frames between
-  samples for the same reason);
+  samples for the same reason). Both disable the strips' scissor whatever `passBound`
+  says: a GL task posted between the last strip and the discard (a palette upload on a
+  preset load, an SSBO update) clears `passBound`, and a scissor left on clipped every
+  clear and every whole sample after it to the last strip's rectangle. That was the
+  "bands after a preset load" of 2026-09-11; `bindAccumPass` and `clearAccumulation`
+  disable it too, and `BandedSampleProbe` has the case;
 - `fence()` returns a `GpuFence` whose `await()` drains the GPU up to it, and `timer()` a
   `GpuTimer` (a `GL_TIME_ELAPSED` query) that gives the GPU time of a step for the cost
   model. Every step waits for its own fence. **A sync between two draws costs the tail of

@@ -303,6 +303,7 @@ public class GLSLEngine implements AutoCloseable {
     private void bindAccumPass(ShaderProgram program, Map<String, Object> uniforms) {
         touchGLState();
         if (photonSide > 0) ensurePhotonBuffers(photonSide);
+        glDisable(GL_SCISSOR_TEST);            // a whole sample, unless drawRows narrows it right after
         glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
         glViewport(0, 0, currentWidth, currentHeight);
         glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE);
@@ -478,7 +479,12 @@ public class GLSLEngine implements AutoCloseable {
     private void closeSample() {
         assertGLThread();
         if (sliceProgram == null) return;
-        if (passBound) { glDisable(GL_SCISSOR_TEST); endAccumPass(); }
+        // The scissor of the last strip is disabled whatever passBound says: another GL
+        // task between that strip and this close (a palette upload, an SSBO update) clears
+        // passBound, and a scissor left on clipped every clear and sample after it to the
+        // strip's rectangle: the bands seen after a preset load (BandedSampleProbe).
+        glDisable(GL_SCISSOR_TEST);
+        if (passBound) endAccumPass();
         if (adaptiveSamplingEnabled) glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
         sliceProgram = null;
         sliceUniforms = null;
@@ -905,6 +911,7 @@ public class GLSLEngine implements AutoCloseable {
 
     private void clearAccumulation() {
         touchGLState();
+        glDisable(GL_SCISSOR_TEST);            // the whole buffer, whatever a strip left
         glBindFramebuffer(GL_FRAMEBUFFER, accumFBO); glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
         glBindFramebuffer(GL_FRAMEBUFFER, varianceFBO); glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
         glBindFramebuffer(GL_FRAMEBUFFER, 0); sampleCount = 0;

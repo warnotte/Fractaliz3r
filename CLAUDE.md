@@ -108,7 +108,8 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.NavigationFluidityP
 # images/s, request->image. "window" puts them in a real window so layout and CSS passes count.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.SliderFluidityProbe" -Dexec.args="presets/ALBEDO_039.frac 1280x720 3 window"
 # A refinement sample drawn in scissored strips (abortable between them) must be the same sample
-# to the bit, and an aborted one must be cleared, not accumulated.
+# to the bit, an aborted one must be cleared, not accumulated, and a strip interrupted by another
+# GL task (a palette upload) then discarded must leave no scissor behind (the bands of a preset load).
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.BandedSampleProbe"
 # What a sample costs as strips against whole, on the GPU, per sync pattern (bound once, rebound
 # each, fenced each, one or two in flight): the measurement behind the scheduler's slice lengths.

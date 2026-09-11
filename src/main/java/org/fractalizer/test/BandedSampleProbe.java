@@ -84,6 +84,25 @@ public class BandedSampleProbe {
                 countAfterDiscard, diff);
         ok &= countAfterDiscard == 0 && diff == 0 && engine.getSampleCount() == 1;
 
+        // A strip, then another GL task that touches the state (a palette upload, as a preset
+        // load posts one), then the discard a preempting request makes: the next whole sample
+        // must still be a whole sample, not the last strip's rectangle (the scissor test must
+        // not survive the discard).
+        engine.resetAccumulation();
+        engine.postAndWait(() -> {
+            engine.beginSample(uniforms);
+            engine.drawRows(H / 4, H / 8);
+            engine.fence().await();
+        });
+        engine.updatePaletteTexture(new float[]{0.2f, 0.4f, 0.6f, 0.8f, 0.6f, 0.4f}, 2);
+        engine.postAndWait(engine::discardSample);
+        engine.renderSamples(uniforms, 1);
+        float[] afterTouch = engine.readRawImage();
+        diff = 0;
+        for (int i = 0; i < whole.length; i++) if (whole[i] != afterTouch[i]) diff++;
+        System.out.printf("  discard after a strip and a palette upload: next sample differs in %d values%n", diff);
+        ok &= diff == 0 && engine.getSampleCount() == 1;
+
         System.out.println(ok ? "RESULT: PASS" : "RESULT: FAIL");
         controller.close();
         Platform.exit();
