@@ -60,8 +60,8 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PresetForge" -Dexec
 #   ShaderCompileProbe --render, which skips the two-minute compile of the built-in shaders.
 
 # Gallery: render every .frac in a directory exactly as the app shows it (params + gradient +
-# post-processing chain). This is where docs/gallery/*.jpg come from (1280x720, 128 spp).
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.GalleryRender" -Dexec.args="presets out/gallery 1280x720 128"
+# post-processing chain). This is where docs/gallery/*.jpg come from (1280x720, 256 spp).
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.GalleryRender" -Dexec.args="presets out/gallery 1280x720 256"
 
 # Autonomous discovery: search Julia-constant space for new fractals worth looking at.
 # Boundary constants are found on the CPU (no rendering), then rendered, scored, filtered
@@ -141,7 +141,7 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExploreProbe" -Dexe
 #   runs the Variations tab instead (count, amplitude).
 # The Presets & Chains browser's thumbnails: every chain + every preset at 320x180. Rerun with
 # "install" whenever a chain or a preset is added — a JUnit test fails until the shipped set matches.
-mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ThumbnailForge" -Dexec.args="out/thumbs 320x180 16 install"
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ThumbnailForge" -Dexec.args="out/thumbs 320x180 32 install"
 # How far ahead of the work an export progress bar runs: time of the first 100%% report
 # against the moment the export future actually completes.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportProgressProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 2600x1600 128"

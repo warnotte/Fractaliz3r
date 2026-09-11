@@ -130,7 +130,7 @@ or makes the chain the scene's node graph, camera placed as in its thumbnail, wi
 Graph editor showing its steps.
 
 The thumbnails are not rendered on open — thirty scenes with a shader compile each is not
-something to wait for. `test/ThumbnailForge` renders them (320×180, 16 spp) under `out/thumbs`
+something to wait for. `test/ThumbnailForge` renders them (320×180, 32 spp) under `out/thumbs`
 and, with `install` as its last argument, copies them into `src/main/resources/thumbs`
 together with `presets/index.txt`, the list the browser reads (a jar cannot list its own
 resources). Two JUnit tests keep the shipped set honest: every chain in the library must have

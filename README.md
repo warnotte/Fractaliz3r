@@ -17,7 +17,7 @@ raymarching, path tracing and a full post-processing chain.
 ## Gallery
 
 Every image below is a shipped preset: open it from `presets/` and you are looking at the same
-scene, live. All were rendered by the app at 1280×720 with 128 samples per pixel.
+scene, live. All were rendered by the app at 1280×720 with 256 samples per pixel.
 
 | | | |
 |:---:|:---:|:---:|
