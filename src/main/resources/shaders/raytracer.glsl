@@ -503,6 +503,10 @@ vec3 computeVolumetricFog(Ray ray, float hitDist, vec3 surfaceColor, out float e
 bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist, out int matType);
 
 vec3 getExtraLightAxisWS() {
+    if (extraLightAttachToCamera == 0) {
+        // Fixed in the world: the direction as given.
+        return dot(extraLightDir, extraLightDir) < 1e-8 ? vec3(0.0, 0.0, 1.0) : normalize(extraLightDir);
+    }
     // Dampen lateral direction controls to keep spot steering predictable.
     vec3 localDir = vec3(extraLightDir.x * 0.2, extraLightDir.y * 0.2, extraLightDir.z);
     if (dot(localDir, localDir) < 1e-8) {
@@ -512,6 +516,7 @@ vec3 getExtraLightAxisWS() {
 }
 
 vec3 getExtraLightPositionWS() {
+    if (extraLightAttachToCamera == 0) return extraLightPos;   // fixed in the world, in scene units
     // Camera-local offset intentionally scaled down for finer positioning.
     return camPos + rotateByQuaternion(extraLightPos * 0.1, camQuat);
 }
@@ -583,6 +588,25 @@ vec3 sampleExtraLightRadiance(vec3 hitPos, vec3 normal, float surfaceDist, inout
     }
 
     vec3 baseRadiance = extraLightColor * extraLightIntensity;
+
+    if (extraLightType == EXTRA_LIGHT_BEAM) {
+        // A collimated beam: the irradiance is the intensity inside a cylinder of the area
+        // radius around the axis, from the position to the range, with the cone softness
+        // as the width of its soft edge; no falloff. Lit if nothing sits between the point
+        // and the beam's source plane.
+        vec3 axis = getExtraLightAxisWS();
+        vec3 rel = hitPos - getExtraLightPositionWS();
+        float t = dot(rel, axis);
+        if (t <= 0.0 || t >= max(extraLightRange, 0.0001)) return vec3(0.0);
+        float radius = max(extraLightAreaRadius, 1e-4);
+        float r = length(rel - axis * t);
+        if (r >= radius) return vec3(0.0);
+        float edge = clamp(extraLightConeSoftness, 0.0, 1.0);
+        float att = edge < 0.001 ? 1.0 : 1.0 - smoothstep(radius * (1.0 - edge), radius, r);
+        lightDirNorm = -axis;
+        float visibility = calcExtraLightVisibility(hitPos, normal, -axis, t, surfaceDist);
+        return baseRadiance * (att * visibility);
+    }
 
     vec3 lightPos = getExtraLightPositionWS();
     float areaRadius = max(extraLightAreaRadius, 0.0);

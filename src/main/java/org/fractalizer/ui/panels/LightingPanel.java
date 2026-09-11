@@ -52,6 +52,7 @@ public class LightingPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider extraLightAreaRadiusSlider;
     private EnhancedSlider extraLightConeAngleSlider;
     private EnhancedSlider extraLightConeSoftnessSlider;
+    private CheckBox extraLightWorldCheck;
 
     public LightingPanel(Supplier<AbstractFractalParams> paramsSupplier, RenderCallback renderCallback) {
         this.paramsSupplier = paramsSupplier;
@@ -144,11 +145,19 @@ public class LightingPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        Label extraLightInfo = new Label("Used in Path Tracing mode.\nPosition/Direction are camera-relative.");
+        Label extraLightInfo = new Label("Used in Path Tracing mode.\nPosition/Direction follow the camera unless fixed in the world.\nBeam: a light confined to a cylinder (radius = area radius, length = range, edge = softness).");
         extraLightInfo.getStyleClass().add("hint-label");
 
+        extraLightWorldCheck = new CheckBox("Fixed in the world (scene units)");
+        extraLightWorldCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setExtraLightAttachToCamera(!extraLightWorldCheck.isSelected());
+                renderCallback.requestRender();
+            }
+        });
+
         extraLightTypeCombo = new ComboBox<>();
-        extraLightTypeCombo.getItems().addAll("Off", "Point (Omni)", "Spot");
+        extraLightTypeCombo.getItems().addAll("Off", "Point (Omni)", "Spot", "Beam");
         extraLightTypeCombo.getSelectionModel().select(0);
         extraLightTypeCombo.setMaxWidth(Double.MAX_VALUE);
         extraLightTypeCombo.setOnAction(e -> {
@@ -241,7 +250,7 @@ public class LightingPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        extraLightAreaRadiusSlider = new EnhancedSlider("Area Radius (Soft Shadows)", 0.0, 0.1, 0.03, false);
+        extraLightAreaRadiusSlider = new EnhancedSlider("Area / Beam Radius", 0.0, 0.5, 0.03, false);
         extraLightAreaRadiusSlider.setPrecision(3);
         extraLightAreaRadiusSlider.setOnAction(v -> {
             if (!suppressRender) {
@@ -281,7 +290,7 @@ public class LightingPanel extends ScrollPane implements Refreshable {
         TitledPane ambPane = new TitledPane("Ambient", ambBox);
         ambPane.setExpanded(false);
 
-        VBox extraBox = new VBox(5, extraLightInfo, extraLightTypeCombo,
+        VBox extraBox = new VBox(5, extraLightInfo, extraLightTypeCombo, extraLightWorldCheck,
             extraLightPosXSlider, extraLightPosYSlider, extraLightPosZSlider,
             extraLightDirXSlider, extraLightDirYSlider, extraLightDirZSlider,
             extraLightColorPicker, extraLightIntensitySlider, extraLightRangeSlider,
@@ -299,6 +308,7 @@ public class LightingPanel extends ScrollPane implements Refreshable {
         return switch (uiIndex) {
             case 1 -> AbstractFractalParams.EXTRA_LIGHT_POINT;
             case 2 -> AbstractFractalParams.EXTRA_LIGHT_SPOT;
+            case 3 -> AbstractFractalParams.EXTRA_LIGHT_BEAM;
             default -> AbstractFractalParams.EXTRA_LIGHT_OFF;
         };
     }
@@ -307,6 +317,7 @@ public class LightingPanel extends ScrollPane implements Refreshable {
         return switch (type) {
             case AbstractFractalParams.EXTRA_LIGHT_POINT -> 1;
             case AbstractFractalParams.EXTRA_LIGHT_SPOT -> 2;
+            case AbstractFractalParams.EXTRA_LIGHT_BEAM -> 3;
             default -> 0; // Includes directional for backward compatibility.
         };
     }
@@ -317,11 +328,13 @@ public class LightingPanel extends ScrollPane implements Refreshable {
         int type = uiIndexToExtraLightType(extraLightTypeCombo.getSelectionModel().getSelectedIndex());
         boolean off = type == AbstractFractalParams.EXTRA_LIGHT_OFF;
         boolean spot = type == AbstractFractalParams.EXTRA_LIGHT_SPOT;
+        boolean beam = type == AbstractFractalParams.EXTRA_LIGHT_BEAM;
 
         boolean posEnabled = !off;
-        boolean dirEnabled = !off && spot;
+        boolean dirEnabled = !off && (spot || beam);
         boolean rangeEnabled = !off;
         boolean coneEnabled = !off && spot;
+        extraLightWorldCheck.setDisable(off);
 
         extraLightPosXSlider.setDisable(!posEnabled);
         extraLightPosYSlider.setDisable(!posEnabled);
@@ -332,7 +345,7 @@ public class LightingPanel extends ScrollPane implements Refreshable {
         extraLightRangeSlider.setDisable(!rangeEnabled);
         extraLightAreaRadiusSlider.setDisable(!rangeEnabled);
         extraLightConeAngleSlider.setDisable(!coneEnabled);
-        extraLightConeSoftnessSlider.setDisable(!coneEnabled);
+        extraLightConeSoftnessSlider.setDisable(!(coneEnabled || beam));
         extraLightColorPicker.setDisable(off);
         extraLightIntensitySlider.setDisable(off);
     }
@@ -374,6 +387,7 @@ public class LightingPanel extends ScrollPane implements Refreshable {
                 extraType = AbstractFractalParams.EXTRA_LIGHT_OFF;
             }
             extraLightTypeCombo.getSelectionModel().select(extraLightTypeToUiIndex(extraType));
+            extraLightWorldCheck.setSelected(!p.isExtraLightAttachToCamera());
             extraLightPosXSlider.setValue(p.getExtraLightX());
             extraLightPosYSlider.setValue(p.getExtraLightY());
             extraLightPosZSlider.setValue(p.getExtraLightZ());

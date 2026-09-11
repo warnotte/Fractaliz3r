@@ -531,6 +531,23 @@ above the shading point; comparing the distance it covered to the distance to th
 rejected most of the floor. What says the emitter was reached is that the march stopped
 near the point drawn.
 
+### The beam light (after 3.2.2)
+
+The additional light (Lighting panel, *Additional Light*) has a fourth type, *Beam*: a
+directional light confined to a cylinder, a laser or a shaft. Its axis runs from the
+light's position along its direction, its radius is the *Area / Beam Radius*, its length the
+*Range*, and the *Spot Edge Softness* is the width of its soft edge. Inside the cylinder the
+irradiance is the intensity, with no falloff (it is collimated); a point is lit when nothing
+sits between it and the beam's source plane, marched back along the axis. Sun-like in the
+shading, so it works in classic and path-traced modes alike.
+
+For a beam aimed at something, the light has to stay put while the camera moves, so the
+additional light can now be *Fixed in the world*: position and direction are then scene
+coordinates as given, instead of the camera-relative offsets (scaled by a tenth, laterally
+damped) the other modes keep by default. The flag was in the file format all along and
+forced on; it is honoured now. `presets/BEAM_SLAB.frac` shows the beam across a dim slab
+onto a matte block: the disc it paints, the bounce light in front of it, the shadow behind.
+
 ---
 
 ## Surface Effects (Per-Node via EffectNode)

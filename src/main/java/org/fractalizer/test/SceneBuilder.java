@@ -709,6 +709,22 @@ public class SceneBuilder {
         return this;
     }
 
+    /** The additional light as a beam fixed in the world: from a point, along a direction,
+     *  a cylinder of this radius over this length, this irradiance. */
+    public SceneBuilder beam(float ox, float oy, float oz, float dx, float dy, float dz,
+                             float radius, float length, float r, float g, float b, float intensity) {
+        config.lighting.extraType = org.fractalizer.fractals.AbstractFractalParams.EXTRA_LIGHT_BEAM;
+        config.lighting.extraAttachToCamera = false;
+        config.lighting.extraPosition = new float[]{ox, oy, oz};
+        config.lighting.extraDirection = new float[]{dx, dy, dz};
+        config.lighting.extraAreaRadius = radius;
+        config.lighting.extraRange = length;
+        config.lighting.extraColor = new float[]{r, g, b};
+        config.lighting.extraIntensity = intensity;
+        config.lighting.extraConeSoftness = 0.15f;
+        return this;
+    }
+
     /** Caustics from the sun: photons leave a disk of this radius, centred on the origin
      *  unless {@link #causticCenter} says otherwise; enables them. */
     public SceneBuilder caustics(float radius) {

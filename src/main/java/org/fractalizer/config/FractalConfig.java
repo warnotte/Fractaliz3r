@@ -499,7 +499,7 @@ public class FractalConfig {
         params.setAmbientColor(lighting.ambientColor[0], lighting.ambientColor[1], lighting.ambientColor[2]);
         params.setAmbientIntensity(lighting.ambientIntensity);
         params.setExtraLightType(lighting.extraType);
-        params.setExtraLightAttachToCamera(true);
+        params.setExtraLightAttachToCamera(lighting.extraAttachToCamera);
         if (lighting.extraPosition != null && lighting.extraPosition.length == 3) {
             params.setExtraLightPosition(lighting.extraPosition[0], lighting.extraPosition[1], lighting.extraPosition[2]);
         }

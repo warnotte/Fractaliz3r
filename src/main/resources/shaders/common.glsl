@@ -33,6 +33,7 @@ const int EXTRA_LIGHT_OFF = 0;
 const int EXTRA_LIGHT_DIRECTIONAL = 1;
 const int EXTRA_LIGHT_POINT = 2;
 const int EXTRA_LIGHT_SPOT = 3;
+const int EXTRA_LIGHT_BEAM = 4;
 
 // ============================================================================
 // Common Uniforms

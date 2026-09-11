@@ -282,6 +282,18 @@ public class PresetForge {
                 .caustics(2.5f).causticPhotons(512)
                 .colorStrength(1.0f).metalness(0.0f));
 
+        // --- The beam: the additional light as a cylinder fixed in the world (a laser), here
+        // across a dim slab onto a matte block: the disc it paints, the shadow behind.
+        p.put("BEAM_SLAB", () -> SceneBuilder.nodeGraph(SceneBuilder.union(SceneBuilder.slab(2.6f), matteBlock()))
+                .camera(0f, 1.6f, -3.2f).lookAt(0f, 0.3f, 0f).fov(42)
+                .gradient(CRYSTAL).coloringMode(0)
+                .materialType(0).roughness(0.6f)
+                .pathTracing(true).maxBounces(4).rimIntensity(0.0f).skyType(3)
+                .lightDir(0.3f, 1.0f, -0.4f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(0.15f)
+                .ambientColor(0.5f, 0.55f, 0.65f).ambientIntensity(0.05f)
+                .beam(-2.5f, 0.6f, 0.0f, 1.0f, -0.15f, 0.0f, 0.12f, 6.0f, 1.0f, 0.97f, 0.9f, 12.0f)
+                .colorStrength(1.0f).metalness(0.0f));
+
         p.put("CAUSTIC_BALL", () -> SceneBuilder.nodeGraph(SceneBuilder.union(SceneBuilder.glassBall(0.5f, 1.5f, 0.02f), SceneBuilder.slab(2.6f)))
                 .camera(0f, 1.7f, -3.4f).lookAt(0f, 0.35f, 0f).fov(42)
                 .gradient(CRYSTAL).coloringMode(0)
@@ -318,6 +330,15 @@ public class PresetForge {
                 .lightDir(1.5f, 2.5f, -2.5f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(3.0f)
                 .ambientColor(0.4f, 0.45f, 0.55f).ambientIntensity(0.25f)
                 .colorStrength(1.0f).metalness(0.0f);
+    }
+
+    /** A matte block standing on the slab, a little to the right, turned a bit. */
+    static org.fractalizer.graph.GraphNode matteBlock() {
+        org.fractalizer.graph.PrimitiveNode block = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.BOX);
+        block.setSizeX(0.35f); block.setSizeY(0.4f); block.setSizeZ(0.35f);
+        org.fractalizer.graph.MaterialNode m = material(SceneBuilder.translate(SceneBuilder.rotate(block, 0f, 20f, 0f), 0.4f, 0.4f, 0.1f), 0.85f, 0.35f, 0.3f, 0.6f, 0f);
+        m.setMaterialType(0);
+        return m;
     }
 
     /** A small glass ball off to the side in front of the Mandelbulb, a lens: with the sun

@@ -204,6 +204,7 @@ public abstract class AbstractFractalParams implements FractalParams {
     public static final int EXTRA_LIGHT_DIRECTIONAL = 1;
     public static final int EXTRA_LIGHT_POINT = 2;
     public static final int EXTRA_LIGHT_SPOT = 3;
+    public static final int EXTRA_LIGHT_BEAM = 4;    // a directional light confined to a cylinder: a laser, a shaft
 
     protected int materialType;
     protected float metalness;       // For metallic: blend between dielectric and metal (0-1)
@@ -804,12 +805,14 @@ public abstract class AbstractFractalParams implements FractalParams {
     // Additional light
     public int getExtraLightType() { return extraLightType; }
     public void setExtraLightType(int type) {
-        int clamped = Math.max(EXTRA_LIGHT_OFF, Math.min(EXTRA_LIGHT_SPOT, type));
+        int clamped = Math.max(EXTRA_LIGHT_OFF, Math.min(EXTRA_LIGHT_BEAM, type));
         // Directional mode is intentionally disabled for this additional light workflow.
         this.extraLightType = (clamped == EXTRA_LIGHT_DIRECTIONAL) ? EXTRA_LIGHT_OFF : clamped;
     }
-    public boolean isExtraLightAttachToCamera() { return true; }
-    public void setExtraLightAttachToCamera(boolean attachToCamera) { this.extraLightAttachToCamera = true; }
+    /** Camera-relative (the default, position and direction follow the camera) or fixed in
+     *  the world: a beam aimed at a prism has to stay where it is while the camera moves. */
+    public boolean isExtraLightAttachToCamera() { return extraLightAttachToCamera; }
+    public void setExtraLightAttachToCamera(boolean attachToCamera) { this.extraLightAttachToCamera = attachToCamera; }
     public float getExtraLightX() { return extraLightX; }
     public float getExtraLightY() { return extraLightY; }
     public float getExtraLightZ() { return extraLightZ; }

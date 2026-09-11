@@ -46,6 +46,8 @@ class ConfigRoundTripTest {
         written.setIor(1.62f);
         written.setDispersionEnabled(true);
         written.setDispersion(0.017f);
+        written.setExtraLightType(org.fractalizer.fractals.AbstractFractalParams.EXTRA_LIGHT_BEAM);
+        written.setExtraLightAttachToCamera(false);
         written.setCausticsEnabled(true);
         written.setCausticPhotons(256);
         written.setCausticRadius(4.5f);
@@ -96,6 +98,8 @@ class ConfigRoundTripTest {
         assertEquals(written.getIor(), reloaded.getIor(), "ior");
         assertEquals(written.isDispersionEnabled(), reloaded.isDispersionEnabled(), "dispersionEnabled");
         assertEquals(written.getDispersion(), reloaded.getDispersion(), "dispersion");
+        assertEquals(written.getExtraLightType(), reloaded.getExtraLightType(), "extraLightType");
+        assertEquals(written.isExtraLightAttachToCamera(), reloaded.isExtraLightAttachToCamera(), "extraLightAttachToCamera");
         assertEquals(written.isCausticsEnabled(), reloaded.isCausticsEnabled(), "causticsEnabled");
         assertEquals(written.getCausticPhotons(), reloaded.getCausticPhotons(), "causticPhotons");
         assertEquals(written.getCausticRadius(), reloaded.getCausticRadius(), "causticRadius");
