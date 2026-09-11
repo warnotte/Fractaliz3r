@@ -35,6 +35,16 @@ public class GLSLEngine implements AutoCloseable {
     private float envTotalLuminance;
     private boolean envCDFReady = false;
     private int materialSSBO = 0;
+    // Caustics: the photon pass draws side x side photons into these and the splat pass adds
+    // them to the accumulation, one pass per sample (photon.glsl); 0 = off
+    private volatile int photonSide = 0;
+    private int photonFBO, photonPixelTexture, photonColorTexture, photonTextureSide, photonVAO;
+    private ShaderProgram splatProgram;
+    // The emission square as a grid of cells: which have produced a specular hit (drawn by
+    // the splat pass, read back now and then), and the snapshot the photon pass draws from
+    private static final int CAUSTIC_GRID = 64;
+    private int cellFBO, cellTexture, cellActiveTexture, cellListTexture, activeCells;
+    private boolean cellMapDirty;
     private int quadVAO, quadVBO, quadEBO;
     private final Map<String, ShaderProgram> programs = new HashMap<>();
     private String activeProgram;
@@ -171,13 +181,21 @@ public class GLSLEngine implements AutoCloseable {
      *                     features that have to be compiled out entirely when unused.
      */
     public String loadCustomFractalShader(String name, String userSource, String extraDefines) {
+        return compileSceneProgram(name, userSource, extraDefines, false);
+    }
+
+    /** A scene program: the defines, common.glsl, the scene, the raytracer. The photon
+     *  variant adds PHOTON_PASS, which takes the camera main out, and photon.glsl after. */
+    private String compileSceneProgram(String name, String userSource, String extraDefines, boolean photon) {
         String[] error = {null};
         runOnGLThread(() -> {
             try {
                 String vertexSource = loadResource("/shaders/fullscreen.vert");
                 String commonSource = stripVersion(loadResource("/shaders/common.glsl"));
                 String raytracerSource = stripVersion(loadResource("/shaders/raytracer.glsl"));
-                String fragmentSource = "#version 430 core\n" + extraDefines + commonSource + "\n" + userSource + "\n" + raytracerSource;
+                String fragmentSource = "#version 430 core\n" + extraDefines + (photon ? "#define PHOTON_PASS\n" : "")
+                        + commonSource + "\n" + userSource + "\n" + raytracerSource
+                        + (photon ? "\n" + stripVersion(loadResource("/shaders/photon.glsl")) : "");
                 ShaderProgram old = programs.remove(name);
                 if (old != null) old.delete();
                 ShaderProgram program = new ShaderProgram(vertexSource, fragmentSource);
@@ -268,6 +286,12 @@ public class GLSLEngine implements AutoCloseable {
         glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE);
         program.use();
         program.setUniform("resolution", (float) currentWidth, (float) currentHeight);
+        bindSceneState(program, uniforms);
+        glBindVertexArray(quadVAO);
+    }
+
+    // Textures, SSBO and the scene's uniforms: what a scene program needs whichever pass it draws.
+    private void bindSceneState(ShaderProgram program, Map<String, Object> uniforms) {
         glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, envMapTexture);
         program.setUniform("envMap", 0); program.setUniform("useEnvMap", envMapLoaded ? 1 : 0);
         program.setUniform("envRotation", envRotation); program.setUniform("envLightingMix", envLightingMix);
@@ -286,7 +310,6 @@ public class GLSLEngine implements AutoCloseable {
         if (adaptiveSamplingEnabled) glBindImageTexture(5, varianceTexture, 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
         if (materialSSBO != 0) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, materialSSBO);
         for (Map.Entry<String, Object> entry : uniforms.entrySet()) { setUniformValue(program, entry.getKey(), entry.getValue()); }
-        glBindVertexArray(quadVAO);
     }
 
     // Draws one accumulation sample; only the per-sample uniforms change. Must run on
@@ -311,6 +334,7 @@ public class GLSLEngine implements AutoCloseable {
             ShaderProgram program = programs.get(activeProgram);
             bindAccumPass(program, uniforms);
             drawAccumSample(program);
+            if (photonsActive()) photonPass(uniforms, sampleCount - 1);
             endAccumPass();
         });
     }
@@ -329,7 +353,9 @@ public class GLSLEngine implements AutoCloseable {
             ShaderProgram program = programs.get(activeProgram);
             bindAccumPass(program, uniforms);
             for (int s = 0; s < count && sampleCount < maxSamples; s++) {
+                if (s > 0 && photonsActive()) bindAccumPass(program, uniforms);   // the photon pass unbound it
                 drawAccumSample(program);
+                if (photonsActive()) photonPass(uniforms, sampleCount - 1);
             }
             endAccumPass();
         });
@@ -406,7 +432,9 @@ public class GLSLEngine implements AutoCloseable {
 
     /** Close the open sample and count it. */
     public void commitSample() {
+        Map<String, Object> uniforms = sliceUniforms;
         closeSample();
+        if (photonsActive() && uniforms != null) photonPass(uniforms, sampleCount);
         sampleCount++;
     }
 
@@ -531,6 +559,162 @@ public class GLSLEngine implements AutoCloseable {
     public boolean hasProgram(String name, String source, String defines) {
         String full = (defines == null ? "" : defines) + source;
         return programs.containsKey(name) && full.equals(programSources.get(name));
+    }
+
+    // ------------------------------------------------------------------------------------
+    // Caustics: the photon variant of a scene program, and the two passes it takes
+    // ------------------------------------------------------------------------------------
+
+    /** The photon-pass variant of {@code name}'s scene, as {@link #ensureProgram}: asked
+     *  for only when caustics are on for that scene, compiled once per source. */
+    public String ensurePhotonProgram(String name, String source, String defines) {
+        String key = photonKey(name);
+        String full = (defines == null ? "" : defines) + source;
+        if (full.equals(programSources.get(key)) && programs.containsKey(key)) return null;
+        String err = compileSceneProgram(key, source, defines == null ? "" : defines, true);
+        if (err == null) programSources.put(key, full);
+        return err;
+    }
+
+    public boolean hasPhotonProgram(String name, String source, String defines) {
+        String key = photonKey(name);
+        return programs.containsKey(key) && ((defines == null ? "" : defines) + source).equals(programSources.get(key));
+    }
+
+    private static String photonKey(String name) { return name + "#photon"; }
+
+    /** Photons per pass for caustics, as the side of a square (side x side photons); 0 is
+     *  off. With a side set, every accumulation sample is followed by one photon pass of the
+     *  active program's photon variant, which must exist ({@link #ensurePhotonProgram}). */
+    public void setCausticPhotons(int side) { photonSide = Math.max(0, side); }
+    public int getCausticPhotons() { return photonSide; }
+
+    /** Photons follow the samples of a final render only: an AOV pass (depth, normals,
+     *  the debug views) must not receive radiance splats. */
+    private boolean photonsActive() { return photonSide > 0 && currentRenderMode == 0; }
+
+    /** One pass of photons with the active program's photon variant, then their splat
+     *  into the accumulation. GL thread, between samples; leaves no pass bound. */
+    private void photonPass(Map<String, Object> uniforms, int passIndex) {
+        ShaderProgram photon = programs.get(photonKey(activeProgram));
+        if (photon == null) throw new IllegalStateException("caustics on but no photon program for " + activeProgram + ": ensurePhotonProgram first");
+        int side = photonSide;
+        ensurePhotonBuffers(side);
+        touchGLState();
+        // 1. where each photon lands and what it adds there
+        glBindFramebuffer(GL_FRAMEBUFFER, photonFBO);
+        glViewport(0, 0, side, side);
+        glDisable(GL_BLEND);
+        photon.use();
+        photon.setUniform("resolution", (float) currentWidth, (float) currentHeight);
+        bindSceneState(photon, uniforms);
+        photon.setUniform("photonSide", side);
+        photon.setUniform("sampleIndex", passIndex);
+        glActiveTexture(GL_TEXTURE7); glBindTexture(GL_TEXTURE_2D, cellListTexture); photon.setUniform("causticCellList", 7);
+        glActiveTexture(GL_TEXTURE8); glBindTexture(GL_TEXTURE_2D, cellActiveTexture); photon.setUniform("causticCellActive", 8);
+        photon.setUniform("causticActiveCells", activeCells);
+        photon.setUniform("time", (float) glfwGetTime());
+        glBindVertexArray(quadVAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        // 2. a point per photon, added to the accumulation
+        glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
+        glViewport(0, 0, currentWidth, currentHeight);
+        glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE);
+        splatProgram.use();
+        glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, photonPixelTexture); splatProgram.setUniform("photonPixelTex", 0);
+        glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, photonColorTexture); splatProgram.setUniform("photonColorTex", 1);
+        splatProgram.setUniform("photonSide", side);
+        splatProgram.setUniform("splatMode", 0);
+        glBindVertexArray(photonVAO);
+        glDrawArrays(GL_POINTS, 0, side * side);
+        // 3. which cells of the emission square met glass or metal
+        glBindFramebuffer(GL_FRAMEBUFFER, cellFBO);
+        glViewport(0, 0, CAUSTIC_GRID, CAUSTIC_GRID);
+        splatProgram.setUniform("splatMode", 1);
+        glDrawArrays(GL_POINTS, 0, side * side);
+        glBindVertexArray(0);
+        glDisable(GL_BLEND);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        cellMapDirty = true;
+        // The first passes are drawn over the whole square and shape the map fast; after
+        // that a refresh every sixteen passes follows what the map still discovers.
+        if (passIndex < 4 || passIndex % 16 == 15) refreshCellMap();
+    }
+
+    /** Read the cell map back, list the active cells, and give both to the photon pass as
+     *  one consistent snapshot. GL thread. */
+    private void refreshCellMap() {
+        if (!cellMapDirty) return;
+        cellMapDirty = false;
+        int n = CAUSTIC_GRID * CAUSTIC_GRID;
+        FloatBuffer hits = MemoryUtil.memAllocFloat(n);
+        glBindFramebuffer(GL_FRAMEBUFFER, cellFBO);
+        glReadPixels(0, 0, CAUSTIC_GRID, CAUSTIC_GRID, GL_RED, GL_FLOAT, hits);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        FloatBuffer active = MemoryUtil.memAllocFloat(n);
+        FloatBuffer list = MemoryUtil.memAllocFloat(n);
+        int count = 0;
+        for (int i = 0; i < n; i++) {
+            boolean hit = hits.get(i) > 0f;
+            active.put(i, hit ? 1f : 0f);
+            if (hit) list.put(count++, (float) i);
+        }
+        glBindTexture(GL_TEXTURE_2D, cellActiveTexture);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, CAUSTIC_GRID, CAUSTIC_GRID, GL_RED, GL_FLOAT, active);
+        if (count > 0) {
+            list.limit(count);
+            glBindTexture(GL_TEXTURE_2D, cellListTexture);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, count, 1, GL_RED, GL_FLOAT, list);
+        }
+        activeCells = count;
+        MemoryUtil.memFree(hits); MemoryUtil.memFree(active); MemoryUtil.memFree(list);
+    }
+
+    private void clearCellMap() {
+        if (splatProgram == null) return;
+        glBindFramebuffer(GL_FRAMEBUFFER, cellFBO); glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        activeCells = 0;
+        cellMapDirty = false;
+    }
+
+    private void ensurePhotonBuffers(int side) {
+        if (splatProgram == null) {
+            splatProgram = new ShaderProgram(loadResource("/shaders/photon_splat.vert"), loadResource("/shaders/photon_splat.frag"));
+            photonVAO = glGenVertexArrays();      // no attributes: the splat reads its photon by gl_VertexID
+            cellTexture = createFloatTexture(CAUSTIC_GRID, CAUSTIC_GRID, GL_R32F, GL_RED);
+            cellActiveTexture = createFloatTexture(CAUSTIC_GRID, CAUSTIC_GRID, GL_R32F, GL_RED);
+            cellListTexture = createFloatTexture(CAUSTIC_GRID * CAUSTIC_GRID, 1, GL_R32F, GL_RED);
+            cellFBO = glGenFramebuffers(); glBindFramebuffer(GL_FRAMEBUFFER, cellFBO);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, cellTexture, 0);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            clearCellMap();
+        }
+        if (photonTextureSide == side) return;
+        deletePhotonBuffers();
+        photonPixelTexture = createPhotonTexture(side);
+        photonColorTexture = createPhotonTexture(side);
+        photonFBO = glGenFramebuffers(); glBindFramebuffer(GL_FRAMEBUFFER, photonFBO);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, photonPixelTexture, 0);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, photonColorTexture, 0);
+        glDrawBuffers(new int[]{GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1});
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        photonTextureSide = side;
+    }
+
+    private int createPhotonTexture(int side) { return createFloatTexture(side, side, GL_RGBA32F, GL_RGBA); }
+
+    private int createFloatTexture(int w, int h, int internalFormat, int format) {
+        int tex = glGenTextures(); glBindTexture(GL_TEXTURE_2D, tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, w, h, 0, format, GL_FLOAT, (ByteBuffer) null);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        return tex;
+    }
+
+    private void deletePhotonBuffers() {
+        if (photonTextureSide == 0) return;
+        glDeleteFramebuffers(photonFBO); glDeleteTextures(photonPixelTexture); glDeleteTextures(photonColorTexture);
+        photonTextureSide = 0;
     }
 
     public boolean isGLThread() { return Thread.currentThread().getName().equals("GLSLEngine-Thread"); }
@@ -697,6 +881,7 @@ public class GLSLEngine implements AutoCloseable {
         glBindFramebuffer(GL_FRAMEBUFFER, accumFBO); glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
         glBindFramebuffer(GL_FRAMEBUFFER, varianceFBO); glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
         glBindFramebuffer(GL_FRAMEBUFFER, 0); sampleCount = 0;
+        if (photonSide > 0) clearCellMap();      // the scene or the light may have moved
     }
 
     private void loadDisplayShader() {
@@ -961,6 +1146,11 @@ public class GLSLEngine implements AutoCloseable {
             glDeleteTextures(envMapTexture); glDeleteTextures(envMarginalCDFTexture); glDeleteTextures(envConditionalCDFTexture);
             glDeleteTextures(paletteTexture); glDeleteTextures(blueNoiseTexture);
             if (materialSSBO != 0) glDeleteBuffers(materialSSBO);
+            deletePhotonBuffers();
+            if (splatProgram != null) {
+                splatProgram.delete(); glDeleteVertexArrays(photonVAO);
+                glDeleteFramebuffers(cellFBO); glDeleteTextures(cellTexture); glDeleteTextures(cellActiveTexture); glDeleteTextures(cellListTexture);
+            }
             glDeleteVertexArrays(quadVAO); glDeleteBuffers(quadVBO); glDeleteBuffers(quadEBO);
             glfwDestroyWindow(window); glfwTerminate();
         });

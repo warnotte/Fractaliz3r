@@ -120,6 +120,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DeferredCompileProb
 # Proves the cheap interactive preview cannot leak into an export: same scene exported cold
 # and again straight after a preview, compared pixel for pixel.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportAfterPreviewProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 640x360 12"
+# Caustics (photon.glsl): the energy check (a matte slab lit twice, by NEE and by photons that may
+# land without meeting glass; the ratio must be 1, with and without the emission map), the cost of a
+# photon pass, and a glass ball and a smooth metal Mandelbulb with and without caustics.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.CausticProbe" -Dexec.args="out/caustic 640x360 64"
 # The app's Explore button, headless: CameraExplorer from a fractal's default camera (or a
 # .frac), scored thumbnails written as a sheet best first, time per view.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExploreProbe" -Dexec.args="MANDELBULB out/explore 320x180 4 3 4 0.6"
@@ -243,6 +247,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ExportProgressProbe.java     # how far ahead of the work a progress bar runs
 ├── ShaderCompileProbe.java      # compile time per shader, built-ins then any .frac; names the one that hangs
 ├── ExportAfterPreviewProbe.java # the cheap preview must not leak into an export
+├── CausticProbe.java            # caustics: photon energy against NEE, cost of a pass, pictures with and without
 ├── DeferredCompileProbe.java    # a scene compile asked from the FX thread must not block it
 ├── NavigationFluidityProbe.java # the viewport while the camera moves: FX held, images/s, latency, interrupt
 ├── SliderFluidityProbe.java     # the viewport while a slider of each real panel moves; "window" for layout costs
@@ -260,6 +265,8 @@ shaders/
 ├── raytracer.glsl         # Main raymarcher (fractal-agnostic)
 ├── common.glsl            # Common utilities, materials, artistic palettes
 ├── postprocess.glsl       # Bloom, tone mapping, color correction
+├── photon.glsl            # Caustics: the photon pass, the scene compiled once more under PHOTON_PASS
+├── photon_splat.vert/frag # the photons as points into the accumulation and the emission map
 └── fractals/              # Individual fractal Distance Estimators
     ├── mandelbulb.glsl, mandelbox.glsl, menger.glsl, kaleidoscopic.glsl
     ├── quaternionjulia4d.glsl, polyhedral.glsl, sierpinski.glsl

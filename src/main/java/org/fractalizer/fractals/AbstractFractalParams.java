@@ -162,6 +162,10 @@ public abstract class AbstractFractalParams implements FractalParams {
     // Path Tracing
     protected boolean pathTracingEnabled;
     protected int maxBounces;
+    protected boolean causticsEnabled;    // photons from the sun through glass and off smooth metal (path tracing)
+    protected int causticPhotons;         // per pass, as the side of a square
+    protected float causticRadius;        // radius of the disk the photons leave from
+    protected float[] causticCenter;      // the disk is centred over this point
     protected float roughness;
     protected float skyIntensity;
     protected float indirectMultiplier;  // Controls indirect light contribution (0 = no GI, 1 = full GI)
@@ -373,6 +377,10 @@ public abstract class AbstractFractalParams implements FractalParams {
         // Path tracing defaults
         this.pathTracingEnabled = true;
         this.maxBounces = 4;
+        this.causticsEnabled = false;
+        this.causticPhotons = 512;
+        this.causticRadius = 3.0f;
+        this.causticCenter = new float[]{0f, 0f, 0f};
         this.roughness = 0.5f;
         this.skyIntensity = 1.0f;
         this.indirectMultiplier = 0.5f;
@@ -507,6 +515,10 @@ public abstract class AbstractFractalParams implements FractalParams {
         // Copy path tracing
         target.pathTracingEnabled = this.pathTracingEnabled;
         target.maxBounces = this.maxBounces;
+        target.causticsEnabled = this.causticsEnabled;
+        target.causticPhotons = this.causticPhotons;
+        target.causticRadius = this.causticRadius;
+        target.causticCenter = this.causticCenter.clone();
         target.roughness = this.roughness;
         target.skyIntensity = this.skyIntensity;
         target.indirectMultiplier = this.indirectMultiplier;
@@ -915,6 +927,14 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setPathTracingEnabled(boolean enabled) { this.pathTracingEnabled = enabled; }
     public int getMaxBounces() { return maxBounces; }
     public void setMaxBounces(int bounces) { this.maxBounces = bounces; }
+    public boolean isCausticsEnabled() { return causticsEnabled; }
+    public void setCausticsEnabled(boolean on) { this.causticsEnabled = on; }
+    public int getCausticPhotons() { return causticPhotons; }
+    public void setCausticPhotons(int side) { this.causticPhotons = Math.max(64, Math.min(2048, side)); }
+    public float getCausticRadius() { return causticRadius; }
+    public void setCausticRadius(float r) { this.causticRadius = Math.max(0.1f, Math.min(100f, r)); }
+    public float[] getCausticCenter() { return causticCenter.clone(); }
+    public void setCausticCenter(float x, float y, float z) { this.causticCenter = new float[]{x, y, z}; }
     public float getRoughness() { return roughness; }
     public void setRoughness(float roughness) { this.roughness = roughness; }
     public float getSkyIntensity() { return skyIntensity; }

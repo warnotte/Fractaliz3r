@@ -105,7 +105,7 @@ public final class ViewportScheduler {
 
     public void close() {
         pauseDepth.incrementAndGet();
-        engine.postAndWait(this::dropCurrent);
+        engine.postAndWait(() -> { dropCurrent(); cancelRefineTimer(); });   // no refine may fire after the engine is gone
     }
 
     // ---- the loop, GL thread ---------------------------------------------------------
@@ -153,7 +153,8 @@ public final class ViewportScheduler {
     }
 
     private Job startJob(SceneSnapshot scene) {
-        if (!engine.hasProgram(scene.programKey(), scene.programSource(), scene.programDefines())) {
+        if (!engine.hasProgram(scene.programKey(), scene.programSource(), scene.programDefines())
+                || (scene.causticPhotons() > 0 && !engine.hasPhotonProgram(scene.programKey(), scene.programSource(), scene.programDefines()))) {
             return new CompileJob(scene);
         }
         return new PreviewJob(scene);
@@ -196,11 +197,13 @@ public final class ViewportScheduler {
         ui.accept(() -> l.onImage(img));
     }
 
-    /** Bind the engine to a scene at a size: program, SSBO, framebuffers, fresh accumulation. */
-    private void bind(SceneSnapshot scene, int w, int h) {
+    /** Bind the engine to a scene at a size: program, SSBO, photons per sample, framebuffers,
+     *  fresh accumulation. */
+    private void bind(SceneSnapshot scene, int w, int h, int causticPhotons) {
         engine.resize(w, h);
         engine.setActiveProgram(scene.programKey());
         engine.updateMaterialSSBO(scene.materialSSBO());
+        engine.setCausticPhotons(causticPhotons);
         engine.resetAccumulation();
     }
 
@@ -217,7 +220,8 @@ public final class ViewportScheduler {
         void finished();
     }
 
-    /** Builds the program; atomic. On success the preview of the same scene follows. */
+    /** Builds the program, and the photon program when the scene has caustics; atomic. On
+     *  success the preview of the same scene follows. */
     private final class CompileJob implements Job {
         private final SceneSnapshot scene;
         CompileJob(SceneSnapshot scene) { this.scene = scene; emit(Status.compiling()); }
@@ -225,6 +229,7 @@ public final class ViewportScheduler {
         @Override public boolean step() {
             long t0 = System.nanoTime();
             String err = engine.ensureProgram(scene.programKey(), scene.programSource(), scene.programDefines());
+            if (err == null && scene.causticPhotons() > 0) err = engine.ensurePhotonProgram(scene.programKey(), scene.programSource(), scene.programDefines());
             if (err != null) {
                 System.err.println("Scene shader error: " + err);
                 emit(Status.error(err));
@@ -259,7 +264,7 @@ public final class ViewportScheduler {
             w = Math.max(160, Math.round(scene.viewportWidth() * scale));
             h = Math.max(90, Math.round(scene.viewportHeight() * scale));
             uniforms = scene.uniformsFor(h, true);
-            bind(scene, w, h);
+            bind(scene, w, h, scene.causticPhotonsFor(true, scale));
             emit(Status.preview());
         }
 
@@ -310,7 +315,7 @@ public final class ViewportScheduler {
             w = scene.viewportWidth();
             h = scene.viewportHeight();
             uniforms = scene.uniformsFor(h, false);
-            bind(scene, w, h);
+            bind(scene, w, h, scene.causticPhotonsFor(false, 1f));
             emit(Status.refining(0, scene.fullSamples()));
         }
 

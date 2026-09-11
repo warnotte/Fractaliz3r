@@ -265,14 +265,31 @@ public class PresetForge {
         // glass Menger sponge, rendered black). So the gem is a convex primitive of glass,
         // and the fractal is what is seen through it, refracted and dispersed. Dispersion
         // is set high enough to read at a glance (flint glass is 0.013).
-        p.put("PRISM_GEM", () -> SceneBuilder.nodeGraph(prismGem(org.fractalizer.graph.PrimitiveNode.PrimitiveType.OCTAHEDRON, 0.5f, 1.7f))
+        p.put("PRISM_GEM", () -> prismGemScene(org.fractalizer.graph.PrimitiveNode.PrimitiveType.OCTAHEDRON, 0.5f, 1.7f));
+
+        // --- Caustics: the sun through the glass, onto what is seen (docs/RENDERING.md,
+        // Caustics). The lens in front of the fractal, the sun from the side so its focus
+        // lands beside the ball on the fractal, in view; and the textbook case, a glass
+        // ball on a slab, the bright crescent under it rimmed by the dispersion.
+        p.put("CAUSTIC_LENS", () -> SceneBuilder.nodeGraph(lensOnBulb())
                 .camera(0f, 0.2f, -3.0f).lookAt(0f, 0f, 0f).fov(40)
                 .gradient(CRYSTAL).coloringMode(0)
-                .materialType(0).ior(1.7f).dispersion(0.030f).roughness(0.5f)
+                .materialType(0).ior(1.5f).dispersion(0.030f).roughness(0.5f)
                 .pathTracing(true).maxBounces(8).rimIntensity(0.0f).skyType(1)
                 .nebula(0.02f, 0.02f, 0.05f, 0.3f)
-                .lightDir(1.5f, 2.5f, -2.5f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(3.0f)
+                .lightDir(1.5f, 0.8f, -1.2f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(3.5f)
                 .ambientColor(0.4f, 0.45f, 0.55f).ambientIntensity(0.25f)
+                .caustics(2.5f).causticPhotons(512)
+                .colorStrength(1.0f).metalness(0.0f));
+
+        p.put("CAUSTIC_BALL", () -> SceneBuilder.nodeGraph(SceneBuilder.union(SceneBuilder.glassBall(0.5f, 1.5f, 0.02f), SceneBuilder.slab(2.6f)))
+                .camera(0f, 1.7f, -3.4f).lookAt(0f, 0.35f, 0f).fov(42)
+                .gradient(CRYSTAL).coloringMode(0)
+                .materialType(0).ior(1.5f).dispersion(0.030f).roughness(0.6f)
+                .pathTracing(true).maxBounces(6).rimIntensity(0.0f).skyType(3)
+                .lightDir(1.1f, 0.9f, -0.6f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(3.0f)
+                .ambientColor(0.5f, 0.55f, 0.65f).ambientIntensity(0.15f)
+                .caustics(3.0f).causticPhotons(512)
                 .colorStrength(1.0f).metalness(0.0f));
 
         // The same fractal behind a glass sphere: a lens, the detail magnified and fringed.
@@ -287,6 +304,33 @@ public class PresetForge {
                 .colorStrength(1.0f).metalness(0.0f));
 
         return p;
+    }
+
+    /** The prism gem scene: a glass octahedron in front of a near-white Mandelbulb, the sun
+     *  behind the camera. */
+    private static SceneBuilder prismGemScene(org.fractalizer.graph.PrimitiveNode.PrimitiveType shape, float radius, float ior) {
+        return SceneBuilder.nodeGraph(prismGem(shape, radius, ior))
+                .camera(0f, 0.2f, -3.0f).lookAt(0f, 0f, 0f).fov(40)
+                .gradient(CRYSTAL).coloringMode(0)
+                .materialType(0).ior(ior).dispersion(0.030f).roughness(0.5f)
+                .pathTracing(true).maxBounces(8).rimIntensity(0.0f).skyType(1)
+                .nebula(0.02f, 0.02f, 0.05f, 0.3f)
+                .lightDir(1.5f, 2.5f, -2.5f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(3.0f)
+                .ambientColor(0.4f, 0.45f, 0.55f).ambientIntensity(0.25f)
+                .colorStrength(1.0f).metalness(0.0f);
+    }
+
+    /** A small glass ball off to the side in front of the Mandelbulb, a lens: with the sun
+     *  from the right its focus lands on the fractal beside the ball, in view. */
+    static org.fractalizer.graph.GraphNode lensOnBulb() {
+        org.fractalizer.graph.PrimitiveNode ball = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.SPHERE);
+        ball.setSizeX(0.35f);
+        org.fractalizer.graph.MaterialNode glass = material(ball, 1f, 1f, 1f, 0.02f, 0f);
+        glass.setMaterialType(2);
+        glass.setIor(1.5f);
+        org.fractalizer.graph.GraphNode lens = SceneBuilder.translate(glass, 0.55f, 0.15f, -0.9f);
+        org.fractalizer.graph.GraphNode bulb = SceneBuilder.translate(SceneBuilder.scale(SceneBuilder.fractal(org.fractalizer.fractals.FractalType.MANDELBULB), 1.15f), 0f, 0f, 0.9f);
+        return SceneBuilder.union(lens, bulb);
     }
 
     /** A glass primitive in front of a matte Mandelbulb: the fractal seen through a prism,

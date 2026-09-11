@@ -13,7 +13,9 @@
 in vec2 fragCoord;
 in vec2 uv;
 
+#ifndef PHOTON_PASS
 out vec4 FragColor;
+#endif
 
 // Adaptive Sampling variance image (R=sumLum, G=sumSqLum, B=count)
 layout(rgba32f, binding = 5) uniform image2D varianceImage;
@@ -1752,6 +1754,7 @@ vec3 renderByMode(RayHit hit, Ray ray, vec3 normal, float shadow, float ao) {
 // Main Render Function
 // ============================================================================
 
+#ifndef PHOTON_PASS
 void main() {
     // Initialize random for this pixel/sample
     uint seed = initRandom(gl_FragCoord.xy, sampleIndex);
@@ -1869,3 +1872,4 @@ void main() {
     // Depth is stored in alpha - will be averaged with colors, but that's fine for focus picking
     FragColor = vec4(color, depth);
 }
+#endif

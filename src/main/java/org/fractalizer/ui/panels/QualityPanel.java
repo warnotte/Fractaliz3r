@@ -68,6 +68,10 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     // Path tracing
     private CheckBox pathTracingCheck;
     private CheckBox neeEnabledCheck;
+    private CheckBox causticsCheck;
+    private ComboBox<String> causticPhotonsCombo;
+    private EnhancedSlider causticRadiusSlider, causticCenterXSlider, causticCenterYSlider, causticCenterZSlider;
+    private static final int[] CAUSTIC_PHOTON_SIDES = {128, 256, 512, 1024};
     private EnhancedSlider renderSamplesSlider;
     private EnhancedSlider bouncesSlider;
     private EnhancedSlider skyIntensitySlider;
@@ -576,6 +580,54 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             }
         });
 
+        // Caustics: photons from the sun, through glass and off smooth metal, onto what the
+        // camera sees; one photon pass per sample (docs/RENDERING.md, Caustics).
+        causticsCheck = new CheckBox("Caustics (photons from the sun)");
+        causticsCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setCausticsEnabled(causticsCheck.isSelected());
+                renderCallback.requestRender();
+            }
+        });
+
+        causticPhotonsCombo = new ComboBox<>();
+        causticPhotonsCombo.getItems().addAll("16k photons per sample", "65k photons per sample",
+                "262k photons per sample", "1M photons per sample");
+        causticPhotonsCombo.getSelectionModel().select(2);
+        causticPhotonsCombo.setOnAction(e -> {
+            int i = causticPhotonsCombo.getSelectionModel().getSelectedIndex();
+            if (!suppressRender && i >= 0) {
+                getParams().setCausticPhotons(CAUSTIC_PHOTON_SIDES[i]);
+                renderCallback.requestRender();
+            }
+        });
+
+        causticRadiusSlider = new EnhancedSlider("Caustic Extent", 0.5, 20.0, 3.0, false);
+        causticRadiusSlider.setPrecision(1);
+        causticRadiusSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setCausticRadius(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
+
+        causticCenterXSlider = new EnhancedSlider("Caustic Centre X", -10.0, 10.0, 0.0, false);
+        causticCenterYSlider = new EnhancedSlider("Caustic Centre Y", -10.0, 10.0, 0.0, false);
+        causticCenterZSlider = new EnhancedSlider("Caustic Centre Z", -10.0, 10.0, 0.0, false);
+        for (EnhancedSlider s : new EnhancedSlider[]{causticCenterXSlider, causticCenterYSlider, causticCenterZSlider}) {
+            s.setPrecision(2);
+            s.setOnAction(v -> {
+                if (!suppressRender) {
+                    getParams().setCausticCenter((float) causticCenterXSlider.getValue(),
+                            (float) causticCenterYSlider.getValue(), (float) causticCenterZSlider.getValue());
+                    renderCallback.requestRender();
+                }
+            });
+        }
+
+        Label causticInfo = new Label("Photons leave a disk of this extent, centred here,\nfacing the sun: it must cover the glass or metal.");
+        causticInfo.getStyleClass().add("hint-label");
+
         skyIntensitySlider = new EnhancedSlider("Sky Intensity", 0.0, 3.0, 1.0, false);
         skyIntensitySlider.setOnAction(v -> {
             if (!suppressRender) {
@@ -599,6 +651,8 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         pathTracingInfo.getStyleClass().add("hint-label");
 
         box.getChildren().addAll(pathTracingCheck, neeEnabledCheck, renderSamplesSlider, bouncesSlider,
+                causticsCheck, causticPhotonsCombo, causticRadiusSlider,
+                causticCenterXSlider, causticCenterYSlider, causticCenterZSlider, causticInfo,
                 skyIntensitySlider, indirectSlider,
                 indirectInfo, pathTracingInfo);
 
@@ -802,6 +856,15 @@ public class QualityPanel extends ScrollPane implements Refreshable {
                 renderSamplesSlider.setValue(fullSamplesSupplier.get());
             }
             bouncesSlider.setValue(p.getMaxBounces());
+            causticsCheck.setSelected(p.isCausticsEnabled());
+            int sideIndex = 2;
+            for (int i = 0; i < CAUSTIC_PHOTON_SIDES.length; i++) if (CAUSTIC_PHOTON_SIDES[i] == p.getCausticPhotons()) sideIndex = i;
+            causticPhotonsCombo.getSelectionModel().select(sideIndex);
+            causticRadiusSlider.setValue(p.getCausticRadius());
+            float[] cc = p.getCausticCenter();
+            causticCenterXSlider.setValue(cc[0]);
+            causticCenterYSlider.setValue(cc[1]);
+            causticCenterZSlider.setValue(cc[2]);
             skyIntensitySlider.setValue(p.getSkyIntensity());
             indirectSlider.setValue(p.getIndirectMultiplier() * 100.0);
 

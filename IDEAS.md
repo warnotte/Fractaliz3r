@@ -20,6 +20,7 @@ Creative feature ideas for Fractaliz3r. Status: IDEA (not started), IN PROGRESS,
 | 11 | Per-Node Materials | MaterialNode with SSBO, per-node PBR overrides (color, roughness, metallic, IOR, emission) |
 | 12 | IFS Base Primitive | 5 shapes (Sphere, Box, Octahedron, Torus, Rounded Box) |
 | 23 | Spectral dispersion through glass | One wavelength per path, Cauchy index, CIE tint; off by default and bit-exact when off. Presets PRISM_GEM and PRISM_LENS. See docs/RENDERING.md § Spectral dispersion |
+| 25 | Caustics from the sun | The scene compiled once more as a photon tracer, one photon pass per sample splatted into the accumulation, emission importance-sampled from a map of where the glass is; off by default and bit-exact when off. Presets CAUSTIC_BALL and CAUSTIC_LENS. See docs/RENDERING.md § Caustics |
 
 ## Rejected
 
@@ -122,4 +123,19 @@ Direction when it is opened: the global material becomes literally a *default ma
 same record and the same editor component as a `MaterialNode`, one list of fields for the UI,
 the `.frac` and the SSBO (the default material could be slot 0). Then a property cannot exist on
 one side only, by construction.
+
+### 26. Caustics Follow-ups
+**Status:** IDEA (the photon pass itself shipped after 3.2.2, see docs/RENDERING.md § Caustics)
+
+1. **Seen through glass.** A photon lands only where the camera sees it directly, so the
+   focus of a lens right behind it is hidden. The fix is a gather: keep the landed photons in
+   a spatial structure and let the path tracer's diffuse vertices reached through glass read
+   them (a photon map, with its radius and its bias). Large.
+2. **The extra light.** Photons leave the sun only. The spot or area light needs its own
+   emission (a cone, a disk) and the same bookkeeping.
+3. **The metal threshold.** Below roughness 0.1 the photons reflect, above it the path tracer's
+   NEE stands; between 0.1 and 0.3 that NEE is partly clamped, so smooth-but-not-mirror metal is
+   under-lit either way. A MIS-style split by roughness instead of a threshold.
+4. **The emission square.** Extent and centre are set by hand. The bounds of the specular
+   nodes of the graph would set them.
 

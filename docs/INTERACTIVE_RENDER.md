@@ -119,6 +119,12 @@ eight times the preview cost and measures.
 - `ensureProgram(key, source, defines)` compiles only if the engine does not already hold
   exactly that source under that key, so the editor and the startup task asking for the
   same scene compile it once.
+- `ensurePhotonProgram(key, source, defines)` and `setCausticPhotons(side)`: with caustics
+  on, the snapshot carries the photons per sample, the compile job builds the scene's
+  photon program next to the scene program, and the engine follows every sample (whole,
+  in `renderSamples`, or sliced, at `commitSample`) with one photon pass and its splat into
+  the accumulation (docs/RENDERING.md, Caustics). A preview scales the count with its size
+  and skips it when it drops path tracing.
 
 The accumulation state (`sampleCount`, `needsReset`) is touched on the GL thread only.
 `renderSamples` (whole samples in one call) stays for exports and harnesses.

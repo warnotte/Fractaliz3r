@@ -24,6 +24,8 @@ import java.util.Map;
  * @param previewFastShading whether the preview may drop path tracing and cut steps
  * @param previewSamples how many samples a preview accumulates
  * @param fullSamples    how many samples the refinement accumulates
+ * @param causticPhotons photons per pass for caustics, as the side of a square, 0 for none:
+ *                       the engine then needs the scene's photon program too
  */
 public record SceneSnapshot(String programKey,
                             String programSource,
@@ -36,7 +38,8 @@ public record SceneSnapshot(String programKey,
                             float previewScale,
                             boolean previewFastShading,
                             int previewSamples,
-                            int fullSamples) {
+                            int fullSamples,
+                            int causticPhotons) {
 
     public SceneSnapshot {
         uniforms = Collections.unmodifiableMap(new HashMap<>(uniforms));
@@ -46,6 +49,15 @@ public record SceneSnapshot(String programKey,
         previewScale = Math.max(0.05f, Math.min(1f, previewScale));
         previewSamples = Math.max(1, previewSamples);
         fullSamples = Math.max(1, fullSamples);
+        causticPhotons = Math.max(0, causticPhotons);
+    }
+
+    /** Photons per pass for a render at {@code scale} of the viewport: none for a preview
+     *  that drops path tracing (caustics are a path-tracing term), else the side scaled with
+     *  the image so the photons per pixel stay what the full render gets. */
+    public int causticPhotonsFor(boolean preview, float scale) {
+        if (causticPhotons == 0 || (preview && previewFastShading)) return 0;
+        return preview ? Math.max(64, Math.round(causticPhotons * scale)) : causticPhotons;
     }
 
     /**

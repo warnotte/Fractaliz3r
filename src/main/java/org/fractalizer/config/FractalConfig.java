@@ -164,6 +164,10 @@ public class FractalConfig {
         // Path Tracing
         public boolean pathTracingEnabled = false;
         public int maxBounces = 4;
+        public boolean causticsEnabled = false;
+        public int causticPhotons = 512;
+        public float causticRadius = 3.0f;
+        public float[] causticCenter = {0f, 0f, 0f};
         public float roughness = 0.5f;
         public float skyIntensity = 1.0f;
         public float indirectMultiplier = 0.5f;
@@ -377,6 +381,10 @@ public class FractalConfig {
         config.effects.dofChromaticStrength = params.getDofChromaticStrength();
         config.effects.pathTracingEnabled = params.isPathTracingEnabled();
         config.effects.maxBounces = params.getMaxBounces();
+        config.effects.causticsEnabled = params.isCausticsEnabled();
+        config.effects.causticPhotons = params.getCausticPhotons();
+        config.effects.causticRadius = params.getCausticRadius();
+        config.effects.causticCenter = params.getCausticCenter();
         config.effects.roughness = params.getRoughness();
         config.effects.skyIntensity = params.getSkyIntensity();
         config.effects.indirectMultiplier = params.getIndirectMultiplier();
@@ -557,6 +565,11 @@ public class FractalConfig {
         params.setDofChromaticStrength(effects.dofChromaticStrength);
         params.setPathTracingEnabled(effects.pathTracingEnabled);
         params.setMaxBounces(effects.maxBounces);
+        params.setCausticsEnabled(effects.causticsEnabled);
+        params.setCausticPhotons(effects.causticPhotons);
+        params.setCausticRadius(effects.causticRadius);
+        if (effects.causticCenter != null && effects.causticCenter.length == 3)
+            params.setCausticCenter(effects.causticCenter[0], effects.causticCenter[1], effects.causticCenter[2]);
         params.setRoughness(effects.roughness);
         params.setSkyIntensity(effects.skyIntensity);
         params.setIndirectMultiplier(effects.indirectMultiplier);

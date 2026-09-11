@@ -187,6 +187,7 @@ public class GLSLFractalizerController implements RenderController {
             if (engine.hasProgram("nodegraph")) {
                 engine.setActiveProgram("nodegraph");
                 currentBooleanProgramKey = null;
+                activateCaustics("nodegraph", glsl, nodeGraphDefines(ngp));
                 return;
             }
             // The graph failed to compile: fall back to the stand-alone kernel below.
@@ -202,6 +203,7 @@ public class GLSLFractalizerController implements RenderController {
             if (engine.hasProgram(key)) {
                 engine.setActiveProgram(key);
                 currentBooleanProgramKey = key;
+                engine.setCausticPhotons(0);      // the legacy boolean assembly has no photon variant
                 return;
             }
         }
@@ -210,7 +212,32 @@ public class GLSLFractalizerController implements RenderController {
         String key = currentFractalType.getKernelName();
         if (engine.hasProgram(key)) {
             engine.setActiveProgram(key);
+            activateCaustics(key, engine.loadShaderSource("/shaders/fractals/" + key + ".glsl"), "");
         }
+    }
+
+    /** Caustics need the scene's photon program: compiled when they are on (once per source,
+     *  like the scene program), and the engine told how many photons follow each sample. */
+    private void activateCaustics(String key, String source, String defines) {
+        if (!(currentParams instanceof AbstractFractalParams p) || !causticsActive(p)) {
+            engine.setCausticPhotons(0);
+            return;
+        }
+        long t0 = System.nanoTime();
+        boolean had = engine.hasPhotonProgram(key, source, defines);
+        String err = engine.ensurePhotonProgram(key, source, defines);
+        if (err != null) {
+            System.err.println("Photon shader error: " + err);
+            engine.setCausticPhotons(0);
+            return;
+        }
+        if (!had) System.out.printf("Photon shader compiled in %d ms%n", (System.nanoTime() - t0) / 1_000_000);
+        engine.setCausticPhotons(p.getCausticPhotons());
+    }
+
+    /** Caustics are a path-tracing term: on only with path tracing. */
+    private static boolean causticsActive(AbstractFractalParams p) {
+        return p.isCausticsEnabled() && p.isPathTracingEnabled();
     }
 
     /** Deep-zoom LOD is compiled in only when enabled: the mutable global it needs is
@@ -292,7 +319,7 @@ public class GLSLFractalizerController implements RenderController {
         float coneTan = params.isConeTracingEnabled() ? (float) Math.tan(params.getFov() * 0.5) : 0f;
         return new SceneSnapshot(key, source, defines, uniforms, coneTan, ssbo,
                 viewportWidth, viewportHeight, params.getPreviewScale(), params.isPreviewFastShading(),
-                previewSamples, fullSamples);
+                previewSamples, fullSamples, causticsActive(params) ? params.getCausticPhotons() : 0);
     }
 
     /** The scene changed: show it. Never blocks. */
@@ -1249,6 +1276,10 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("pathTracingEnabled", params.isPathTracingEnabled() ? 1 : 0);
             uniforms.put("neeEnabled", params.isNeeEnabled() ? 1 : 0);
             uniforms.put("maxBounces", params.getMaxBounces());
+            // Caustics (photon.glsl): the emitting disk; the photon count is engine state
+            uniforms.put("causticRadius", params.getCausticRadius());
+            uniforms.put("causticCenter", params.getCausticCenter());
+            uniforms.put("causticDebug", 0);
             uniforms.put("roughness", params.getRoughness());
             uniforms.put("skyIntensity", params.getSkyIntensity());
             uniforms.put("indirectMultiplier", params.getIndirectMultiplier());
@@ -1307,7 +1338,9 @@ public class GLSLFractalizerController implements RenderController {
 
         // Adaptive sampling
         if (currentParams instanceof AbstractFractalParams afp) {
-            boolean adaptive = afp.isAdaptiveSampling();
+            // Caustics splat into every sample; a pixel that stopped sampling would keep
+            // receiving them and divide by too few, so the two exclude each other.
+            boolean adaptive = afp.isAdaptiveSampling() && !causticsActive(afp);
             uniforms.put("adaptiveSampling", adaptive ? 1 : 0);
             uniforms.put("varianceThreshold", afp.getVarianceThreshold());
             uniforms.put("minAdaptiveSamples", afp.getMinAdaptiveSamples());

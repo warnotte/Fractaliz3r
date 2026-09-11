@@ -160,6 +160,34 @@ public class SceneBuilder {
     // Node Graph factory
     // ========================================================================
 
+    /** A matte grey slab, {@code halfSize} wide, its top at y = 0: what caustics fall on.
+     *  Finite, so a photon disk can cover it. */
+    public static GraphNode slab(float halfSize) {
+        org.fractalizer.graph.PrimitiveNode box = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.BOX);
+        box.setSizeX(halfSize); box.setSizeY(0.06f); box.setSizeZ(halfSize);
+        org.fractalizer.graph.MaterialNode m = new org.fractalizer.graph.MaterialNode(translate(box, 0f, -0.06f, 0f));
+        m.setMaterialType(0);
+        m.setColorMode(org.fractalizer.graph.MaterialNode.COLOR_SOLID);
+        m.setColorR(0.72f); m.setColorG(0.72f); m.setColorB(0.72f);
+        m.setRoughness(0.7f);
+        m.setMetallic(0f);
+        return m;
+    }
+
+    /** A clear glass ball of this radius resting on y = 0. */
+    public static GraphNode glassBall(float radius, float ior, float roughness) {
+        org.fractalizer.graph.PrimitiveNode s = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.SPHERE);
+        s.setSizeX(radius);
+        org.fractalizer.graph.MaterialNode m = new org.fractalizer.graph.MaterialNode(translate(s, 0f, radius * 1.24f, 0f));
+        m.setMaterialType(2);
+        m.setIor(ior);
+        m.setColorMode(org.fractalizer.graph.MaterialNode.COLOR_SOLID);
+        m.setColorR(1f); m.setColorG(1f); m.setColorB(1f);
+        m.setRoughness(roughness);
+        m.setMetallic(0f);
+        return m;
+    }
+
     public static SceneBuilder nodeGraph(GraphNode root) {
         SceneBuilder b = new SceneBuilder("NODE_GRAPH");
         b.config.fractalParams.put("graph", FractalConfig.serializeGraphNode(root));
@@ -678,6 +706,24 @@ public class SceneBuilder {
 
     public SceneBuilder maxBounces(int bounces) {
         config.effects.maxBounces = bounces;
+        return this;
+    }
+
+    /** Caustics from the sun: photons leave a disk of this radius, centred on the origin
+     *  unless {@link #causticCenter} says otherwise; enables them. */
+    public SceneBuilder caustics(float radius) {
+        config.effects.causticsEnabled = true;
+        config.effects.causticRadius = radius;
+        return this;
+    }
+
+    public SceneBuilder causticPhotons(int side) {
+        config.effects.causticPhotons = side;
+        return this;
+    }
+
+    public SceneBuilder causticCenter(float x, float y, float z) {
+        config.effects.causticCenter = new float[]{x, y, z};
         return this;
     }
 

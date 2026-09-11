@@ -46,6 +46,10 @@ class ConfigRoundTripTest {
         written.setIor(1.62f);
         written.setDispersionEnabled(true);
         written.setDispersion(0.017f);
+        written.setCausticsEnabled(true);
+        written.setCausticPhotons(256);
+        written.setCausticRadius(4.5f);
+        written.setCausticCenter(0.5f, -0.25f, 1.5f);
 
         FractalConfig config = FractalConfig.fromParams(written);
 
@@ -92,6 +96,10 @@ class ConfigRoundTripTest {
         assertEquals(written.getIor(), reloaded.getIor(), "ior");
         assertEquals(written.isDispersionEnabled(), reloaded.isDispersionEnabled(), "dispersionEnabled");
         assertEquals(written.getDispersion(), reloaded.getDispersion(), "dispersion");
+        assertEquals(written.isCausticsEnabled(), reloaded.isCausticsEnabled(), "causticsEnabled");
+        assertEquals(written.getCausticPhotons(), reloaded.getCausticPhotons(), "causticPhotons");
+        assertEquals(written.getCausticRadius(), reloaded.getCausticRadius(), "causticRadius");
+        assertArrayEquals(written.getCausticCenter(), reloaded.getCausticCenter(), "causticCenter");
     }
 
     @Test
