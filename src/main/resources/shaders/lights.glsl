@@ -183,6 +183,27 @@ float sunSquareDraw(inout uint seed, out vec2 sq) {
     return sunSquareDensity(sq);
 }
 
+// ---- The gather: the photon vertices of the pass and the grid over them -------------------
+// A caustic seen through glass (camera, glass, floor, glass, light) is no path tracer's and no
+// photon landing's: the landing cannot be seen and the draw is blocked. So the photon pass
+// stores its first eligible vertex (past a glass, mirror or metal) with its flux, and the path
+// tracer, at the first matte or metal vertex it reaches through nothing but glass, gathers the
+// photons within mergeRadius: the flux per gather area through the BRDF. Rebuilt every pass,
+// the radius shrinking with the passes (progressive photon mapping), so the estimate converges.
+layout(std430, binding = 8) buffer PhotonVertices { vec4 photonData[]; };          // per photon: pos + flag, flux, normal, wIn
+layout(std430, binding = 9) readonly buffer CellStart { uint cellStart[]; };
+layout(std430, binding = 10) readonly buffer CellCount { uint cellCount[]; };
+layout(std430, binding = 11) readonly buffer PhotonIndex { uint photonIndex[]; };
+uniform float mergeRadius;       // the gather radius of this pass, 0 for no gather
+uniform int cellMask;            // the grid has cellMask + 1 cells
+const int MERGE_MAX_PER_CELL = 96;
+
+uint cellKey(vec3 p) {
+    ivec3 c = ivec3(floor(p / mergeRadius));
+    uint h = uint(c.x) * 73856093u ^ uint(c.y) * 19349663u ^ uint(c.z) * 83492791u;
+    return h & uint(cellMask);
+}
+
 /** The GGX sampling density of direction b at a vertex of normal n seen from direction a
  *  (both away from the vertex); symmetric in a and b. */
 float ggxPdf(vec3 n, vec3 a, vec3 b, float a2) {

@@ -45,6 +45,14 @@ public class GLSLEngine implements AutoCloseable {
     private static final int CAUSTIC_GRID = 64;
     private int cellFBO, cellTexture, cellActiveTexture, cellListTexture, activeCells;
     private boolean cellMapDirty;
+    // The gather (lights.glsl): the pass's photon vertices, and the hash grid over them built
+    // by three compute passes; the radius shrinks with the samples (progressive photon mapping)
+    private static final int MERGE_CELLS = 65536;
+    private static final float MERGE_ALPHA = 0.7f;
+    private int photonVertexSSBO, cellStartSSBO, cellCountSSBO, photonIndexSSBO, cellCursorSSBO;
+    private int photonBufferSide;
+    private ShaderProgram gridCount, gridScan, gridScatter;
+    private float mergeRadiusNow;
     private int quadVAO, quadVBO, quadEBO;
     private final Map<String, ShaderProgram> programs = new HashMap<>();
     private String activeProgram;
@@ -339,6 +347,14 @@ public class GLSLEngine implements AutoCloseable {
             glActiveTexture(GL_TEXTURE8); glBindTexture(GL_TEXTURE_2D, cellActiveTexture); program.setUniform("causticCellActive", 8);
             program.setUniform("causticActiveCells", activeCells);
             program.setUniform("photonSide", photonSide);
+            if (photonVertexSSBO != 0) {
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, photonVertexSSBO);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, cellStartSSBO);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, cellCountSSBO);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 11, photonIndexSSBO);
+            }
+            program.setUniform("mergeRadius", mergeRadiusNow);
+            program.setUniform("cellMask", MERGE_CELLS - 1);
         }
         for (Map.Entry<String, Object> entry : uniforms.entrySet()) { setUniformValue(program, entry.getKey(), entry.getValue()); }
     }
@@ -363,9 +379,9 @@ public class GLSLEngine implements AutoCloseable {
             if (needsReset) { clearAccumulation(); needsReset = false; }
             if (sampleCount >= maxSamples) return;
             ShaderProgram program = programs.get(activeProgram);
+            if (photonsActive()) photonPass(uniforms, sampleCount);   // before the sample: its gather reads this pass's photons
             bindAccumPass(program, uniforms);
             drawAccumSample(program);
-            if (photonsActive()) photonPass(uniforms, sampleCount - 1);
             endAccumPass();
         });
     }
@@ -382,11 +398,10 @@ public class GLSLEngine implements AutoCloseable {
             if (activeProgram == null) throw new IllegalStateException();
             if (needsReset) { clearAccumulation(); needsReset = false; }
             ShaderProgram program = programs.get(activeProgram);
-            bindAccumPass(program, uniforms);
             for (int s = 0; s < count && sampleCount < maxSamples; s++) {
-                if (s > 0 && photonsActive()) bindAccumPass(program, uniforms);   // the photon pass unbound it
+                if (photonsActive()) photonPass(uniforms, sampleCount);   // before the sample: its gather reads this pass's photons
+                if (s == 0 || photonsActive()) bindAccumPass(program, uniforms);   // the photon pass unbinds it
                 drawAccumSample(program);
-                if (photonsActive()) photonPass(uniforms, sampleCount - 1);
             }
             endAccumPass();
         });
@@ -420,6 +435,7 @@ public class GLSLEngine implements AutoCloseable {
         assertGLThread();
         if (activeProgram == null) throw new IllegalStateException("no active program");
         if (needsReset) { clearAccumulation(); needsReset = false; }
+        if (photonsActive()) photonPass(uniforms, sampleCount);   // before the strips: their gather reads this pass's photons
         sliceProgram = programs.get(activeProgram);
         sliceUniforms = uniforms;
         sliceTime = (float) glfwGetTime();
@@ -463,9 +479,7 @@ public class GLSLEngine implements AutoCloseable {
 
     /** Close the open sample and count it. */
     public void commitSample() {
-        Map<String, Object> uniforms = sliceUniforms;
         closeSample();
-        if (photonsActive() && uniforms != null) photonPass(uniforms, sampleCount);
         sampleCount++;
     }
 
@@ -637,6 +651,10 @@ public class GLSLEngine implements AutoCloseable {
         int side = photonSide;
         ensurePhotonBuffers(side);
         touchGLState();
+        // the gather radius of this pass: r0 from the uniforms, shrinking as k^((alpha-1)/2)
+        Object r0 = uniforms.get("mergeRadius0");
+        float base = r0 instanceof Float f ? f : 0f;
+        mergeRadiusNow = base > 0f ? (float) (base * Math.pow(Math.max(passIndex, 0) + 1, (MERGE_ALPHA - 1.0) / 2.0)) : 0f;
         // 1. where each photon lands and what it adds there
         glBindFramebuffer(GL_FRAMEBUFFER, photonFBO);
         glViewport(0, 0, side, side);
@@ -669,9 +687,37 @@ public class GLSLEngine implements AutoCloseable {
         glDisable(GL_BLEND);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         cellMapDirty = true;
+        if (mergeRadiusNow > 0f) buildPhotonGrid(side);
         // The first passes are drawn over the whole square and shape the map fast; after
         // that a refresh every sixteen passes follows what the map still discovers.
         if (passIndex < 4 || passIndex % 16 == 15) refreshCellMap();
+    }
+
+    /** The hash grid over this pass's photon vertices: counts per cell, their prefix sum,
+     *  the photons scattered into their cells' slots. GL thread, after the photon draw. */
+    private void buildPhotonGrid(int side) {
+        int photons = side * side;
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);         // the photon draw's vertex writes
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, cellCountSSBO);
+        glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, (ByteBuffer) null);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, photonVertexSSBO);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, cellStartSSBO);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, cellCountSSBO);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 11, photonIndexSSBO);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 12, cellCursorSSBO);
+        int groups = (photons + 255) / 256;
+        gridCount.use();
+        gridCount.setUniform("photonCount", photons); gridCount.setUniform("cellSize", mergeRadiusNow); gridCount.setUniform("cellMask", MERGE_CELLS - 1);
+        glDispatchCompute(groups, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        gridScan.use();
+        glDispatchCompute(1, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        gridScatter.use();
+        gridScatter.setUniform("photonCount", photons); gridScatter.setUniform("cellSize", mergeRadiusNow); gridScatter.setUniform("cellMask", MERGE_CELLS - 1);
+        glDispatchCompute(groups, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     }
 
     /** Read the cell map back, list the active cells, and give both to the photon pass as
@@ -722,6 +768,28 @@ public class GLSLEngine implements AutoCloseable {
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, cellTexture, 0);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             clearCellMap();
+        }
+        if (gridCount == null) {
+            gridCount = new ShaderProgram(loadResource("/shaders/grid_count.comp"));
+            gridScan = new ShaderProgram(loadResource("/shaders/grid_scan.comp"));
+            gridScatter = new ShaderProgram(loadResource("/shaders/grid_scatter.comp"));
+            cellStartSSBO = glGenBuffers(); cellCountSSBO = glGenBuffers(); cellCursorSSBO = glGenBuffers();
+            for (int b : new int[]{cellStartSSBO, cellCountSSBO, cellCursorSSBO}) {
+                glBindBuffer(GL_SHADER_STORAGE_BUFFER, b);
+                glBufferData(GL_SHADER_STORAGE_BUFFER, (long) MERGE_CELLS * 4, GL_DYNAMIC_COPY);
+            }
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        }
+        if (photonBufferSide != side) {
+            if (photonVertexSSBO != 0) { glDeleteBuffers(photonVertexSSBO); glDeleteBuffers(photonIndexSSBO); }
+            photonVertexSSBO = glGenBuffers();
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, photonVertexSSBO);
+            glBufferData(GL_SHADER_STORAGE_BUFFER, (long) side * side * 16 * 4, GL_DYNAMIC_COPY);
+            photonIndexSSBO = glGenBuffers();
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, photonIndexSSBO);
+            glBufferData(GL_SHADER_STORAGE_BUFFER, (long) side * side * 4, GL_DYNAMIC_COPY);
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+            photonBufferSide = side;
         }
         if (photonTextureSide == side) return;
         deletePhotonBuffers();
@@ -1186,6 +1254,11 @@ public class GLSLEngine implements AutoCloseable {
                 splatProgram.delete(); glDeleteVertexArrays(photonVAO);
                 glDeleteFramebuffers(cellFBO); glDeleteTextures(cellTexture); glDeleteTextures(cellActiveTexture); glDeleteTextures(cellListTexture);
             }
+            if (gridCount != null) {
+                gridCount.delete(); gridScan.delete(); gridScatter.delete();
+                glDeleteBuffers(cellStartSSBO); glDeleteBuffers(cellCountSSBO); glDeleteBuffers(cellCursorSSBO);
+                if (photonVertexSSBO != 0) { glDeleteBuffers(photonVertexSSBO); glDeleteBuffers(photonIndexSSBO); }
+            }
             glDeleteVertexArrays(quadVAO); glDeleteBuffers(quadVBO); glDeleteBuffers(quadEBO);
             glfwDestroyWindow(window); glfwTerminate();
         });
@@ -1201,6 +1274,13 @@ public class GLSLEngine implements AutoCloseable {
             programId = glCreateProgram(); glAttachShader(programId, vs); glAttachShader(programId, fs); glLinkProgram(programId);
             if (glGetProgrami(programId, GL_LINK_STATUS) == GL_FALSE) throw new RuntimeException(glGetProgramInfoLog(programId));
             glDeleteShader(vs); glDeleteShader(fs);
+        }
+        /** A compute program. */
+        public ShaderProgram(String computeSource) {
+            int cs = compileShader(GL_COMPUTE_SHADER, computeSource, "Compute");
+            programId = glCreateProgram(); glAttachShader(programId, cs); glLinkProgram(programId);
+            if (glGetProgrami(programId, GL_LINK_STATUS) == GL_FALSE) throw new RuntimeException(glGetProgramInfoLog(programId));
+            glDeleteShader(cs);
         }
         private int compileShader(int type, String source, String typeName) {
             int s = glCreateShader(type); glShaderSource(s, source); glCompileShader(s);

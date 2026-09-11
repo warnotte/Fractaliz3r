@@ -1324,6 +1324,15 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("causticRadius", params.getCausticRadius());
             uniforms.put("causticCenter", params.getCausticCenter());
             uniforms.put("causticDebug", 0);
+            // The gather's radius at the first pass: a share of the distance to the caustic
+            // centre, so it scales with the scene; the engine shrinks it pass by pass.
+            {
+                float[] cc = params.getCausticCenter();
+                float[] cp = params.getCamera().getPosition();
+                float dx = cc[0] - cp[0], dy = cc[1] - cp[1], dz = cc[2] - cp[2];
+                float sceneD = Math.max((float) Math.sqrt(dx * dx + dy * dy + dz * dz), 0.1f);
+                uniforms.put("mergeRadius0", causticsActive(params) ? 0.02f * sceneD : 0f);
+            }
             uniforms.put("emitterDebug", 0);
             uniforms.put("roughness", params.getRoughness());
             uniforms.put("skyIntensity", params.getSkyIntensity());

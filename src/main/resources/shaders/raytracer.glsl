@@ -1493,6 +1493,10 @@ vec3 pathTrace(Ray ray, inout uint seed) {
     // only past one: bdMatte counts the matte and metal vertices after the first, bdCoins
     // how many of them lie before the last such vertex (-1: none yet, the path is not its).
     int bdMatte = 0, bdCoins = -1;
+    // The gather: at the first matte or metal vertex reached through nothing but glass or
+    // mirrors, the photons around it are what light it from behind glass; from there on a
+    // BSDF ray reaching an emitter through glass is the gather's path, not this one's.
+    bool bdOnlyDelta = true, bdGathered = false, bdDeltaSince = false;
 #endif
 
     Ray currentRay = ray;
@@ -1558,6 +1562,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     if (bounce > 0) { bdQ *= ((bdCosIn / PI) * bdPrevCosOut / bdD2) / bdArrivePt; bdMatte++; }
                     bdPrevDelta = false; bdPrevCosOut = max(dot(normal, currentRay.direction), 0.001);
                 }
+                bdOnlyDelta = false; bdDeltaSince = false;
 #endif
             }
             continue;
@@ -1657,6 +1662,48 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         if (extraLightType == EXTRA_LIGHT_BEAM) extraLightRadiance *= bdBeamW;
         float bdExtraW = BD_DRAW_WEIGHT(bdLtExtra, 1.0, extraLightDirNorm);
         if (bdExtraPoint) extraLightRadiance *= bdExtraW;
+
+        if (mergeRadius > 0.0 && bounce > 0 && bdOnlyDelta && localMatType != MATERIAL_GLASS) {
+            vec3 gathered = vec3(0.0);
+            float r2 = mergeRadius * mergeRadius;
+            ivec3 c0 = ivec3(floor(hitPos / mergeRadius));
+            vec3 F0g = mix(vec3(0.04), albedo, localMetalness);
+            for (int dz = -1; dz <= 1; dz++) for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+                ivec3 c = c0 + ivec3(dx, dy, dz);
+                uint h = (uint(c.x) * 73856093u ^ uint(c.y) * 19349663u ^ uint(c.z) * 83492791u) & uint(cellMask);
+                uint start = cellStart[h];
+                uint n = min(cellCount[h], uint(MERGE_MAX_PER_CELL));
+                for (uint j = 0u; j < n; j++) {
+                    uint i = photonIndex[start + j];
+                    vec4 pf = photonData[4u * i];
+                    vec3 dp = pf.xyz - hitPos;
+                    if (dot(dp, dp) > r2) continue;
+                    vec3 pn = photonData[4u * i + 2].xyz;
+                    if (dot(pn, faceNormal) < 0.7) continue;
+                    vec3 wi = photonData[4u * i + 3].xyz;
+                    float NdotLg = max(dot(faceNormal, wi), 0.0);
+                    if (NdotLg <= 0.0) continue;
+                    vec3 f;
+                    if (localMatType == MATERIAL_METALLIC) {
+                        vec3 Hg = normalize(wi + viewDir);
+                        float NdotHg = max(dot(faceNormal, Hg), 0.0);
+                        float VdotHg = max(dot(viewDir, Hg), 0.001);
+                        float Dg = a2 / (PI * pow(NdotHg * NdotHg * (a2 - 1.0) + 1.0, 2.0));
+                        float Gg = smithG2GGX(max(NdotLg, 0.001), NdotV, a2);
+                        f = fresnelSchlickVec(VdotHg, F0g) * Dg * Gg / (4.0 * NdotV * max(NdotLg, 0.001));
+                    } else {
+                        f = albedo / PI;
+                    }
+                    gathered += photonData[4u * i + 1].xyz * f;
+                }
+            }
+            radiance += clamp(throughput * gathered / (PI * r2), 0.0, FIREFLY_CLAMP);
+            bdGathered = true;
+            bdDeltaSince = true;
+        } else if (localMatType != MATERIAL_GLASS) {
+            bdOnlyDelta = false;               // a matte or metal vertex before any gather
+            bdDeltaSince = false;              // or after it: a BSDF ray from here is not the gather's
+        }
 #endif
 
         // Emissive
@@ -1681,6 +1728,9 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     }
                     emitMis = 1.0 / (1.0 + aB * aB + cB * cB);
                 }
+#ifdef BIDIR
+                if (bdGathered && bdDeltaSince && lastWasSpecular) emitMis = 0.0;   // the gather has this path
+#endif
                 if (emitterDebug == 1 && bounce > 0) emitMis = 0.0;
                 if (emitterDebug == 2) emitMis = 1.0;
                 radiance += clamp(throughput * albedo * localEmissive * emitMis, 0.0, FIREFLY_CLAMP);

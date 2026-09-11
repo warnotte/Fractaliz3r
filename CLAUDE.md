@@ -131,7 +131,8 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.CausticProbe" -Dexe
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.EmitterProbe" -Dexec.args="slab out/emitter 640x360 1024 32"
 # One light transport (BIDIR): the path tracer alone and the path tracer with the photon pass weighted
 # against it must converge to the same image; panel = glass ball under an emissive panel, metal = a
-# smooth metal block, beam = the beam on the slab. Noise removed and time per sample too.
+# smooth metal block, beam = the beam on the slab, window = the panel scene behind a pane of glass
+# (the gather's case). Noise removed and time per sample too.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.BidirProbe" -Dexec.args="panel out/bidir 320x180 2048 32"
 # The app's Explore button, headless: CameraExplorer from a fractal's default camera (or a
 # .frac), scored thumbnails written as a sheet best first, time per view.
@@ -279,6 +280,7 @@ shaders/
 ├── postprocess.glsl       # Bloom, tone mapping, color correction
 ├── lights.glsl            # The light list (LightList.java) and the photon pass's draws and densities, under HAS_EMITTERS / BIDIR
 ├── photon.glsl            # The photon pass: light tracing from every light, MIS-weighted; the scene compiled once more under PHOTON_PASS
+├── grid_count/scan/scatter.comp  # the hash grid over the pass's photon vertices, for the gather behind glass
 ├── photon_splat.vert/frag # the photons as points into the accumulation and the emission map
 └── fractals/              # Individual fractal Distance Estimators
     ├── mandelbulb.glsl, mandelbox.glsl, menger.glsl, kaleidoscopic.glsl

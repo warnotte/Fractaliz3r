@@ -499,10 +499,30 @@ How it works (`lights.glsl`, `photon.glsl`, the `BIDIR` blocks of `pathTrace`,
   the whole square, each with the flux of its mixture density; the path tracer reads the same
   map for its weights.
 
-What it cannot do yet: a caustic seen *through* glass (a landing has to be visible from the
-camera; the focus of a lens right behind it stays hidden: that is a gather, see IDEAS.md
-§ 26), photons from the sky (the path tracer has those already, through the glass it sees),
-photons from the point and spot lights.
+- **The gather, for a caustic seen through glass.** A landing has to be visible from the
+  camera, and a draw from a matte point behind glass is blocked: the caustic under a ball
+  seen through a window, the focus of a lens seen through the lens, is no strategy's above.
+  So the photon pass also stores its first eligible vertex (position, flux, normal, incoming
+  direction, one slot per photon, an SSBO), three compute passes build a hash grid over
+  them (`grid_count`, `grid_scan`, `grid_scatter`: counts per cell, their prefix sum, the
+  photons scattered into their cells' slots; 65536 cells of the gather radius), and the path
+  tracer, at the first matte or metal vertex it reaches through nothing but glass or
+  mirrors, gathers the photons within the radius: their flux through the BRDF over the
+  gather area. Rebuilt every pass, before the sample it serves, the radius shrinking with
+  the passes as k^-0.15 from 2 % of the distance to the caustic centre (progressive photon
+  mapping), so the estimate converges. From such a vertex a BSDF ray that reaches an emitter
+  through glass is the gather's path and counts nothing. The window scene of `BidirProbe`
+  (the panel scene behind a pane of glass; the path tracer alone finds the caustic by chance
+  through the ball and the pane, slowly) converges to the same image: 0.6 % apart, 1 % over
+  blocks, the caustic band 0.02 %, and the noise falls 1.4x.
+- **Point and spot lights send photons too**, from their jittered point over the sphere or
+  the cone with the soft edge as a weight; at their first hit the photons take the draw's
+  range falloff instead of the inverse square their flux carries, so the photons and the
+  draw tell the same light (CausticProbe's point-light check: 0.999).
+
+What it cannot do yet: photons from the sky (the path tracer has those already, through the
+glass it sees), the emitters' light in the fog before a glass (the fog march scatters the
+sun and the beam only).
 
 The proofs. `CausticProbe`: a matte slab under the sun with `causticDebug` on, so every
 landing weighs one, renders the sun's direct light twice, once by NEE and once by photons,
@@ -743,7 +763,7 @@ reliable than re-reading the path it covers:
 | `ExportAfterPreviewProbe` | the cheap preview must not leak into an export |
 | `CausticProbe` | caustics: the photons' energy against NEE (must be 1, with and without the emission map), the cost of a pass, pictures with and without |
 | `EmitterProbe` | emitters drawn directly against found by chance: the same converged image (the slab scene), the noise removed, the cost |
-| `BidirProbe` | the path tracer alone against the path tracer with the photon pass weighted against it: the same converged image (panel, metal, beam scenes), the noise, the cost |
+| `BidirProbe` | the path tracer alone against the path tracer with the photon pass weighted against it: the same converged image (panel, metal, beam scenes; the window scene for the gather), the noise, the cost |
 | `ProspectSwapProbe` | the Discoveries search runs on a throw-away scene; the user's scene must come back pixel-identical |
 | `ExploreProbe` | the app's Explore button, headless: scored views or parameter variations from any camera, time per view |
 | `ThumbnailForge` | the Presets & Chains browser's thumbnails, every chain and preset; `install` ships them as resources |

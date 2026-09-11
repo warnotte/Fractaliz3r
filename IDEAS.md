@@ -146,7 +146,12 @@ bidirectional compiles in under its own define: the fast path stays byte-identic
 5. a triangular prism primitive and the beam-through-prism preset (done: PRISM_BEAM, the
    acceptance scene, see docs/RENDERING.md § The acceptance scene).
 
-The follow-ups the photon pass alone leaves open:
+Done since: the gather for a caustic seen through glass (a hash grid over the pass's photon
+vertices, gathered at the first matte vertex reached through glass; BidirProbe's window scene),
+and photons from the point and spot lights. Still open: the emitters' light in the fog before a
+glass, photons from the sky (not needed), and the emission square's extent and centre by hand.
+
+The follow-ups the photon pass alone leaves open (kept for the record):
 
 1. **Seen through glass.** A photon lands only where the camera sees it directly, so the
    focus of a lens right behind it is hidden. The fix is a gather: keep the landed photons in

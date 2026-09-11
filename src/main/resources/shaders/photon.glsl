@@ -21,6 +21,8 @@ uniform int causticDebug;        // CausticProbe: 1 = every landing weighted 1, 
 
 bool gLanded = false;
 bool gSpecular = false;
+bool gStored = false;
+int gSlot = 0;                   // this photon's slot in the vertex buffer
 
 // A landing may not add more than this many times what a photon of average flux adds to a
 // pixel at the distance of the caustic centre: the fireflies of a landing right under the
@@ -379,6 +381,15 @@ void trace(int li, inout uint seed) {
         vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
         bool eligible = gSpecular || causticDebug != 0;             // the calibration check lands anywhere, weight one
 
+        // the first eligible vertex is stored for the gather, whatever the coin says
+        if (gSpecular && !gStored) {
+            photonData[4 * gSlot] = vec4(hitPos, 1.0);
+            photonData[4 * gSlot + 1] = vec4(flux * weight, 0.0);
+            photonData[4 * gSlot + 2] = vec4(faceN, 0.0);
+            photonData[4 * gSlot + 3] = vec4(wIn, 0.0);
+            gStored = true;
+        }
+
         if (eligible && random(seed) < LT_LAND) {
             vec3 toCam; float camFactor; vec2 tileUV;
             if (!connectToCamera(hitPos, faceN, true, seed, toCam, camFactor, tileUV)) return;
@@ -473,6 +484,8 @@ void trace(int li, inout uint seed) {
 void main() {
     photonPixel = vec4(0.0);
     photonColor = vec4(0.0);
+    gSlot = int(gl_FragCoord.y) * photonSide + int(gl_FragCoord.x);
+    photonData[4 * gSlot] = vec4(0.0);                        // no vertex until one is stored
     uint seed = initRandom(gl_FragCoord.xy + vec2(0.5, 7919.0), sampleIndex);
     float pick;
     int li = pickLight(seed, pick);

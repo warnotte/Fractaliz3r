@@ -22,7 +22,7 @@ import java.util.concurrent.CountDownLatch;
  * the beam across the slab onto a block; the photons' direct landings weigh next to
  * nothing against the draw, and the images must agree.
  *
- * Usage: BidirProbe [panel | metal | beam | scene.frac] [outDir] [WxH] [referenceSamples] [testSamples]
+ * Usage: BidirProbe [panel | metal | beam | window | scene.frac] [outDir] [WxH] [referenceSamples] [testSamples]
  */
 public class BidirProbe {
 
@@ -67,6 +67,23 @@ public class BidirProbe {
                 cfg = SceneBuilder.nodeGraph(SceneBuilder.union(SceneBuilder.union(SceneBuilder.slab(2.6f), panel()), m))
                         .camera(0f, 2.0f, -3.4f).lookAt(0f, 0.3f, 0f).fov(45)
                         .materialType(0).roughness(0.6f).pathTracing(true).maxBounces(6)
+                        .lightIntensity(0f).ambientIntensity(0f)
+                        .caustics(3.0f).causticPhotons(512)
+                        .build();
+                noSun = true;
+            }
+            case "window" -> {
+                // the panel scene seen through a pane of glass: the caustic under the ball is then
+                // a path with glass on both sides of the floor, which only the gather makes; the
+                // path tracer alone finds it by chance through the ball, slowly
+                org.fractalizer.graph.PrimitiveNode pane = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.BOX);
+                pane.setSizeX(3.5f); pane.setSizeY(2.5f); pane.setSizeZ(0.02f);
+                org.fractalizer.graph.MaterialNode glass = new org.fractalizer.graph.MaterialNode(SceneBuilder.translate(pane, 0f, 1.0f, -1.6f));
+                glass.setMaterialType(2); glass.setIor(1.5f); glass.setRoughness(0.02f); glass.setMetallic(0f);
+                glass.setColorMode(org.fractalizer.graph.MaterialNode.COLOR_SOLID); glass.setColorR(1f); glass.setColorG(1f); glass.setColorB(1f);
+                cfg = SceneBuilder.nodeGraph(SceneBuilder.union(SceneBuilder.union(SceneBuilder.union(SceneBuilder.slab(2.6f), panel()), SceneBuilder.glassBall(0.45f, 1.5f, 0.02f)), glass))
+                        .camera(0f, 2.0f, -3.4f).lookAt(0f, 0.3f, 0f).fov(45)
+                        .materialType(0).roughness(0.6f).pathTracing(true).maxBounces(8)
                         .lightIntensity(0f).ambientIntensity(0f)
                         .caustics(3.0f).causticPhotons(512)
                         .build();
@@ -149,7 +166,7 @@ public class BidirProbe {
         g.dispose();
         javax.imageio.ImageIO.write(sheet, "png", new File(outDir, "_" + which + "_sheet.png"));
 
-        boolean ok = photonsOn && rel < 0.04;
+        boolean ok = photonsOn && rel < (which.equals("window") ? 0.08 : 0.04);   // the window's reference is the slowest to converge
         System.out.println(ok ? "BIDIR OK" : "BIDIR MISMATCH");
         System.out.println("DONE -> " + outDir.getAbsolutePath());
         Platform.exit();
