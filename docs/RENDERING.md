@@ -590,6 +590,19 @@ the air before the ball, focused into a cone seen in the air behind it, with a c
 the slab. The cone is the photons' and is grainy until the samples accumulate; the incoming
 beam is the march's and is smooth from the first sample.
 
+### The acceptance scene: a beam through a prism
+
+`presets/PRISM_BEAM.frac`, the picture the whole of this was aimed at: a white beam fixed in
+the world enters the left face of a glass triangular prism (the twelfth primitive,
+`TRIANGULAR_PRISM`, an equilateral section along Z) near the angle of minimum deviation, and
+leaves the right face as a fan of colour, seen in the fog, that lands on the slab as a
+spectrum; a faint reflection of the beam climbs from the entry face. Nothing else lights
+the scene. The beam in the air is the camera rays' march; everything past the glass, the fan
+and the spectrum and the reflection, is the photon pass's, dispersion included; the two meet
+without a seam because each path is one strategy's, or shared by weights that sum to one.
+The scene compiles in 17 s (EXTRA_BEAM, BIDIR, HAS_MATERIALS) plus 4 s for its photon program,
+and renders at 960x540 in 14 ms per sample with 1024 x 1024 photons.
+
 For a beam aimed at something, the light has to stay put while the camera moves, so the
 additional light can now be *Fixed in the world*: position and direction are then scene
 coordinates as given, instead of the camera-relative offsets (scaled by a tenth, laterally

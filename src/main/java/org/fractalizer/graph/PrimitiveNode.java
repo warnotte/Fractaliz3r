@@ -21,7 +21,8 @@ public class PrimitiveNode extends GraphNode {
         CONE("Cone"),
         OCTAHEDRON("Octahedron"),
         PYRAMID("Pyramid"),
-        HEX_PRISM("Hex Prism");
+        HEX_PRISM("Hex Prism"),
+        TRIANGULAR_PRISM("Triangular Prism");   // an equilateral section in XY, apex up, along Z: the prism of the spectrum
 
         private final String displayName;
         PrimitiveType(String displayName) { this.displayName = displayName; }
@@ -87,6 +88,7 @@ public class PrimitiveNode extends GraphNode {
             case CYLINDER, CAPSULE, HEX_PRISM -> "Radius";
             case CONE -> "Height";
             case PYRAMID -> "Height";
+            case TRIANGULAR_PRISM -> "Side";
         };
     }
 
@@ -96,6 +98,7 @@ public class PrimitiveNode extends GraphNode {
             case TORUS -> "Minor Radius";
             case CYLINDER, CAPSULE, HEX_PRISM -> "Half Height";
             case CONE -> "Bottom Radius";
+            case TRIANGULAR_PRISM -> "Half Length";
             default -> "Size Y";
         };
     }

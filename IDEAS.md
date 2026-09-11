@@ -143,7 +143,8 @@ bidirectional compiles in under its own define: the fast path stays byte-identic
    in place of the split rules (done; BidirProbe is the proof);
 4. the medium: the beam scattered along camera rays, photons scattering in the fog past a
    glass (done; see docs/RENDERING.md § The medium);
-5. a triangular prism primitive and the beam-through-prism preset and probe.
+5. a triangular prism primitive and the beam-through-prism preset (done: PRISM_BEAM, the
+   acceptance scene, see docs/RENDERING.md § The acceptance scene).
 
 The follow-ups the photon pass alone leaves open:
 

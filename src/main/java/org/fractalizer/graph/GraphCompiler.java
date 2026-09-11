@@ -1733,6 +1733,15 @@ public class GraphCompiler {
                     "    vec2 _hd = vec2(length(_hxz - vec2(clamp(_hxz.x, -_hk * _hr, _hk * _hr), _hr)) * sign(_hxz.y - _hr), _hp.y - _hh);\n" +
                     "    float d = min(max(_hd.x, _hd.y), 0.0) + length(max(_hd, 0.0));\n";
             }
+            case TRIANGULAR_PRISM -> {
+                // IQ sdTriPrism: an equilateral triangle of side sizeX in XY, apex up, its base at
+                // y = -sizeX/2 (so a prism standing on y = 0 is translated up by sizeX/2), extruded
+                // along Z over a half length of sizeY. The prism of the spectrum.
+                yield "    float _ts = " + p + "_sizeX;\n" +
+                    "    float _tl = " + p + "_sizeY;\n" +
+                    "    vec3 _tq = abs(pos);\n" +
+                    "    float d = max(_tq.z - _tl, max(_tq.x * 0.866025 + pos.y * 0.5, -pos.y) - _ts * 0.5);\n";
+            }
         };
     }
 

@@ -75,7 +75,7 @@ Analytic SDF geometric primitives. Unlike `FractalNode`, these generate their ow
 
 ```java
 public class PrimitiveNode extends GraphNode {
-    public enum PrimitiveType { SPHERE, BOX, ROUNDED_BOX, PLANE, TORUS, CYLINDER, CAPSULE, CONE, OCTAHEDRON, PYRAMID, HEX_PRISM }
+    public enum PrimitiveType { SPHERE, BOX, ROUNDED_BOX, PLANE, TORUS, CYLINDER, CAPSULE, CONE, OCTAHEDRON, PYRAMID, HEX_PRISM, TRIANGULAR_PRISM }
     private PrimitiveType primitiveType;
     private float sizeX, sizeY, sizeZ;
     private float rounding;  // For rounded corners

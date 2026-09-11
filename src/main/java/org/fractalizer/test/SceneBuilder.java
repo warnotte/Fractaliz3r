@@ -162,14 +162,43 @@ public class SceneBuilder {
 
     /** A matte grey slab, {@code halfSize} wide, its top at y = 0: what caustics fall on.
      *  Finite, so a photon disk can cover it. */
-    public static GraphNode slab(float halfSize) {
+    public static GraphNode slab(float halfSize) { return slab(halfSize, 0.72f); }
+
+    public static GraphNode slab(float halfSize, float grey) {
         org.fractalizer.graph.PrimitiveNode box = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.BOX);
         box.setSizeX(halfSize); box.setSizeY(0.06f); box.setSizeZ(halfSize);
         org.fractalizer.graph.MaterialNode m = new org.fractalizer.graph.MaterialNode(translate(box, 0f, -0.06f, 0f));
         m.setMaterialType(0);
         m.setColorMode(org.fractalizer.graph.MaterialNode.COLOR_SOLID);
-        m.setColorR(0.72f); m.setColorG(0.72f); m.setColorB(0.72f);
+        m.setColorR(grey); m.setColorG(grey); m.setColorB(grey);
         m.setRoughness(0.7f);
+        m.setMetallic(0f);
+        return m;
+    }
+
+    /** A clear glass triangular prism of this side, standing on y = 0, its length along Z. */
+    public static GraphNode glassPrism(float side, float halfLength, float ior) {
+        org.fractalizer.graph.PrimitiveNode p = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.TRIANGULAR_PRISM);
+        p.setSizeX(side); p.setSizeY(halfLength);
+        org.fractalizer.graph.MaterialNode m = new org.fractalizer.graph.MaterialNode(translate(p, 0f, side * 0.5f, 0f));
+        m.setMaterialType(2);
+        m.setIor(ior);
+        m.setColorMode(org.fractalizer.graph.MaterialNode.COLOR_SOLID);
+        m.setColorR(1f); m.setColorG(1f); m.setColorB(1f);
+        m.setRoughness(0.02f);
+        m.setMetallic(0f);
+        return m;
+    }
+
+    /** A matte screen: a thin tall box facing -X at x, to catch a spectrum. */
+    public static GraphNode screen(float x, float halfHeight, float halfDepth, float grey) {
+        org.fractalizer.graph.PrimitiveNode box = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.BOX);
+        box.setSizeX(0.04f); box.setSizeY(halfHeight); box.setSizeZ(halfDepth);
+        org.fractalizer.graph.MaterialNode m = new org.fractalizer.graph.MaterialNode(translate(box, x, halfHeight, 0f));
+        m.setMaterialType(0);
+        m.setColorMode(org.fractalizer.graph.MaterialNode.COLOR_SOLID);
+        m.setColorR(grey); m.setColorG(grey); m.setColorB(grey);
+        m.setRoughness(0.8f);
         m.setMetallic(0f);
         return m;
     }
@@ -459,6 +488,11 @@ public class SceneBuilder {
 
     public SceneBuilder pathTracing(boolean enabled) {
         config.effects.pathTracingEnabled = enabled;
+        return this;
+    }
+
+    public SceneBuilder skyIntensity(float i) {
+        config.effects.skyIntensity = i;
         return this;
     }
 

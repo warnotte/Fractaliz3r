@@ -174,7 +174,7 @@ org.fractalizer
 ├── graph/
 │   ├── GraphNode.java              # Abstract base for composable fractal operations
 │   ├── FractalNode.java            # Leaf: wraps FractalType + per-node params
-│   ├── PrimitiveNode.java          # Leaf: 11 SDF geometric primitives
+│   ├── PrimitiveNode.java          # Leaf: 12 SDF geometric primitives
 │   ├── CSGNode.java                # Binary: Union/Intersect/Subtract/Morph
 │   ├── TransformNode.java          # Unary: 7 modes (Standard/Mirror/Twist/Bend/Taper/Rep/Rep1D)
 │   ├── HybridNode.java             # Leaf: chains formulas INSIDE one iteration loop (28 step types, per-step iteration gating)
@@ -301,7 +301,7 @@ Uniform changes never trigger recompilation — only structural changes require 
 
 The Node Graph is the primary UI for fractal editing/composition. Composable tree → single GPU shader.
 
-**Node types:** `FractalNode` (leaf) / `PrimitiveNode` (leaf: 11 SDF shapes) / `CSGNode` (binary: 5 ops — Union/Intersect/Subtract/Morph/Nesting) / `TransformNode` (unary: 7 modes) / `EffectNode` (unary: Erosion/Crystal/Moss) / `MaterialNode` (unary: per-node material overrides via SSBO, `colorMode` 0=palette/1=solid/2=tint, gated by `#define HAS_MATERIALS`).
+**Node types:** `FractalNode` (leaf) / `PrimitiveNode` (leaf: 12 SDF shapes) / `CSGNode` (binary: 5 ops — Union/Intersect/Subtract/Morph/Nesting) / `TransformNode` (unary: 7 modes) / `EffectNode` (unary: Erosion/Crystal/Moss) / `MaterialNode` (unary: per-node material overrides via SSBO, `colorMode` 0=palette/1=solid/2=tint, gated by `#define HAS_MATERIALS`).
 
 **GraphCompiler** compiles in 8 phases with unique prefixes (`n0_`, `t0_`, `e0_`, `m0_`, `c0_`, `p0_`) via `ShaderPreprocessor`.
 

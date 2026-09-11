@@ -42,6 +42,15 @@ is named after the Earth's albedo.
 
 ![The Labyrinth: a stone corridor of the Menger maze opening on the Escher room, three staircases climbing under three gravities around a glowing crystal](docs/gallery/labyrinth.jpg)
 
+![A white beam entering a glass prism in fog and leaving it as a fan of colour that lands on the floor as a spectrum](docs/gallery/prism_beam.jpg)
+
+**The prism** — [`PRISM_BEAM.frac`](presets/PRISM_BEAM.frac) — is one light transport at work: a
+beam fixed in the world, a glass prism with dispersion, fog. The beam is seen in the air by the
+camera rays' march; past the glass its light is the photon pass's, weighted against the path
+tracer so that nothing is counted twice: the fan of colour in the air, the spectrum on the floor,
+the Fresnel reflection going up. Everything of it compiles in only for the scenes that use it;
+a scene without caustics renders with the program it always had, byte for byte.
+
 **The Labyrinth** — [`LABYRINTH.frac`](presets/LABYRINTH.frac) — is not a view but a place. The maze is a
 Menger sponge seen from inside: corridors two thirds wide, doorways at every scale, and it goes
 on. At its heart, Jareth's Escher room: three staircases, each climbing under its own gravity,
@@ -87,7 +96,7 @@ plane, four materials.
 
 ### Node graph compositor
 
-- **Node types:** fractal leaves, 11 SDF primitives, hybrid chains, CSG (union, intersect, subtract,
+- **Node types:** fractal leaves, 12 SDF primitives, hybrid chains, CSG (union, intersect, subtract,
   morph, nesting), 7 transform modes (translate/rotate/scale, mirror, twist, bend, taper, repetition,
   1D repetition), 3 surface effects (erosion, crystallisation, moss), per-node materials.
 - **Per-node parameters** with their own animation tracks.
