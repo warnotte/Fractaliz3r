@@ -129,6 +129,39 @@ public class CausticProbe {
         System.out.printf("energy with the emission map (glass ball on the slab): %d lit pixels, photons / NEE = %.3f (expect 1.00)%n", lit2, ratio2);
         energyOk &= Math.abs(ratio2 - 1.0) < 0.08;
 
+        // The same check with a point light instead of the sun: its draw has a range falloff
+        // rather than an inverse square, and the photons apply the same falloff at their first
+        // hit; the two must still agree.
+        params = apply(controller, SceneBuilder.nodeGraph(SceneBuilder.slab(2.6f))
+                .camera(0f, 2.2f, -3.6f).lookAt(0f, 0f, 0f).fov(45)
+                .materialType(0).roughness(0.6f).pathTracing(true).maxBounces(4)
+                .lightIntensity(0f).ambientIntensity(0f)
+                .pointLight(0.4f, 1.3f, 0.2f, 0.03f, 4.0f, 1f, 0.95f, 0.9f, 3.0f)
+                .causticPhotons(512).causticCenter(0f, 0f, 0f)
+                .build());
+        params.setSkyIntensity(0f);
+        params.setAmbientIntensity(0f);
+        params.setLightIntensity(0f);
+        params.setCausticsEnabled(false);
+        float[] direct3 = render(engine, controller.buildUniformsForProbe(), probeSamples);
+        params.setCausticsEnabled(true);
+        params.setCausticRadius(4.0f);
+        Map<String, Object> uOn3 = controller.buildUniformsForProbe();
+        uOn3.put("causticDebug", 1);
+        float[] both3 = render(engine, uOn3, probeSamples);
+        double sumD3 = 0, sumP3 = 0; int lit3 = 0;
+        for (int i = 0; i < direct3.length; i += 4) {
+            float d = direct3[i] + direct3[i + 1] + direct3[i + 2];
+            if (d > 0.03f) {
+                lit3++;
+                sumD3 += d;
+                sumP3 += (both3[i] - direct3[i]) + (both3[i + 1] - direct3[i + 1]) + (both3[i + 2] - direct3[i + 2]);
+            }
+        }
+        double ratio3 = sumP3 / Math.max(sumD3, 1e-9);
+        System.out.printf("energy with a point light (its range falloff on both sides): %d lit pixels, photons / NEE = %.3f (expect 1.00)%n", lit3, ratio3);
+        energyOk &= Math.abs(ratio3 - 1.0) < 0.08;
+
         // ---- 2. cost ------------------------------------------------------------------------
         params.setCausticsEnabled(false);
         Map<String, Object> uCost = controller.buildUniformsForProbe();

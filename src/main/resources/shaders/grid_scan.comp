@@ -1,0 +1,39 @@
+#version 430 core
+
+/**
+ * The photon grid, pass 2 of 3: the exclusive prefix sum of the cell counts, so each cell
+ * knows where its photons start in the index buffer. One workgroup, each thread 64 cells
+ * (the grid is cellMask + 1 = 65536 cells): a scan over the 1024 partial sums in shared
+ * memory, then each thread writes its run. The cursors start where the starts do; the
+ * scatter advances them.
+ */
+
+layout(local_size_x = 1024) in;
+
+layout(std430, binding = 10) readonly buffer CellCount { uint cellCount[]; };
+layout(std430, binding = 9) buffer CellStart { uint cellStart[]; };
+layout(std430, binding = 12) buffer CellCursor { uint cellCursor[]; };
+
+shared uint partial[1024];
+
+void main() {
+    uint t = gl_LocalInvocationID.x;
+    uint base = t * 64u;
+    uint s = 0u;
+    for (uint k = 0u; k < 64u; k++) s += cellCount[base + k];
+    partial[t] = s;
+    barrier();
+    // Hillis-Steele inclusive scan over the partial sums
+    for (uint step = 1u; step < 1024u; step <<= 1u) {
+        uint v = t >= step ? partial[t - step] : 0u;
+        barrier();
+        partial[t] += v;
+        barrier();
+    }
+    uint run = partial[t] - s;               // exclusive: what came before this thread's cells
+    for (uint k = 0u; k < 64u; k++) {
+        cellStart[base + k] = run;
+        cellCursor[base + k] = run;
+        run += cellCount[base + k];
+    }
+}

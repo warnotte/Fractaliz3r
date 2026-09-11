@@ -784,6 +784,18 @@ float ltDensityBeam(vec3 n) {
     float radius = max(L.sx, 1e-4);
     return lightPickPdf(li) / (PI * radius * radius) / c;
 }
+
+// ... and from the point or spot light: its pick, its direction's density, the point from it.
+float ltDensityExtra(vec3 x, vec3 n, vec3 toLight) {
+    int li = lightOfType(extraLightType == EXTRA_LIGHT_SPOT ? LIGHT_SPOT : LIGHT_POINT);
+    if (li < 0) return 0.0;
+    LightData L = lights[li];
+    float c = abs(dot(n, toLight));
+    if (c < 1e-4) return 0.0;
+    float pdfDir = extraLightType == EXTRA_LIGHT_SPOT ? 1.0 / (TAU * (1.0 - cos(radians(clamp(L.sz, 1.0, 89.0))))) : 1.0 / (4.0 * PI);
+    vec3 d = vec3(L.px, L.py, L.pz) - x;
+    return lightPickPdf(li) * pdfDir * c / max(dot(d, d), 1e-8);
+}
 #endif
 
 vec3 shadeSimple(vec3 hitPos, Ray ray, int matType) {
@@ -1630,6 +1642,8 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         bool bdMetalHere = localMatType == MATERIAL_METALLIC;
         float bdLtSun = bdLive ? ltDensitySun(hitPos, faceNormal) : 0.0;
         float bdLtBeam = (bdLive && extraLightType == EXTRA_LIGHT_BEAM) ? ltDensityBeam(faceNormal) : 0.0;
+        bool bdExtraPoint = extraLightType == EXTRA_LIGHT_POINT || extraLightType == EXTRA_LIGHT_SPOT;
+        float bdLtExtra = (bdLive && bdExtraPoint && hasExtraLight) ? ltDensityExtra(hitPos, faceNormal, extraLightDirNorm) : 0.0;
         // a draw from here is the photon pass's path too when a glass, mirror or metal lies
         // between here and the light: this vertex itself when it is metal, else an earlier one
         bool bdEligible = bounce > 0 && (bdMetalHere || bdCoins >= 0);
@@ -1641,6 +1655,8 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         float bdSunW = BD_DRAW_WEIGHT(bdLtSun, 1.0, normalize(lightDir));
         float bdBeamW = BD_DRAW_WEIGHT(bdLtBeam, 1.0, extraLightDirNorm);
         if (extraLightType == EXTRA_LIGHT_BEAM) extraLightRadiance *= bdBeamW;
+        float bdExtraW = BD_DRAW_WEIGHT(bdLtExtra, 1.0, extraLightDirNorm);
+        if (bdExtraPoint) extraLightRadiance *= bdExtraW;
 #endif
 
         // Emissive

@@ -124,6 +124,9 @@ void trace(int li, inout uint seed) {
     vec3 flux;
     vec3 emitPos = vec3(0.0), emitN = vec3(0.0, 1.0, 0.0);
     float rho = 0.0;               // sun and beam: the draw's density over the square or the disk
+    float dirPdf = 0.0;            // point and spot: the direction's density; their range too
+    float range = 0.0;
+    bool pointSource = false;
     if (ltype == LIGHT_SUN) {
         vec3 Ldir, u, v;
         sunFrame(Ldir, u, v);
@@ -146,6 +149,40 @@ void trace(int li, inout uint seed) {
         float att = edge < 0.001 ? 1.0 : 1.0 - smoothstep(radius * (1.0 - edge), radius, r);
         rho = 1.0 / (PI * radius * radius);
         flux = vec3(L.r, L.g, L.b) * L.intensity * att / (rho * pick);
+    } else if (ltype == LIGHT_POINT || ltype == LIGHT_SPOT) {
+        // From the point (jittered over its area radius as the draw jitters it), a direction
+        // over the sphere, or over the spot's cone with its soft edge as a weight.
+        pointSource = true;
+        vec3 pos = vec3(L.px, L.py, L.pz);
+        if (L.sx > 0.0) {
+            float z = 1.0 - 2.0 * random(seed), phi = TAU * random(seed), rxy = sqrt(max(0.0, 1.0 - z * z));
+            pos += vec3(rxy * cos(phi), rxy * sin(phi), z) * L.sx;
+        }
+        vec3 dir;
+        float att = 1.0;
+        if (ltype == LIGHT_POINT) {
+            float z = 1.0 - 2.0 * random(seed), phi = TAU * random(seed), rxy = sqrt(max(0.0, 1.0 - z * z));
+            dir = vec3(rxy * cos(phi), rxy * sin(phi), z);
+            dirPdf = 1.0 / (4.0 * PI);
+        } else {
+            vec3 axis = vec3(L.dx, L.dy, L.dz);
+            float outer = clamp(L.sz, 1.0, 89.0);
+            float cosOuter = cos(radians(outer));
+            float cosT = mix(cosOuter, 1.0, random(seed));
+            float sinT = sqrt(max(0.0, 1.0 - cosT * cosT));
+            float phi = TAU * random(seed);
+            vec3 u = normalize(cross(abs(axis.y) < 0.999 ? vec3(0, 1, 0) : vec3(1, 0, 0), axis));
+            vec3 v = cross(axis, u);
+            dir = normalize(u * (sinT * cos(phi)) + v * (sinT * sin(phi)) + axis * cosT);
+            dirPdf = 1.0 / (TAU * (1.0 - cosOuter));
+            float softness = clamp(L.pad0, 0.0, 1.0);
+            float cosInner = cos(radians(mix(outer, 0.0, softness)));
+            att = softness < 0.001 ? 1.0 : smoothstep(cosOuter, cosInner, cosT);
+        }
+        ray.origin = pos;
+        ray.direction = dir;
+        range = L.sy;
+        flux = vec3(L.r, L.g, L.b) * L.intensity * att / (dirPdf * pick);
     } else if (emitter) {
         sampleEmitterPoint(li, seed, emitPos, emitN);
         ray.origin = emitPos + emitN * 0.005;
@@ -208,6 +245,13 @@ void trace(int li, inout uint seed) {
             if (emitter) {
                 float cosL = max(dot(emitN, ray.direction), 0.0);
                 ltHere = pick * emitterPdfArea(li) * (cosL / PI) * cosIn / d2;
+            } else if (pointSource) {
+                ltHere = pick * dirPdf * cosIn / d2;
+                // the draw's light falls with a range, not with the inverse square this flux
+                // carries: the same falloff here, so both tell the same light
+                float nd = hitDist / range;
+                if (nd >= 1.0) return;
+                weight *= (1.0 / (1.0 + nd * nd * 8.0)) * pow(max(1.0 - nd, 0.0), 3.0) * d2;
             } else {
                 ltHere = pick * rho / cosIn;                   // a parallel draw, projected
             }

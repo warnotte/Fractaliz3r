@@ -64,6 +64,8 @@ public final class LightList {
             if (sun != null) entries.add(sun);
             float[] beam = beamEntry(p, camPos, camQuatWxyz);
             if (beam != null) entries.add(beam);
+            float[] extra = extraEntry(p, camPos, camQuatWxyz);
+            if (extra != null) entries.add(extra);
         }
         if (entries.isEmpty()) return Table.EMPTY;
         float[] data = new float[entries.size() * FLOATS];
@@ -127,6 +129,43 @@ public final class LightList {
         e[10] = p.getExtraLightIntensity();
         e[15] = radius; e[16] = p.getExtraLightRange(); e[17] = p.getExtraLightConeSoftness();
         e[18] = (float) (lum(e[7], e[8], e[9]) * e[10] * Math.PI * radius * radius);
+        e[19] = -1f;
+        return e;
+    }
+
+    /** The additional light as a point or a spot: its position (and the spot's axis) in the
+     *  world, its area radius, range, cone and softness; its power the intensity over the
+     *  sphere or the cone. The falloff of its draw (a range, not an inverse square) is
+     *  applied to the photons at their first hit, so both tell the same light. */
+    private static float[] extraEntry(org.fractalizer.fractals.AbstractFractalParams p, float[] camPos, float[] q) {
+        int type = p.getExtraLightType();
+        boolean spot = type == org.fractalizer.fractals.AbstractFractalParams.EXTRA_LIGHT_SPOT;
+        if ((type != org.fractalizer.fractals.AbstractFractalParams.EXTRA_LIGHT_POINT && !spot) || p.getExtraLightIntensity() <= 0f) return null;
+        float[] pos = {p.getExtraLightX(), p.getExtraLightY(), p.getExtraLightZ()};
+        float[] dir = {p.getExtraLightDirX(), p.getExtraLightDirY(), p.getExtraLightDirZ()};
+        if (p.isExtraLightAttachToCamera()) {
+            if (camPos == null || q == null) return null;
+            float[] local = {dir[0] * 0.2f, dir[1] * 0.2f, dir[2]};
+            if (local[0] * local[0] + local[1] * local[1] + local[2] * local[2] < 1e-8f) local = new float[]{0f, 0f, 1f};
+            dir = rotate(local, q);
+            float[] off = rotate(new float[]{pos[0] * 0.1f, pos[1] * 0.1f, pos[2] * 0.1f}, q);
+            pos = new float[]{camPos[0] + off[0], camPos[1] + off[1], camPos[2] + off[2]};
+        }
+        float len = (float) Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+        if (len < 1e-6f) dir = new float[]{0f, 0f, 1f}; else dir = new float[]{dir[0] / len, dir[1] / len, dir[2] / len};
+        float[] e = new float[FLOATS];
+        e[0] = spot ? SPOT : POINT;
+        e[1] = pos[0]; e[2] = pos[1]; e[3] = pos[2];
+        e[4] = dir[0]; e[5] = dir[1]; e[6] = dir[2];
+        e[7] = p.getExtraLightR(); e[8] = p.getExtraLightG(); e[9] = p.getExtraLightB();
+        e[10] = p.getExtraLightIntensity();
+        e[15] = Math.max(p.getExtraLightAreaRadius(), 0f);
+        e[16] = Math.max(p.getExtraLightRange(), 1e-4f);
+        float outer = Math.max(1f, Math.min(89f, p.getExtraLightConeAngle()));
+        e[17] = outer;
+        e[21] = Math.max(0f, Math.min(1f, p.getExtraLightConeSoftness()));
+        double solid = spot ? 2.0 * Math.PI * (1.0 - Math.cos(Math.toRadians(outer))) : 4.0 * Math.PI;
+        e[18] = (float) (lum(e[7], e[8], e[9]) * e[10] * solid);
         e[19] = -1f;
         return e;
     }

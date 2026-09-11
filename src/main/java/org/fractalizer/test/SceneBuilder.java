@@ -759,6 +759,19 @@ public class SceneBuilder {
         return this;
     }
 
+    /** The additional light as a point fixed in the world: its position, area radius, range,
+     *  colour and intensity. */
+    public SceneBuilder pointLight(float x, float y, float z, float areaRadius, float range, float r, float g, float b, float intensity) {
+        config.lighting.extraType = org.fractalizer.fractals.AbstractFractalParams.EXTRA_LIGHT_POINT;
+        config.lighting.extraAttachToCamera = false;
+        config.lighting.extraPosition = new float[]{x, y, z};
+        config.lighting.extraAreaRadius = areaRadius;
+        config.lighting.extraRange = range;
+        config.lighting.extraColor = new float[]{r, g, b};
+        config.lighting.extraIntensity = intensity;
+        return this;
+    }
+
     /** Caustics from the sun: photons leave a disk of this radius, centred on the origin
      *  unless {@link #causticCenter} says otherwise; enables them. */
     public SceneBuilder caustics(float radius) {

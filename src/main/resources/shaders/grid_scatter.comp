@@ -1,0 +1,31 @@
+#version 430 core
+
+/**
+ * The photon grid, pass 3 of 3: each stored photon vertex takes the next slot of its cell
+ * in the index buffer, so a cell's photons are photonIndex[cellStart .. cellStart + cellCount).
+ */
+
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 8) readonly buffer PhotonVertices { vec4 photonData[]; };
+layout(std430, binding = 11) buffer PhotonIndex { uint photonIndex[]; };
+layout(std430, binding = 12) buffer CellCursor { uint cellCursor[]; };
+
+uniform int photonCount;
+uniform float cellSize;
+uniform int cellMask;
+
+uint cellKey(vec3 p) {
+    ivec3 c = ivec3(floor(p / cellSize));
+    uint h = uint(c.x) * 73856093u ^ uint(c.y) * 19349663u ^ uint(c.z) * 83492791u;
+    return h & uint(cellMask);
+}
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uint(photonCount)) return;
+    vec4 pf = photonData[4u * i];
+    if (pf.w < 0.5) return;
+    uint slot = atomicAdd(cellCursor[cellKey(pf.xyz)], 1u);
+    photonIndex[slot] = i;
+}
