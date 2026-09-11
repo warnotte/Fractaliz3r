@@ -294,6 +294,20 @@ public class PresetForge {
                 .beam(-2.5f, 0.6f, 0.0f, 1.0f, -0.15f, 0.0f, 0.12f, 6.0f, 1.0f, 0.97f, 0.9f, 12.0f)
                 .colorStrength(1.0f).metalness(0.0f));
 
+        // The beam in fog onto a glass ball: the beam seen in the air (the camera rays' march),
+        // the ball's caustic and the beam's light through the ball seen in the air (photons).
+        p.put("BEAM_FOG", () -> SceneBuilder.nodeGraph(SceneBuilder.union(SceneBuilder.slab(2.6f), SceneBuilder.glassBall(0.4f, 1.5f, 0.02f)))
+                .camera(0.6f, 1.4f, -3.0f).lookAt(0f, 0.35f, 0f).fov(42)
+                .gradient(CRYSTAL).coloringMode(0)
+                .materialType(0).ior(1.5f).dispersion(0.02f).roughness(0.6f)
+                .pathTracing(true).maxBounces(6).rimIntensity(0.0f).skyType(3)
+                .lightDir(0.3f, 1.0f, -0.4f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(0.1f)
+                .ambientColor(0.5f, 0.55f, 0.65f).ambientIntensity(0.03f)
+                .beam(-2.5f, 0.55f, 0.0f, 1.0f, -0.05f, 0.0f, 0.1f, 6.0f, 1.0f, 0.97f, 0.9f, 14.0f)
+                .fog(0.25f).fogColor(0.8f, 0.85f, 0.9f)
+                .caustics(3.0f).causticPhotons(512)
+                .colorStrength(1.0f).metalness(0.0f));
+
         p.put("CAUSTIC_BALL", () -> SceneBuilder.nodeGraph(SceneBuilder.union(SceneBuilder.glassBall(0.5f, 1.5f, 0.02f), SceneBuilder.slab(2.6f)))
                 .camera(0f, 1.7f, -3.4f).lookAt(0f, 0.35f, 0f).fov(42)
                 .gradient(CRYSTAL).coloringMode(0)

@@ -562,7 +562,33 @@ light's position along its direction, its radius is the *Area / Beam Radius*, it
 irradiance is the intensity, with no falloff (it is collimated); a point is lit when nothing
 sits between it and the beam's source plane, marched back along the axis. Sun-like in the
 shading, so it works in classic and path-traced modes alike; with caustics on it sends
-photons like the sun.
+photons like the sun. Its draw and its glow in the fog compile in under `EXTRA_BEAM`, a
+define present only when the additional light is a beam: measured on the built-in shaders,
+the draw alone cost 2 to 3 s of compile per program, and no scene without a beam pays it.
+
+### The medium: the beam seen in the air (after 3.2.2)
+
+A beam in a vacuum is invisible; the picture of a beam through a prism is a picture of fog.
+The volumetric fog (Quality panel) scattered the sun along the camera rays, one shadow march
+per step; it scatters the beam too now. Not with a second march per step: a full marcher
+inlined inside that loop sent the NVIDIA compiler past its cliff and no program compiled
+within five minutes (ShaderCompileProbe is how to see that). Instead the beam's cylinder is
+intersected with the camera ray analytically, the segment is clipped to the beam's free
+length (one march per pixel along the axis, to the first surface), and the in-scattering is
+integrated over it with the fog's extinction and the beam's soft edge in eight steps and no
+march. The beam's light past a glass (the cone a lens makes of it) is the photon pass's:
+past a glass, mirror or metal a photon may scatter in the fog before its next surface, at a
+distance drawn from the fog's density, and it is connected to the camera from there, with
+the phase function and the fog's albedo (its colour), the connection attenuated as the
+camera rays are. Before such a vertex the photon flies straight: its direct light in the
+fog is the camera rays' march. Neither the photon's flight nor the path tracer's bounces are
+attenuated by the fog, the same approximation on both sides, so the caustic paths keep
+agreeing (BidirProbe's beam scene: 0.02 %).
+
+`presets/BEAM_FOG.frac` shows it: the beam across a foggy slab into a glass ball, seen in
+the air before the ball, focused into a cone seen in the air behind it, with a caustic on
+the slab. The cone is the photons' and is grainy until the samples accumulate; the incoming
+beam is the march's and is smooth from the first sample.
 
 For a beam aimed at something, the light has to stay put while the camera moves, so the
 additional light can now be *Fixed in the world*: position and direction are then scene

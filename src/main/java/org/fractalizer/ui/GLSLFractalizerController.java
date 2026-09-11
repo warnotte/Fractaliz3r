@@ -262,12 +262,15 @@ public class GLSLFractalizerController implements RenderController {
     private static String nodeGraphDefines(NodeGraphParams ngp) {
         return (ngp.getDetailLOD() > 0f ? "#define DETAIL_LOD\n" : "")
              + (org.fractalizer.render.LightList.hasEmitters(ngp.getGraphRoot()) ? "#define HAS_EMITTERS\n" : "")
-             + (causticsActive(ngp) ? "#define BIDIR\n" : "");
+             + builtinDefines(ngp);
     }
 
-    /** The defines of a built-in kernel scene: BIDIR with caustics, nothing otherwise. */
+    /** The defines every scene may carry: BIDIR with caustics, EXTRA_BEAM when the additional
+     *  light is a beam (its draw and its glow in the fog cost a few seconds of compile, so
+     *  only a scene with a beam pays them). Nothing otherwise. */
     private static String builtinDefines(AbstractFractalParams p) {
-        return causticsActive(p) ? "#define BIDIR\n" : "";
+        return (causticsActive(p) ? "#define BIDIR\n" : "")
+             + (p.getExtraLightType() == AbstractFractalParams.EXTRA_LIGHT_BEAM ? "#define EXTRA_BEAM\n" : "");
     }
 
     /** The scene's light table: the graph's emitters, and with caustics on the sun and the

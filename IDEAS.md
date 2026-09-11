@@ -141,7 +141,8 @@ bidirectional compiles in under its own define: the fast path stays byte-identic
    fixable in the world (done);
 3. the photon pass emitting from every light of the list, with MIS weights in both tracers
    in place of the split rules (done; BidirProbe is the proof);
-4. the medium: single scattering along camera rays from the list, and along photon paths;
+4. the medium: the beam scattered along camera rays, photons scattering in the fog past a
+   glass (done; see docs/RENDERING.md § The medium);
 5. a triangular prism primitive and the beam-through-prism preset and probe.
 
 The follow-ups the photon pass alone leaves open:

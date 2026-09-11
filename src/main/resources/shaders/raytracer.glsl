@@ -467,6 +467,13 @@ RayHit rayMarch(Ray ray) {
 // Volumetric Fog Helper
 // ============================================================================
 
+#ifdef EXTRA_BEAM
+// defined below: the beam's frame and the marcher its glow in the fog needs
+vec3 getExtraLightAxisWS();
+vec3 getExtraLightPositionWS();
+bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist, out int matType);
+#endif
+
 vec3 computeVolumetricFog(Ray ray, float hitDist, vec3 surfaceColor, out float extinction) {
     extinction = 1.0;
     if (volumetricFogEnabled == 0 || fogDensity <= 0.0) return surfaceColor;
@@ -491,7 +498,62 @@ vec3 computeVolumetricFog(Ray ray, float hitDist, vec3 surfaceColor, out float e
     
     extinction = exp(-hitDist * fogDensity);
     vec3 volumetricLight = lightColor * lightIntensity * fogColor * phase * volAccum * fogDensity;
-    
+
+#ifdef EXTRA_BEAM
+    // The beam in the fog: the camera ray crosses its cylinder over a segment, clipped to
+    // the beam's free length (to the first surface along its axis, one march per pixel) and
+    // integrated with the fog's extinction and the beam's soft edge, no march per step: a
+    // second marcher inside the loop above is what the compiler cannot take. The beam's
+    // light through a glass is the photon pass's (photon.glsl), not this.
+    if (extraLightType == EXTRA_LIGHT_BEAM && extraLightIntensity > 0.0) {
+        vec3 axis = getExtraLightAxisWS();
+        vec3 o = getExtraLightPositionWS();
+        float radius = max(extraLightAreaRadius, 1e-4);
+        float range = max(extraLightRange, 0.0001);
+        Ray along;
+        along.origin = o;
+        along.direction = axis;
+        vec3 fp; float fd; int fm;
+        float freeLen = rayMarchSimple(along, fp, fd, fm) ? min(fd, range) : range;
+        vec3 w = ray.origin - o;
+        vec3 wPerp = w - axis * dot(w, axis);
+        vec3 dPerp = ray.direction - axis * dot(ray.direction, axis);
+        float qa = dot(dPerp, dPerp), qb = 2.0 * dot(wPerp, dPerp), qc = dot(wPerp, wPerp) - radius * radius;
+        if (qa > 1e-8) {
+            float disc = qb * qb - 4.0 * qa * qc;
+            if (disc > 0.0) {
+                float sq = sqrt(disc);
+                float d0 = max((-qb - sq) / (2.0 * qa), 0.0);
+                float d1 = min((-qb + sq) / (2.0 * qa), hitDist);
+                // along the axis the point at d is at t(d) = t0 + d * ta: keep 0 < t < freeLen
+                float t0 = dot(w, axis), ta = dot(ray.direction, axis);
+                if (abs(ta) > 1e-6) {
+                    float e0 = (0.0 - t0) / ta, e1 = (freeLen - t0) / ta;
+                    d0 = max(d0, min(e0, e1));
+                    d1 = min(d1, max(e0, e1));
+                } else if (t0 <= 0.0 || t0 >= freeLen) {
+                    d1 = d0;
+                }
+                if (d1 > d0) {
+                    float edge = clamp(extraLightConeSoftness, 0.0, 1.0);
+                    float beamPhase = phaseHG(dot(ray.direction, -axis), fogScattering);
+                    const int BEAM_STEPS = 8;
+                    float ds = (d1 - d0) / float(BEAM_STEPS);
+                    float acc = 0.0;
+                    for (int i = 0; i < BEAM_STEPS; i++) {
+                        float d = d0 + (float(i) + 0.5) * ds;
+                        vec3 rel = ray.origin + ray.direction * d - o;
+                        float r = length(rel - axis * dot(rel, axis));
+                        float att = edge < 0.001 ? 1.0 : 1.0 - smoothstep(radius * (1.0 - edge), radius, r);
+                        acc += att * exp(-d * fogDensity) * ds;
+                    }
+                    volumetricLight += extraLightColor * extraLightIntensity * fogColor * beamPhase * acc * fogDensity;
+                }
+            }
+        }
+    }
+#endif
+
     return surfaceColor * extinction + volumetricLight;
 }
 
@@ -589,6 +651,7 @@ vec3 sampleExtraLightRadiance(vec3 hitPos, vec3 normal, float surfaceDist, inout
 
     vec3 baseRadiance = extraLightColor * extraLightIntensity;
 
+#ifdef EXTRA_BEAM
     if (extraLightType == EXTRA_LIGHT_BEAM) {
         // A collimated beam: the irradiance is the intensity inside a cylinder of the area
         // radius around the axis, from the position to the range, with the cone softness
@@ -607,6 +670,7 @@ vec3 sampleExtraLightRadiance(vec3 hitPos, vec3 normal, float surfaceDist, inout
         float visibility = calcExtraLightVisibility(hitPos, normal, -axis, t, surfaceDist);
         return baseRadiance * (att * visibility);
     }
+#endif
 
     vec3 lightPos = getExtraLightPositionWS();
     float areaRadius = max(extraLightAreaRadius, 0.0);

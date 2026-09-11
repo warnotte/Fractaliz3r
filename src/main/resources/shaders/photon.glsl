@@ -33,7 +33,9 @@ const float CAUSTIC_CLAMP = 64.0;
 // factor is also the path tracer's density of x from the eye, in area measure. With depth
 // of field the eye is a point of the lens and the pixel the one whose centre ray meets the
 // lens ray on the focal sphere, as getCameraRayDOF builds its rays.
-bool connectToCamera(vec3 x, vec3 n, inout uint seed, out vec3 toCam, out float camFactor, out vec2 tileUV) {
+// For a surface point (surface true: the cosine at x and the bias above it), or a point of
+// the medium (no cosine, no bias). The factor carries the fog's transmittance to the eye.
+bool connectToCamera(vec3 x, vec3 n, bool surface, inout uint seed, out vec3 toCam, out float camFactor, out vec2 tileUV) {
     if (projectionMode != 0) return false;                 // no caustics in the 360 projection
     vec3 forward = rotateByQuaternion(vec3(0, 0, 1), camQuat);
     vec3 right   = rotateByQuaternion(vec3(1, 0, 0), camQuat);
@@ -75,7 +77,7 @@ bool connectToCamera(vec3 x, vec3 n, inout uint seed, out vec3 toCam, out float 
     vec3 dir = toX / d;
     float cosCam = dot(dir, forward);
     if (cosCam <= 0.001) return false;
-    float cosX = dot(n, -dir);
+    float cosX = surface ? dot(n, -dir) : 1.0;
     if (cosX <= 0.0) return false;
 
     vec3 ip = imagePoint - camPos;
@@ -88,15 +90,26 @@ bool connectToCamera(vec3 x, vec3 n, inout uint seed, out vec3 toCam, out float 
     if (any(lessThan(tileUV, vec2(0.0))) || any(greaterThanEqual(tileUV, vec2(1.0)))) return false;
 
     Ray toEye;
-    toEye.origin = x + n * surfaceBias(d);
+    toEye.origin = surface ? x + n * surfaceBias(d) : x;
     toEye.direction = -dir;
     vec3 vp; float vd; int vm;
     if (rayMarchSimple(toEye, vp, vd, vm) && vd < d - 0.01) return false;
 
     float pixelArea = (2.0 * halfW / fullResolution.x) * (2.0 * halfH / fullResolution.y);
     camFactor = cosX / (d2 * pixelArea * cosCam * cosCam * cosCam);
+    if (volumetricFogEnabled != 0 && fogDensity > 0.0) camFactor *= exp(-d * fogDensity);   // as the camera rays are attenuated
     toCam = -dir;
     return true;
+}
+
+// The landing's clamp: this many times what a photon of average flux adds to a pixel at
+// the distance of the caustic centre.
+float landingBound() {
+    float sceneD = max(length(causticCenter - camPos), 0.1);
+    float halfH = tan(radians(fov) * 0.5);
+    float halfW = halfH * fullResolution.x / fullResolution.y;
+    float pixelArea = (2.0 * halfW / fullResolution.x) * (2.0 * halfH / fullResolution.y);
+    return CAUSTIC_CLAMP * lightPowerTotal / ltCount() / (PI * pixelArea * sceneD * sceneD);
 }
 
 // The photon's flight from light li to where it lands or dies.
@@ -160,8 +173,28 @@ void trace(int li, inout uint seed) {
 
     for (int bounce = 0; bounce <= maxBounces; bounce++) {
         vec3 hitPos; float hitDist; int hitMat;
-        if (!rayMarchSimple(ray, hitPos, hitDist, hitMat)) return;
-        if (bounce == 0 && hitDist < 1e-3) return;            // the draw started inside something
+        bool hit = rayMarchSimple(ray, hitPos, hitDist, hitMat);
+        if (bounce == 0 && hit && hitDist < 1e-3) return;     // the draw started inside something
+
+        // In the fog, past a glass, mirror or metal, the photon may scatter before it gets
+        // there: the light through the prism seen in the air. Its direct light in the fog
+        // is the camera rays' march (computeVolumetricFog), so before such a vertex it flies
+        // straight; its flight is not attenuated, as the path tracer's bounces are not.
+        if (volumetricFogEnabled != 0 && fogDensity > 0.0 && gSpecular) {
+            float t = -log(max(1.0 - random(seed), 1e-6)) / fogDensity;
+            if (t < (hit ? hitDist : MAX_DISTANCE)) {
+                vec3 p = ray.origin + ray.direction * t;
+                vec3 toCam; float camFactor; vec2 tileUV;
+                if (!connectToCamera(p, vec3(0.0), false, seed, toCam, camFactor, tileUV)) return;
+                float phase = phaseHG(dot(ray.direction, toCam), fogScattering);
+                vec3 c = flux * weight * fogColor * phase * camFactor;   // a real scatter event: sigma_s / sigma_t is the fog's albedo
+                photonPixel.xy = tileUV;
+                photonColor.rgb = min(c, vec3(landingBound()));
+                gLanded = true;
+                return;
+            }
+        }
+        if (!hit) return;
 
         vec3 normal = calcNormal(hitPos);
         vec3 faceN = dot(ray.direction, normal) > 0.0 ? -normal : normal;
@@ -304,7 +337,7 @@ void trace(int li, inout uint seed) {
 
         if (eligible && random(seed) < LT_LAND) {
             vec3 toCam; float camFactor; vec2 tileUV;
-            if (!connectToCamera(hitPos, faceN, seed, toCam, camFactor, tileUV)) return;
+            if (!connectToCamera(hitPos, faceN, true, seed, toCam, camFactor, tileUV)) return;
             float NdotV = max(dot(faceN, toCam), 0.001);
             vec3 f;
             if (metal) {
@@ -328,19 +361,17 @@ void trace(int li, inout uint seed) {
                 rA *= pt / ltHere;
                 rB *= pt / ltHere;
             }
-            // the camera segment (the eye's density of this vertex, ours a delta) and the coin
-            rA *= camFactor / LT_LAND;
-            rB *= camFactor / LT_LAND;
+            // the camera segment (the eye's density of this vertex, ours a delta) and the coin;
+            // the density is the geometric factor, without the fog's transmittance
+            float pCam = camFactor;
+            if (volumetricFogEnabled != 0 && fogDensity > 0.0) pCam /= exp(-length(hitPos - camPos) * fogDensity);
+            rA *= pCam / LT_LAND;
+            rB *= pCam / LT_LAND;
             float nA = rA / ltCount(), nB = rB / ltCount();       // one camera path against all our photons
             float w = causticDebug != 0 ? 1.0 : 1.0 / (1.0 + nA * nA + nB * nB);
             vec3 c = flux * weight * f * camFactor * w / LT_LAND;
-            float sceneD = max(length(causticCenter - camPos), 0.1);
-            float halfH = tan(radians(fov) * 0.5);
-            float halfW = halfH * fullResolution.x / fullResolution.y;
-            float pixelArea = (2.0 * halfW / fullResolution.x) * (2.0 * halfH / fullResolution.y);
-            float reference = lightPowerTotal / ltCount() / (PI * pixelArea * sceneD * sceneD);   // a photon of average flux, seen from the scene's distance
             photonPixel.xy = tileUV;
-            photonColor.rgb = min(c, vec3(CAUSTIC_CLAMP * reference));
+            photonColor.rgb = min(c, vec3(landingBound()));
             gLanded = true;
             return;
         }
