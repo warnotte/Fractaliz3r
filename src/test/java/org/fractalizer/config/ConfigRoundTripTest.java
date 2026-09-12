@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ConfigRoundTripTest {
 
     static MandelbulbParams written;
+    static String envMapReloaded;
     static MandelbulbParams reloaded;
     static GLSLEngine.PostProcessParams ppWritten;
     static GLSLEngine.PostProcessParams ppReloaded;
@@ -74,6 +75,7 @@ class ConfigRoundTripTest {
         ppWritten.colorGradingIntensity = 0.66f;
         ppWritten.audioDeltaExposure = 999f;   // transient: must NOT reach the file
         config.postProcess = ppWritten;
+        config.effects.envMap = "studio_small_08_1k.hdr";
 
         File tmp = File.createTempFile("roundtrip_", ".frac");
         try {
@@ -82,6 +84,7 @@ class ConfigRoundTripTest {
             reloaded = new MandelbulbParams();
             back.applyTo(reloaded);
             ppReloaded = back.postProcess;
+            envMapReloaded = back.effects.envMap;
         } finally {
             tmp.delete();
         }
@@ -117,6 +120,11 @@ class ConfigRoundTripTest {
         assertEquals(written.getJuliaCx(), reloaded.getJuliaCx(), "juliaCx");
         assertEquals(written.getJuliaCy(), reloaded.getJuliaCy(), "juliaCy");
         assertEquals(written.getJuliaCz(), reloaded.getJuliaCz(), "juliaCz");
+    }
+
+    @Test
+    void environmentMapNameSurvives() {
+        assertEquals("studio_small_08_1k.hdr", envMapReloaded, "effects.envMap");
     }
 
     @Test

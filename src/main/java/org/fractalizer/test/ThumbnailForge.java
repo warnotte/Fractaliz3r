@@ -95,6 +95,7 @@ public class ThumbnailForge {
             controller.updatePaletteTexture(pp.getCustomGradient());
             if (cfg.postProcess != null) controller.getEngine().getPostProcessParams().copyFrom(cfg.postProcess);
             else controller.getEngine().getPostProcessParams().reset();
+            controller.applyEnvironmentMap(cfg.effects.envMap);
             long t0 = System.nanoTime();
             BufferedImage img = controller.renderStill(W, H, samples, () -> false);
             writeJpeg(img, new File(presetsDir, name + ".jpg"));

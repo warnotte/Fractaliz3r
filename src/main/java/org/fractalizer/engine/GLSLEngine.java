@@ -1092,7 +1092,12 @@ public class GLSLEngine implements AutoCloseable {
         });
     }
 
+    private volatile String envMapPath = null;     // the file the environment map came from, null for none
+    /** The file the environment map was loaded from, or null when none is loaded. */
+    public String getEnvironmentMapPath() { return envMapPath; }
+
     public void loadEnvironmentMap(String filePath) {
+        envMapPath = filePath;
         touchGLState();
         runOnGLThread(() -> {
             try {
@@ -1141,6 +1146,7 @@ public class GLSLEngine implements AutoCloseable {
     }
 
     public void clearEnvironmentMap() {
+        envMapPath = null;
         touchGLState();
         runOnGLThread(() -> {
             glDeleteTextures(envMapTexture); createDefaultEnvMap();

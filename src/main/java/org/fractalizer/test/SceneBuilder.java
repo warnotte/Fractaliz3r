@@ -723,6 +723,12 @@ public class SceneBuilder {
         return this;
     }
 
+    /** The environment map: a file name in the hdri folder next to the app (the release ships it). */
+    public SceneBuilder envMap(String name) {
+        config.effects.envMap = name;
+        return this;
+    }
+
     /** The beam's halo: its light scattered by the fog scattered once more (path tracing). */
     public SceneBuilder fogHalo(boolean on) {
         config.effects.fogHalo = on;

@@ -239,6 +239,14 @@ The `GLSLFractalizerController` maintains a cache of fractal parameters. Switchi
 
 ---
 
+**Environment map in a scene file (2026-09-12).** A `.frac` can name its environment map,
+`effects.envMap`: a file name looked for in the `hdri/` folder next to the app (the release
+ships it), or an absolute path. Saving writes the name of the map loaded at the time; loading
+applies it, and a scene without one clears the map, so a preset never keeps the HDRI the scene
+before it loaded. A missing file clears the map and says so on the console. The harnesses that
+show a scene as the app does (GalleryRender, ThumbnailForge, NavigationFluidityProbe) apply it
+too, and `SceneBuilder.envMap(name)` sets it.
+
 ## Boolean Operations (Legacy/Core)
 
 Constructive Solid Geometry between fractal distance fields. This logic now powers the `CSGNode` in the node graph.

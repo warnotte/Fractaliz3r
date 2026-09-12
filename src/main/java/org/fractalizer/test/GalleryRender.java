@@ -57,6 +57,7 @@ public class GalleryRender {
             // Same three steps the app performs on File > Load: params, gradient texture,
             // post-processing chain. Skipping any of them renders a different image.
             controller.updatePaletteTexture(params.getCustomGradient());
+            controller.applyEnvironmentMap(cfg.effects.envMap);
             if (cfg.postProcess != null) {
                 controller.getEngine().getPostProcessParams().copyFrom(cfg.postProcess);
             }

@@ -161,6 +161,7 @@ public class NavigationFluidityProbe {
             cfg.applyTo(params);
             controller.updatePaletteTexture(params.getCustomGradient());
             if (cfg.postProcess != null) controller.getEngine().getPostProcessParams().copyFrom(cfg.postProcess);
+            controller.applyEnvironmentMap(cfg.effects.envMap);
         } else {
             controller.setFractalType(FractalType.valueOf(spec));
         }

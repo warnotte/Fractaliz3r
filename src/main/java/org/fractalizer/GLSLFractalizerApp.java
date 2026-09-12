@@ -909,6 +909,7 @@ public class GLSLFractalizerApp extends Application {
                     config.animation = animationManager.exportAnimation();
                 }
                 config.postProcess = controller.getEngine().getPostProcessParams().copy();
+                config.effects.envMap = controller.environmentMapName();
                 
                 FractalConfigManager.save(config, file);
                 currentConfigFile = file;
@@ -955,6 +956,7 @@ public class GLSLFractalizerApp extends Application {
             } else {
                 controller.getEngine().getPostProcessParams().reset();
             }
+            controller.applyEnvironmentMap(config.effects.envMap);
 
             // Update fractal panel reference
             fractalPanel.setParams(params);

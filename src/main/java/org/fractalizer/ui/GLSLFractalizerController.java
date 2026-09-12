@@ -370,6 +370,34 @@ public class GLSLFractalizerController implements RenderController {
     /** Refine the scene on screen now, without the idle delay (Space). */
     public void refineNow() { viewport.refineNow(); }
 
+    /**
+     * The environment map a scene names, or none: a bare name is looked for in the hdri
+     * folder next to the app (the release ships it), an absolute path is taken as is; a
+     * missing file clears the map and says so, so a preset never keeps the map the scene
+     * before it loaded.
+     */
+    public void applyEnvironmentMap(String name) {
+        if (name == null || name.isBlank()) { engine.clearEnvironmentMap(); return; }
+        java.io.File f = new java.io.File(name);
+        if (!f.isAbsolute() || !f.exists()) {
+            java.io.File inHdri = new java.io.File(org.fractalizer.config.DataDirs.of("hdri"), name);
+            if (inHdri.exists()) f = inHdri;
+        }
+        if (f.exists()) engine.loadEnvironmentMap(f.getAbsolutePath());
+        else { System.err.println("Environment map not found: " + name); engine.clearEnvironmentMap(); }
+    }
+
+    /** The name a loaded environment map is saved under: its file name when it lives in the
+     *  hdri folder next to the app, else its absolute path; null when none is loaded. */
+    public String environmentMapName() {
+        String path = engine.getEnvironmentMapPath();
+        if (path == null) return null;
+        java.io.File f = new java.io.File(path);
+        java.io.File hdri = org.fractalizer.config.DataDirs.of("hdri");
+        if (f.getParentFile() != null && hdri.isDirectory() && f.getParentFile().getAbsoluteFile().equals(hdri.getAbsoluteFile())) return f.getName();
+        return f.getAbsolutePath();
+    }
+
     /** Stop the viewport while something else uses the engine (an export, a search);
      *  nestable. {@link #resumeViewport} puts the scene back. */
     public void pauseViewport() { viewport.pause(); }

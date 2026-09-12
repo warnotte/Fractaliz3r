@@ -175,6 +175,8 @@ public class FractalConfig {
         
         // Procedural Sky
         public int skyType = 0;
+        /** The environment map's file: a name in the hdri folder next to the app, or an absolute path; null for none. */
+        public String envMap = null;
         public float cloudDensity = 0.5f;
         public float[] nebulaColor = {0.25f, 0.35f, 0.75f};
         public float nebulaTint = 0f;
