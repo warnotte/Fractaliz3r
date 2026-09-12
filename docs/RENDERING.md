@@ -664,6 +664,15 @@ left, as the album cover does, at the prism's side faces rather than its triangu
 The engine: the beam's glow seen in the faces and the slab, and the beam fading along its
 way, the two terms above. `docs/gallery/prism_beam.jpg` is the result.
 
+`presets/LASER_TABLE.frac` takes the same pieces further, as an optical table seen from
+above and in front: a thin laser (a beam of 1.5 cm radius, 3000 of intensity for the thin
+chord a camera ray gets of it) zigzags on two front-surface mirrors (thin metal boxes of
+roughness zero, placed and turned with `SceneBuilder.mirror`) into a prism whose fan lands
+on the table as a spectrum, in a thin fog (0.12) with bloom and a faint sky. The first
+segment is the fog march's, smooth from the first sample; the two reflected segments, the
+fan, the spectrum and the entry face's faint reflection are the photon pass's, so they
+sharpen with the samples. `docs/gallery/laser_table.jpg` is its render at 256 spp.
+
 For a beam aimed at something, the light has to stay put while the camera moves, so the
 additional light can now be *Fixed in the world*: position and direction are then scene
 coordinates as given, instead of the camera-relative offsets (scaled by a tenth, laterally

@@ -51,6 +51,14 @@ tracer so that nothing is counted twice: the fan of colour in the air, the spect
 the Fresnel reflection going up. Everything of it compiles in only for the scenes that use it;
 a scene without caustics renders with the program it always had, byte for byte.
 
+![An optical table: a thin laser zigzagging on two mirrors into a prism, its spectrum landing on the table](docs/gallery/laser_table.jpg)
+
+**The optical table** — [`LASER_TABLE.frac`](presets/LASER_TABLE.frac) — is the same transport
+with mirrors: a thin laser zigzags on two front-surface mirrors into the prism, in a thin fog.
+The first segment is lit by the camera rays' march; everything after the first mirror, the
+reflected segments, the fan, the spectrum, is carried by photons and sharpens as the samples
+accumulate.
+
 **The Labyrinth** — [`LABYRINTH.frac`](presets/LABYRINTH.frac) — is not a view but a place. The maze is a
 Menger sponge seen from inside: corridors two thirds wide, doorways at every scale, and it goes
 on. At its heart, Jareth's Escher room: three staircases, each climbing under its own gravity,

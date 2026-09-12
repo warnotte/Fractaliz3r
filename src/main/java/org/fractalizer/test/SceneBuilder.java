@@ -190,6 +190,31 @@ public class SceneBuilder {
         return m;
     }
 
+    /** A child placed at (x, y, z) and turned by yaw degrees about Y. A thin box along its
+     *  local X turned by yaw has its face normal at (cos yaw, 0, sin yaw) in the world. */
+    public static GraphNode place(GraphNode child, float x, float y, float z, float yawDeg) {
+        return new org.fractalizer.graph.TransformNode(child, new float[]{x, y, z}, new float[]{0f, yawDeg, 0f}, 1f);
+    }
+
+    /** A front-surface mirror standing on the table: a thin metal box of half width halfW
+     *  and half height halfH, its reflecting face's normal at (cos yaw, 0, sin yaw). */
+    public static GraphNode mirror(float x, float z, float yawDeg, float halfW, float halfH) {
+        org.fractalizer.graph.PrimitiveNode box = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.BOX);
+        box.setSizeX(0.012f); box.setSizeY(halfH); box.setSizeZ(halfW);
+        org.fractalizer.graph.MaterialNode m = new org.fractalizer.graph.MaterialNode(place(box, x, halfH, z, yawDeg));
+        m.setMaterialType(org.fractalizer.graph.MaterialNode.TYPE_METALLIC);
+        m.setColorMode(org.fractalizer.graph.MaterialNode.COLOR_SOLID);
+        m.setColorR(0.96f); m.setColorG(0.96f); m.setColorB(0.98f);
+        m.setRoughness(0.0f);
+        m.setMetallic(1f);
+        return m;
+    }
+
+    /** A glass prism placed at (x, z), its length along Z. */
+    public static GraphNode glassPrismAt(float side, float halfLength, float ior, float x, float z) {
+        return place(glassPrism(side, halfLength, ior), x, 0f, z, 0f);
+    }
+
     /** A matte screen: a thin tall box facing -X at x, to catch a spectrum. */
     public static GraphNode screen(float x, float halfHeight, float halfDepth, float grey) {
         org.fractalizer.graph.PrimitiveNode box = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.BOX);

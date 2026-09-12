@@ -4,6 +4,7 @@ import org.fractalizer.config.FractalConfig;
 import org.fractalizer.config.FractalConfigManager;
 import org.fractalizer.fractals.AbstractFractalParams;
 import org.fractalizer.fractals.FractalType;
+import org.fractalizer.graph.GraphNode;
 import org.fractalizer.graph.HybridNode;
 import org.fractalizer.graph.HybridNode.DEMode;
 import org.fractalizer.graph.HybridNode.Step;
@@ -303,6 +304,7 @@ public class PresetForge {
         // something to reflect (in a black room a prism is invisible), the beam's glow in the
         // fog is what its faces show of it, and bloom is the halo a bright beam has on film.
         p.put("PRISM_BEAM", () -> prismBeam().camera(-0.4f, 1.3f, -2.6f).lookAt(0.7f, 0.4f, 0f));
+        p.put("LASER_TABLE", () -> laserTable().camera(-0.7f, 2.0f, -3.7f).lookAt(-0.35f, 0.3f, -0.1f).fov(50));
 
         // The beam in fog onto a glass ball: the beam seen in the air (the camera rays' march),
         // the ball's caustic and the beam's light through the ball seen in the air (photons).
@@ -639,6 +641,28 @@ public class PresetForge {
         m.setMetallic(0f);
         m.setEmission(emission);
         return m;
+    }
+
+    /** The optical table: a thin white laser zigzags on two mirrors into a prism whose fan
+     *  lands on the table as a spectrum; thin fog, bloom, a faint sky for the reflections. */
+    private static SceneBuilder laserTable() {
+        GraphNode table = SceneBuilder.slab(4.0f, 0.35f);
+        GraphNode m1 = SceneBuilder.mirror(1.2f, -1.2f, 135f, 0.3f, 0.36f);     // +X in, +Z out
+        GraphNode m2 = SceneBuilder.mirror(1.2f, 0.6f, 45f, 0.3f, 0.36f);       // +Z in, -X out
+        GraphNode prism = SceneBuilder.glassPrismAt(0.9f, 0.4f, 1.55f, -0.3f, 0.6f);
+        GraphNode all = SceneBuilder.union(SceneBuilder.union(SceneBuilder.union(table, m1), m2), prism);
+        return SceneBuilder.nodeGraph(all)
+                .fov(48)
+                .gradient(CRYSTAL).coloringMode(0)
+                .materialType(0).ior(1.55f).dispersion(0.045f).roughness(0.6f)
+                .pathTracing(true).maxBounces(8).rimIntensity(0.0f).skyType(0).skyIntensity(0.16f)
+                .lightDir(0.3f, 1.0f, -0.4f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(0.0f)
+                .ambientColor(0.5f, 0.55f, 0.65f).ambientIntensity(0.02f)
+                .beam(-3.2f, 0.5f, -1.2f, 1.0f, 0.0f, 0.0f, 0.015f, 12.0f, 1.0f, 1.0f, 1.0f, 3000.0f)
+                .fog(0.12f).fogColor(0.8f, 0.82f, 0.88f)
+                .caustics(3.0f).causticPhotons(1024)
+                .bloom(0.8f, 0.6f)
+                .colorStrength(1.0f).metalness(0.0f);
     }
 
     /** The prism scene without its camera: a white beam, a glass prism, the fog, bloom. */
