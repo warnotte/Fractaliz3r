@@ -727,6 +727,12 @@ public class SceneBuilder {
         return this;
     }
 
+    /** The glass's haze: scattering inside the glass per unit length (path tracing). */
+    public SceneBuilder glassHaze(float haze) {
+        config.material.glassHaze = haze;
+        return this;
+    }
+
     /** Spectral dispersion through glass, Cauchy B in micrometres squared; enables it. */
     public SceneBuilder dispersion(float b) {
         config.material.dispersionEnabled = true;

@@ -21,6 +21,7 @@ uniform int causticDebug;        // CausticProbe: 1 = every landing weighted 1, 
 
 bool gLanded = false;
 bool gSpecular = false;
+bool gMirrorOnly = false;   // a beam photon that has met nothing but perfect mirrors: its light in the fog is the beam path's (raytracer.glsl), not ours
 bool gStored = false;
 int gSlot = 0;                   // this photon's slot in the vertex buffer
 
@@ -195,6 +196,7 @@ void trace(int li, inout uint seed) {
     }
     flux /= float(photonSide * photonSide);
     vec3 weight = vec3(1.0);
+    gMirrorOnly = ltype == LIGHT_BEAM;
 
     float lambda = 0.0;
     bool dispersed = false;
@@ -219,7 +221,7 @@ void trace(int li, inout uint seed) {
         // there: the light through the prism seen in the air. Its direct light in the fog
         // is the camera rays' march (computeVolumetricFog), so before such a vertex it flies
         // straight; its flight is not attenuated, as the path tracer's bounces are not.
-        if (volumetricFogEnabled != 0 && fogDensity > 0.0 && gSpecular) {
+        if (volumetricFogEnabled != 0 && fogDensity > 0.0 && gSpecular && !gMirrorOnly) {
             float t = -log(max(1.0 - random(seed), 1e-6)) / fogDensity;
             if (t < (hit ? hitDist : MAX_DISTANCE)) {
                 vec3 p = ray.origin + ray.direction * t;
@@ -340,7 +342,7 @@ void trace(int li, inout uint seed) {
                     for (int gs = 0; gs < 128; gs++) {
                         exitPos = hitPos + interiorDir * t;
                         float dd = sceneDE_simple(exitPos);
-                        if (dd > 0.0) { exitPos -= interiorDir * dd; break; }
+                        if (dd > 0.0) { exitPos -= interiorDir * dd; if (glassHaze > 0.0) weight *= exp(-glassHaze * t); break; }   // a hazy glass dims what passes, as the path tracer's does
                         t += max(abs(dd), 0.002);
                         if (t > 10.0) break;
                     }
@@ -361,6 +363,7 @@ void trace(int li, inout uint seed) {
 
         if (delta) {
             gSpecular = true;
+            gMirrorOnly = false;
             // the path tracer's density of the previous vertex from here is a delta (1); of
             // the light's point from here, none by a draw, a delta by a BSDF ray
             if (first) { rA = 0.0; rB = emitter ? 1.0 / ltHere : 0.0; first = false; }
@@ -470,6 +473,7 @@ void trace(int li, inout uint seed) {
             weight /= (1.0 - LT_LAND);
         }
         if (metal) gSpecular = true;                             // past it, the next landing counts
+        if (!metal || safeRoughness > MIRROR_ROUGHNESS) gMirrorOnly = false;   // a beam stays a beam only off a perfect mirror
         pendingLtPdf = pdfOmega;
         prevCosOut = max(dot(faceN, wOut), 0.001);
         prevDelta = false;

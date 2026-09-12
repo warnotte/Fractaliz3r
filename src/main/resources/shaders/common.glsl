@@ -125,6 +125,13 @@ uniform float ior;
 // taken, bit-exact with the plain render.
 uniform int dispersionEnabled;
 uniform float dispersion;          // Cauchy B, micrometres squared: crown glass 0.004, flint 0.013
+// The glass's haze (path tracing only): scattering inside the glass, per unit length, 0 for
+// a clear glass. A hazy glass shows the beam that crosses it (raytracer.glsl, hazeInScatter)
+// and dims what passes through it, on the path tracer's and the photon pass's side alike.
+uniform float glassHaze;
+// A metal no rougher than this reflects a beam into a beam: the beam's path in the fog
+// follows it (raytracer.glsl, beamPath), and the photon pass leaves that light to it.
+const float MIRROR_ROUGHNESS = 0.05;
 
 float dispersedIor(float nD, float lambdaNm) {
     float l = lambdaNm * 0.001;

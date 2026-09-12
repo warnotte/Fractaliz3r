@@ -473,59 +473,94 @@ vec3 getExtraLightAxisWS();
 vec3 getExtraLightPositionWS();
 bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist, out int matType);
 
-// The beam's free length along its axis: to the first surface, one march per pixel, lazily,
-// with the surface's normal there: the beam's end is that surface, not a disc across the
-// axis. A fibre of the beam at offset off from the axis ends where it meets the plane of
-// the surface through the axis's hit, at t = freeLen - dot(off, n) / dot(axis, n); with the
-// end cut as a disc, a beam into a slanted face stopped short of the face on one side and
-// went into the glass on the other (the prism scene, 2026-09-12).
-float gBeamFreeLen = -1.0;
-vec3 gBeamCutN = vec3(0.0);        // the normal at the axis's hit, zero when the beam hits nothing
-float beamFreeLen() {
-    if (gBeamFreeLen < 0.0) {
-        Ray along;
-        along.origin = getExtraLightPositionWS();
-        along.direction = getExtraLightAxisWS();
-        vec3 fp; float fd; int fm;
-        float range = max(extraLightRange, 0.0001);
-        if (rayMarchSimple(along, fp, fd, fm) && fd < range) {
-            gBeamFreeLen = fd;
-            gBeamCutN = calcNormal(fp);
-        } else {
-            gBeamFreeLen = range;
-        }
+// The beam's path: from its source along its axis to the first surface, and on past every
+// perfect mirror it meets (a metal of near-zero roughness reflects a beam into a beam), up
+// to BEAM_SEGMENTS segments, one march each per pixel, lazily. Each segment knows where it
+// starts, its direction and length, the surface that ends it, what the mirrors before it
+// let through, and the beam's length before it (the fog's toll on the beam itself). The
+// beam ends on the surface it hits, not on a disc across the axis: a fibre at offset off
+// from the axis ends where it meets the plane of that surface through the axis's hit, at
+// t = len - dot(off, n) / dot(axis, n) (cut as a disc, a beam into a slanted face stopped
+// short on one side and went into the glass on the other). Past a glass, a rough metal or
+// a matte surface the beam is no longer a beam: that light is the photon pass's, which for
+// that reason lets its beam photons scatter in the fog only past such a vertex.
+const int BEAM_SEGMENTS = 4;
+int gSegCount = -1;
+vec3 gSegO[BEAM_SEGMENTS], gSegD[BEAM_SEGMENTS], gSegN[BEAM_SEGMENTS], gSegPow[BEAM_SEGMENTS];
+float gSegLen[BEAM_SEGMENTS], gSegStart[BEAM_SEGMENTS];
+int gBeamHitMat = -1;              // the material type ending the last segment (MATERIAL_GLASS, ...), -1 for none
+
+// The material at a surface point: the node's when the graph gives it one, else the global.
+void materialAt(vec3 p, out int type, out float roughnessOut, out vec3 albedoOut) {
+    OrbitTrap trap;
+    DE(p, trap);
+    type = materialType; roughnessOut = roughness; albedoOut = vec3(1.0);
+#ifdef HAS_MATERIALS
+    if (trap.matId >= 0) {
+        MaterialData mat = materials[trap.matId];
+        if (int(mat.type) >= 0) type = int(mat.type);
+        if (mat.roughness >= 0.0) roughnessOut = mat.roughness;
+        if (int(mat.colorMode) == 1) albedoOut = vec3(mat.albedoR, mat.albedoG, mat.albedoB);
     }
-    return gBeamFreeLen;
+#endif
 }
 
-// The beam's light scattered by the fog along [0, segLen] of a ray: the ray crosses the
-// beam's cylinder over a segment, clipped to the beam's free length, integrated with the
-// fog's extinction from the ray's origin, the beam's own extinction from its source, and
-// its soft edge, no march per step (a second marcher inside the fog loop is what the
-// compiler cannot take). On the camera ray it is the fog march's term; on a segment after
-// a bounce it is what a face of glass reflects or refracts of the beam, and what lights a
-// matte surface near it (pathTrace).
-vec3 beamInScatter(Ray ray, float segLen) {
-    vec3 axis = getExtraLightAxisWS();
+void beamPath() {
+    if (gSegCount >= 0) return;
+    gSegCount = 0;
     vec3 o = getExtraLightPositionWS();
+    vec3 d = getExtraLightAxisWS();
+    vec3 pw = vec3(1.0);
+    float start = 0.0;
+    float range = max(extraLightRange, 0.0001);
+    for (int i = 0; i < BEAM_SEGMENTS; i++) {
+        Ray along;
+        along.origin = o;
+        along.direction = d;
+        vec3 fp; float fd; int fm;
+        bool hit = rayMarchSimple(along, fp, fd, fm) && fd < range - start;
+        gSegO[i] = o; gSegD[i] = d; gSegPow[i] = pw; gSegStart[i] = start;
+        gSegLen[i] = hit ? fd : range - start;
+        gSegN[i] = hit ? calcNormal(fp) : vec3(0.0);
+        gSegCount = i + 1;
+        if (!hit || fm == MAT_OCEAN) { gBeamHitMat = -1; return; }
+        int type; float rough; vec3 alb;
+        materialAt(fp, type, rough, alb);
+        gBeamHitMat = type;
+        if (type != MATERIAL_METALLIC || rough > MIRROR_ROUGHNESS) return;
+        // a mirror: the beam goes on, reflected, with what the metal keeps (F0 = its colour)
+        vec3 n = gSegN[i];
+        if (dot(d, n) > 0.0) n = -n;
+        pw *= fresnelSchlickVec(max(dot(-d, n), 0.0), alb);
+        start += fd;
+        o = fp + n * 0.005;
+        d = normalize(reflect(d, n));
+    }
+}
+
+// A cylinder of the beam's radius from o along axis, over [0, len], ending on the surface
+// of normal n (zero for none), lit with the beam's soft edge, seen along [0, segLen] of a
+// ray through a medium of density sigma: the phase-weighted chord integral over eight
+// steps with the medium's extinction from the ray's origin and along the beam from its
+// source (before + t). The caller supplies the light, the medium's albedo and sigma.
+float cylinderGlow(vec3 rayO, vec3 rayD, float segLen, vec3 o, vec3 axis, float len, vec3 n, float before, float sigma) {
     float radius = max(extraLightAreaRadius, 1e-4);
-    float freeLen = beamFreeLen();
-    vec3 w = ray.origin - o;
+    vec3 w = rayO - o;
     vec3 wPerp = w - axis * dot(w, axis);
-    vec3 dPerp = ray.direction - axis * dot(ray.direction, axis);
+    vec3 dPerp = rayD - axis * dot(rayD, axis);
     float qa = dot(dPerp, dPerp), qb = 2.0 * dot(wPerp, dPerp), qc = dot(wPerp, wPerp) - radius * radius;
-    if (qa <= 1e-8) return vec3(0.0);
+    if (qa <= 1e-8) return 0.0;
     float disc = qb * qb - 4.0 * qa * qc;
-    if (disc <= 0.0) return vec3(0.0);
+    if (disc <= 0.0) return 0.0;
     float sq = sqrt(disc);
     float d0 = max((-qb - sq) / (2.0 * qa), 0.0);
     float d1 = min((-qb + sq) / (2.0 * qa), segLen);
     // along the axis the point at d is at t(d) = t0 + d * ta: keep 0 < t < the end, which
-    // for a slanted end surface lies up to a radius beyond freeLen on one side
-    float t0 = dot(w, axis), ta = dot(ray.direction, axis);
-    float dn = dot(axis, gBeamCutN);
-    float slant = abs(dn) > 1e-3 ? radius * length(gBeamCutN - axis * dn) / abs(dn) : 0.0;
-    float tEnd = freeLen + min(slant, 4.0 * radius);
+    // for a slanted end surface lies up to a radius beyond len on one side
+    float t0 = dot(w, axis), ta = dot(rayD, axis);
+    float dn = dot(axis, n);
+    float slant = abs(dn) > 1e-3 ? radius * length(n - axis * dn) / abs(dn) : 0.0;
+    float tEnd = len + min(slant, 4.0 * radius);
     if (abs(ta) > 1e-6) {
         float e0 = (0.0 - t0) / ta, e1 = (tEnd - t0) / ta;
         d0 = max(d0, min(e0, e1));
@@ -533,24 +568,68 @@ vec3 beamInScatter(Ray ray, float segLen) {
     } else if (t0 <= 0.0 || t0 >= tEnd) {
         d1 = d0;
     }
-    if (d1 <= d0) return vec3(0.0);
+    if (d1 <= d0) return 0.0;
     float edge = clamp(extraLightConeSoftness, 0.0, 1.0);
-    float beamPhase = phaseHG(dot(ray.direction, -axis), fogScattering);
-    const int BEAM_STEPS = 8;
-    float ds = (d1 - d0) / float(BEAM_STEPS);
+    float phase = phaseHG(dot(rayD, -axis), fogScattering);
+    const int GLOW_STEPS = 8;
+    float ds = (d1 - d0) / float(GLOW_STEPS);
     float acc = 0.0;
-    for (int i = 0; i < BEAM_STEPS; i++) {
+    for (int i = 0; i < GLOW_STEPS; i++) {
         float d = d0 + (float(i) + 0.5) * ds;
-        vec3 rel = ray.origin + ray.direction * d - o;
+        vec3 rel = rayO + rayD * d - o;
         float t = dot(rel, axis);
         vec3 off = rel - axis * t;
         float r = length(off);
-        float tCut = abs(dn) > 1e-3 ? freeLen - dot(off, gBeamCutN) / dn : freeLen;   // this fibre's end
+        float tCut = abs(dn) > 1e-3 ? len - dot(off, n) / dn : len;   // this fibre's end
         if (t > tCut) continue;
         float att = edge < 0.001 ? 1.0 : 1.0 - smoothstep(radius * (1.0 - edge), radius, r);
-        acc += att * exp(-(d + t) * fogDensity) * ds;      // the fog on the way to the eye, and on the beam's way here
+        acc += att * exp(-(d + before + t) * sigma) * ds;
     }
-    return extraLightColor * extraLightIntensity * fogColor * beamPhase * acc * fogDensity;
+    return phase * acc;
+}
+
+// The beam's light scattered by the fog along [0, segLen] of a ray, every segment of its
+// path. On the camera ray it is the fog march's term; on a segment after a bounce it is
+// what a face of glass or a mirror reflects or refracts of the beam, and what lights a
+// matte surface near it (pathTrace).
+vec3 beamInScatter(Ray ray, float segLen) {
+    beamPath();
+    vec3 sum = vec3(0.0);
+    for (int i = 0; i < gSegCount; i++)
+        sum += gSegPow[i] * cylinderGlow(ray.origin, ray.direction, segLen, gSegO[i], gSegD[i], gSegLen[i], gSegN[i], gSegStart[i], fogDensity);
+    return extraLightColor * extraLightIntensity * fogColor * sum * fogDensity;
+}
+
+// The beam inside a hazy glass its path ends in, seen along a path's segment inside that
+// glass: the beam's axis refracted at the entry for this path's index (the fan opens inside
+// the glass, wavelength by wavelength), its length to the exit, and the chord integral with
+// the haze as the medium (its albedo white, the fog's phase). A cylinder along the refracted
+// axis is right for a flat face and a sketch for a curved one. What enters is what the fog
+// and the mirrors let through and the entry face did not reflect.
+vec3 hazeInScatter(vec3 rayO, vec3 rayD, float segLen, float ior) {
+    beamPath();
+    int last = gSegCount - 1;
+    if (last < 0 || gBeamHitMat != MATERIAL_GLASS || dot(gSegN[last], gSegN[last]) < 0.5) return vec3(0.0);
+    vec3 axis = gSegD[last];
+    vec3 o = gSegO[last] + axis * gSegLen[last];
+    vec3 n = gSegN[last];
+    if (dot(axis, n) > 0.0) n = -n;
+    vec3 gAxis;
+    if (!refractRay(axis, n, 1.0 / ior, gAxis)) return vec3(0.0);
+    gAxis = normalize(gAxis);
+    vec3 power = gSegPow[last] * (1.0 - fresnelDielectric(max(dot(-axis, n), 0.0), ior));
+    if (volumetricFogEnabled != 0 && fogDensity > 0.0) power *= exp(-(gSegStart[last] + gSegLen[last]) * fogDensity);
+    // the beam's length inside: the glass traversal's march along its axis
+    float gLen = 0.02;
+    for (int gs = 0; gs < 128; gs++) {
+        float d = sceneDE_simple(o + gAxis * gLen);
+        if (d > 0.0) { gLen -= d; break; }
+        gLen += max(abs(d), 0.002);
+        if (gLen > 10.0) break;
+    }
+    vec3 exitN = calcNormal(o + gAxis * gLen);
+    float glow = cylinderGlow(rayO, rayD, segLen, o, gAxis, gLen, exitN, 0.0, glassHaze);
+    return extraLightColor * extraLightIntensity * power * glow * glassHaze;
 }
 #endif
 
@@ -1847,6 +1926,15 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                         currentRay.direction = interiorDir;
                     }
                     currentRay.origin = exitPos + exitNormal * 0.005;
+                    if (glassHaze > 0.0) {
+                        // a hazy glass: the beam crossing it is seen along this segment inside,
+                        // and what passes through is dimmed (the photon pass dims its photons the same)
+#ifdef EXTRA_BEAM
+                        if (extraLightType == EXTRA_LIGHT_BEAM && extraLightIntensity > 0.0)
+                            radiance += clamp(throughput * hazeInScatter(hitPos, interiorDir, t, localIor), 0.0, FIREFLY_CLAMP);
+#endif
+                        throughput *= exp(-glassHaze * t);
+                    }
                     throughput *= vec3(0.98, 1.0, 1.02) * albedo;
 #ifdef BIDIR
                     bdOutN = exitNormal;

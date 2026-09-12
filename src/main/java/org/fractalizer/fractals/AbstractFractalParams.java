@@ -211,6 +211,7 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float ior;             // Index of refraction for glass (typically 1.5)
     protected boolean dispersionEnabled;   // spectral dispersion through glass (path tracing)
     protected float dispersion;            // Cauchy B, micrometres squared (crown 0.004, flint 0.013)
+    protected float glassHaze;             // scattering inside glass per unit length, 0 = clear (path tracing)
 
     // Advanced Effects
     protected float reflectionIntensity;  // 0-1, ray-marched reflections (classic mode)
@@ -399,6 +400,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.ior = 1.5f;  // Glass IOR
         this.dispersionEnabled = false;
         this.dispersion = 0.01f;
+        this.glassHaze = 0f;
 
         // Advanced Effects (all disabled by default)
         this.reflectionIntensity = 0.0f;
@@ -549,6 +551,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.ior = this.ior;
         target.dispersionEnabled = this.dispersionEnabled;
         target.dispersion = this.dispersion;
+        target.glassHaze = this.glassHaze;
 
         // Copy Advanced Effects
         target.reflectionIntensity = this.reflectionIntensity;
@@ -997,6 +1000,8 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setDispersionEnabled(boolean on) { this.dispersionEnabled = on; }
     public float getDispersion() { return dispersion; }
     public void setDispersion(float b) { this.dispersion = Math.max(0f, Math.min(0.05f, b)); }
+    public float getGlassHaze() { return glassHaze; }
+    public void setGlassHaze(float h) { this.glassHaze = Math.max(0f, Math.min(5f, h)); }
 
     // Advanced Effects
     public float getReflectionIntensity() { return reflectionIntensity; }

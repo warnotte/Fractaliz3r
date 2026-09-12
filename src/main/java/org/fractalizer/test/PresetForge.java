@@ -659,6 +659,7 @@ public class PresetForge {
                 .lightDir(0.3f, 1.0f, -0.4f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(0.0f)
                 .ambientColor(0.5f, 0.55f, 0.65f).ambientIntensity(0.02f)
                 .beam(-3.2f, 0.5f, -1.2f, 1.0f, 0.0f, 0.0f, 0.015f, 12.0f, 1.0f, 1.0f, 1.0f, 3000.0f)
+                .glassHaze(0.4f)      // a slightly hazy prism: the beam and its fan are seen inside it
                 .fog(0.12f).fogColor(0.8f, 0.82f, 0.88f)
                 .caustics(3.0f).causticPhotons(1024)
                 .bloom(0.8f, 0.6f)
@@ -677,6 +678,7 @@ public class PresetForge {
                 // horizontal into the left face near the angle of minimum deviation: the fan
                 // leaves the right face downward and lands on the slab as a spectrum
                 .beam(-3.0f, 0.6f, 0.0f, 1.0f, 0.0f, 0.0f, 0.07f, 8.0f, 1.0f, 1.0f, 1.0f, 600.0f)
+                .glassHaze(0.3f)      // a slightly hazy prism: the beam and its fan are seen inside it
                 .fog(0.35f).fogColor(0.8f, 0.82f, 0.88f)
                 .caustics(3.5f).causticPhotons(1024)
                 .bloom(0.8f, 0.6f)

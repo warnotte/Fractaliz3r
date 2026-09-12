@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-12T00:13:09.865925600Z",
+  "timestamp": "2026-09-12T01:17:56.825720400Z",
   "name": null,
   "description": null,
   "fractalType": "NODE_GRAPH",
@@ -92,6 +92,7 @@
     "ior": 1.55,
     "dispersionEnabled": true,
     "dispersion": 0.045,
+    "glassHaze": 0.3,
     "gradientStops": [
       {
         "position": 0.0,

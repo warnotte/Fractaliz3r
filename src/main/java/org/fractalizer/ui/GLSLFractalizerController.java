@@ -1360,6 +1360,7 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("ior", params.getIor());
             uniforms.put("dispersionEnabled", params.isDispersionEnabled() ? 1 : 0);
             uniforms.put("dispersion", params.getDispersion());
+            uniforms.put("glassHaze", params.getGlassHaze());
 
             // Advanced Effects
             uniforms.put("reflectionIntensity", params.getReflectionIntensity());

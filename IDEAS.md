@@ -119,6 +119,10 @@ reworked, the brief comes first: a feeling, one visual reference, what the viewe
 ### 24. One Material Model (global material = the default material)
 **Status:** IDEA (parked 2026-09-11, raised by the user; a large reflection, not to be started on the side)
 
+Properties added since, global for lack of the unified model, to move over when it comes:
+the spectral dispersion (2026-09-11) and the glass's haze (2026-09-12), both in the Material
+panel next to the IOR.
+
 Today a scene has two material vocabularies: the global material of the Material panel (the
 surfaces with no node, `matId` −1) and the `MaterialNode` of the graph (overrides per subtree
 through the SSBO, a sentinel for "inherit"). The model is sound as long as both sides carry the
@@ -160,7 +164,10 @@ Done since: the gather for a caustic seen through glass (a hash grid over the pa
 vertices, gathered at the first matte vertex reached through glass; BidirProbe's window scene),
 photons from the point and spot lights, and (2026-09-12, the prism judged unreal) the beam's
 glow seen by every path segment after a bounce (the prism's faces reflect and refract the
-beam, the slab glows next to it) with the beam fading along its way in the fog. Still open:
+beam, the slab glows next to it) with the beam fading along its way in the fog; then, the
+same night, the beam's path following perfect mirrors analytically (the photon pass hands
+that light over) and the glass's haze, which shows the beam and its fan inside the prism
+(docs/RENDERING.md § The glass's haze). Still open:
 the emitters' light in the fog before a glass, second-order scattering in the fog (the soft
 halo around a beam; bloom stands in for it), photons from the sky (not needed), and the
 emission square's extent and centre by hand.

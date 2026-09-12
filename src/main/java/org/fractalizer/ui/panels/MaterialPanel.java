@@ -42,6 +42,7 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider iorSlider;
     private CheckBox dispersionCheck;
     private EnhancedSlider dispersionSlider;
+    private EnhancedSlider glassHazeSlider;
 
     // Specular
     private EnhancedSlider specularIntensitySlider;
@@ -220,6 +221,16 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
                 renderCallback.requestRender();
             }
         });
+        // The glass's haze (path tracing): scattering inside the glass, which shows a beam
+        // crossing it and dims what passes through
+        glassHazeSlider = new EnhancedSlider("Glass Haze", 0.0, 2.0, 0.0, false);
+        glassHazeSlider.setPrecision(2);
+        glassHazeSlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setGlassHaze(v.floatValue());
+                renderCallback.requestRender();
+            }
+        });
 
         // === SPECULAR SECTION ===
 
@@ -279,7 +290,7 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
         TitledPane palettePane = new TitledPane("Color Palette", paletteBox);
         palettePane.setExpanded(true);
 
-        VBox physBox = new VBox(5, typeBox, roughnessSlider, metalnessSlider, iorSlider, dispersionCheck, dispersionSlider);
+        VBox physBox = new VBox(5, typeBox, roughnessSlider, metalnessSlider, iorSlider, dispersionCheck, dispersionSlider, glassHazeSlider);
         TitledPane physPane = new TitledPane("Physical Material", physBox);
         physPane.setExpanded(true);
 
@@ -388,6 +399,7 @@ public class MaterialPanel extends ScrollPane implements Refreshable {
             iorSlider.setValue(p.getIor());
             dispersionCheck.setSelected(p.isDispersionEnabled());
             dispersionSlider.setValue(p.getDispersion());
+            glassHazeSlider.setValue(p.getGlassHaze());
 
             // Specular
             specularIntensitySlider.setValue(p.getSpecularIntensity());

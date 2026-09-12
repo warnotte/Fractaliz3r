@@ -122,6 +122,7 @@ public class FractalConfig {
         public float ior = 1.5f;
         public boolean dispersionEnabled = false;
         public float dispersion = 0.01f;
+        public float glassHaze = 0f;
         public List<GradientStopConfig> gradientStops;
 
         // Advanced Effects
@@ -347,6 +348,7 @@ public class FractalConfig {
         config.material.ior = params.getIor();
         config.material.dispersionEnabled = params.isDispersionEnabled();
         config.material.dispersion = params.getDispersion();
+        config.material.glassHaze = params.getGlassHaze();
 
         // Advanced Effects
         config.material.reflectionIntensity = params.getReflectionIntensity();
@@ -527,6 +529,7 @@ public class FractalConfig {
         params.setIor(material.ior);
         params.setDispersionEnabled(material.dispersionEnabled);
         params.setDispersion(material.dispersion);
+        params.setGlassHaze(material.glassHaze);
 
         // Advanced Effects
         params.setReflectionIntensity(material.reflectionIntensity);

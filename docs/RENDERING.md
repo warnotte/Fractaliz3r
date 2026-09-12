@@ -621,6 +621,33 @@ Two things the first version left out, found when the prism looked unreal (2026-
   cylinder was cut at that distance: into a slanted face the beam stopped short on one side
   and went into the glass on the other. The march now keeps the surface's normal too, and
   each fibre of the beam ends where it meets the plane of that surface.
+- **The beam stopped at the first mirror.** Its path in the fog (`beamPath`) now follows
+  every perfect mirror it meets, a metal no rougher than `MIRROR_ROUGHNESS` (0.05), up to
+  four segments, each with what the mirrors before it kept (Schlick with the metal's colour
+  as F0) and the fog's toll on the beam so far. The reflected segments are then the fog
+  march's, smooth from the first sample, where they were the photon pass's and grainy; and
+  the photon pass lets a beam photon scatter in the fog only once it has met something
+  other than a perfect mirror (`gMirrorOnly`), so nothing is counted twice. Past a glass,
+  a rough metal or a matte surface the beam is no longer a beam and stays the photons'.
+
+### The glass's haze: the beam seen inside the prism
+
+A clear glass shows nothing of a beam crossing it: nothing scatters inside. The pictures
+that make a prism legible are of a slightly hazy glass, and so is the album cover: the beam
+enters, bends, and its fan opens inside the glass, colour by colour. *Glass Haze* (Material
+panel; `glassHaze`, global like the dispersion, 0 by default and then free) is that: a
+scattering density inside every glass. Where a path's segment runs inside a glass that the
+beam's path ends in, the beam's axis is refracted at the entry for that path's own
+wavelength (so the paths of different wavelengths see the beam at different angles and the
+fan opens in the picture by itself), its length to the exit is marched, and the same chord
+integral as in the fog is taken with the haze as the medium (`hazeInScatter`): what enters
+is what the fog and the mirrors let through and the entry face did not reflect. The beam
+inside is taken as a cylinder along the refracted axis, right for a flat face and a sketch
+for a curved one; only the beam's direct passage is shown, not its internal reflections.
+A hazy glass also dims what passes through it, `exp(-haze * length)`, on the path tracer's
+side and on the photon's alike, so the spectrum on the table keeps agreeing with what the
+prism lets out (PRISM_BEAM at 0.3: the spectrum 70 -> 60, the prism 13 -> 32 of mean
+value). `PRISM_BEAM.frac` and `LASER_TABLE.frac` use 0.3 and 0.4.
 
 The red patch at the prism's right foot is not a defect: it is the beam's internal
 reflection off the exit face, sent to the base and back, leaving the right face near the
