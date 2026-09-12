@@ -304,6 +304,7 @@ public class PresetForge {
         // something to reflect (in a black room a prism is invisible), the beam's glow in the
         // fog is what its faces show of it, and bloom is the halo a bright beam has on film.
         p.put("PRISM_BEAM", () -> prismBeam().camera(-0.4f, 1.3f, -2.6f).lookAt(0.7f, 0.4f, 0f));
+        p.put("LASER_SPONGE", () -> laserFractal().camera(-1.5f, 1.35f, -2.1f).lookAt(0.25f, 0.5f, 0.05f).fov(46).dof(3.0f, 0.015f));
         p.put("LASER_TABLE", () -> laserTable().camera(-1.0f, 2.0f, -3.7f).lookAt(-0.6f, 0.3f, -0.1f).fov(54).dof(4.6f, 0.02f));
 
         // The beam in fog onto a glass ball: the beam seen in the air (the camera rays' march),
@@ -661,7 +662,32 @@ public class PresetForge {
                 .ambientColor(0.5f, 0.55f, 0.65f).ambientIntensity(0.02f)
                 .beam(-2.75f, 0.5f, -1.2f, 1.0f, 0.0f, 0.0f, 0.015f, 12.0f, 1.0f, 1.0f, 1.0f, 3000.0f)
                 .glassHaze(0.4f)      // a slightly hazy prism: the beam and its fan are seen inside it
-                .fog(0.12f).fogColor(0.8f, 0.82f, 0.88f)
+                .fog(0.12f).fogColor(0.8f, 0.82f, 0.88f).fogHalo(true)
+                .caustics(3.0f).causticPhotons(1024)
+                .bloom(0.8f, 0.6f)
+                .colorStrength(1.0f).metalness(0.0f);
+    }
+
+    /** A laser through a glass fractal: the beam enters a slightly hazy glass Menger sponge,
+     *  is seen inside it, and what comes out lands on a screen as a spot in a glow of
+     *  scattered light. The sponge needs many bounces to read as glass: a glass fractal is
+     *  black when its paths run out of bounces inside it. */
+    private static SceneBuilder laserFractal() {
+        GraphNode table = SceneBuilder.breadboard(4.0f, 0.33f, 0.125f, 0.014f);
+        GraphNode sponge = SceneBuilder.glassFractal(FractalType.MENGER_SPONGE, 2, 0.5f, 1.5f, 0f, 0.5f, 0f);
+        GraphNode wall = SceneBuilder.screen(1.8f, 1.2f, 1.6f, 0.85f);
+        GraphNode laser = SceneBuilder.laserModule(-2.4f, 0.5f, 0f, 0f, 0.05f, 0.45f);
+        GraphNode all = SceneBuilder.union(SceneBuilder.union(SceneBuilder.union(table, sponge), wall), laser);
+        return SceneBuilder.nodeGraph(all)
+                .fov(50)
+                .gradient(CRYSTAL).coloringMode(0)
+                .materialType(0).ior(1.5f).dispersion(0.02f).roughness(0.6f)
+                .pathTracing(true).maxBounces(24).rimIntensity(0.0f).skyType(0).skyIntensity(0.12f)
+                .lightDir(0.3f, 1.0f, -0.4f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(0.0f)
+                .ambientColor(0.5f, 0.55f, 0.65f).ambientIntensity(0.02f)
+                .beam(-2.4f, 0.5f, 0f, 1.0f, 0.0f, 0.0f, 0.08f, 10.0f, 1.0f, 1.0f, 1.0f, 800.0f)
+                .glassHaze(0.25f)
+                .fog(0.1f).fogColor(0.8f, 0.82f, 0.88f).fogHalo(true)
                 .caustics(3.0f).causticPhotons(1024)
                 .bloom(0.8f, 0.6f)
                 .colorStrength(1.0f).metalness(0.0f);
@@ -680,7 +706,7 @@ public class PresetForge {
                 // leaves the right face downward and lands on the slab as a spectrum
                 .beam(-3.0f, 0.6f, 0.0f, 1.0f, 0.0f, 0.0f, 0.07f, 8.0f, 1.0f, 1.0f, 1.0f, 600.0f)
                 .glassHaze(0.3f)      // a slightly hazy prism: the beam and its fan are seen inside it
-                .fog(0.35f).fogColor(0.8f, 0.82f, 0.88f)
+                .fog(0.35f).fogColor(0.8f, 0.82f, 0.88f).fogHalo(true)
                 .caustics(3.5f).causticPhotons(1024)
                 .bloom(0.8f, 0.6f)
                 .colorStrength(1.0f).metalness(0.0f);

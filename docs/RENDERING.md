@@ -630,6 +630,22 @@ Two things the first version left out, found when the prism looked unreal (2026-
   other than a perfect mirror (`gMirrorOnly`), so nothing is counted twice. Past a glass,
   a rough metal or a matte surface the beam is no longer a beam and stays the photons'.
 
+### The halo: the beam's light scattered twice
+
+A beam in fog has a soft halo that single scattering cannot give: the light the fog
+scatters out of the beam is scattered once more, and that is what fills the air around a
+light shaft. *Beam halo* (Environment panel, fog section; `fogHalo`, off by default) adds
+that second order for the beam, unbiased and one sample per camera ray: the glowing beam is
+a line source (per unit length the fog inside it scatters `sigma * E * pi r^2` into the
+phase function), one scatter point is drawn along the camera ray with the transmittance as
+its density, one point on the beam's path by the equiangular rule about it (the point
+source's 1/d^2 drawn exactly, so the estimate is smooth), and the one march between them is
+the shadow (`beamHalo`). It converges with the samples like the rest of the path tracer.
+On PRISM_BEAM (fog 0.35) the air just above the beam goes from 6 to 32 of mean value, the
+beam itself brightens 7 %, the far sky from 4 to 6; on the table (fog 0.12) the halo is the
+soft glow around the beams and the laser's aperture. Points inside the beam are the single
+scattering's already, so the distance is kept at a radius at least.
+
 ### The glass's haze: the beam seen inside the prism
 
 A clear glass shows nothing of a beam crossing it: nothing scatters inside. The pictures
@@ -702,6 +718,14 @@ a faint sky and a little depth of field. The beam and its two reflected segments
 fog march's, smooth from the first sample; the fan, the spectrum and the entry face's faint
 reflection are the photon pass's, and sharpen with the samples. `docs/gallery/laser_table.jpg`
 is its render at 256 spp.
+
+`presets/LASER_SPONGE.frac` sends the laser through a fractal in glass, a Menger sponge of
+two iterations (`SceneBuilder.glassFractal`): slightly hazy, it shows the beam crossing it,
+and what the sponge's faces scatter lands on the screen behind as a spot in a glow. Two
+things were learned making it: a glass fractal renders black unless the path tracer is
+given the bounces its cavities take (24 here; the "glass fractal renders black" of the
+dispersion notes was that), and the caustic of a fractal is a cloud rather than a pattern,
+its faces sending the beam everywhere; it converges into a smooth glow by 512 samples.
 
 For a beam aimed at something, the light has to stay put while the camera moves, so the
 additional light can now be *Fixed in the world*: position and direction are then scene

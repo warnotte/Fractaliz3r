@@ -17,7 +17,7 @@ raymarching, path tracing and a full post-processing chain.
 ## Gallery
 
 Every image below is a shipped preset: open it from `presets/` and you are looking at the same
-scene, live. All were rendered by the app at 1280×720 with 256 samples per pixel.
+scene, live. All were rendered by the app at 1280×720 with 256 samples per pixel (the glass sponge with 512).
 
 | | | |
 |:---:|:---:|:---:|
@@ -58,6 +58,13 @@ with mirrors: a thin laser zigzags on two front-surface mirrors into the prism, 
 The first segment is lit by the camera rays' march; everything after the first mirror, the
 reflected segments, the fan, the spectrum, is carried by photons and sharpens as the samples
 accumulate.
+
+![A laser through a glass Menger sponge: the beam seen inside the hazy glass, a spot and a glow of scattered light on the screen behind](docs/gallery/laser_sponge.jpg)
+
+**The glass sponge** — [`LASER_SPONGE.frac`](presets/LASER_SPONGE.frac) — is a fractal in glass:
+a Menger sponge of two iterations, slightly hazy, so the laser is seen crossing it, with the
+light it scatters landing on the screen behind as a spot in a glow. A glass fractal renders
+black unless its paths are given the bounces its cavities take; this one has twenty-four.
 
 **The Labyrinth** — [`LABYRINTH.frac`](presets/LABYRINTH.frac) — is not a view but a place. The maze is a
 Menger sponge seen from inside: corridors two thirds wide, doorways at every scale, and it goes

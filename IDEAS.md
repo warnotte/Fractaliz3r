@@ -167,10 +167,10 @@ glow seen by every path segment after a bounce (the prism's faces reflect and re
 beam, the slab glows next to it) with the beam fading along its way in the fog; then, the
 same night, the beam's path following perfect mirrors analytically (the photon pass hands
 that light over) and the glass's haze, which shows the beam and its fan inside the prism
-(docs/RENDERING.md § The glass's haze). Still open:
-the emitters' light in the fog before a glass, second-order scattering in the fog (the soft
-halo around a beam; bloom stands in for it), photons from the sky (not needed), and the
-emission square's extent and centre by hand.
+(docs/RENDERING.md § The glass's haze), and the beam's halo, the second scattering in the
+fog, unbiased with equiangular sampling (§ The halo). Still open: the emitters' light in
+the fog before a glass, photons from the sky (not needed), and the emission square's
+extent and centre by hand.
 
 The follow-ups the photon pass alone leaves open (kept for the record):
 

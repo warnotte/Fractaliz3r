@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-12T01:22:54.839656100Z",
+  "timestamp": "2026-09-12T01:30:21.962366900Z",
   "name": null,
   "description": null,
   "fractalType": "NODE_GRAPH",
@@ -173,6 +173,7 @@
     ],
     "fogScattering": 0.5,
     "fogSteps": 32,
+    "fogHalo": true,
     "shutterAngle": 180.0,
     "neeEnabled": true,
     "coneTracingEnabled": true,

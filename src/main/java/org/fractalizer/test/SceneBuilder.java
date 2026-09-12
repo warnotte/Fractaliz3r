@@ -271,6 +271,24 @@ public class SceneBuilder {
         return place(module, x, y, z, yawDeg);
     }
 
+    /** A built-in fractal in glass: iterations and scale of the formula, then scaled as a
+     *  whole by size and placed at (x, y, z). */
+    public static GraphNode glassFractal(FractalType type, int iterations, float size, float ior, float x, float y, float z) {
+        FractalNode f = new FractalNode(type);
+        org.fractalizer.fractals.AbstractFractalParams fp = f.getFractalParams();
+        if (fp instanceof org.fractalizer.fractals.MengerSpongeParams m) m.setMaxIterations(iterations);
+        if (fp instanceof org.fractalizer.fractals.MandelbulbParams m) m.setMaxIterations(iterations);
+        org.fractalizer.graph.TransformNode t = new org.fractalizer.graph.TransformNode(f, new float[]{x, y, z}, new float[]{0f, 0f, 0f}, size);
+        org.fractalizer.graph.MaterialNode m = new org.fractalizer.graph.MaterialNode(t);
+        m.setMaterialType(org.fractalizer.graph.MaterialNode.TYPE_GLASS);
+        m.setIor(ior);
+        m.setColorMode(org.fractalizer.graph.MaterialNode.COLOR_SOLID);
+        m.setColorR(1f); m.setColorG(1f); m.setColorB(1f);
+        m.setRoughness(0.02f);
+        m.setMetallic(0f);
+        return m;
+    }
+
     /** A glass prism placed at (x, z), its length along Z. */
     public static GraphNode glassPrismAt(float side, float halfLength, float ior, float x, float z) {
         return place(glassPrism(side, halfLength, ior), x, 0f, z, 0f);
@@ -702,6 +720,12 @@ public class SceneBuilder {
     public SceneBuilder fog(float density) {
         config.effects.volumetricFogEnabled = true;
         config.effects.fogDensity = density;
+        return this;
+    }
+
+    /** The beam's halo: its light scattered by the fog scattered once more (path tracing). */
+    public SceneBuilder fogHalo(boolean on) {
+        config.effects.fogHalo = on;
         return this;
     }
 

@@ -194,6 +194,7 @@ public class FractalConfig {
         public float[] fogColor = {0.5f, 0.6f, 0.7f};
         public float fogScattering = 0.5f;
         public int fogSteps = 32;
+        public boolean fogHalo = false;
 
         // Motion Blur
         public float shutterAngle = 180f;
@@ -406,6 +407,7 @@ public class FractalConfig {
         config.effects.fogColor = params.getFogColor().clone();
         config.effects.fogScattering = params.getFogScattering();
         config.effects.fogSteps = params.getFogSteps();
+        config.effects.fogHalo = params.isFogHalo();
         config.effects.shutterAngle = params.getShutterAngle();
         config.effects.neeEnabled = params.isNeeEnabled();
         config.effects.coneTracingEnabled = params.isConeTracingEnabled();
@@ -596,6 +598,7 @@ public class FractalConfig {
         }
         params.setFogScattering(effects.fogScattering);
         params.setFogSteps(effects.fogSteps);
+        params.setFogHalo(effects.fogHalo);
         params.setShutterAngle(effects.shutterAngle);
         params.setNeeEnabled(effects.neeEnabled);
         params.setConeTracingEnabled(effects.coneTracingEnabled);

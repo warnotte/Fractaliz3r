@@ -1,0 +1,537 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-09-12T01:32:18.597453400Z",
+  "name": null,
+  "description": null,
+  "fractalType": "NODE_GRAPH",
+  "camera": {
+    "position": [
+      -1.5,
+      1.35,
+      -2.1
+    ],
+    "quaternion": [
+      0.9318153,
+      0.139647,
+      0.3312914,
+      -0.049649157
+    ],
+    "fov": 46.0,
+    "moveSpeed": 0.1
+  },
+  "rendering": {
+    "maxRaySteps": 200,
+    "epsilon": 1.0E-4,
+    "qualityMultiplier": 1.0,
+    "previewScale": 0.5,
+    "previewFastShading": true,
+    "renderMode": 0,
+    "shadowSoftness": 16.0,
+    "shadowSteps": 128,
+    "aoSteps": 5,
+    "aoIntensity": 0.5,
+    "glowIntensity": 0.15,
+    "rimIntensity": 0.0,
+    "specularIntensity": 0.5,
+    "specularPower": 32.0
+  },
+  "lighting": {
+    "direction": [
+      0.3,
+      1.0,
+      -0.4
+    ],
+    "color": [
+      1.0,
+      0.98,
+      0.95
+    ],
+    "intensity": 0.0,
+    "ambientColor": [
+      0.5,
+      0.55,
+      0.65
+    ],
+    "ambientIntensity": 0.02,
+    "extraType": 4,
+    "extraAttachToCamera": false,
+    "extraPosition": [
+      -2.4,
+      0.5,
+      0.0
+    ],
+    "extraDirection": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "extraColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "extraIntensity": 800.0,
+    "extraRange": 10.0,
+    "extraAreaRadius": 0.08,
+    "extraConeAngle": 35.0,
+    "extraConeSoftness": 0.15
+  },
+  "material": {
+    "hue": [
+      0.0,
+      0.33,
+      0.67
+    ],
+    "paletteIndex": 0,
+    "coloringMode": 0,
+    "colorStrength": 1.0,
+    "paletteOffset": 0.0,
+    "trapMode": 0,
+    "type": 0,
+    "metalness": 0.0,
+    "ior": 1.5,
+    "dispersionEnabled": true,
+    "dispersion": 0.02,
+    "glassHaze": 0.25,
+    "gradientStops": [
+      {
+        "position": 0.0,
+        "r": 0.8999999761581421,
+        "g": 0.9399999976158142,
+        "b": 1.0
+      },
+      {
+        "position": 0.5,
+        "r": 0.9700000286102295,
+        "g": 0.9800000190734863,
+        "b": 1.0
+      },
+      {
+        "position": 1.0,
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      }
+    ],
+    "reflectionIntensity": 0.0,
+    "emissiveIntensity": 0.0,
+    "sssIntensity": 0.0,
+    "sssRadius": 0.1,
+    "sssColor": [
+      1.0,
+      0.4,
+      0.2
+    ]
+  },
+  "effects": {
+    "dofEnabled": true,
+    "focalDistance": 3.0,
+    "aperture": 0.015,
+    "dofSamples": 16,
+    "anamorphicRatio": 1.0,
+    "bokehBlades": 0,
+    "bokehRotation": 0.0,
+    "opticalVignettingStrength": 0.0,
+    "tiltShiftEnabled": false,
+    "tiltAngleX": 0.0,
+    "tiltAngleY": 0.0,
+    "dofChromaticStrength": 0.0,
+    "pathTracingEnabled": true,
+    "maxBounces": 24,
+    "causticsEnabled": true,
+    "causticPhotons": 1024,
+    "causticRadius": 3.0,
+    "causticCenter": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "roughness": 0.6,
+    "skyIntensity": 0.12,
+    "indirectMultiplier": 0.5,
+    "skyType": 0,
+    "cloudDensity": 0.5,
+    "nebulaColor": [
+      0.25,
+      0.35,
+      0.75
+    ],
+    "nebulaTint": 0.0,
+    "skySpeed": 1.0,
+    "skyTime": 0.0,
+    "skyParallax": 0.25,
+    "projectionMode": 0,
+    "lensEffectsEnabled": false,
+    "lensDirtIntensity": 0.0,
+    "starburstIntensity": 0.0,
+    "volumetricFogEnabled": true,
+    "fogDensity": 0.1,
+    "fogColor": [
+      0.8,
+      0.82,
+      0.88
+    ],
+    "fogScattering": 0.5,
+    "fogSteps": 32,
+    "fogHalo": true,
+    "shutterAngle": 180.0,
+    "neeEnabled": true,
+    "coneTracingEnabled": true,
+    "detailLOD": 0.0,
+    "detailLODMax": 24,
+    "fudgeFactor": 1.0,
+    "refinementSteps": 4,
+    "stepRelaxation": 0.0,
+    "adaptiveSampling": false,
+    "varianceThreshold": 5.0E-4,
+    "minAdaptiveSamples": 16,
+    "erosionEnabled": false,
+    "erosionStrength": 0.5,
+    "erosionTime": 0.0,
+    "erosionScale": 1.0,
+    "erosionType": 0,
+    "crystalEnabled": false,
+    "crystalStrength": 0.5,
+    "crystalTime": 0.0,
+    "crystalScale": 1.0,
+    "crystalSharpness": 2.0,
+    "mossEnabled": false,
+    "mossStrength": 0.5,
+    "mossTime": 0.0,
+    "mossScale": 1.0,
+    "mossColorR": 0.15,
+    "mossColorG": 0.35,
+    "mossColorB": 0.08,
+    "mossNormalThreshold": 0.3,
+    "booleanEnabled": false,
+    "booleanOp": 1,
+    "boolSecondaryType": null,
+    "boolOffsetX": 0.5,
+    "boolOffsetY": 0.0,
+    "boolOffsetZ": 0.0,
+    "boolScale": 1.0,
+    "boolBlend": 0.0,
+    "boolRotX": 0.0,
+    "boolRotY": 0.0,
+    "boolRotZ": 0.0,
+    "nestThreshold": 0.1,
+    "nestRepeatScale": 5.0,
+    "nestRotation": 0.0,
+    "nestMix": 1.0,
+    "oceanEnabled": false,
+    "oceanHeight": -1.0,
+    "oceanColor": [
+      0.05,
+      0.15,
+      0.3
+    ],
+    "oceanWaveScale": 2.0,
+    "oceanWaveHeight": 0.1,
+    "oceanSpeed": 1.0,
+    "oceanTime": 0.0
+  },
+  "fractalParams": {
+    "graph": {
+      "type": "csg",
+      "op": "UNION",
+      "blend": 0.0,
+      "left": {
+        "type": "csg",
+        "op": "UNION",
+        "blend": 0.0,
+        "left": {
+          "type": "csg",
+          "op": "UNION",
+          "blend": 0.0,
+          "left": {
+            "type": "material",
+            "materialType": 0,
+            "colorMode": 1,
+            "colorR": 0.33000001311302185,
+            "colorG": 0.33000001311302185,
+            "colorB": 0.3431999981403351,
+            "roughness": 0.550000011920929,
+            "metallic": 0.0,
+            "ior": -1.0,
+            "emission": -1.0,
+            "child": {
+              "type": "transform",
+              "mode": "STANDARD",
+              "axis": 1,
+              "offset": [
+                0.0,
+                -0.05999999865889549,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "scale": 1.0,
+              "frequency": 1.0,
+              "child": {
+                "type": "csg",
+                "op": "SUBTRACT",
+                "blend": 0.0,
+                "left": {
+                  "type": "primitive",
+                  "primitiveType": "BOX",
+                  "sizeX": 4.0,
+                  "sizeY": 0.05999999865889549,
+                  "sizeZ": 4.0,
+                  "rounding": 0.0,
+                  "shell": 0.0
+                },
+                "right": {
+                  "type": "transform",
+                  "mode": "STANDARD",
+                  "axis": 1,
+                  "offset": [
+                    0.0,
+                    0.05999999865889549,
+                    0.0
+                  ],
+                  "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "scale": 1.0,
+                  "frequency": 1.0,
+                  "child": {
+                    "type": "transform",
+                    "mode": "REPETITION",
+                    "axis": 1,
+                    "offset": [
+                      0.125,
+                      1000.0,
+                      0.125
+                    ],
+                    "rotation": [
+                      0.0,
+                      0.0,
+                      0.0
+                    ],
+                    "scale": 1.0,
+                    "frequency": 1.0,
+                    "child": {
+                      "type": "primitive",
+                      "primitiveType": "CYLINDER",
+                      "sizeX": 0.014000000432133675,
+                      "sizeY": 0.019999999552965164,
+                      "sizeZ": 1.0,
+                      "rounding": 0.0,
+                      "shell": 0.0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "right": {
+            "type": "material",
+            "materialType": 2,
+            "colorMode": 1,
+            "colorR": 1.0,
+            "colorG": 1.0,
+            "colorB": 1.0,
+            "roughness": 0.019999999552965164,
+            "metallic": 0.0,
+            "ior": 1.5,
+            "emission": -1.0,
+            "child": {
+              "type": "transform",
+              "mode": "STANDARD",
+              "axis": 1,
+              "offset": [
+                0.0,
+                0.5,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "scale": 0.5,
+              "frequency": 1.0,
+              "child": {
+                "type": "fractal",
+                "fractalType": "MENGER_SPONGE",
+                "params": {
+                  "maxIterations": 2,
+                  "scale": 3.0,
+                  "offsetX": 1.0,
+                  "offsetY": 1.0,
+                  "offsetZ": 1.0,
+                  "rotAngle": 0.0
+                }
+              }
+            }
+          }
+        },
+        "right": {
+          "type": "material",
+          "materialType": 0,
+          "colorMode": 1,
+          "colorR": 0.8500000238418579,
+          "colorG": 0.8500000238418579,
+          "colorB": 0.8500000238418579,
+          "roughness": 0.800000011920929,
+          "metallic": 0.0,
+          "ior": -1.0,
+          "emission": -1.0,
+          "child": {
+            "type": "transform",
+            "mode": "STANDARD",
+            "axis": 1,
+            "offset": [
+              1.7999999523162842,
+              1.2000000476837158,
+              0.0
+            ],
+            "rotation": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "scale": 1.0,
+            "frequency": 1.0,
+            "child": {
+              "type": "primitive",
+              "primitiveType": "BOX",
+              "sizeX": 0.03999999910593033,
+              "sizeY": 1.2000000476837158,
+              "sizeZ": 1.600000023841858,
+              "rounding": 0.0,
+              "shell": 0.0
+            }
+          }
+        }
+      },
+      "right": {
+        "type": "transform",
+        "mode": "STANDARD",
+        "axis": 1,
+        "offset": [
+          -2.4000000953674316,
+          0.5,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": 1.0,
+        "frequency": 1.0,
+        "child": {
+          "type": "csg",
+          "op": "UNION",
+          "blend": 0.0,
+          "left": {
+            "type": "material",
+            "materialType": 0,
+            "colorMode": 1,
+            "colorR": 0.11999999731779099,
+            "colorG": 0.11999999731779099,
+            "colorB": 0.12999999523162842,
+            "roughness": 0.44999998807907104,
+            "metallic": 0.0,
+            "ior": -1.0,
+            "emission": -1.0,
+            "child": {
+              "type": "transform",
+              "mode": "STANDARD",
+              "axis": 1,
+              "offset": [
+                -0.2449999898672104,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                90.0
+              ],
+              "scale": 1.0,
+              "frequency": 1.0,
+              "child": {
+                "type": "primitive",
+                "primitiveType": "CYLINDER",
+                "sizeX": 0.05000000074505806,
+                "sizeY": 0.22499999403953552,
+                "sizeZ": 1.0,
+                "rounding": 0.0,
+                "shell": 0.0
+              }
+            }
+          },
+          "right": {
+            "type": "material",
+            "materialType": 0,
+            "colorMode": 1,
+            "colorR": 1.0,
+            "colorG": 0.9800000190734863,
+            "colorB": 0.949999988079071,
+            "roughness": 0.800000011920929,
+            "metallic": 0.0,
+            "ior": -1.0,
+            "emission": 6.0,
+            "child": {
+              "type": "transform",
+              "mode": "STANDARD",
+              "axis": 1,
+              "offset": [
+                -0.024000000208616257,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                90.0
+              ],
+              "scale": 1.0,
+              "frequency": 1.0,
+              "child": {
+                "type": "primitive",
+                "primitiveType": "CYLINDER",
+                "sizeX": 0.017500000074505806,
+                "sizeY": 0.009999999776482582,
+                "sizeZ": 1.0,
+                "rounding": 0.0,
+                "shell": 0.0
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "postProcess": {
+    "toneMapMode": 0,
+    "exposure": 1.0,
+    "bloomEnabled": true,
+    "bloomIntensity": 0.8,
+    "bloomThreshold": 0.6,
+    "bloomRadius": 3,
+    "chromaticAberrationEnabled": false,
+    "chromaticAberrationIntensity": 0.005,
+    "vignetteEnabled": false,
+    "vignetteIntensity": 0.3,
+    "vignetteSoftness": 0.5,
+    "filmGrainEnabled": false,
+    "filmGrainIntensity": 0.03,
+    "sharpenEnabled": false,
+    "sharpenIntensity": 0.3,
+    "saturation": 1.0,
+    "lensEffectsEnabled": false,
+    "lensDirtIntensity": 0.5,
+    "starburstIntensity": 0.3,
+    "colorGradingMode": 0,
+    "colorGradingIntensity": 1.0
+  },
+  "animation": null
+}

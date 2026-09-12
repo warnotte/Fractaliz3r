@@ -185,7 +185,8 @@ uniform sampler2D blueNoiseTex;
 uniform int volumetricFogEnabled;
 uniform float fogDensity;
 uniform vec3 fogColor;
-uniform float fogScattering; // Anisotropy
+uniform float fogScattering;
+uniform int fogHalo;               // second-order scattering of the beam in the fog, the halo (raytracer.glsl, beamHalo) // Anisotropy
 uniform int fogSteps;
 
 // Advanced Effects

@@ -600,6 +600,60 @@ vec3 beamInScatter(Ray ray, float segLen) {
     return extraLightColor * extraLightIntensity * fogColor * sum * fogDensity;
 }
 
+// The halo: the beam's light the fog scatters out of it, scattered once more toward the
+// eye. The glowing beam is a line source: per unit length the fog inside it scatters
+// sigma * E * pi r^2 into the phase function. One scatter point is drawn along the camera
+// ray (its length weighted by the transmittance), one point on the beam's path by the
+// equiangular rule about it (the point source's 1/d^2 drawn exactly), the one march between
+// them is the shadow, and the estimate is unbiased; it converges with the samples like the
+// rest of the path tracer. Points inside the beam are the single scattering's already, so
+// the distance is kept at a radius at least.
+vec3 beamHalo(Ray ray, float segLen, inout uint seed) {
+    beamPath();
+    if (gSegCount <= 0) return vec3(0.0);
+    float sigma = fogDensity;
+    float D = min(segLen, 60.0);
+    float A = 1.0 - exp(-sigma * D);
+    if (A <= 1e-5) return vec3(0.0);
+    float s = -log(1.0 - random(seed) * A) / sigma;
+    vec3 x = ray.origin + ray.direction * s;
+    float wS = A / sigma;                                           // T(s) / pdf(s)
+    float total = 0.0;
+    for (int i = 0; i < gSegCount; i++) total += gSegLen[i];
+    if (total <= 0.0) return vec3(0.0);
+    float pick = random(seed) * total;
+    int seg = 0;
+    float before = 0.0;
+    for (int i = 0; i < gSegCount; i++) { if (pick < before + gSegLen[i] || i == gSegCount - 1) { seg = i; break; } before += gSegLen[i]; }
+    float pSeg = gSegLen[seg] / total;
+    vec3 o = gSegO[seg], a = gSegD[seg];
+    float L = gSegLen[seg];
+    float t0 = dot(x - o, a);
+    vec3 foot = o + a * t0;
+    float h = max(length(x - foot), 1e-3);
+    float thA = atan((0.0 - t0) / h), thB = atan((L - t0) / h);
+    if (thB - thA < 1e-5) return vec3(0.0);
+    float th = mix(thA, thB, random(seed));
+    float t = clamp(t0 + h * tan(th), 0.0, L);
+    float pdfT = h / ((thB - thA) * (h * h + (t - t0) * (t - t0)));
+    vec3 p = o + a * t;
+    vec3 toX = x - p;
+    float radius = max(extraLightAreaRadius, 1e-4);
+    float d2 = max(dot(toX, toX), radius * radius);
+    float d = sqrt(d2);
+    toX = normalize(toX);
+    Ray sh;
+    sh.origin = p;
+    sh.direction = toX;
+    vec3 hp; float hd; int hm;
+    if (rayMarchSimple(sh, hp, hd, hm) && hd < d - 0.01) return vec3(0.0);
+    vec3 E = extraLightColor * extraLightIntensity * gSegPow[seg] * exp(-(gSegStart[seg] + t) * sigma);
+    vec3 I = sigma * fogColor * E * (PI * radius * radius) * phaseHG(dot(a, toX), fogScattering);   // toward x, per unit length
+    vec3 L1 = I * exp(-sigma * d) / d2;                                                              // at x
+    vec3 L2 = sigma * fogColor * phaseHG(dot(ray.direction, -toX), fogScattering) * L1;             // toward the eye
+    return L2 * wS / (pdfT * pSeg);
+}
+
 // The beam inside a hazy glass its path ends in, seen along a path's segment inside that
 // glass: the beam's axis refracted at the entry for this path's index (the fan opens inside
 // the glass, wavelength by wavelength), its length to the exit, and the chord integral with
@@ -659,9 +713,12 @@ vec3 computeVolumetricFog(Ray ray, float hitDist, vec3 surfaceColor, out float e
     vec3 volumetricLight = lightColor * lightIntensity * fogColor * phase * volAccum * fogDensity;
 
 #ifdef EXTRA_BEAM
-    // The beam in the fog along the camera ray (beamInScatter). Its light through a glass
-    // is the photon pass's (photon.glsl), not this.
-    if (extraLightType == EXTRA_LIGHT_BEAM && extraLightIntensity > 0.0) volumetricLight += beamInScatter(ray, hitDist);
+    // The beam in the fog along the camera ray (beamInScatter), and its halo when asked
+    // (beamHalo). Its light through a glass is the photon pass's (photon.glsl), not this.
+    if (extraLightType == EXTRA_LIGHT_BEAM && extraLightIntensity > 0.0) {
+        volumetricLight += beamInScatter(ray, hitDist);
+        if (fogHalo != 0) volumetricLight += beamHalo(ray, hitDist, seed);
+    }
 #endif
 
     return surfaceColor * extinction + volumetricLight;

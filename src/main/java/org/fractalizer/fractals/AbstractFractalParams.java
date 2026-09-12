@@ -192,6 +192,7 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float[] fogColorVec;
     protected float fogScattering; // Anisotropy (-1 to 1)
     protected int fogSteps;
+    protected boolean fogHalo;     // second-order scattering of the beam in the fog (the halo), path tracing
 
     // Material System
     // Type: 0 = Lambertian (diffuse), 1 = Metallic, 2 = Glass (dielectric)
@@ -426,6 +427,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         this.fogColorVec = new float[]{0.5f, 0.6f, 0.7f};
         this.fogScattering = 0.5f; // Forward scattering
         this.fogSteps = 32;
+        this.fogHalo = false;
     }
 
     /**
@@ -544,6 +546,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.fogColorVec = this.fogColorVec.clone();
         target.fogScattering = this.fogScattering;
         target.fogSteps = this.fogSteps;
+        target.fogHalo = this.fogHalo;
 
         // Copy material
         target.materialType = this.materialType;
@@ -988,6 +991,8 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setFogScattering(float scattering) { this.fogScattering = scattering; }
     public int getFogSteps() { return fogSteps; }
     public void setFogSteps(int steps) { this.fogSteps = steps; }
+    public boolean isFogHalo() { return fogHalo; }
+    public void setFogHalo(boolean on) { this.fogHalo = on; }
 
     // Material
     public int getMaterialType() { return materialType; }

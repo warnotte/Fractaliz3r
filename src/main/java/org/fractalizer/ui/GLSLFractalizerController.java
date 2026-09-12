@@ -1353,6 +1353,7 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("fogColor", params.getFogColor());
             uniforms.put("fogScattering", params.getFogScattering());
             uniforms.put("fogSteps", params.getFogSteps());
+            uniforms.put("fogHalo", params.isFogHalo() ? 1 : 0);
 
             // Material System
             uniforms.put("materialType", params.getMaterialType());

@@ -41,6 +41,7 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
     private ColorPicker fogColorPicker;
     private EnhancedSlider fogScatteringSlider;
     private EnhancedSlider fogStepsSlider;
+    private CheckBox fogHaloCheck;
 
     // Ocean controls
     private CheckBox oceanEnabledCheck;
@@ -193,6 +194,15 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
             }
         });
         
+        // The beam's halo: its light scattered by the fog scattered once more (path tracing)
+        fogHaloCheck = new CheckBox("Beam halo (second scattering, path tracing)");
+        fogHaloCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setFogHalo(fogHaloCheck.isSelected());
+                onUpdate.run();
+            }
+        });
+
         fogStepsSlider = new EnhancedSlider("Quality (Samples)", 8, 64, 32, true);
         fogStepsSlider.showTickMarks(true);
         fogStepsSlider.setMajorTickUnit(8);
@@ -288,7 +298,7 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
         oceanPane.setExpanded(false);
 
         VBox fogBox = new VBox(5, fogEnabledCheck, fogDensitySlider, fogColorBox,
-            fogScatteringSlider, fogStepsSlider, infoLabel);
+            fogScatteringSlider, fogStepsSlider, fogHaloCheck, infoLabel);
         TitledPane fogPane = new TitledPane("Volumetric Fog & God Rays", fogBox);
         fogPane.setExpanded(false);
 
@@ -336,6 +346,7 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
             fogColorPicker.setValue(javafx.scene.paint.Color.color(fc[0], fc[1], fc[2]));
             fogScatteringSlider.setValue(p.getFogScattering());
             fogStepsSlider.setValue(p.getFogSteps());
+            fogHaloCheck.setSelected(p.isFogHalo());
 
             oceanEnabledCheck.setSelected(p.isOceanEnabled());
             oceanHeightSlider.setValue(p.getOceanHeight());
