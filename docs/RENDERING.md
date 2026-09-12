@@ -617,6 +617,17 @@ Two things the first version left out, found when the prism looked unreal (2026-
   inside the glass by internal reflection, the slab glows faintly along the beam. Neither
   the photon pass nor the fog march makes these paths, so nothing is counted twice, and
   the bounce segments stay unattenuated as before. Compiled under `EXTRA_BEAM` only.
+- **The beam ended as a disc.** Its free length is one march along its axis, and the whole
+  cylinder was cut at that distance: into a slanted face the beam stopped short on one side
+  and went into the glass on the other. The march now keeps the surface's normal too, and
+  each fibre of the beam ends where it meets the plane of that surface.
+
+The red patch at the prism's right foot is not a defect: it is the beam's internal
+reflection off the exit face, sent to the base and back, leaving the right face near the
+critical angle, where only the long wavelengths escape (the shorter ones, with their higher
+index, are totally reflected). Without dispersion nothing but a few speckles gets out;
+without the photon pass the path tracer cannot find the path (`out/prism_red` variants,
+2026-09-12).
 - **The beam did not fade.** Its irradiance now carries the fog's extinction from its
   source (`exp(-t * fogDensity)` along the axis), in the fog march, in the surface draw and
   in the photon's first flight alike, so the two strategies still tell the same beam:

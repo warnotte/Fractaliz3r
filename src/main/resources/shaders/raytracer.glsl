@@ -473,8 +473,14 @@ vec3 getExtraLightAxisWS();
 vec3 getExtraLightPositionWS();
 bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist, out int matType);
 
-// The beam's free length along its axis: to the first surface, one march per pixel, lazily.
+// The beam's free length along its axis: to the first surface, one march per pixel, lazily,
+// with the surface's normal there: the beam's end is that surface, not a disc across the
+// axis. A fibre of the beam at offset off from the axis ends where it meets the plane of
+// the surface through the axis's hit, at t = freeLen - dot(off, n) / dot(axis, n); with the
+// end cut as a disc, a beam into a slanted face stopped short of the face on one side and
+// went into the glass on the other (the prism scene, 2026-09-12).
 float gBeamFreeLen = -1.0;
+vec3 gBeamCutN = vec3(0.0);        // the normal at the axis's hit, zero when the beam hits nothing
 float beamFreeLen() {
     if (gBeamFreeLen < 0.0) {
         Ray along;
@@ -482,7 +488,12 @@ float beamFreeLen() {
         along.direction = getExtraLightAxisWS();
         vec3 fp; float fd; int fm;
         float range = max(extraLightRange, 0.0001);
-        gBeamFreeLen = rayMarchSimple(along, fp, fd, fm) ? min(fd, range) : range;
+        if (rayMarchSimple(along, fp, fd, fm) && fd < range) {
+            gBeamFreeLen = fd;
+            gBeamCutN = calcNormal(fp);
+        } else {
+            gBeamFreeLen = range;
+        }
     }
     return gBeamFreeLen;
 }
@@ -509,13 +520,17 @@ vec3 beamInScatter(Ray ray, float segLen) {
     float sq = sqrt(disc);
     float d0 = max((-qb - sq) / (2.0 * qa), 0.0);
     float d1 = min((-qb + sq) / (2.0 * qa), segLen);
-    // along the axis the point at d is at t(d) = t0 + d * ta: keep 0 < t < freeLen
+    // along the axis the point at d is at t(d) = t0 + d * ta: keep 0 < t < the end, which
+    // for a slanted end surface lies up to a radius beyond freeLen on one side
     float t0 = dot(w, axis), ta = dot(ray.direction, axis);
+    float dn = dot(axis, gBeamCutN);
+    float slant = abs(dn) > 1e-3 ? radius * length(gBeamCutN - axis * dn) / abs(dn) : 0.0;
+    float tEnd = freeLen + min(slant, 4.0 * radius);
     if (abs(ta) > 1e-6) {
-        float e0 = (0.0 - t0) / ta, e1 = (freeLen - t0) / ta;
+        float e0 = (0.0 - t0) / ta, e1 = (tEnd - t0) / ta;
         d0 = max(d0, min(e0, e1));
         d1 = min(d1, max(e0, e1));
-    } else if (t0 <= 0.0 || t0 >= freeLen) {
+    } else if (t0 <= 0.0 || t0 >= tEnd) {
         d1 = d0;
     }
     if (d1 <= d0) return vec3(0.0);
@@ -528,7 +543,10 @@ vec3 beamInScatter(Ray ray, float segLen) {
         float d = d0 + (float(i) + 0.5) * ds;
         vec3 rel = ray.origin + ray.direction * d - o;
         float t = dot(rel, axis);
-        float r = length(rel - axis * t);
+        vec3 off = rel - axis * t;
+        float r = length(off);
+        float tCut = abs(dn) > 1e-3 ? freeLen - dot(off, gBeamCutN) / dn : freeLen;   // this fibre's end
+        if (t > tCut) continue;
         float att = edge < 0.001 ? 1.0 : 1.0 - smoothstep(radius * (1.0 - edge), radius, r);
         acc += att * exp(-(d + t) * fogDensity) * ds;      // the fog on the way to the eye, and on the beam's way here
     }
