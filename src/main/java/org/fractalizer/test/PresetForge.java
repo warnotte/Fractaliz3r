@@ -298,19 +298,11 @@ public class PresetForge {
         // The beam enters the left face, disperses, leaves the right face as a fan of colour
         // seen in the air (photons scattering in the fog past the glass) and lands as a
         // spectrum on a screen (a caustic). Nothing else lights the scene.
-        p.put("PRISM_BEAM", () -> SceneBuilder.nodeGraph(SceneBuilder.union(SceneBuilder.slab(3.0f, 0.4f), SceneBuilder.glassPrism(0.9f, 0.5f, 1.55f)))
-                .camera(0.5f, 0.8f, -3.1f).lookAt(0.75f, 0.42f, 0f).fov(44)
-                .gradient(CRYSTAL).coloringMode(0)
-                .materialType(0).ior(1.55f).dispersion(0.045f).roughness(0.6f)
-                .pathTracing(true).maxBounces(6).rimIntensity(0.0f).skyType(3).skyIntensity(0.05f)
-                .lightDir(0.3f, 1.0f, -0.4f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(0.0f)
-                .ambientColor(0.5f, 0.55f, 0.65f).ambientIntensity(0.02f)
-                // horizontal into the left face near the angle of minimum deviation: the fan
-                // leaves the right face downward and lands on the slab as a spectrum
-                .beam(-3.0f, 0.6f, 0.0f, 1.0f, 0.0f, 0.0f, 0.07f, 8.0f, 1.0f, 1.0f, 1.0f, 100.0f)
-                .fog(0.35f).fogColor(0.8f, 0.82f, 0.88f)
-                .caustics(3.5f).causticPhotons(1024)
-                .colorStrength(1.0f).metalness(0.0f));
+        // Seen from the front and a little to the left, as the album cover: the beam comes in
+        // from the left, the fan leaves to the right. A faint gradient sky gives the glass
+        // something to reflect (in a black room a prism is invisible), the beam's glow in the
+        // fog is what its faces show of it, and bloom is the halo a bright beam has on film.
+        p.put("PRISM_BEAM", () -> prismBeam().camera(-0.4f, 1.3f, -2.6f).lookAt(0.7f, 0.4f, 0f));
 
         // The beam in fog onto a glass ball: the beam seen in the air (the camera rays' march),
         // the ball's caustic and the beam's light through the ball seen in the air (photons).
@@ -647,6 +639,24 @@ public class PresetForge {
         m.setMetallic(0f);
         m.setEmission(emission);
         return m;
+    }
+
+    /** The prism scene without its camera: a white beam, a glass prism, the fog, bloom. */
+    private static SceneBuilder prismBeam() {
+        return SceneBuilder.nodeGraph(SceneBuilder.union(SceneBuilder.slab(3.0f, 0.4f), SceneBuilder.glassPrism(0.9f, 0.5f, 1.55f)))
+                .fov(44)
+                .gradient(CRYSTAL).coloringMode(0)
+                .materialType(0).ior(1.55f).dispersion(0.045f).roughness(0.6f)
+                .pathTracing(true).maxBounces(6).rimIntensity(0.0f).skyType(0).skyIntensity(0.12f)
+                .lightDir(0.3f, 1.0f, -0.4f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(0.0f)
+                .ambientColor(0.5f, 0.55f, 0.65f).ambientIntensity(0.02f)
+                // horizontal into the left face near the angle of minimum deviation: the fan
+                // leaves the right face downward and lands on the slab as a spectrum
+                .beam(-3.0f, 0.6f, 0.0f, 1.0f, 0.0f, 0.0f, 0.07f, 8.0f, 1.0f, 1.0f, 1.0f, 600.0f)
+                .fog(0.35f).fogColor(0.8f, 0.82f, 0.88f)
+                .caustics(3.5f).causticPhotons(1024)
+                .bloom(0.8f, 0.6f)
+                .colorStrength(1.0f).metalness(0.0f);
     }
 
     public static void main(String[] args) throws Exception {

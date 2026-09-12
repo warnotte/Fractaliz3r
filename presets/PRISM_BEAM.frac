@@ -1,20 +1,20 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-11T15:02:10.492850100Z",
+  "timestamp": "2026-09-12T00:13:09.865925600Z",
   "name": null,
   "description": null,
   "fractalType": "NODE_GRAPH",
   "camera": {
     "position": [
-      0.5,
-      0.8,
-      -3.1
+      -0.4,
+      1.3,
+      -2.6
     ],
     "quaternion": [
-      0.997345,
-      0.060704067,
-      0.040150348,
-      -0.0024437776
+      0.96839833,
+      0.15062644,
+      0.1964254,
+      -0.030552363
     ],
     "fov": 44.0,
     "moveSpeed": 0.1
@@ -70,7 +70,7 @@
       1.0,
       1.0
     ],
-    "extraIntensity": 100.0,
+    "extraIntensity": 600.0,
     "extraRange": 8.0,
     "extraAreaRadius": 0.07,
     "extraConeAngle": 35.0,
@@ -146,9 +146,9 @@
       0.0
     ],
     "roughness": 0.6,
-    "skyIntensity": 0.05,
+    "skyIntensity": 0.12,
     "indirectMultiplier": 0.5,
-    "skyType": 3,
+    "skyType": 0,
     "cloudDensity": 0.5,
     "nebulaColor": [
       0.25,
@@ -311,6 +311,28 @@
       }
     }
   },
-  "postProcess": null,
+  "postProcess": {
+    "toneMapMode": 0,
+    "exposure": 1.0,
+    "bloomEnabled": true,
+    "bloomIntensity": 0.8,
+    "bloomThreshold": 0.6,
+    "bloomRadius": 3,
+    "chromaticAberrationEnabled": false,
+    "chromaticAberrationIntensity": 0.005,
+    "vignetteEnabled": false,
+    "vignetteIntensity": 0.3,
+    "vignetteSoftness": 0.5,
+    "filmGrainEnabled": false,
+    "filmGrainIntensity": 0.03,
+    "sharpenEnabled": false,
+    "sharpenIntensity": 0.3,
+    "saturation": 1.0,
+    "lensEffectsEnabled": false,
+    "lensDirtIntensity": 0.5,
+    "starburstIntensity": 0.3,
+    "colorGradingMode": 0,
+    "colorGradingIntensity": 1.0
+  },
   "animation": null
 }

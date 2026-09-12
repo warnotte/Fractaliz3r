@@ -158,8 +158,12 @@ bidirectional compiles in under its own define: the fast path stays byte-identic
 
 Done since: the gather for a caustic seen through glass (a hash grid over the pass's photon
 vertices, gathered at the first matte vertex reached through glass; BidirProbe's window scene),
-and photons from the point and spot lights. Still open: the emitters' light in the fog before a
-glass, photons from the sky (not needed), and the emission square's extent and centre by hand.
+photons from the point and spot lights, and (2026-09-12, the prism judged unreal) the beam's
+glow seen by every path segment after a bounce (the prism's faces reflect and refract the
+beam, the slab glows next to it) with the beam fading along its way in the fog. Still open:
+the emitters' light in the fog before a glass, second-order scattering in the fog (the soft
+halo around a beam; bloom stands in for it), photons from the sky (not needed), and the
+emission square's extent and centre by hand.
 
 The follow-ups the photon pass alone leaves open (kept for the record):
 

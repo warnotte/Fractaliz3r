@@ -28,6 +28,8 @@ public class BidirProbe {
 
     public static void main(String[] args) throws Exception {
         String which = args.length > 0 ? args[0] : "panel";
+        // a scene given as a path names its images by its file name (a path made a directory of it, and the save died after the render)
+        String tag = which.endsWith(".frac") ? new File(which).getName().replace(".frac", "") : which;
         File outDir = new File(args.length > 1 ? args[1] : "out/bidir");
         String[] res = (args.length > 2 ? args[2] : "320x180").split("x");
         int W = Integer.parseInt(res[0]), H = Integer.parseInt(res[1]);
@@ -155,16 +157,16 @@ public class BidirProbe {
                 testSamples, rmsePt, rmseBd, rmsePt / Math.max(rmseBd, 1e-9));
         System.out.printf("cost: %.1f ms per sample path tracer, %.1f with photons%n", msPt, msBd);
 
-        savePng(ptRef, W, H, new File(outDir, which + "_pt_ref.png"));
-        savePng(bdRef, W, H, new File(outDir, which + "_bidir_ref.png"));
-        savePng(ptTest, W, H, new File(outDir, which + "_pt_" + testSamples + ".png"));
-        savePng(bdTest, W, H, new File(outDir, which + "_bidir_" + testSamples + ".png"));
+        savePng(ptRef, W, H, new File(outDir, tag + "_pt_ref.png"));
+        savePng(bdRef, W, H, new File(outDir, tag + "_bidir_ref.png"));
+        savePng(ptTest, W, H, new File(outDir, tag + "_pt_" + testSamples + ".png"));
+        savePng(bdTest, W, H, new File(outDir, tag + "_bidir_" + testSamples + ".png"));
         BufferedImage sheet = new BufferedImage(W * 2 + 4, H * 2 + 4, BufferedImage.TYPE_INT_RGB);
         java.awt.Graphics2D g = sheet.createGraphics();
-        String[] names = {which + "_pt_ref", which + "_bidir_ref", which + "_pt_" + testSamples, which + "_bidir_" + testSamples};
+        String[] names = {tag + "_pt_ref", tag + "_bidir_ref", tag + "_pt_" + testSamples, tag + "_bidir_" + testSamples};
         for (int i = 0; i < 4; i++) g.drawImage(javax.imageio.ImageIO.read(new File(outDir, names[i] + ".png")), (i % 2) * (W + 4), (i / 2) * (H + 4), null);
         g.dispose();
-        javax.imageio.ImageIO.write(sheet, "png", new File(outDir, "_" + which + "_sheet.png"));
+        javax.imageio.ImageIO.write(sheet, "png", new File(outDir, "_" + tag + "_sheet.png"));
 
         boolean ok = photonsOn && rel < (which.equals("window") ? 0.08 : 0.04);   // the window's reference is the slowest to converge
         System.out.println(ok ? "BIDIR OK" : "BIDIR MISMATCH");

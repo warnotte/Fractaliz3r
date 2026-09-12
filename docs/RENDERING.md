@@ -605,6 +605,26 @@ fog is the camera rays' march. Neither the photon's flight nor the path tracer's
 attenuated by the fog, the same approximation on both sides, so the caustic paths keep
 agreeing (BidirProbe's beam scene: 0.02 %).
 
+Two things the first version left out, found when the prism looked unreal (2026-09-12):
+
+- **The beam's glow is seen only along the camera ray.** A face of glass or metal reflects
+  or refracts what is bright around it, and in a dark foggy room the bright thing is the
+  beam; a matte surface next to the beam is lit by the glowing fog. Neither path existed:
+  the fog march ran on the camera segment alone, and the photon pass scatters photons only
+  past a glass. So the beam's in-scatter (`beamInScatter`, the same analytic integral) is
+  now added on every path segment after a bounce, weighted by the path's throughput: the
+  prism's faces show the beam in reflection and refraction, the beam's image appears
+  inside the glass by internal reflection, the slab glows faintly along the beam. Neither
+  the photon pass nor the fog march makes these paths, so nothing is counted twice, and
+  the bounce segments stay unattenuated as before. Compiled under `EXTRA_BEAM` only.
+- **The beam did not fade.** Its irradiance now carries the fog's extinction from its
+  source (`exp(-t * fogDensity)` along the axis), in the fog march, in the surface draw and
+  in the photon's first flight alike, so the two strategies still tell the same beam:
+  BidirProbe on `BEAM_FOG.frac` (the beam in fog onto a glass ball) has the slab's bands,
+  caustic included, agree within 0.5 %, while the bands of the air above carry the cone the
+  photons alone can make (+6 to +10 %), as designed. A beam through 3 units of fog at 0.35
+  arrives at 35 %; the presets' beams are set brighter for it.
+
 `presets/BEAM_FOG.frac` shows it: the beam across a foggy slab into a glass ball, seen in
 the air before the ball, focused into a cone seen in the air behind it, with a caustic on
 the slab. The cone is the photons' and is grainy until the samples accumulate; the incoming
@@ -616,12 +636,22 @@ beam is the march's and is smooth from the first sample.
 the world enters the left face of a glass triangular prism (the twelfth primitive,
 `TRIANGULAR_PRISM`, an equilateral section along Z) near the angle of minimum deviation, and
 leaves the right face as a fan of colour, seen in the fog, that lands on the slab as a
-spectrum; a faint reflection of the beam climbs from the entry face. Nothing else lights
-the scene. The beam in the air is the camera rays' march; everything past the glass, the fan
-and the spectrum and the reflection, is the photon pass's, dispersion included; the two meet
-without a seam because each path is one strategy's, or shared by weights that sum to one.
-The scene compiles in 17 s (EXTRA_BEAM, BIDIR, HAS_MATERIALS) plus 4 s for its photon program,
-and renders at 960x540 in 14 ms per sample with 1024 x 1024 photons.
+spectrum; a faint reflection of the beam climbs from the entry face. The beam in the air is
+the camera rays' march; everything past the glass, the fan and the spectrum and the
+reflection, is the photon pass's, dispersion included; the two meet without a seam because
+each path is one strategy's, or shared by weights that sum to one. The scene compiles in
+17 s (EXTRA_BEAM, BIDIR, HAS_MATERIALS) plus 4 s for its photon program, and renders at
+960x540 in 14 ms per sample with 1024 x 1024 photons.
+
+The first version of the scene was judged unreal next to other engines (2026-09-12): the
+beam dull and grey, the prism a black silhouette. Half of it was the scene, half the engine.
+The scene: in a black room nothing lights a prism and it has nothing to reflect, so a faint
+gradient sky (0.12) gives the glass its reflections and the slab its grey; the beam at 100
+scattered from the side gave 0.2 of radiance, dull by construction, so it is 600 with bloom
+for the halo a bright beam has on film; and the camera looks from the front and a little
+left, as the album cover does, at the prism's side faces rather than its triangular end.
+The engine: the beam's glow seen in the faces and the slab, and the beam fading along its
+way, the two terms above. `docs/gallery/prism_beam.jpg` is the result.
 
 For a beam aimed at something, the light has to stay put while the camera moves, so the
 additional light can now be *Fixed in the world*: position and direction are then scene

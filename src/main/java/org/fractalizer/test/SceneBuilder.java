@@ -903,6 +903,21 @@ public class SceneBuilder {
     // Build & Output
     // ========================================================================
 
+    /** The additional light's intensity, after beam() or pointLight() set the rest. */
+    public SceneBuilder extraIntensity(float intensity) {
+        config.lighting.extraIntensity = intensity;
+        return this;
+    }
+
+    /** Bloom in the preset's own post-process chain, as File > Load applies it. */
+    public SceneBuilder bloom(float intensity, float threshold) {
+        if (config.postProcess == null) config.postProcess = new org.fractalizer.engine.GLSLEngine.PostProcessParams();
+        config.postProcess.bloomEnabled = true;
+        config.postProcess.bloomIntensity = intensity;
+        config.postProcess.bloomThreshold = threshold;
+        return this;
+    }
+
     public FractalConfig build() {
         // Compile tracks into animation config
         if (!trackBuilders.isEmpty()) {

@@ -234,6 +234,9 @@ void trace(int li, inout uint seed) {
             }
         }
         if (!hit) return;
+        // A beam photon's first flight through the fog: attenuated as the path tracer's
+        // draw of the beam is (sampleExtraLightRadiance), so both tell the same beam.
+        if (bounce == 0 && ltype == LIGHT_BEAM && volumetricFogEnabled != 0 && fogDensity > 0.0) weight *= exp(-hitDist * fogDensity);
 
         vec3 normal = calcNormal(hitPos);
         vec3 faceN = dot(ray.direction, normal) > 0.0 ? -normal : normal;

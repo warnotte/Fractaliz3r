@@ -472,6 +472,68 @@ RayHit rayMarch(Ray ray) {
 vec3 getExtraLightAxisWS();
 vec3 getExtraLightPositionWS();
 bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist, out int matType);
+
+// The beam's free length along its axis: to the first surface, one march per pixel, lazily.
+float gBeamFreeLen = -1.0;
+float beamFreeLen() {
+    if (gBeamFreeLen < 0.0) {
+        Ray along;
+        along.origin = getExtraLightPositionWS();
+        along.direction = getExtraLightAxisWS();
+        vec3 fp; float fd; int fm;
+        float range = max(extraLightRange, 0.0001);
+        gBeamFreeLen = rayMarchSimple(along, fp, fd, fm) ? min(fd, range) : range;
+    }
+    return gBeamFreeLen;
+}
+
+// The beam's light scattered by the fog along [0, segLen] of a ray: the ray crosses the
+// beam's cylinder over a segment, clipped to the beam's free length, integrated with the
+// fog's extinction from the ray's origin, the beam's own extinction from its source, and
+// its soft edge, no march per step (a second marcher inside the fog loop is what the
+// compiler cannot take). On the camera ray it is the fog march's term; on a segment after
+// a bounce it is what a face of glass reflects or refracts of the beam, and what lights a
+// matte surface near it (pathTrace).
+vec3 beamInScatter(Ray ray, float segLen) {
+    vec3 axis = getExtraLightAxisWS();
+    vec3 o = getExtraLightPositionWS();
+    float radius = max(extraLightAreaRadius, 1e-4);
+    float freeLen = beamFreeLen();
+    vec3 w = ray.origin - o;
+    vec3 wPerp = w - axis * dot(w, axis);
+    vec3 dPerp = ray.direction - axis * dot(ray.direction, axis);
+    float qa = dot(dPerp, dPerp), qb = 2.0 * dot(wPerp, dPerp), qc = dot(wPerp, wPerp) - radius * radius;
+    if (qa <= 1e-8) return vec3(0.0);
+    float disc = qb * qb - 4.0 * qa * qc;
+    if (disc <= 0.0) return vec3(0.0);
+    float sq = sqrt(disc);
+    float d0 = max((-qb - sq) / (2.0 * qa), 0.0);
+    float d1 = min((-qb + sq) / (2.0 * qa), segLen);
+    // along the axis the point at d is at t(d) = t0 + d * ta: keep 0 < t < freeLen
+    float t0 = dot(w, axis), ta = dot(ray.direction, axis);
+    if (abs(ta) > 1e-6) {
+        float e0 = (0.0 - t0) / ta, e1 = (freeLen - t0) / ta;
+        d0 = max(d0, min(e0, e1));
+        d1 = min(d1, max(e0, e1));
+    } else if (t0 <= 0.0 || t0 >= freeLen) {
+        d1 = d0;
+    }
+    if (d1 <= d0) return vec3(0.0);
+    float edge = clamp(extraLightConeSoftness, 0.0, 1.0);
+    float beamPhase = phaseHG(dot(ray.direction, -axis), fogScattering);
+    const int BEAM_STEPS = 8;
+    float ds = (d1 - d0) / float(BEAM_STEPS);
+    float acc = 0.0;
+    for (int i = 0; i < BEAM_STEPS; i++) {
+        float d = d0 + (float(i) + 0.5) * ds;
+        vec3 rel = ray.origin + ray.direction * d - o;
+        float t = dot(rel, axis);
+        float r = length(rel - axis * t);
+        float att = edge < 0.001 ? 1.0 : 1.0 - smoothstep(radius * (1.0 - edge), radius, r);
+        acc += att * exp(-(d + t) * fogDensity) * ds;      // the fog on the way to the eye, and on the beam's way here
+    }
+    return extraLightColor * extraLightIntensity * fogColor * beamPhase * acc * fogDensity;
+}
 #endif
 
 vec3 computeVolumetricFog(Ray ray, float hitDist, vec3 surfaceColor, out float extinction) {
@@ -500,58 +562,9 @@ vec3 computeVolumetricFog(Ray ray, float hitDist, vec3 surfaceColor, out float e
     vec3 volumetricLight = lightColor * lightIntensity * fogColor * phase * volAccum * fogDensity;
 
 #ifdef EXTRA_BEAM
-    // The beam in the fog: the camera ray crosses its cylinder over a segment, clipped to
-    // the beam's free length (to the first surface along its axis, one march per pixel) and
-    // integrated with the fog's extinction and the beam's soft edge, no march per step: a
-    // second marcher inside the loop above is what the compiler cannot take. The beam's
-    // light through a glass is the photon pass's (photon.glsl), not this.
-    if (extraLightType == EXTRA_LIGHT_BEAM && extraLightIntensity > 0.0) {
-        vec3 axis = getExtraLightAxisWS();
-        vec3 o = getExtraLightPositionWS();
-        float radius = max(extraLightAreaRadius, 1e-4);
-        float range = max(extraLightRange, 0.0001);
-        Ray along;
-        along.origin = o;
-        along.direction = axis;
-        vec3 fp; float fd; int fm;
-        float freeLen = rayMarchSimple(along, fp, fd, fm) ? min(fd, range) : range;
-        vec3 w = ray.origin - o;
-        vec3 wPerp = w - axis * dot(w, axis);
-        vec3 dPerp = ray.direction - axis * dot(ray.direction, axis);
-        float qa = dot(dPerp, dPerp), qb = 2.0 * dot(wPerp, dPerp), qc = dot(wPerp, wPerp) - radius * radius;
-        if (qa > 1e-8) {
-            float disc = qb * qb - 4.0 * qa * qc;
-            if (disc > 0.0) {
-                float sq = sqrt(disc);
-                float d0 = max((-qb - sq) / (2.0 * qa), 0.0);
-                float d1 = min((-qb + sq) / (2.0 * qa), hitDist);
-                // along the axis the point at d is at t(d) = t0 + d * ta: keep 0 < t < freeLen
-                float t0 = dot(w, axis), ta = dot(ray.direction, axis);
-                if (abs(ta) > 1e-6) {
-                    float e0 = (0.0 - t0) / ta, e1 = (freeLen - t0) / ta;
-                    d0 = max(d0, min(e0, e1));
-                    d1 = min(d1, max(e0, e1));
-                } else if (t0 <= 0.0 || t0 >= freeLen) {
-                    d1 = d0;
-                }
-                if (d1 > d0) {
-                    float edge = clamp(extraLightConeSoftness, 0.0, 1.0);
-                    float beamPhase = phaseHG(dot(ray.direction, -axis), fogScattering);
-                    const int BEAM_STEPS = 8;
-                    float ds = (d1 - d0) / float(BEAM_STEPS);
-                    float acc = 0.0;
-                    for (int i = 0; i < BEAM_STEPS; i++) {
-                        float d = d0 + (float(i) + 0.5) * ds;
-                        vec3 rel = ray.origin + ray.direction * d - o;
-                        float r = length(rel - axis * dot(rel, axis));
-                        float att = edge < 0.001 ? 1.0 : 1.0 - smoothstep(radius * (1.0 - edge), radius, r);
-                        acc += att * exp(-d * fogDensity) * ds;
-                    }
-                    volumetricLight += extraLightColor * extraLightIntensity * fogColor * beamPhase * acc * fogDensity;
-                }
-            }
-        }
-    }
+    // The beam in the fog along the camera ray (beamInScatter). Its light through a glass
+    // is the photon pass's (photon.glsl), not this.
+    if (extraLightType == EXTRA_LIGHT_BEAM && extraLightIntensity > 0.0) volumetricLight += beamInScatter(ray, hitDist);
 #endif
 
     return surfaceColor * extinction + volumetricLight;
@@ -664,6 +677,7 @@ vec3 sampleExtraLightRadiance(vec3 hitPos, vec3 normal, float surfaceDist, inout
         if (r >= radius) return vec3(0.0);
         float edge = clamp(extraLightConeSoftness, 0.0, 1.0);
         float att = edge < 0.001 ? 1.0 : 1.0 - smoothstep(radius * (1.0 - edge), radius, r);
+        if (volumetricFogEnabled != 0 && fogDensity > 0.0) att *= exp(-t * fogDensity);   // the fog on the beam's way here (the photon pass carries the same)
         lightDirNorm = -axis;
         float visibility = calcExtraLightVisibility(hitPos, normal, -axis, t, surfaceDist);
         return baseRadiance * (att * visibility);
@@ -1504,7 +1518,17 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         float hitDist;
         int hitMat;
 
-        if (!rayMarchSimple(currentRay, hitPos, hitDist, hitMat)) {
+        bool segmentHit = rayMarchSimple(currentRay, hitPos, hitDist, hitMat);
+#ifdef EXTRA_BEAM
+        // The beam's glow in the fog along this segment. On the camera segment it is the
+        // fog march's, after the path (computeVolumetricFog); after a bounce it is what a
+        // face of glass reflects or refracts of the beam, and what lights a matte surface
+        // near it. Neither the photon pass nor the fog march makes these paths. The
+        // segment itself is not attenuated, as no bounce segment is.
+        if (bounce > 0 && volumetricFogEnabled != 0 && fogDensity > 0.0 && extraLightType == EXTRA_LIGHT_BEAM && extraLightIntensity > 0.0)
+            radiance += clamp(throughput * beamInScatter(currentRay, segmentHit ? hitDist : MAX_DISTANCE), 0.0, FIREFLY_CLAMP);
+#endif
+        if (!segmentHit) {
             // Ray escaped - add environment light with MIS weight
             float envScale = (bounce == 0) ? 1.0 : indirectMultiplier;
             vec3 envColor = sampleEnvironment(currentRay.direction) * envScale;
