@@ -210,6 +210,67 @@ public class SceneBuilder {
         return m;
     }
 
+    /** A matte solid-colour material over a child. */
+    public static GraphNode matte(GraphNode child, float r, float g, float b, float roughness) {
+        org.fractalizer.graph.MaterialNode m = new org.fractalizer.graph.MaterialNode(child);
+        m.setMaterialType(org.fractalizer.graph.MaterialNode.TYPE_LAMBERTIAN);
+        m.setColorMode(org.fractalizer.graph.MaterialNode.COLOR_SOLID);
+        m.setColorR(r); m.setColorG(g); m.setColorB(b);
+        m.setRoughness(roughness);
+        m.setMetallic(0f);
+        return m;
+    }
+
+    /** An optical breadboard: the slab with a grid of tapped holes in its top, pitch apart,
+     *  of radius holeR (a repeated cylinder subtracted from it; the repetition's period along
+     *  Y is huge so the holes are one layer). Anodised: dark, a little rough. */
+    public static GraphNode breadboard(float halfSize, float grey, float pitch, float holeR) {
+        org.fractalizer.graph.PrimitiveNode box = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.BOX);
+        box.setSizeX(halfSize); box.setSizeY(0.06f); box.setSizeZ(halfSize);
+        org.fractalizer.graph.PrimitiveNode hole = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.CYLINDER);
+        hole.setSizeX(holeR); hole.setSizeY(0.02f);
+        org.fractalizer.graph.TransformNode grid = new org.fractalizer.graph.TransformNode(hole, new float[]{pitch, 1000f, pitch});
+        grid.setMode(org.fractalizer.graph.TransformNode.Mode.REPETITION);
+        GraphNode holes = translate(grid, 0f, 0.06f, 0f);              // the holes' layer at the slab's top
+        GraphNode plate = subtract(box, holes);
+        return matte(translate(plate, 0f, -0.06f, 0f), grey, grey, grey * 1.04f, 0.55f);
+    }
+
+    /** A post standing on the table at (x, z): a cylinder of radius r up to height h. */
+    public static GraphNode post(float x, float z, float r, float h) {
+        org.fractalizer.graph.PrimitiveNode c = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.CYLINDER);
+        c.setSizeX(r); c.setSizeY(h * 0.5f);
+        return matte(translate(c, x, h * 0.5f, z), 0.18f, 0.18f, 0.19f, 0.5f);
+    }
+
+    /** A mirror on a post: the mirror's bottom edge at height lift. */
+    public static GraphNode mountedMirror(float x, float z, float yawDeg, float halfW, float halfH, float lift) {
+        GraphNode m = mirror(x, z, yawDeg, halfW, halfH);
+        return union(translate(m, 0f, lift, 0f), post(x, z, 0.025f, lift));
+    }
+
+    /** A laser module: a dark cylinder along its axis (from (x, y, z) backwards by length)
+     *  with a bright emissive aperture at its front face, where the beam starts. The axis is
+     *  +X turned by yaw degrees about Y. */
+    public static GraphNode laserModule(float x, float y, float z, float yawDeg, float radius, float length) {
+        org.fractalizer.graph.PrimitiveNode body = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.CYLINDER);
+        body.setSizeX(radius); body.setSizeY(length * 0.5f);
+        // the cylinder stands along Y: lay it along X (roll 90 about Z), then yaw
+        org.fractalizer.graph.TransformNode laid = new org.fractalizer.graph.TransformNode(body, new float[]{-length * 0.5f - 0.02f, 0f, 0f}, new float[]{0f, 0f, 90f}, 1f);   // its front face 2 cm behind the beam's start, so the beam's march does not begin inside it
+        GraphNode bodyM = matte(laid, 0.12f, 0.12f, 0.13f, 0.45f);
+        org.fractalizer.graph.PrimitiveNode ap = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.CYLINDER);
+        ap.setSizeX(radius * 0.35f); ap.setSizeY(0.004f);
+        org.fractalizer.graph.TransformNode apLaid = new org.fractalizer.graph.TransformNode(ap, new float[]{-0.024f, 0f, 0f}, new float[]{0f, 0f, 90f}, 1f);
+        org.fractalizer.graph.MaterialNode apM = new org.fractalizer.graph.MaterialNode(apLaid);
+        apM.setMaterialType(org.fractalizer.graph.MaterialNode.TYPE_LAMBERTIAN);
+        apM.setColorMode(org.fractalizer.graph.MaterialNode.COLOR_SOLID);
+        apM.setColorR(1f); apM.setColorG(0.98f); apM.setColorB(0.95f);
+        apM.setEmission(6f);
+        apM.setRoughness(0.8f); apM.setMetallic(0f);
+        GraphNode module = union(bodyM, apM);
+        return place(module, x, y, z, yawDeg);
+    }
+
     /** A glass prism placed at (x, z), its length along Z. */
     public static GraphNode glassPrismAt(float side, float halfLength, float ior, float x, float z) {
         return place(glassPrism(side, halfLength, ior), x, 0f, z, 0f);

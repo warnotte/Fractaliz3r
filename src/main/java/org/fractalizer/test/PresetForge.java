@@ -304,7 +304,7 @@ public class PresetForge {
         // something to reflect (in a black room a prism is invisible), the beam's glow in the
         // fog is what its faces show of it, and bloom is the halo a bright beam has on film.
         p.put("PRISM_BEAM", () -> prismBeam().camera(-0.4f, 1.3f, -2.6f).lookAt(0.7f, 0.4f, 0f));
-        p.put("LASER_TABLE", () -> laserTable().camera(-0.7f, 2.0f, -3.7f).lookAt(-0.35f, 0.3f, -0.1f).fov(50));
+        p.put("LASER_TABLE", () -> laserTable().camera(-1.0f, 2.0f, -3.7f).lookAt(-0.6f, 0.3f, -0.1f).fov(54).dof(4.6f, 0.02f));
 
         // The beam in fog onto a glass ball: the beam seen in the air (the camera rays' march),
         // the ball's caustic and the beam's light through the ball seen in the air (photons).
@@ -646,11 +646,12 @@ public class PresetForge {
     /** The optical table: a thin white laser zigzags on two mirrors into a prism whose fan
      *  lands on the table as a spectrum; thin fog, bloom, a faint sky for the reflections. */
     private static SceneBuilder laserTable() {
-        GraphNode table = SceneBuilder.slab(4.0f, 0.35f);
-        GraphNode m1 = SceneBuilder.mirror(1.2f, -1.2f, 135f, 0.3f, 0.36f);     // +X in, +Z out
-        GraphNode m2 = SceneBuilder.mirror(1.2f, 0.6f, 45f, 0.3f, 0.36f);       // +Z in, -X out
+        GraphNode table = SceneBuilder.breadboard(4.0f, 0.33f, 0.125f, 0.014f);
+        GraphNode m1 = SceneBuilder.mountedMirror(1.2f, -1.2f, 135f, 0.26f, 0.3f, 0.14f);   // +X in, +Z out
+        GraphNode m2 = SceneBuilder.mountedMirror(1.2f, 0.6f, 45f, 0.26f, 0.3f, 0.14f);     // +Z in, -X out
         GraphNode prism = SceneBuilder.glassPrismAt(0.9f, 0.4f, 1.55f, -0.3f, 0.6f);
-        GraphNode all = SceneBuilder.union(SceneBuilder.union(SceneBuilder.union(table, m1), m2), prism);
+        GraphNode laser = SceneBuilder.laserModule(-2.75f, 0.5f, -1.2f, 0f, 0.05f, 0.45f);
+        GraphNode all = SceneBuilder.union(SceneBuilder.union(SceneBuilder.union(SceneBuilder.union(table, m1), m2), prism), laser);
         return SceneBuilder.nodeGraph(all)
                 .fov(48)
                 .gradient(CRYSTAL).coloringMode(0)
@@ -658,7 +659,7 @@ public class PresetForge {
                 .pathTracing(true).maxBounces(8).rimIntensity(0.0f).skyType(0).skyIntensity(0.16f)
                 .lightDir(0.3f, 1.0f, -0.4f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(0.0f)
                 .ambientColor(0.5f, 0.55f, 0.65f).ambientIntensity(0.02f)
-                .beam(-3.2f, 0.5f, -1.2f, 1.0f, 0.0f, 0.0f, 0.015f, 12.0f, 1.0f, 1.0f, 1.0f, 3000.0f)
+                .beam(-2.75f, 0.5f, -1.2f, 1.0f, 0.0f, 0.0f, 0.015f, 12.0f, 1.0f, 1.0f, 1.0f, 3000.0f)
                 .glassHaze(0.4f)      // a slightly hazy prism: the beam and its fan are seen inside it
                 .fog(0.12f).fogColor(0.8f, 0.82f, 0.88f)
                 .caustics(3.0f).causticPhotons(1024)

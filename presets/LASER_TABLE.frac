@@ -1,22 +1,22 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-12T01:17:58.584774200Z",
+  "timestamp": "2026-09-12T01:22:54.839656100Z",
   "name": null,
   "description": null,
   "fractalType": "NODE_GRAPH",
   "camera": {
     "position": [
-      -0.7,
+      -1.0,
       2.0,
       -3.7
     ],
     "quaternion": [
-      0.9748209,
-      0.21766439,
-      0.04727567,
-      -0.010556022
+      0.974533,
+      0.21731842,
+      0.05397464,
+      -0.01203621
     ],
-    "fov": 50.0,
+    "fov": 54.0,
     "moveSpeed": 0.1
   },
   "rendering": {
@@ -56,7 +56,7 @@
     "extraType": 4,
     "extraAttachToCamera": false,
     "extraPosition": [
-      -3.2,
+      -2.75,
       0.5,
       -1.2
     ],
@@ -124,8 +124,8 @@
     ]
   },
   "effects": {
-    "dofEnabled": false,
-    "focalDistance": 2.5,
+    "dofEnabled": true,
+    "focalDistance": 4.6,
     "aperture": 0.02,
     "dofSamples": 16,
     "anamorphicRatio": 1.0,
@@ -243,117 +243,345 @@
           "op": "UNION",
           "blend": 0.0,
           "left": {
-            "type": "material",
-            "materialType": 0,
-            "colorMode": 1,
-            "colorR": 0.3499999940395355,
-            "colorG": 0.3499999940395355,
-            "colorB": 0.3499999940395355,
-            "roughness": 0.699999988079071,
-            "metallic": 0.0,
-            "ior": -1.0,
-            "emission": -1.0,
-            "child": {
-              "type": "transform",
-              "mode": "STANDARD",
-              "axis": 1,
-              "offset": [
-                0.0,
-                -0.05999999865889549,
-                0.0
-              ],
-              "rotation": [
-                0.0,
-                0.0,
-                0.0
-              ],
-              "scale": 1.0,
-              "frequency": 1.0,
+            "type": "csg",
+            "op": "UNION",
+            "blend": 0.0,
+            "left": {
+              "type": "material",
+              "materialType": 0,
+              "colorMode": 1,
+              "colorR": 0.33000001311302185,
+              "colorG": 0.33000001311302185,
+              "colorB": 0.3431999981403351,
+              "roughness": 0.550000011920929,
+              "metallic": 0.0,
+              "ior": -1.0,
+              "emission": -1.0,
               "child": {
-                "type": "primitive",
-                "primitiveType": "BOX",
-                "sizeX": 4.0,
-                "sizeY": 0.05999999865889549,
-                "sizeZ": 4.0,
-                "rounding": 0.0,
-                "shell": 0.0
+                "type": "transform",
+                "mode": "STANDARD",
+                "axis": 1,
+                "offset": [
+                  0.0,
+                  -0.05999999865889549,
+                  0.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "scale": 1.0,
+                "frequency": 1.0,
+                "child": {
+                  "type": "csg",
+                  "op": "SUBTRACT",
+                  "blend": 0.0,
+                  "left": {
+                    "type": "primitive",
+                    "primitiveType": "BOX",
+                    "sizeX": 4.0,
+                    "sizeY": 0.05999999865889549,
+                    "sizeZ": 4.0,
+                    "rounding": 0.0,
+                    "shell": 0.0
+                  },
+                  "right": {
+                    "type": "transform",
+                    "mode": "STANDARD",
+                    "axis": 1,
+                    "offset": [
+                      0.0,
+                      0.05999999865889549,
+                      0.0
+                    ],
+                    "rotation": [
+                      0.0,
+                      0.0,
+                      0.0
+                    ],
+                    "scale": 1.0,
+                    "frequency": 1.0,
+                    "child": {
+                      "type": "transform",
+                      "mode": "REPETITION",
+                      "axis": 1,
+                      "offset": [
+                        0.125,
+                        1000.0,
+                        0.125
+                      ],
+                      "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                      ],
+                      "scale": 1.0,
+                      "frequency": 1.0,
+                      "child": {
+                        "type": "primitive",
+                        "primitiveType": "CYLINDER",
+                        "sizeX": 0.014000000432133675,
+                        "sizeY": 0.019999999552965164,
+                        "sizeZ": 1.0,
+                        "rounding": 0.0,
+                        "shell": 0.0
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "right": {
+              "type": "csg",
+              "op": "UNION",
+              "blend": 0.0,
+              "left": {
+                "type": "transform",
+                "mode": "STANDARD",
+                "axis": 1,
+                "offset": [
+                  0.0,
+                  0.14000000059604645,
+                  0.0
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "scale": 1.0,
+                "frequency": 1.0,
+                "child": {
+                  "type": "material",
+                  "materialType": 1,
+                  "colorMode": 1,
+                  "colorR": 0.9599999785423279,
+                  "colorG": 0.9599999785423279,
+                  "colorB": 0.9800000190734863,
+                  "roughness": 0.0,
+                  "metallic": 1.0,
+                  "ior": -1.0,
+                  "emission": -1.0,
+                  "child": {
+                    "type": "transform",
+                    "mode": "STANDARD",
+                    "axis": 1,
+                    "offset": [
+                      1.2000000476837158,
+                      0.30000001192092896,
+                      -1.2000000476837158
+                    ],
+                    "rotation": [
+                      0.0,
+                      135.0,
+                      0.0
+                    ],
+                    "scale": 1.0,
+                    "frequency": 1.0,
+                    "child": {
+                      "type": "primitive",
+                      "primitiveType": "BOX",
+                      "sizeX": 0.012000000104308128,
+                      "sizeY": 0.30000001192092896,
+                      "sizeZ": 0.25999999046325684,
+                      "rounding": 0.0,
+                      "shell": 0.0
+                    }
+                  }
+                }
+              },
+              "right": {
+                "type": "material",
+                "materialType": 0,
+                "colorMode": 1,
+                "colorR": 0.18000000715255737,
+                "colorG": 0.18000000715255737,
+                "colorB": 0.1899999976158142,
+                "roughness": 0.5,
+                "metallic": 0.0,
+                "ior": -1.0,
+                "emission": -1.0,
+                "child": {
+                  "type": "transform",
+                  "mode": "STANDARD",
+                  "axis": 1,
+                  "offset": [
+                    1.2000000476837158,
+                    0.07000000029802322,
+                    -1.2000000476837158
+                  ],
+                  "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "scale": 1.0,
+                  "frequency": 1.0,
+                  "child": {
+                    "type": "primitive",
+                    "primitiveType": "CYLINDER",
+                    "sizeX": 0.02500000037252903,
+                    "sizeY": 0.07000000029802322,
+                    "sizeZ": 1.0,
+                    "rounding": 0.0,
+                    "shell": 0.0
+                  }
+                }
               }
             }
           },
           "right": {
-            "type": "material",
-            "materialType": 1,
-            "colorMode": 1,
-            "colorR": 0.9599999785423279,
-            "colorG": 0.9599999785423279,
-            "colorB": 0.9800000190734863,
-            "roughness": 0.0,
-            "metallic": 1.0,
-            "ior": -1.0,
-            "emission": -1.0,
-            "child": {
+            "type": "csg",
+            "op": "UNION",
+            "blend": 0.0,
+            "left": {
               "type": "transform",
               "mode": "STANDARD",
               "axis": 1,
               "offset": [
-                1.2000000476837158,
-                0.36000001430511475,
-                -1.2000000476837158
+                0.0,
+                0.14000000059604645,
+                0.0
               ],
               "rotation": [
                 0.0,
-                135.0,
+                0.0,
                 0.0
               ],
               "scale": 1.0,
               "frequency": 1.0,
               "child": {
-                "type": "primitive",
-                "primitiveType": "BOX",
-                "sizeX": 0.012000000104308128,
-                "sizeY": 0.36000001430511475,
-                "sizeZ": 0.30000001192092896,
-                "rounding": 0.0,
-                "shell": 0.0
+                "type": "material",
+                "materialType": 1,
+                "colorMode": 1,
+                "colorR": 0.9599999785423279,
+                "colorG": 0.9599999785423279,
+                "colorB": 0.9800000190734863,
+                "roughness": 0.0,
+                "metallic": 1.0,
+                "ior": -1.0,
+                "emission": -1.0,
+                "child": {
+                  "type": "transform",
+                  "mode": "STANDARD",
+                  "axis": 1,
+                  "offset": [
+                    1.2000000476837158,
+                    0.30000001192092896,
+                    0.6000000238418579
+                  ],
+                  "rotation": [
+                    0.0,
+                    45.0,
+                    0.0
+                  ],
+                  "scale": 1.0,
+                  "frequency": 1.0,
+                  "child": {
+                    "type": "primitive",
+                    "primitiveType": "BOX",
+                    "sizeX": 0.012000000104308128,
+                    "sizeY": 0.30000001192092896,
+                    "sizeZ": 0.25999999046325684,
+                    "rounding": 0.0,
+                    "shell": 0.0
+                  }
+                }
+              }
+            },
+            "right": {
+              "type": "material",
+              "materialType": 0,
+              "colorMode": 1,
+              "colorR": 0.18000000715255737,
+              "colorG": 0.18000000715255737,
+              "colorB": 0.1899999976158142,
+              "roughness": 0.5,
+              "metallic": 0.0,
+              "ior": -1.0,
+              "emission": -1.0,
+              "child": {
+                "type": "transform",
+                "mode": "STANDARD",
+                "axis": 1,
+                "offset": [
+                  1.2000000476837158,
+                  0.07000000029802322,
+                  0.6000000238418579
+                ],
+                "rotation": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "scale": 1.0,
+                "frequency": 1.0,
+                "child": {
+                  "type": "primitive",
+                  "primitiveType": "CYLINDER",
+                  "sizeX": 0.02500000037252903,
+                  "sizeY": 0.07000000029802322,
+                  "sizeZ": 1.0,
+                  "rounding": 0.0,
+                  "shell": 0.0
+                }
               }
             }
           }
         },
         "right": {
-          "type": "material",
-          "materialType": 1,
-          "colorMode": 1,
-          "colorR": 0.9599999785423279,
-          "colorG": 0.9599999785423279,
-          "colorB": 0.9800000190734863,
-          "roughness": 0.0,
-          "metallic": 1.0,
-          "ior": -1.0,
-          "emission": -1.0,
+          "type": "transform",
+          "mode": "STANDARD",
+          "axis": 1,
+          "offset": [
+            -0.30000001192092896,
+            0.0,
+            0.6000000238418579
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": 1.0,
+          "frequency": 1.0,
           "child": {
-            "type": "transform",
-            "mode": "STANDARD",
-            "axis": 1,
-            "offset": [
-              1.2000000476837158,
-              0.36000001430511475,
-              0.6000000238418579
-            ],
-            "rotation": [
-              0.0,
-              45.0,
-              0.0
-            ],
-            "scale": 1.0,
-            "frequency": 1.0,
+            "type": "material",
+            "materialType": 2,
+            "colorMode": 1,
+            "colorR": 1.0,
+            "colorG": 1.0,
+            "colorB": 1.0,
+            "roughness": 0.019999999552965164,
+            "metallic": 0.0,
+            "ior": 1.5499999523162842,
+            "emission": -1.0,
             "child": {
-              "type": "primitive",
-              "primitiveType": "BOX",
-              "sizeX": 0.012000000104308128,
-              "sizeY": 0.36000001430511475,
-              "sizeZ": 0.30000001192092896,
-              "rounding": 0.0,
-              "shell": 0.0
+              "type": "transform",
+              "mode": "STANDARD",
+              "axis": 1,
+              "offset": [
+                0.0,
+                0.44999998807907104,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "scale": 1.0,
+              "frequency": 1.0,
+              "child": {
+                "type": "primitive",
+                "primitiveType": "TRIANGULAR_PRISM",
+                "sizeX": 0.8999999761581421,
+                "sizeY": 0.4000000059604645,
+                "sizeZ": 1.0,
+                "rounding": 0.0,
+                "shell": 0.0
+              }
             }
           }
         }
@@ -363,9 +591,9 @@
         "mode": "STANDARD",
         "axis": 1,
         "offset": [
-          -0.30000001192092896,
-          0.0,
-          0.6000000238418579
+          -2.75,
+          0.5,
+          -1.2000000476837158
         ],
         "rotation": [
           0.0,
@@ -375,40 +603,83 @@
         "scale": 1.0,
         "frequency": 1.0,
         "child": {
-          "type": "material",
-          "materialType": 2,
-          "colorMode": 1,
-          "colorR": 1.0,
-          "colorG": 1.0,
-          "colorB": 1.0,
-          "roughness": 0.019999999552965164,
-          "metallic": 0.0,
-          "ior": 1.5499999523162842,
-          "emission": -1.0,
-          "child": {
-            "type": "transform",
-            "mode": "STANDARD",
-            "axis": 1,
-            "offset": [
-              0.0,
-              0.44999998807907104,
-              0.0
-            ],
-            "rotation": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "scale": 1.0,
-            "frequency": 1.0,
+          "type": "csg",
+          "op": "UNION",
+          "blend": 0.0,
+          "left": {
+            "type": "material",
+            "materialType": 0,
+            "colorMode": 1,
+            "colorR": 0.11999999731779099,
+            "colorG": 0.11999999731779099,
+            "colorB": 0.12999999523162842,
+            "roughness": 0.44999998807907104,
+            "metallic": 0.0,
+            "ior": -1.0,
+            "emission": -1.0,
             "child": {
-              "type": "primitive",
-              "primitiveType": "TRIANGULAR_PRISM",
-              "sizeX": 0.8999999761581421,
-              "sizeY": 0.4000000059604645,
-              "sizeZ": 1.0,
-              "rounding": 0.0,
-              "shell": 0.0
+              "type": "transform",
+              "mode": "STANDARD",
+              "axis": 1,
+              "offset": [
+                -0.2449999898672104,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                90.0
+              ],
+              "scale": 1.0,
+              "frequency": 1.0,
+              "child": {
+                "type": "primitive",
+                "primitiveType": "CYLINDER",
+                "sizeX": 0.05000000074505806,
+                "sizeY": 0.22499999403953552,
+                "sizeZ": 1.0,
+                "rounding": 0.0,
+                "shell": 0.0
+              }
+            }
+          },
+          "right": {
+            "type": "material",
+            "materialType": 0,
+            "colorMode": 1,
+            "colorR": 1.0,
+            "colorG": 0.9800000190734863,
+            "colorB": 0.949999988079071,
+            "roughness": 0.800000011920929,
+            "metallic": 0.0,
+            "ior": -1.0,
+            "emission": 6.0,
+            "child": {
+              "type": "transform",
+              "mode": "STANDARD",
+              "axis": 1,
+              "offset": [
+                -0.024000000208616257,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                90.0
+              ],
+              "scale": 1.0,
+              "frequency": 1.0,
+              "child": {
+                "type": "primitive",
+                "primitiveType": "CYLINDER",
+                "sizeX": 0.017500000074505806,
+                "sizeY": 0.009999999776482582,
+                "sizeZ": 1.0,
+                "rounding": 0.0,
+                "shell": 0.0
+              }
             }
           }
         }

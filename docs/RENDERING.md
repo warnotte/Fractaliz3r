@@ -693,12 +693,15 @@ way, the two terms above. `docs/gallery/prism_beam.jpg` is the result.
 
 `presets/LASER_TABLE.frac` takes the same pieces further, as an optical table seen from
 above and in front: a thin laser (a beam of 1.5 cm radius, 3000 of intensity for the thin
-chord a camera ray gets of it) zigzags on two front-surface mirrors (thin metal boxes of
-roughness zero, placed and turned with `SceneBuilder.mirror`) into a prism whose fan lands
-on the table as a spectrum, in a thin fog (0.12) with bloom and a faint sky. The first
-segment is the fog march's, smooth from the first sample; the two reflected segments, the
-fan, the spectrum and the entry face's faint reflection are the photon pass's, so they
-sharpen with the samples. `docs/gallery/laser_table.jpg` is its render at 256 spp.
+chord a camera ray gets of it) leaves a laser module (a dark cylinder with an emissive
+aperture, `SceneBuilder.laserModule`), zigzags on two front-surface mirrors on posts (thin
+metal boxes of roughness zero, `mountedMirror`) into a slightly hazy prism whose fan opens
+inside it and lands on the table as a spectrum; the table is an optical breadboard (a
+repeated cylinder subtracted from the slab, `breadboard`), the fog thin (0.12), with bloom,
+a faint sky and a little depth of field. The beam and its two reflected segments are the
+fog march's, smooth from the first sample; the fan, the spectrum and the entry face's faint
+reflection are the photon pass's, and sharpen with the samples. `docs/gallery/laser_table.jpg`
+is its render at 256 spp.
 
 For a beam aimed at something, the light has to stay put while the camera moves, so the
 additional light can now be *Fixed in the world*: position and direction are then scene
