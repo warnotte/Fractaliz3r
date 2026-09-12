@@ -142,6 +142,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExploreProbe" -Dexe
 # The Presets & Chains browser's thumbnails: every chain + every preset at 320x180. Rerun with
 # "install" whenever a chain or a preset is added — a JUnit test fails until the shipped set matches.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ThumbnailForge" -Dexec.args="out/thumbs 320x180 32 install"
+# The laser sweep: a mirror of the optical table turns a few degrees back and forth, one still export
+# per frame (the transform's rotation is a uniform, nothing recompiles), FFmpeg makes the MP4.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.LaserSweep" -Dexec.args="presets/LASER_TABLE.frac out/sweep 1280x720 96 96 24 45 3.0"
+#   (scene outDir WxH samples frames fps mirrorYaw amplitudeDeg)
 # How far ahead of the work an export progress bar runs: time of the first 100%% report
 # against the moment the export future actually completes.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportProgressProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 2600x1600 128"
@@ -269,6 +273,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── StripCostProbe.java          # GPU cost of strips vs whole per sync pattern: why slices are 60 ms
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them
+├── LaserSweep.java              # the optical table's mirror turning: one still per frame, FFmpeg makes the MP4
 └── GalleryRender.java           # every .frac in a dir rendered as the app shows it (README gallery)
 ```
 

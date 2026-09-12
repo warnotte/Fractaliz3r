@@ -868,6 +868,7 @@ reliable than re-reading the path it covers:
 | `CausticProbe` | caustics: the photons' energy against NEE (must be 1, with and without the emission map), the cost of a pass, pictures with and without |
 | `EmitterProbe` | emitters drawn directly against found by chance: the same converged image (the slab scene), the noise removed, the cost |
 | `BidirProbe` | the path tracer alone against the path tracer with the photon pass weighted against it: the same converged image (panel, metal, beam scenes; the window scene for the gather), the noise, the cost |
+| `LaserSweep` | the optical table's mirror turning a few degrees back and forth, one still export per frame, FFmpeg's MP4: the beam sweeping the prism, the spectrum sliding over the table (`docs/gallery/laser_sweep.mp4`) |
 | `ProspectSwapProbe` | the Discoveries search runs on a throw-away scene; the user's scene must come back pixel-identical |
 | `ExploreProbe` | the app's Explore button, headless: scored views or parameter variations from any camera, time per view |
 | `ThumbnailForge` | the Presets & Chains browser's thumbnails, every chain and preset; `install` ships them as resources |

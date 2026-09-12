@@ -66,6 +66,14 @@ a Menger sponge of two iterations, slightly hazy, so the laser is seen crossing 
 light it scatters landing on the screen behind as a spot in a glow. A glass fractal renders
 black unless its paths are given the bounces its cavities take; this one has twenty-four.
 
+![The laser sweep: the second mirror of the optical table turns a few degrees back and forth and the spectrum slides over the table](docs/gallery/laser_sweep.gif)
+
+**The sweep** — [`docs/gallery/laser_sweep.mp4`](docs/gallery/laser_sweep.mp4) — is the table in
+motion: the second mirror turns three degrees either side, the beam it sends sweeps across the
+prism, and the spectrum slides over the table and vanishes when the beam misses the glass.
+Ninety-six stills of the scene at 96 spp (`test/LaserSweep`), nothing recompiles between two,
+FFmpeg makes the film.
+
 **The Labyrinth** — [`LABYRINTH.frac`](presets/LABYRINTH.frac) — is not a view but a place. The maze is a
 Menger sponge seen from inside: corridors two thirds wide, doorways at every scale, and it goes
 on. At its heart, Jareth's Escher room: three staircases, each climbing under its own gravity,
