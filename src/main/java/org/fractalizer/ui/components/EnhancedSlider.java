@@ -28,6 +28,30 @@ public class EnhancedSlider extends VBox {
     private final ToggleButton lockBtn;
     private int precision = 3;
     private boolean editing = false;
+    private boolean logarithmic = false;
+
+    /**
+     * A slider for a positive quantity that spans decades (a focal distance from 10 down to
+     * 1e-9 on a deep zoom, a move speed from 1 to 1e-12): the knob moves along log10 of the
+     * value, so every decade gets the same travel. Everything else speaks the value itself:
+     * the label, the typed entry, {@link #getValue}, {@link #setValue}, {@link #setOnAction}.
+     * {@link #getSlider} still exposes the knob, in log10 units.
+     */
+    public static EnhancedSlider logarithmic(String title, double min, double max, double initial) {
+        EnhancedSlider s = new EnhancedSlider(title, Math.log10(min), Math.log10(max), Math.log10(initial), false);
+        s.logarithmic = true;
+        s.updateLabel(s.slider.getValue());
+        return s;
+    }
+
+    private double toValue(double position) { return logarithmic ? Math.pow(10.0, position) : position; }
+
+    /** Where a value sits on the knob; a value at or below 0 on a logarithmic slider goes to
+     *  its minimum (the slider clamps). */
+    private double toPosition(double value) {
+        if (!logarithmic) return value;
+        return value > 0 ? Math.log10(value) : slider.getMin();
+    }
 
     public EnhancedSlider(String title, double min, double max, double initial, boolean isInteger) {
         super(4); // Spacing
@@ -124,7 +148,7 @@ public class EnhancedSlider extends VBox {
             currentValue = String.valueOf((int) Math.round(slider.getValue()));
         } else {
             // Show real value, not display-rounded value
-            currentValue = String.valueOf(slider.getValue());
+            currentValue = String.valueOf(toValue(slider.getValue()));
         }
 
         TextField field = new TextField(currentValue);
@@ -141,7 +165,7 @@ public class EnhancedSlider extends VBox {
         Runnable commit = () -> {
             if (!editing) return;
             try {
-                double val = Double.parseDouble(field.getText().replace(',', '.'));
+                double val = toPosition(Double.parseDouble(field.getText().replace(',', '.')));
                 val = Math.max(slider.getMin(), Math.min(slider.getMax(), val));
                 if (isInteger) val = Math.round(val);
                 slider.setValue(val);
@@ -179,6 +203,9 @@ public class EnhancedSlider extends VBox {
     private void updateLabel(double value) {
         if (isInteger) {
             label.setText(String.format("%s: %d", title, (int) Math.round(value)));
+        } else if (logarithmic) {
+            // Four significant digits at any scale: 2.500, 0.01370, 1.370e-07
+            label.setText(String.format("%s: %.4g", title, toValue(value)));
         } else {
             String format = "%s: %." + precision + "f";
             label.setText(String.format(format, title, value));
@@ -194,9 +221,9 @@ public class EnhancedSlider extends VBox {
 
     public boolean isLocked() { return lockBtn.isSelected(); }
 
-    public double getValue() { return slider.getValue(); }
+    public double getValue() { return toValue(slider.getValue()); }
 
-    public void setValue(double value) { slider.setValue(value); }
+    public void setValue(double value) { slider.setValue(toPosition(value)); }
 
     public void setPrecision(int decimals) {
         this.precision = decimals;
@@ -213,6 +240,6 @@ public class EnhancedSlider extends VBox {
     }
 
     public void setOnAction(java.util.function.Consumer<Double> action) {
-        slider.valueProperty().addListener((obs, old, val) -> action.accept(val.doubleValue()));
+        slider.valueProperty().addListener((obs, old, val) -> action.accept(toValue(val.doubleValue())));
     }
 }

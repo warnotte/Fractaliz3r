@@ -346,7 +346,9 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        focalDistSlider = new EnhancedSlider("Focal Distance", 0.1, 10, 2.5, false);
+        // Both logarithmic: a dive takes the focal distance from 2.5 to 1e-9 and the aperture
+        // with it, and a linear slider cannot hold that.
+        focalDistSlider = EnhancedSlider.logarithmic("Focal Distance", 1e-9, 10, 2.5);
         focalDistSlider.setOnAction(v -> {
             if (!suppressRender) {
                 getParams().setFocalDistance(v.floatValue());
@@ -354,8 +356,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             }
         });
 
-        apertureSlider = new EnhancedSlider("Aperture", 0, 0.2, 0.02, false);
-        apertureSlider.setPrecision(3);
+        apertureSlider = EnhancedSlider.logarithmic("Aperture", 1e-11, 1, 0.02);
         apertureSlider.setOnAction(v -> {
             if (!suppressRender) {
                 getParams().setAperture(v.floatValue());
@@ -536,9 +537,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             boolean was = suppressRender;
             suppressRender = true;
             try {
-                double clampedDistance = Math.max(focalDistSlider.getSlider().getMin(),
-                        Math.min(focalDistSlider.getSlider().getMax(), distance));
-                focalDistSlider.setValue(clampedDistance);
+                focalDistSlider.setValue(distance);   // the slider clamps to its range
             } finally {
                 suppressRender = was;
             }

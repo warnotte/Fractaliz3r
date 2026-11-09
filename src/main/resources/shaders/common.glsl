@@ -1049,6 +1049,12 @@ vec3 getAmbientLighting(vec3 normal) {
 // ============================================================================
 
 vec3 dofColorWeight = vec3(1.0);
+// The primary ray's origin, and its offset from the camera (the lens sample of the DoF). Kept
+// apart on purpose: a march in double or renormalised coordinates must never form the lens
+// position as an absolute float (camPos + 1e-8 rounds back to camPos); it takes the small
+// offset as part of its delta. gPrimaryOrigin is what a camera ray's origin is compared to.
+vec3 gLensOffset = vec3(0.0);
+vec3 gPrimaryOrigin = vec3(0.0);
 
 vec2 randomDisk(inout uint seed) {
     float r = sqrt(random(seed));
@@ -1234,7 +1240,9 @@ vec4 quaternionFromAxisAngle(vec3 axis, float angle) {
 Ray getCameraRay(vec2 screenUV) {
     Ray ray;
     ray.origin = camPos;
-    
+    gLensOffset = vec3(0.0);
+    gPrimaryOrigin = camPos;
+
     if (projectionMode == 1) { // 360 EQUIRECTANGULAR
         // screenUV is in range [-1, 1]
         // Longitude: -PI to PI
@@ -1286,7 +1294,9 @@ Ray getCameraRay(vec2 screenUV) {
 
 Ray getCameraRayDOF(vec2 screenUV, inout uint seed, vec2 bnDof) {
     dofColorWeight = vec3(1.0);
-    if (dofEnabled == 0 || aperture < 0.0001) return getCameraRay(screenUV);
+    // No absolute threshold here: at a deep zoom a useful aperture is 1e-8 and the old
+    // `aperture < 0.0001` silently switched the depth of field off.
+    if (dofEnabled == 0 || aperture <= 0.0) return getCameraRay(screenUV);
 
     Ray centerRay = getCameraRay(screenUV);
     vec3 forward = rotateByQuaternion(vec3(0,0,1), camQuat);
@@ -1302,10 +1312,12 @@ Ray getCameraRayDOF(vec2 screenUV, inout uint seed, vec2 bnDof) {
         else                 { effectiveFocalDist *= (1.0 + dofChromaticStrength); dofColorWeight = vec3(0,0,3); }
     }
 
-    // --- Focal point (with optional tilt-shift) ---
-    vec3 focalPoint;
+    // --- Focal point (with optional tilt-shift), as a vector from the camera ---
+    // Relative on purpose: at a deep zoom the focal distance is ~1e-6 and an absolute
+    // focal point would round back onto the camera.
+    vec3 focalVec;
     if (tiltShiftEnabled != 0 && (abs(tiltAngleX) > 0.001 || abs(tiltAngleY) > 0.001)) {
-        vec3 planeCenter = camPos + forward * effectiveFocalDist;
+        vec3 planeCenterVec = forward * effectiveFocalDist;
         vec3 pn = forward;
         float cx = cos(tiltAngleX), sx = sin(tiltAngleX);
         pn = pn * cx + cross(right, pn) * sx + right * dot(right, pn) * (1.0 - cx);
@@ -1314,13 +1326,13 @@ Ray getCameraRayDOF(vec2 screenUV, inout uint seed, vec2 bnDof) {
         pn = normalize(pn);
         float denom = dot(centerRay.direction, pn);
         if (abs(denom) > 0.0001) {
-            float t = dot(planeCenter - centerRay.origin, pn) / denom;
-            focalPoint = centerRay.origin + centerRay.direction * max(t, 0.01);
+            float t = dot(planeCenterVec, pn) / denom;
+            focalVec = centerRay.direction * max(t, effectiveFocalDist * 0.01);
         } else {
-            focalPoint = centerRay.origin + centerRay.direction * effectiveFocalDist;
+            focalVec = centerRay.direction * effectiveFocalDist;
         }
     } else {
-        focalPoint = centerRay.origin + centerRay.direction * effectiveFocalDist;
+        focalVec = centerRay.direction * effectiveFocalDist;
     }
 
     // --- Aperture sampling: blue noise disk (polygon or circle) ---
@@ -1357,9 +1369,14 @@ Ray getCameraRayDOF(vec2 screenUV, inout uint seed, vec2 bnDof) {
     }
 
     // --- Construct ray ---
+    // The lens offset is carried separately (gLensOffset); the float origin below is what
+    // the ordinary march uses, a march in double rebuilds it exactly from camPosD + gLensOffset.
+    vec3 lens = right * diskSample.x + up * diskSample.y;
     Ray ray;
-    ray.origin = camPos + right * diskSample.x + up * diskSample.y;
-    ray.direction = normalize(focalPoint - ray.origin);
+    ray.origin = camPos + lens;
+    gLensOffset = lens;
+    gPrimaryOrigin = ray.origin;
+    ray.direction = normalize(focalVec - lens);
     return ray;
 }
 
@@ -1412,7 +1429,10 @@ float pixelScaleAt(float d) {
  *  -15% luminance. It is kept only as a `max` guard, so low resolutions (where a hit
  *  really is imprecise) cannot fall below their own footprint and pick up acne. */
 float surfaceBias(float d) {
-    return max(max(3.0 * pixelScaleAt(d), 0.0125 * d), 1e-5);
+    // The old 1e-5 floor is a float concern (positions near |pos| ~ 1 cannot be offset by
+    // less): at a deep zoom it is larger than the whole view and kills every contact shadow.
+    // It scales with the view below d = 0.01 instead; above, it is what it always was.
+    return max(max(3.0 * pixelScaleAt(d), 0.0125 * d), 1e-5 * min(1.0, d * 100.0));
 }
 
 // ============================================================================
