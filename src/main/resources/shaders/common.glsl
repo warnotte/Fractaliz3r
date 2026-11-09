@@ -48,6 +48,9 @@ uniform float time;
 
 uniform vec3 camPos;
 uniform vec4 camQuat;
+// The same camera as camPos without the float rounding (Camera holds it in double), for a
+// march formed in double at a deep zoom. Unused, and so absent, in a program that does not.
+uniform dvec3 camPosD;
 uniform float fov;
 uniform float tanHalfFov;   // tan(radians(fov) * 0.5), computed once per frame
 uniform int projectionMode;

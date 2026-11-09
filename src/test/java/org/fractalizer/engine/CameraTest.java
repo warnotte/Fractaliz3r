@@ -114,4 +114,25 @@ class CameraTest {
         c.setPosition(1, 2, 3);
         assertArrayEquals(new float[]{1, 2, 4}, c.getTarget(), EPS);
     }
+
+    /** A deep dive: 1e-9 steps from a camera one unit out. In float every one of them
+     *  would round away (a float ulp near 1.0 is 1.2e-7); the position must keep them. */
+    @Test
+    void positionKeepsStepsBelowAFloatUlp() {
+        Camera c = new Camera();
+        c.setPosition(1.0, 0.0, 0.0);
+        c.setMoveSpeed(1e-9f);
+        for (int i = 0; i < 1000; i++) c.moveForward(1f);   // forward is +z at identity
+        double[] p = c.getPositionD();
+        assertEquals(1.0, p[0], 0.0);
+        assertEquals(1000e-9, p[2], 1e-12, "a thousand nanometre steps add up to a micrometre");
+        assertEquals(1e-6f, c.getPosition()[2], 1e-9f, "the float copy sees the sum, not the steps");
+    }
+
+    @Test
+    void doublePositionRoundTripsExactly() {
+        Camera c = new Camera();
+        c.setPosition(0.123456789012345678, -1.000000000000001, 2.5e-9);
+        assertArrayEquals(new double[]{0.123456789012345678, -1.000000000000001, 2.5e-9}, c.getPositionD(), 0.0);
+    }
 }

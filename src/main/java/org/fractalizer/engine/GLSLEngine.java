@@ -1206,6 +1206,15 @@ public class GLSLEngine implements AutoCloseable {
                 default -> program.setUniform1fv(name, arr);
             }
         } else if (value instanceof int[] arr) { if (arr.length == 1) program.setUniform(name, arr[0]); }
+        else if (value instanceof double[] arr) {
+            // Double-precision uniforms (dvec3 camPosD). Ignored by a program that does not
+            // use them: the location is -1 and GL drops the call.
+            switch (arr.length) {
+                case 1 -> program.setUniform(name, arr[0]);
+                case 3 -> program.setUniform(name, arr[0], arr[1], arr[2]);
+                default -> { }
+            }
+        }
     }
 
     private void flipImageY(float[] image, int width, int height) {
@@ -1300,6 +1309,8 @@ public class GLSLEngine implements AutoCloseable {
         public void setUniform(String name, float x, float y) { glUniform2f(getUniformLocation(name), x, y); }
         public void setUniform(String name, float x, float y, float z) { glUniform3f(getUniformLocation(name), x, y, z); }
         public void setUniform(String name, float x, float y, float z, float w) { glUniform4f(getUniformLocation(name), x, y, z, w); }
+        public void setUniform(String name, double v) { glUniform1d(getUniformLocation(name), v); }
+        public void setUniform(String name, double x, double y, double z) { glUniform3d(getUniformLocation(name), x, y, z); }
         public void setUniformMatrix3(String name, float[] v) { glUniformMatrix3fv(getUniformLocation(name), false, v); }
         public void setUniformMatrix4(String name, float[] v) { glUniformMatrix4fv(getUniformLocation(name), false, v); }
         public void setUniform1fv(String name, float[] v) { glUniform1fv(getUniformLocation(name), v); }

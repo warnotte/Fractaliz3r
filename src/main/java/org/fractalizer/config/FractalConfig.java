@@ -59,6 +59,12 @@ public class FractalConfig {
 
     public static class CameraConfig {
         public float[] position = {0, 0, -3};
+        // The position at full precision. `position` is kept for files and tools that
+        // read it; a deep-zoom camera rounded to float lands up to 1e-7 away from where it
+        // was, which at that depth is a different frame. On load this one wins only while
+        // it still rounds to `position`: a tool that edits `position` without knowing this
+        // field (SceneBuilder writes it directly) must not be overruled by a stale copy.
+        public double[] positionD = null;
         public float[] quaternion = {1, 0, 0, 0};  // w, x, y, z
         public float fov = 60;  // degrees
         public float moveSpeed = 0.1f;
@@ -300,8 +306,10 @@ public class FractalConfig {
         // Camera
         Camera cam = params.getCamera();
         float[] pos = cam.getPosition();
+        double[] posD = cam.getPositionD();
         float[] quat = cam.getQuaternion();
         config.camera.position = new float[]{pos[0], pos[1], pos[2]};
+        config.camera.positionD = new double[]{posD[0], posD[1], posD[2]};
         config.camera.quaternion = new float[]{quat[0], quat[1], quat[2], quat[3]};
         config.camera.fov = (float) Math.toDegrees(params.getFov());
         config.camera.moveSpeed = cam.getMoveSpeed();
@@ -476,7 +484,14 @@ public class FractalConfig {
     public void applyTo(AbstractFractalParams params) {
         // Camera
         Camera cam = params.getCamera();
-        cam.setPosition(camera.position[0], camera.position[1], camera.position[2]);
+        double[] d = camera.positionD;
+        float[] f = camera.position;
+        if (d != null && d.length == 3
+                && (float) d[0] == f[0] && (float) d[1] == f[1] && (float) d[2] == f[2]) {
+            cam.setPosition(d[0], d[1], d[2]);
+        } else {
+            cam.setPosition(f[0], f[1], f[2]);
+        }
         cam.setQuaternion(camera.quaternion[0], camera.quaternion[1],
                           camera.quaternion[2], camera.quaternion[3]);
         params.setFovDegrees(camera.fov);

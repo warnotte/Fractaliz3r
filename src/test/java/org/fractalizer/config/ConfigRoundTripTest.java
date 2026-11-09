@@ -36,6 +36,8 @@ class ConfigRoundTripTest {
         written.setTrapMode(3);
         written.setDetailLOD(2.5f);
         written.setDetailLODMax(19);
+        // A deep-zoom camera: the float copy of this position is 1e-7 off.
+        written.getCamera().setPosition(1.000000012345678, -0.5000000098765432, 0.25000000123);
         written.setPreviewScale(0.31f);
         written.setPreviewFastShading(false);
         written.setNebulaColor(0.11f, 0.22f, 0.33f);
@@ -111,6 +113,33 @@ class ConfigRoundTripTest {
         assertEquals(written.getCausticPhotons(), reloaded.getCausticPhotons(), "causticPhotons");
         assertEquals(written.getCausticRadius(), reloaded.getCausticRadius(), "causticRadius");
         assertArrayEquals(written.getCausticCenter(), reloaded.getCausticCenter(), "causticCenter");
+    }
+
+    @Test
+    void cameraPositionSurvivesAtDoublePrecision() {
+        assertArrayEquals(written.getCamera().getPositionD(), reloaded.getCamera().getPositionD(), 0.0,
+                "camera position at double precision");
+    }
+
+    /** A tool that moves `position` in a loaded file without knowing `positionD` (SceneBuilder
+     *  writes it directly) must be obeyed: the stale double copy no longer rounds to it. */
+    @Test
+    void editedFloatPositionWinsOverAStaleDoubleCopy() {
+        FractalConfig config = FractalConfig.fromParams(written);
+        config.camera.position = new float[]{0.5f, 0.25f, -4f};
+        MandelbulbParams p = new MandelbulbParams();
+        config.applyTo(p);
+        assertArrayEquals(new double[]{0.5, 0.25, -4.0}, p.getCamera().getPositionD(), 0.0);
+    }
+
+    /** A file written before positionD existed loads its float position as it always did. */
+    @Test
+    void fileWithoutDoublePositionLoadsTheFloatOne() {
+        FractalConfig config = FractalConfig.fromParams(written);
+        config.camera.positionD = null;
+        MandelbulbParams p = new MandelbulbParams();
+        config.applyTo(p);
+        assertArrayEquals(written.getCamera().getPosition(), p.getCamera().getPosition(), 0f);
     }
 
     @Test

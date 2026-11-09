@@ -1248,8 +1248,11 @@ public class GLSLFractalizerController implements RenderController {
             // Camera
             Camera camera = params.getCamera();
             float[] pos = camera.getPosition();
+            double[] posD = camera.getPositionD();
             float[] quat = camera.getQuaternion(); // Returns [w, x, y, z]
             uniforms.put("camPos", new float[]{pos[0], pos[1], pos[2]});
+            // The same camera without the float rounding, for a march formed in double.
+            uniforms.put("camPosD", new double[]{posD[0], posD[1], posD[2]});
             // GLSL expects vec4(x, y, z, w), so reorder from Java's [w, x, y, z]
             uniforms.put("camQuat", new float[]{quat[1], quat[2], quat[3], quat[0]});
             uniforms.put("fov", (float) Math.toDegrees(params.getFov()));

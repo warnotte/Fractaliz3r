@@ -3,11 +3,18 @@ package org.fractalizer.engine;
 /**
  * FPS-style camera using quaternions to avoid gimbal lock.
  * Supports free navigation inside fractals like a spaceship.
+ *
+ * <p>The position is kept in double precision. A float holds about seven significant
+ * digits, so a camera one world unit from the origin cannot be placed closer than
+ * ~1e-7 to anything: every move finer than that rounds away, and a dive past a zoom
+ * of ~1e4 stalls. Doubles give nine more orders of magnitude. The float accessors are
+ * kept for the many call sites that only need a rendering-precision copy; the shaders
+ * that march in double read {@link #getPositionD()}.</p>
  */
 public class Camera {
 
     // Position
-    private float x, y, z;
+    private double x, y, z;
 
     // Quaternion orientation (w, x, y, z)
     private float qw, qx, qy, qz;
@@ -18,9 +25,9 @@ public class Camera {
 
     public Camera() {
         // Default position
-        this.x = 0f;
-        this.y = 0f;
-        this.z = -3f;
+        this.x = 0.0;
+        this.y = 0.0;
+        this.z = -3.0;
 
         // Identity quaternion (no rotation)
         this.qw = 1f;
@@ -35,9 +42,10 @@ public class Camera {
      */
     public void moveForward(float amount) {
         float[] forward = getForwardVector();
-        x += forward[0] * amount * moveSpeed;
-        y += forward[1] * amount * moveSpeed;
-        z += forward[2] * amount * moveSpeed;
+        double step = (double) amount * moveSpeed;
+        x += forward[0] * step;
+        y += forward[1] * step;
+        z += forward[2] * step;
     }
 
     /**
@@ -46,9 +54,10 @@ public class Camera {
      */
     public void strafe(float amount) {
         float[] right = getRightVector();
-        x += right[0] * amount * moveSpeed;
-        y += right[1] * amount * moveSpeed;
-        z += right[2] * amount * moveSpeed;
+        double step = (double) amount * moveSpeed;
+        x += right[0] * step;
+        y += right[1] * step;
+        z += right[2] * step;
     }
 
     /**
@@ -57,9 +66,10 @@ public class Camera {
      */
     public void moveUp(float amount) {
         float[] up = getUpVector();
-        x += up[0] * amount * moveSpeed;
-        y += up[1] * amount * moveSpeed;
-        z += up[2] * amount * moveSpeed;
+        double step = (double) amount * moveSpeed;
+        x += up[0] * step;
+        y += up[1] * step;
+        z += up[2] * step;
     }
 
     /**
@@ -214,16 +224,16 @@ public class Camera {
     public float[] getTarget() {
         float[] forward = getForwardVector();
         return new float[] {
-            x + forward[0],
-            y + forward[1],
-            z + forward[2]
+            (float) (x + forward[0]),
+            (float) (y + forward[1]),
+            (float) (z + forward[2])
         };
     }
 
     // Getters and setters
-    public float getX() { return x; }
-    public float getY() { return y; }
-    public float getZ() { return z; }
+    public float getX() { return (float) x; }
+    public float getY() { return (float) y; }
+    public float getZ() { return (float) z; }
 
     public void setPosition(float x, float y, float z) {
         this.x = x;
@@ -231,8 +241,21 @@ public class Camera {
         this.z = z;
     }
 
+    /** Full-precision placement: the way a deep-zoom camera or a saved scene sets it. */
+    public void setPosition(double x, double y, double z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+
+    /** Rendering-precision copy of the position. Lossy past ~1e-7 world units. */
     public float[] getPosition() {
-        return new float[] { x, y, z };
+        return new float[] { (float) x, (float) y, (float) z };
+    }
+
+    /** The position as held. What the double-precision march and the .frac file read. */
+    public double[] getPositionD() {
+        return new double[] { x, y, z };
     }
 
     public float[] getQuaternion() {
@@ -257,9 +280,9 @@ public class Camera {
      * Reset camera to default position and orientation.
      */
     public void reset() {
-        x = 0f;
-        y = 0f;
-        z = -3f;
+        x = 0.0;
+        y = 0.0;
+        z = -3.0;
         qw = 1f;
         qx = 0f;
         qy = 0f;
