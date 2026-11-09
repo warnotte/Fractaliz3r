@@ -2,7 +2,7 @@
 
 Read it before touching anything related to deep zoom, precision, DoF or navigation.
 
-## 0. Where the work is (updated 2026-11-09, night)
+## 0. Where the work is (updated 2026-11-10)
 
 - **`deep-zoom-wip`** (one commit, `c239d69`): the interactive session of 2026-11-08/09 as
   it was left, everything in § 2, untouched. It is the reference for "what worked": the
@@ -32,13 +32,65 @@ Read it before touching anything related to deep zoom, precision, DoF or navigat
   Every commit: `mvn test` green (147), `RenderRegression check` bit-exact on the global and
   the detail scenes (`out/nav/detail_scenes.txt`; those goldens were rewritten from `main`
   on 2026-11-09, the September ones are in `out/test_regression/golden_backup_2026-09`).
-- **Still only on `deep-zoom-wip`, by design:** auto speed (`NavigationController
-  .effectiveStep`, the checkbox) waits for the probe (§ 4.1) to feed it a clearance; Deep
-  Precision / Renormalize (params, `.frac` fields, Quality panel checkboxes, `rayMarchDeep`,
-  the per-kernel `DE_deep` / `DE_local`, `Renormalizer` + test, the SSBO), `PrecisionLab`,
-  `presets/KIFS_DIVE.frac` and the docs/RENDERING.md narrative belong to § 4.2-4.3 and § 4.5;
-  `CpuDE` is to be deleted.
-- **Next: § 4.1, the GPU probe.**
+- **Step 2 (§ 4.1, the probe) is done on `deep-zoom`, two commits:**
+  1. `b894617` **the probe.** `GLSLEngine.probe` runs the scene's own program on up to
+     eight rays from the camera. A ray is the view's ray through a screen point or a world
+     direction. The probe returns the distance along each ray and the scene's estimate at
+     the camera.
+     - Shader: `probeMode` takes the same path through `main()` as the view and leaves right
+       after the primary march, so there is no second copy of the march or of the estimator
+       (`ShaderCompileProbe`: no change). The estimate at the camera is the march's first
+       one (`gMarchStartDE`).
+     - The read is synchronous, about 0.3 ms. The GPU is idle between viewport steps, each
+       of which awaits its fence, so the PBO and fence of the plan were not needed.
+     - The focus pick goes through it: the ray through the clicked pixel, exact at its
+       centre, before any image has accumulated, an edge included.
+     - `FocusPickProbe`:
+       - a sphere against the exact intersection: within 0.31 of a pixel's footprint,
+         clearance exact to 4e-8;
+       - a scene against its own image's depth: median 0.01 %;
+       - a pick during a refinement: 18-35 ms.
+     - `BandedSampleProbe`: a probe between two strips leaves the sample bit-identical.
+     - `CpuDE` was never lifted, so nothing CPU-side knows any fractal.
+  2. `e59c9be` **auto speed, measured on the scene.** `DiveSpeed` moves the camera
+     each frame by the dial's fraction of the **free distance ahead along the move** (a
+     probe ray in that direction), less the distance moved since the measure. A late
+     measure only slows the camera down. A measure older than 250 ms, or taken more than 2°
+     off the current move, is not trusted: the camera holds a frame. Inside the solid it
+     backs out at the scale it came in at. It is not the WIP's estimate at the camera: that
+     is a lower bound, measured 3800 times too low at the Mandelbox's default camera,
+     where a speed tied to it froze the camera.
+     - `DiveProbe` (headless, 60 frames a second, a still per decade): a decade every 60
+       frames at a dial of 0.1 down to 1e-6 ahead on the Julia bulb, the Mandelbox (detail
+       camera) and the Labyrinth, never crossing the surface. Below 1e-6 the float camera
+       position stops following the double one and the dive slows, safely.
+     - The stills show the float wall from 1e-4 down (blocky, then flat cells), as § 1
+       measured.
+     - Checkbox *Auto speed* in the Navigation panel, on by default as on the WIP; off, the
+       dial is the step as before.
+
+  Both commits were checked:
+  - `mvn test` green (154);
+  - `RenderRegression check` maxD 0 on the 9 global and the 6 detail scenes. The global
+    goldens were rewritten from `deep-zoom` before the probe. The September
+    `mandelbulb_pathtraced` was already 5/255 off on a few pixels at `main` and at this
+    branch's step 1. The September goldens are in `golden_backup_2026-09`;
+  - shader compile times unchanged: the 15 built-ins 163.4 s against 163.3 s (each one
+    swings ±2 s from run to run); `ALBEDO_039` 15.3 s against 15.1 s; `LABYRINTH` 15.3 s
+    against 15.9 s (measured before the direction rays; the final run hit the driver's
+    cache);
+  - the caustics' photon program still compiles;
+  - the viewport probes, see `docs/INTERACTIVE_RENDER.md` § Proof.
+- **Still only on `deep-zoom-wip`, by design:**
+  - § 4.2-4.3: Deep Precision / Renormalize (params, `.frac` fields, Quality panel
+    checkboxes, `rayMarchDeep`, the per-kernel `DE_deep` / `DE_local`, `Renormalizer` +
+    test, the SSBO);
+  - § 4.5: `PrecisionLab`;
+  - `presets/KIFS_DIVE.frac` and the docs/RENDERING.md narrative;
+  - `CpuDE` is not to be lifted.
+- **Next: § 4.2, double precision emitted by the compiler.** The probe must then march in
+  double too: it already takes the view's own path through `main()`, so it follows
+  `rayMarchDeep` wherever the view does.
 
 The owner's wishes, in the owner's words and mine:
 
@@ -119,6 +171,10 @@ Anything that needs a distance (focus pick, auto speed, the renormalisation's in
 (PBO + fence, one frame of latency). Microseconds of GPU per frame, works for every graph,
 hybrid, custom shader. Delete `CpuDE`. The probe should run the same precision path as the
 view (double / renormalised when active) so it is right at depth.
+
+*Done (§ 0, step 2).* The read turned out synchronous (the GPU is idle between steps); auto
+speed follows the free distance along the move rather than the estimate at the camera; the
+probe shares the view's path through `main()`, so it will follow § 4.2's double march.
 
 ### 4.2 Double precision generated by the compiler, not written per kernel
 `GraphCompiler` already emits the composite DE. Make it emit a **second, double-typed
