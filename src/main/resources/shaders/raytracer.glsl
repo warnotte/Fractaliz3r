@@ -2452,12 +2452,16 @@ void main() {
     if (adaptiveSampling != 0) {
         float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
         vec4 varData = imageLoad(varianceImage, pixel);
+        // .a accumulates the depth of the samples that were drawn, with .b their count: a
+        // converged pixel skips samples (FragColor = 0 above, alpha included), so the depth
+        // in the accumulation's alpha divided by the global sample count under-reads, late
+        // in a refinement by a lot, and a focus pick then lands far too close.
         imageStore(varianceImage, pixel,
-            vec4(varData.r + lum, varData.g + lum * lum, varData.b + 1.0, 0.0));
+            vec4(varData.r + lum, varData.g + lum * lum, varData.b + 1.0, varData.a + depth));
     }
 
-    // Output: RGB = color (accumulated), A = depth (for focus picking)
-    // Depth is stored in alpha - will be averaged with colors, but that's fine for focus picking
+    // Output: RGB = color (accumulated), A = depth (for focus picking when adaptive
+    // sampling is off; with it on the engine reads the variance image instead)
     FragColor = vec4(color, depth);
 }
 #endif

@@ -913,19 +913,60 @@ public class GLSLEngine implements AutoCloseable {
         return result;
     }
 
+    /** The mean primary-hit depth under pixel (x, y), y from the top; -1 off the image or
+     *  before any sample. Waits for the GL thread. */
     public float readDepthAt(int x, int y) {
         if (x < 0 || x >= currentWidth || y < 0 || y >= currentHeight) return -1.0f;
-        int glY = currentHeight - 1 - y;
         float[] depth = new float[1];
-        runOnGLThread(() -> {
+        runOnGLThread(() -> depth[0] = depthAtOnGLThread(x, currentHeight - 1 - y));
+        return depth[0];
+    }
+
+    /**
+     * {@link #readDepthAt} without the wait: the read is posted to the GL thread and the
+     * result handed to {@code onResult} from that thread, so a click never stalls the UI on
+     * whatever the GL thread is busy with (a long sample, a compile). The second argument of
+     * the callback is how long the GL thread took to get to the read, in milliseconds.
+     */
+    public void readDepthAtAsync(int x, int y, java.util.function.ObjDoubleConsumer<Float> onResult) {
+        if (x < 0 || x >= currentWidth || y < 0 || y >= currentHeight) { onResult.accept(-1.0f, 0); return; }
+        final long asked = System.nanoTime();
+        postToGLThread(() -> {
+            double waitedMs = (System.nanoTime() - asked) / 1e6;
+            float depth = depthAtOnGLThread(x, currentHeight - 1 - y);
+            System.out.printf(java.util.Locale.ROOT, "[focus] pixel (%d,%d) depth %.6g (%s), GL thread reached in %.0f ms%n",
+                    x, y, depth, adaptiveSamplingEnabled ? "variance image" : "accumulation / " + sampleCount + " samples", waitedMs);
+            onResult.accept(depth, waitedMs);
+        });
+    }
+
+    /**
+     * The depth under a pixel of the image being accumulated, GL rows from the bottom.
+     * With adaptive sampling a converged pixel skips samples, so the accumulation's alpha
+     * divided by the global sample count under-reads, late in a refinement by a lot; the
+     * variance image carries the drawn samples' depth sum (.a) and their count (.b).
+     * The read may land between two strips of a sample: it binds a framebuffer of its own,
+     * so the pass must be bound again before the next strip (BandedSampleProbe).
+     */
+    private float depthAtOnGLThread(int x, int glY) {
+        touchGLState();
+        FloatBuffer buffer = MemoryUtil.memAllocFloat(4);
+        try {
+            if (adaptiveSamplingEnabled && varianceFBO != 0) {
+                glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT);
+                glBindFramebuffer(GL_FRAMEBUFFER, varianceFBO);
+                glReadPixels(x, glY, 1, 1, GL_RGBA, GL_FLOAT, buffer);
+                float count = buffer.get(2);
+                return count > 0 ? buffer.get(3) / count : -1.0f;
+            }
             glBindFramebuffer(GL_FRAMEBUFFER, accumFBO);
-            FloatBuffer buffer = MemoryUtil.memAllocFloat(4);
             glReadPixels(x, glY, 1, 1, GL_RGBA, GL_FLOAT, buffer);
-            depth[0] = buffer.get(3) / Math.max(1, sampleCount);
+            // During the first sample of a refinement the rows already drawn hold one sample.
+            return buffer.get(3) / Math.max(1, sampleCount);
+        } finally {
             MemoryUtil.memFree(buffer);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        });
-        return depth[0];
+        }
     }
 
     public int getWidth() { return currentWidth; }

@@ -531,10 +531,17 @@ public class QualityPanel extends ScrollPane implements Refreshable {
      */
     public void updateFocalDistanceDisplay(float distance) {
         if (focalDistSlider != null) {
-            // Clamp to slider range
-            double clampedDistance = Math.max(focalDistSlider.getSlider().getMin(),
-                    Math.min(focalDistSlider.getSlider().getMax(), distance));
-            focalDistSlider.setValue(clampedDistance);
+            // Display only: the slider's action would write the clamped value back, and a
+            // pick closer than the slider's minimum would focus at the minimum instead.
+            boolean was = suppressRender;
+            suppressRender = true;
+            try {
+                double clampedDistance = Math.max(focalDistSlider.getSlider().getMin(),
+                        Math.min(focalDistSlider.getSlider().getMax(), distance));
+                focalDistSlider.setValue(clampedDistance);
+            } finally {
+                suppressRender = was;
+            }
         }
     }
 

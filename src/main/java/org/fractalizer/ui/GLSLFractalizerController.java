@@ -1867,25 +1867,30 @@ public class GLSLFractalizerController implements RenderController {
 
     /**
      * Pick focal distance at a specific pixel coordinate.
-     * Reads the depth from the accumulation buffer and sets it as the focal distance.
+     * Reads the depth of the image being accumulated and sets it as the focal distance.
      *
      * @param x X coordinate in viewport space (0 = left)
      * @param y Y coordinate in viewport space (0 = top)
-     * @return The picked depth, or -1 if invalid
+     * @param onResult called on the JavaFX thread with the picked depth (-1 when there is
+     *                 no surface under the pixel) and how long the GL thread took to reach
+     *                 the read, in milliseconds
      */
-    public float pickFocalDistance(int x, int y) {
+    public void pickFocalDistance(int x, int y, java.util.function.ObjDoubleConsumer<Float> onResult) {
         // Scale coordinates from viewport to render size
         int renderX = (int) ((float) x / viewportWidth * engine.getWidth());
         int renderY = (int) ((float) y / viewportHeight * engine.getHeight());
 
-        float depth = engine.readDepthAt(renderX, renderY);
-
-        if (depth > 0 && depth < 100.0f && currentParams instanceof AbstractFractalParams params) {
-            params.setFocalDistance(depth);
-            return depth;
-        }
-
-        return -1;
+        // Not awaited: the GL thread may be in the middle of a refinement step, and the UI
+        // must not stall on it. The result comes back on the JavaFX thread, where the
+        // parameters live.
+        engine.readDepthAtAsync(renderX, renderY, (depth, waitedMs) -> Platform.runLater(() -> {
+            if (depth > 0 && depth < 100.0f && currentParams instanceof AbstractFractalParams params) {
+                params.setFocalDistance(depth);
+                onResult.accept(depth, waitedMs);
+            } else {
+                onResult.accept(-1.0f, waitedMs);
+            }
+        }));
     }
 
     /**

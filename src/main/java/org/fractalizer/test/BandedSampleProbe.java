@@ -66,6 +66,30 @@ public class BandedSampleProbe {
             ok &= diff == 0 && engine.getSampleCount() == 1;
         }
 
+        // A strip, a depth read (a focus pick lands between two strips of a refinement), the
+        // remaining strips: the read binds a framebuffer of its own and must not leave it bound
+        // under the pass, or the rest of the sample is drawn where nobody reads it.
+        {
+            engine.resetAccumulation();
+            engine.postAndWait(() -> {
+                engine.beginSample(uniforms);
+                engine.drawRows(0, H / 2);
+                engine.fence().await();
+            });
+            float picked = engine.readDepthAt(160, 135);   // queued between the two strips, in the drawn half
+            engine.postAndWait(() -> {
+                engine.drawRows(H / 2, H - H / 2);
+                engine.fence().await();
+                engine.commitSample();
+            });
+            float[] withRead = engine.readRawImage();
+            int d = 0;
+            for (int i = 0; i < whole.length; i++) if (whole[i] != withRead[i]) d++;
+            System.out.printf("  a depth read between two strips (depth %.4f): differing values %d / %d%n",
+                    picked, d, whole.length);
+            ok &= d == 0 && engine.getSampleCount() == 1;
+        }
+
         // Discard after the first strip: the count must not move, and the next whole sample
         // must start from a cleared buffer (equal to a fresh single sample).
         engine.resetAccumulation();

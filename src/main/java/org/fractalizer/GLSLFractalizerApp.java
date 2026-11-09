@@ -407,17 +407,21 @@ public class GLSLFractalizerApp extends Application {
                 int x = (int) event.getX();
                 int y = (int) event.getY();
 
-                float distance = controller.pickFocalDistance(x, y);
-
-                if (distance > 0) {
-                    statusLabel.setText(String.format("Focal distance set: %.3f", distance));
-                    qualityPanel.updateFocalDistanceDisplay(distance);
-                    playFocusAnimation(x, y, true);
-                    requestRender();
-                } else {
-                    statusLabel.setText("No surface at click position");
-                    playFocusAnimation(x, y, false);
-                }
+                // Asynchronous: the read waits for the GL thread, the UI does not. The
+                // result comes back on this thread.
+                statusLabel.setText("Picking focus…");
+                controller.pickFocalDistance(x, y, (distance, waitedMs) -> {
+                    if (distance > 0) {
+                        statusLabel.setText(String.format(java.util.Locale.ROOT,
+                                "Focal distance set: %.4g", distance));
+                        qualityPanel.updateFocalDistanceDisplay(distance);
+                        playFocusAnimation(x, y, true);
+                        requestRender();
+                    } else {
+                        statusLabel.setText("No surface at click position");
+                        playFocusAnimation(x, y, false);
+                    }
+                });
 
                 event.consume();
             }
