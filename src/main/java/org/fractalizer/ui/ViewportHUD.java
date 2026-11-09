@@ -125,7 +125,10 @@ public class ViewportHUD {
         // Fill segments
         int segments = 10;
         double segH = h / segments;
-        int activeSegments = Math.round(speed * segments);
+        // The meter reads the speed on a log scale, 1e-12 .. 1: a dive runs it over twelve
+        // decades and a linear bar would sit at zero for all of them.
+        float level = (float) ((Math.log10(Math.max(1e-12, speed)) + 12.0) / 12.0);
+        int activeSegments = Math.round(level * segments);
 
         for (int i = 0; i < segments; i++) {
             double sy = yStart + h - (i + 1) * segH;
@@ -141,7 +144,7 @@ public class ViewportHUD {
         gc.setFill(COLOR_HUD.deriveColor(0, 1, 1, opacity));
         gc.setFont(Font.font("monospace", FontWeight.BOLD, 11));
         gc.setTextAlign(javafx.scene.text.TextAlignment.RIGHT);
-        gc.fillText(String.format("%.2fx", speed), cx - 12, yStart + h + 15);
+        gc.fillText(String.format(java.util.Locale.ROOT, "%.1e", speed), cx - 16, yStart + h + 15);
         gc.fillText("SPD", cx - 12, yStart - 5);
     }
 
@@ -149,7 +152,7 @@ public class ViewportHUD {
         gc.setFill(COLOR_TEXT);
         gc.setFont(Font.font("monospace", FontWeight.BOLD, 12));
         gc.setTextAlign(javafx.scene.text.TextAlignment.LEFT);
-        String text = String.format("NAV_SYS: ACTIVE | SPD: %.3f | FOV: %.1f\u00B0", speed, fov);
+        String text = String.format(java.util.Locale.ROOT, "NAV_SYS: ACTIVE | SPD: %.2e | FOV: %.1f\u00B0", speed, fov);
         gc.fillText(text, x, y);
     }
 

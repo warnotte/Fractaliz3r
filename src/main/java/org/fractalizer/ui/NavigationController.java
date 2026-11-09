@@ -144,11 +144,13 @@ public class NavigationController {
             }
         });
 
-        // Scroll for movement speed adjustment
+        // Scroll for movement speed adjustment: geometric, down to 1e-12. A dive to 1e-9
+        // needs steps of 1e-10, and the camera holds its position in double, so the speed
+        // can follow the zoom all the way down. A factor 1.25 a notch, ten notches a decade.
         imageContainer.setOnScroll(e -> {
-            double delta = e.getDeltaY() > 0 ? 1.1 : 0.9;
+            double delta = e.getDeltaY() > 0 ? 1.25 : 0.8;
             float newSpeed = getCamera().getMoveSpeed() * (float) delta;
-            newSpeed = Math.max(0.001f, Math.min(1.0f, newSpeed));
+            newSpeed = Math.max(1e-12f, Math.min(1.0f, newSpeed));
             getCamera().setMoveSpeed(newSpeed);
             speedChangeCallback.accept(newSpeed);
         });

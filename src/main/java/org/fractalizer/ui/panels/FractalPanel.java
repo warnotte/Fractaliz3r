@@ -55,8 +55,13 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         VBox.setVgrow(nodeGraphEditor, Priority.ALWAYS);
 
         // Navigation & camera
-        speedSlider = new EnhancedSlider("Move Speed", 0.001, 0.5, 0.1, false);
-        speedSlider.setOnAction(v -> camera.setMoveSpeed(v.floatValue()));
+        // Logarithmic, the range of the wheel over the viewport: a dive runs the speed from 0.1
+        // down to 1e-10, and the camera holds its position in double to follow it.
+        speedSlider = EnhancedSlider.logarithmic("Move Speed", 1e-12, 1.0, 0.1);
+        speedSlider.setOnAction(v -> {
+            camera.setMoveSpeed(v.floatValue());
+            updatePositionLabel();
+        });
 
         positionLabel = new Label("Pos: (0.00, 0.00, -3.00)");
         positionLabel.getStyleClass().add("mono-label");
@@ -114,8 +119,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
 
     public void updatePositionLabel() {
         if (positionLabel != null && camera != null) {
-            float[] pos = camera.getPosition();
-            positionLabel.setText(String.format("Pos: (%.2f, %.2f, %.2f)", pos[0], pos[1], pos[2]));
+            // Nine decimals: on a dive the camera moves by 1e-9 and two decimals show nothing.
+            double[] pos = camera.getPositionD();
+            positionLabel.setText(String.format(java.util.Locale.ROOT, "Pos: (%.9f, %.9f, %.9f)\nSpeed: %.3g",
+                    pos[0], pos[1], pos[2], camera.getMoveSpeed()));
         }
     }
 
@@ -130,6 +137,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
     public void setSpeedSliderValue(double value) {
         if (speedSlider != null) {
             speedSlider.setValue(value);
+            updatePositionLabel();
         }
     }
 
