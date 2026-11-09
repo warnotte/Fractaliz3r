@@ -1866,31 +1866,74 @@ public class GLSLFractalizerController implements RenderController {
     }
 
     /**
-     * Pick focal distance at a specific pixel coordinate.
-     * Reads the depth of the image being accumulated and sets it as the focal distance.
+     * Ask the current scene where rays from the camera land: the scene's own program run on
+     * the GL thread for these rays only (GLSLEngine.probe), so the answer holds for any
+     * fractal, graph, hybrid chain or custom shader, at the precision the view itself has.
+     * Never blocks: the result comes to {@code onResult} on the GL thread, null when the
+     * scene's program is not compiled yet (a compile is pending) or there is no scene.
+     *
+     * @param uv screen points as (x, y) pairs in [-1, 1], y up, at most GLSLEngine.PROBE_RAYS
+     */
+    public void probe(float[] uv, java.util.function.Consumer<GLSLEngine.ProbeHit[]> onResult) {
+        float[] rays = new float[uv.length * 2];
+        for (int i = 0; i < uv.length / 2; i++) System.arraycopy(GLSLEngine.screenRay(uv[2 * i], uv[2 * i + 1]), 0, rays, 4 * i, 4);
+        probeRays(rays, onResult);
+    }
+
+    /** The distance from the camera along a world direction (where it is about to move), as
+     *  {@link #probe}: one hit, or null. */
+    public void probeAlong(double[] direction, java.util.function.Consumer<GLSLEngine.ProbeHit[]> onResult) {
+        probeRays(GLSLEngine.directionRay(direction), onResult);
+    }
+
+    /** {@link #probe} for rays already packed (GLSLEngine.screenRay / directionRay). */
+    public void probeRays(float[] rays, java.util.function.Consumer<GLSLEngine.ProbeHit[]> onResult) {
+        SceneSnapshot scene = snapshot();
+        if (scene == null) { onResult.accept(null); return; }
+        Map<String, Object> uniforms = scene.uniformsFor(scene.viewportHeight(), false);
+        engine.enqueue(() -> {
+            GLSLEngine.ProbeHit[] hits = null;
+            try {
+                if (engine.hasProgram(scene.programKey(), scene.programSource(), scene.programDefines())) {
+                    hits = engine.probe(scene.programKey(), uniforms, scene.viewportWidth(), scene.viewportHeight(), rays);
+                }
+            } finally {
+                onResult.accept(hits);        // always answered: a caller may be waiting on it
+            }
+        });
+    }
+
+    /** The screen point (x, y in [-1, 1], y up) at the centre of viewport pixel (x, y). */
+    public float[] screenPoint(double x, double y) {
+        return new float[]{ (float) ((x + 0.5) / viewportWidth * 2.0 - 1.0), (float) (1.0 - (y + 0.5) / viewportHeight * 2.0) };
+    }
+
+    /**
+     * Pick the focal distance at a viewport pixel: the probe's distance along the ray
+     * through that pixel, which is what the depth of field focuses on (common.glsl puts the
+     * focal point on each pixel's own ray). Exact at the pixel's centre, whatever the image
+     * has accumulated so far, an edge included.
      *
      * @param x X coordinate in viewport space (0 = left)
      * @param y Y coordinate in viewport space (0 = top)
-     * @param onResult called on the JavaFX thread with the picked depth (-1 when there is
-     *                 no surface under the pixel) and how long the GL thread took to reach
-     *                 the read, in milliseconds
+     * @param onResult called on the JavaFX thread with the picked distance (-1 when there is
+     *                 no surface under the pixel) and how long the answer took, in milliseconds
      */
     public void pickFocalDistance(int x, int y, java.util.function.ObjDoubleConsumer<Float> onResult) {
-        // Scale coordinates from viewport to render size
-        int renderX = (int) ((float) x / viewportWidth * engine.getWidth());
-        int renderY = (int) ((float) y / viewportHeight * engine.getHeight());
-
-        // Not awaited: the GL thread may be in the middle of a refinement step, and the UI
-        // must not stall on it. The result comes back on the JavaFX thread, where the
-        // parameters live.
-        engine.readDepthAtAsync(renderX, renderY, (depth, waitedMs) -> Platform.runLater(() -> {
-            if (depth > 0 && depth < 100.0f && currentParams instanceof AbstractFractalParams params) {
-                params.setFocalDistance(depth);
-                onResult.accept(depth, waitedMs);
-            } else {
-                onResult.accept(-1.0f, waitedMs);
-            }
-        }));
+        long asked = System.nanoTime();
+        probe(screenPoint(x, y), hits -> {
+            double tookMs = (System.nanoTime() - asked) / 1e6;
+            float d = hits != null && hits[0].hit() ? hits[0].distance() : -1.0f;
+            System.out.printf(java.util.Locale.ROOT, "[focus] pixel (%d,%d) distance %.6g, answered in %.0f ms%n", x, y, d, tookMs);
+            Platform.runLater(() -> {
+                if (d > 0 && currentParams instanceof AbstractFractalParams params) {
+                    params.setFocalDistance(d);
+                    onResult.accept(d, tookMs);
+                } else {
+                    onResult.accept(-1.0f, tookMs);
+                }
+            });
+        });
     }
 
     /**

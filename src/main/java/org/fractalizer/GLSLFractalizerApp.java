@@ -407,8 +407,8 @@ public class GLSLFractalizerApp extends Application {
                 int x = (int) event.getX();
                 int y = (int) event.getY();
 
-                // Asynchronous: the read waits for the GL thread, the UI does not. The
-                // result comes back on this thread.
+                // Asynchronous: the probe runs on the GL thread between two viewport
+                // steps, the UI does not wait for it. The result comes back on this thread.
                 statusLabel.setText("Picking focus…");
                 controller.pickFocalDistance(x, y, (distance, waitedMs) -> {
                     if (distance > 0) {

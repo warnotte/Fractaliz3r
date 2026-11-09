@@ -376,6 +376,11 @@ vec3 refineSurface(vec3 ro, vec3 rd, float hitDist, float lastStep) {
     return ro + rd * ((lo + hi) * 0.5);
 }
 
+// The scene's estimate at the first point of the last primary march, the camera: what the
+// probe reports as the camera's clearance (main). Kept here rather than asked of the scene
+// once more because every call site of the estimator is another copy of it to compile.
+float gMarchStartDE = -1.0;
+
 RayHit rayMarch(Ray ray) {
     RayHit result;
     result.hit = false;
@@ -394,6 +399,7 @@ RayHit rayMarch(Ray ray) {
         result.pos = ray.origin + ray.direction * result.dist;
 
         float d = sceneDE(result.pos, result.trap, result.matType);
+        if (i == 0) gMarchStartDE = d;
         result.minDist = min(result.minDist, d);
         result.steps = i + 1;
 
@@ -2343,15 +2349,29 @@ vec3 renderByMode(RayHit hit, Ray ray, vec3 normal, float shadow, float ao) {
 // ============================================================================
 
 #ifndef PHOTON_PASS
+// ---- The probe ---------------------------------------------------------------------
+// Every distance the app needs (the focus pick, the auto speed) is asked of the scene's own
+// program, never of a copy of the estimator on the CPU, so it holds for every fractal, graph,
+// hybrid chain and custom shader alike. With probeMode on, fragment i of a one-row target is
+// one ray from the camera, probeRay[i]: the pinhole ray through the screen point xy
+// ([-1, 1], y up) when w is 0, the ray along the world direction xyz when w is 1 (where the
+// camera is about to move). It is marched by the view's own primary march, and the output is:
+// the distance along the ray to the surface (-1 for a miss), the scene's estimate at the
+// camera, the steps, 1 on a hit. The probe takes the same path through main() as the view and
+// leaves right after the march: no second copy of the march or of the estimator to compile.
+#define PROBE_RAYS 8
+uniform vec4 probeRay[PROBE_RAYS];
+
 void main() {
     // Initialize random for this pixel/sample
     uint seed = initRandom(gl_FragCoord.xy, sampleIndex);
     ivec2 pixel = ivec2(gl_FragCoord.xy);
+    bool probe = probeMode != 0;
 
     // Adaptive sampling: skip converged pixels
     // Uses variance-of-mean (popVariance / count) to measure actual noise in the average.
     // A pixel is converged when adding more samples won't visibly change the result.
-    if (adaptiveSampling != 0) {
+    if (adaptiveSampling != 0 && !probe) {
         vec4 varData = imageLoad(varianceImage, pixel);
         float count = varData.b;
         if (count >= float(minAdaptiveSamples)) {
@@ -2380,6 +2400,8 @@ void main() {
     vec2 tileUV = fragCoord * 0.5 + 0.5;                          // [0,1] within tile
     vec2 fullUV = tileOffset + tileUV * tileScale;                 // [0,1] within full image
     vec2 screenUV = fullUV * 2.0 - 1.0 + jitter * 2.0;           // [-1,1] NDC + jitter
+    vec4 probeSpec = probe ? probeRay[min(pixel.x, PROBE_RAYS - 1)] : vec4(0.0);
+    if (probe) screenUV = probeSpec.xy;
 
     // Deep-zoom iteration LOD: how close the camera sits to the surface sets how
     // fine the structure on screen is, and therefore how many DE iterations are
@@ -2391,12 +2413,14 @@ void main() {
 
     // Get camera ray (with optional DoF)
     Ray ray = getCameraRayDOF(screenUV, seed, bnDof);
+    if (probe && probeSpec.w > 0.5) ray.direction = normalize(probeSpec.xyz);
 
     vec3 color;
     float depth = 100.0; // Default far distance
 
-    // Choose rendering mode: Path Tracing or Raytracing
-    if (pathTracingEnabled != 0 && renderMode == RENDER_MODE_FINAL) {
+    // Choose rendering mode: Path Tracing or Raytracing (the probe takes the second: it
+    // wants the primary march and nothing after it)
+    if (pathTracingEnabled != 0 && renderMode == RENDER_MODE_FINAL && !probe) {
         // ====== PATH TRACING ======
         if (neeEnabled != 0) {
             color = pathTrace(ray, seed);      // NEE+MIS + corrected GGX
@@ -2421,6 +2445,10 @@ void main() {
         // ====== CLASSIC RAYTRACING ======
         RayHit hit = rayMarch(ray);
         depth = hit.hit ? hit.dist : 100.0;
+        if (probe) {
+            FragColor = vec4(hit.hit ? hit.dist : -1.0, gMarchStartDE, float(hit.steps), hit.hit ? 1.0 : 0.0);
+            return;
+        }
 
         if (hit.hit) {
             // STRICT COLORING:

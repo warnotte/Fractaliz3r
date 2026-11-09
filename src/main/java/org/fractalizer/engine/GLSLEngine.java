@@ -941,24 +941,6 @@ public class GLSLEngine implements AutoCloseable {
     }
 
     /**
-     * {@link #readDepthAt} without the wait: the read is posted to the GL thread and the
-     * result handed to {@code onResult} from that thread, so a click never stalls the UI on
-     * whatever the GL thread is busy with (a long sample, a compile). The second argument of
-     * the callback is how long the GL thread took to get to the read, in milliseconds.
-     */
-    public void readDepthAtAsync(int x, int y, java.util.function.ObjDoubleConsumer<Float> onResult) {
-        if (x < 0 || x >= currentWidth || y < 0 || y >= currentHeight) { onResult.accept(-1.0f, 0); return; }
-        final long asked = System.nanoTime();
-        postToGLThread(() -> {
-            double waitedMs = (System.nanoTime() - asked) / 1e6;
-            float depth = depthAtOnGLThread(x, currentHeight - 1 - y);
-            System.out.printf(java.util.Locale.ROOT, "[focus] pixel (%d,%d) depth %.6g (%s), GL thread reached in %.0f ms%n",
-                    x, y, depth, adaptiveSamplingEnabled ? "variance image" : "accumulation / " + sampleCount + " samples", waitedMs);
-            onResult.accept(depth, waitedMs);
-        });
-    }
-
-    /**
      * The depth under a pixel of the image being accumulated, GL rows from the bottom.
      * With adaptive sampling a converged pixel skips samples, so the accumulation's alpha
      * divided by the global sample count under-reads, late in a refinement by a lot; the
@@ -985,6 +967,87 @@ public class GLSLEngine implements AutoCloseable {
             MemoryUtil.memFree(buffer);
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         }
+    }
+
+    // ------------------------------------------------------------------------------------
+    // The probe: the scene's own program asked where a few camera rays land (raytracer.glsl,
+    // main). One source of truth for every distance the app needs, whatever the scene is
+    // made of; nothing about any fractal is known here.
+    // ------------------------------------------------------------------------------------
+
+    /** Rays one probe carries at most (the shader's PROBE_RAYS). */
+    public static final int PROBE_RAYS = 8;
+
+    /**
+     * Where one probe ray landed.
+     *
+     * @param distance  along the ray from the camera to the surface, negative for a miss
+     * @param clearance the scene's distance estimate at the camera (the same for every ray
+     *                  of a probe): a lower bound of the distance to the nearest surface in
+     *                  any direction, negative or zero inside or on the solid
+     * @param steps     march steps the ray took
+     */
+    public record ProbeHit(float distance, float clearance, int steps) {
+        public boolean hit() { return distance >= 0f; }
+    }
+
+    private int probeFBO, probeTexture;
+
+    /** A probe ray through the screen point (x, y), [-1, 1], y up: the view's own ray there. */
+    public static float[] screenRay(float x, float y) { return new float[]{x, y, 0f, 0f}; }
+
+    /** A probe ray from the camera along a world direction (where the camera is about to move). */
+    public static float[] directionRay(double[] dir) { return new float[]{(float) dir[0], (float) dir[1], (float) dir[2], 1f}; }
+
+    /**
+     * Runs the scene program {@code programKey} with {@code uniforms} on rays from the camera,
+     * {@code rays} holding four floats per ray ({@link #screenRay} or {@link #directionRay};
+     * screen points as the view's own rays for an image {@code width} x {@code height}), one
+     * fragment each, and reads the result back. GL thread only, never compiles: null when the
+     * program does not exist.
+     *
+     * <p>The read waits for the draw. That is a few hundred microseconds and not a frame of
+     * latency because the GPU is idle between viewport steps (each one awaits its fence), so
+     * there is nothing ahead of the probe to wait for. It may land between two strips of a
+     * sample: it binds its own target, so the pass is bound again before the next strip.
+     */
+    public ProbeHit[] probe(String programKey, Map<String, Object> uniforms, int width, int height, float[] rays) {
+        assertGLThread();
+        int n = rays.length / 4;
+        if (n < 1 || n > PROBE_RAYS || rays.length % 4 != 0) throw new IllegalArgumentException("1 to " + PROBE_RAYS + " rays of four floats");
+        ShaderProgram program = programs.get(programKey);
+        if (program == null) return null;
+        touchGLState();
+        if (probeFBO == 0) {
+            probeTexture = createFloatTexture(PROBE_RAYS, 1, GL_RGBA32F, GL_RGBA);
+            probeFBO = glGenFramebuffers();
+            glBindFramebuffer(GL_FRAMEBUFFER, probeFBO);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, probeTexture, 0);
+        }
+        FloatBuffer out = MemoryUtil.memAllocFloat(4 * n);
+        try {
+            glDisable(GL_SCISSOR_TEST);       // a strip of an open sample may have left it on
+            glDisable(GL_BLEND);
+            glBindFramebuffer(GL_FRAMEBUFFER, probeFBO);
+            glViewport(0, 0, n, 1);
+            program.use();
+            program.setUniform("resolution", (float) width, (float) height);
+            bindSceneState(program, uniforms);
+            program.setUniform4fv("probeRay", Arrays.copyOf(rays, PROBE_RAYS * 4));
+            program.setUniform("probeMode", 1);
+            glBindVertexArray(quadVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glReadPixels(0, 0, n, 1, GL_RGBA, GL_FLOAT, out);
+        } finally {
+            program.setUniform("probeMode", 0);   // the program's next pass is a view again
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
+        ProbeHit[] hits = new ProbeHit[n];
+        for (int i = 0; i < n; i++) {
+            hits[i] = new ProbeHit(out.get(4 * i), out.get(4 * i + 1), Math.round(out.get(4 * i + 2)));
+        }
+        MemoryUtil.memFree(out);
+        return hits;
     }
 
     public int getWidth() { return currentWidth; }
@@ -1317,6 +1380,7 @@ public class GLSLEngine implements AutoCloseable {
             glDeleteFramebuffers(accumFBO); glDeleteTextures(accumTexture);
             glDeleteFramebuffers(displayFBO); glDeleteTextures(displayTexture);
             glDeleteFramebuffers(varianceFBO); glDeleteTextures(varianceTexture);
+            if (probeFBO != 0) { glDeleteFramebuffers(probeFBO); glDeleteTextures(probeTexture); }
             glDeleteFramebuffers(bloomFBO1); glDeleteFramebuffers(bloomFBO2);
             glDeleteTextures(bloomTexture1); glDeleteTextures(bloomTexture2);
             glDeleteTextures(envMapTexture); glDeleteTextures(envMarginalCDFTexture); glDeleteTextures(envConditionalCDFTexture);
@@ -1373,6 +1437,7 @@ public class GLSLEngine implements AutoCloseable {
         public void setUniformMatrix3(String name, float[] v) { glUniformMatrix3fv(getUniformLocation(name), false, v); }
         public void setUniformMatrix4(String name, float[] v) { glUniformMatrix4fv(getUniformLocation(name), false, v); }
         public void setUniform1fv(String name, float[] v) { glUniform1fv(getUniformLocation(name), v); }
+        public void setUniform4fv(String name, float[] v) { glUniform4fv(getUniformLocation(name), v); }
         public void delete() { glDeleteProgram(programId); }
     }
 

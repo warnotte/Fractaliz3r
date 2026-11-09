@@ -36,7 +36,7 @@ pending request is checked at every step, so camera moves and sliders still pree
 once, but anything else posted to the GL thread waited for the end of the job: a Ctrl+click
 focus pick during a refinement read its depth seconds late (`FocusPickProbe`: ~725 ms on a
 light scene, the length of the refinement on a heavy one), and a `pause()` before an
-export waited the same. At most one step is ever queued (`stepQueued`, an `AtomicBoolean`
+export waited the same. A probe (below) is such a task: it waits at most one step. At most one step is ever queued (`stepQueued`, an `AtomicBoolean`
 shared by requests, the step itself, the refine timer and `resume`), so a request does not
 start a second chain of steps.
 
@@ -153,13 +153,32 @@ still planned as before and a throughput-bound scene keeps its 60 ms strips.
   sync, and the slice length is what bounds both that price and the resume latency:
   previews use `STEP_BUDGET_NS` (30 ms), the refinement `REFINE_SLICE_NS` (60 ms, about
   10-20 % on the heaviest scene, where 30 ms cost up to 60 %).
-- `readDepthAt` / `readDepthAtAsync` (the focus pick) may land between two strips of a
-  sample: they call `touchGLState()` like every other pass, or the rest of the sample was
-  drawn into the default framebuffer (`BandedSampleProbe` has the case). With adaptive
-  sampling a converged pixel stops drawing, so the depth comes from the variance image
-  (`.a` the drawn samples' depth sum, `.b` their count), not from the accumulation's alpha
-  over the global sample count, which read 75 % short late in a refinement
-  (`FocusPickProbe`).
+- `probe(programKey, uniforms, w, h, rays)` asks the scene's own program where up to eight
+  rays from the camera land: the distance along each ray, and the scene's estimate at the
+  camera (its clearance). A ray is either the view's ray through a screen point
+  (`screenRay`) or a world direction (`directionRay`). It is the one source of every
+  distance the app needs: the focus pick takes the ray through the clicked pixel.
+
+  A copy of the estimator on the CPU would hold for one fractal type at a time; the probe
+  holds for any fractal, graph, hybrid chain or custom shader. In the shader
+  (`raytracer.glsl`, `main`), `probeMode` swaps the pixel's ray for `probeRay[i]`, skips
+  adaptive sampling and path tracing, and leaves right after the view's own primary march,
+  writing `(distance or -1, clearance, steps, hit)`. The clearance is the march's first estimate, at the camera (`gMarchStartDE`). The
+  probe takes the same path as the view rather than calling the march or the estimator once
+  more, because each call site is another copy of it for the compiler
+  (`ShaderCompileProbe`: the 15 built-ins 163.4 s against 163.3 s). The read is synchronous and costs about
+  0.3 ms. That is not a frame of latency, because every viewport step awaits its fence, so
+  the GPU is idle when the probe runs. A probe may land between two strips. It calls
+  `touchGLState()` and resets `probeMode`, so the rest of the sample is drawn as before
+  (`BandedSampleProbe`). The controller's `probe(uv, onResult)` freezes a snapshot and
+  answers null while the scene's program is not compiled yet. It never compiles.
+- `readDepthAt` (now only for the harnesses: the reference depth of the image) may land
+  between two strips of a sample. It calls `touchGLState()` like every other pass, or the
+  rest of the sample was drawn into the default framebuffer (`BandedSampleProbe` has the
+  case). With adaptive sampling a converged pixel stops drawing, so the depth comes from the
+  variance image (`.a` the drawn samples' depth sum, `.b` their count), not from the
+  accumulation's alpha over the global sample count. That read 75 % short late in a
+  refinement, and the focus pick used it until 2026-11-09.
 - `readViewportFrame()` runs the post-process and returns a `ViewportFrame` (BGRA bytes,
   size, sample count), converted to a JavaFX image by the listener on the JavaFX thread.
   Read as bytes straight from the display framebuffer (8 ms at 1080p; the float readback
@@ -216,10 +235,14 @@ a still export ran while the preview loop kept resizing the engine.
   § Since 3.2.2 for the numbers); `SliderFluidityProbe` drives it through the app's own
   panels, in a window.
 - `BandedSampleProbe` checks the slicing API: strips give the same sample to the bit, a
-  discarded sample leaves nothing behind, a depth read between two strips loses nothing.
-- `FocusPickProbe`: the picked depth against an every-sample reference with adaptive
-  sampling on, and how long a pick made during a refinement takes to come back and to
-  reach the screen.
+  discarded sample leaves nothing behind, a depth read or a probe between two strips loses
+  nothing.
+- `FocusPickProbe` checks the probe:
+  - on a sphere, against the exact intersection: hit or miss right on every ray, within
+    0.31 of a pixel's footprint of the surface, clearance exact to 4e-8;
+  - on a scene, against the depth its own image accumulated: median 0.01 %;
+  - its cost: 0.3 ms idle;
+  - a pick made during a refinement comes back in 18-35 ms.
 - `RenderRegression check`, `ExportAfterPreviewProbe`: exports unchanged to the bit.
 - `ResponsivenessProbe`: the refinement's throughput and image cadence.
 - `StripCostProbe`: what a sample costs as strips against whole, on the GPU, per sync

@@ -97,6 +97,10 @@ uniform float rimIntensity;
 uniform float specularIntensity;
 uniform float specularPower;
 
+// The probe (raytracer.glsl, main): non-zero while the engine asks the scene where a few
+// camera rays land. Its rays are the pinhole rays, whatever the depth of field says.
+uniform int probeMode;
+
 uniform int dofEnabled;
 uniform float focalDistance;
 uniform float aperture;
@@ -1296,7 +1300,7 @@ Ray getCameraRayDOF(vec2 screenUV, inout uint seed, vec2 bnDof) {
     dofColorWeight = vec3(1.0);
     // No absolute threshold here: at a deep zoom a useful aperture is 1e-8 and the old
     // `aperture < 0.0001` silently switched the depth of field off.
-    if (dofEnabled == 0 || aperture <= 0.0) return getCameraRay(screenUV);
+    if (dofEnabled == 0 || aperture <= 0.0 || probeMode != 0) return getCameraRay(screenUV);
 
     Ray centerRay = getCameraRay(screenUV);
     vec3 forward = rotateByQuaternion(vec3(0,0,1), camQuat);

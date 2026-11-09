@@ -112,9 +112,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.SliderFluidityProbe
 # to the bit, an aborted one must be cleared, not accumulated, and a strip interrupted by another
 # GL task (a palette upload) then discarded must leave no scissor behind (the bands of a preset load).
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.BandedSampleProbe"
-# The focus pick (Ctrl+click): the depth read with adaptive sampling on against an every-sample
-# reference (the old read was 75 % short), and how long a pick made during a refinement takes to
-# come back and to reach the screen (it waited for the whole refinement before 2026-11-09).
+# The probe (the scene's own program asked where camera rays land; every distance the app needs
+# comes from it) and the focus pick (Ctrl+click) that uses it: a sphere against the exact
+# intersection, the scene against its own image's depth, the cost of a probe, and how long a pick
+# made during a refinement takes to come back and to reach the screen.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.FocusPickProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 640x360 64"
 # What a sample costs as strips against whole, on the GPU, per sync pattern (bound once, rebound
 # each, fenced each, one or two in flight): the measurement behind the scheduler's slice lengths.
@@ -274,8 +275,8 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── DeferredCompileProbe.java    # a scene compile asked from the FX thread must not block it
 ├── NavigationFluidityProbe.java # the viewport while the camera moves: FX held, images/s, latency, interrupt
 ├── SliderFluidityProbe.java     # the viewport while a slider of each real panel moves; "window" for layout costs
-├── BandedSampleProbe.java       # a sample drawn in strips is the same sample; an aborted one is cleared; a depth read between strips loses nothing
-├── FocusPickProbe.java          # focus pick: depth vs an every-sample reference (adaptive on), latency of a pick during a refinement
+├── BandedSampleProbe.java       # a sample drawn in strips is the same sample; an aborted one is cleared; a depth read or a probe between strips loses nothing
+├── FocusPickProbe.java          # the probe and the focus pick: sphere vs exact intersection, scene vs its image's depth, cost, latency during a refinement
 ├── StripCostProbe.java          # GPU cost of strips vs whole per sync pattern: why slices are 60 ms
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them

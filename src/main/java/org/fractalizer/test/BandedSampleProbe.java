@@ -17,7 +17,9 @@ import java.util.concurrent.CountDownLatch;
  * {@code discardSample}) so it can change its mind between strips. This probe renders the
  * same first sample whole and in 1, 3, 8 and 16 strips and compares the raw accumulation
  * buffers, then discards a sample after its first strip and checks that the next sample
- * starts from a cleared buffer rather than on top of the partial one.
+ * starts from a cleared buffer rather than on top of the partial one. A depth read and a
+ * probe (the scene's program asked where rays land) between two strips must leave the sample
+ * what it would have been.
  *
  *   mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.BandedSampleProbe"
  *
@@ -88,6 +90,33 @@ public class BandedSampleProbe {
             System.out.printf("  a depth read between two strips (depth %.4f): differing values %d / %d%n",
                     picked, d, whole.length);
             ok &= d == 0 && engine.getSampleCount() == 1;
+        }
+
+        // The same with the probe (a focus pick, the auto speed's clearance): it draws with the
+        // scene's own program in probe mode into a target of its own, scissor off. The rest of
+        // the sample must be drawn as a view again, where the pass expects, unclipped.
+        {
+            engine.resetAccumulation();
+            engine.postAndWait(() -> {
+                engine.beginSample(uniforms);
+                engine.drawRows(0, H / 2);
+                engine.fence().await();
+            });
+            java.util.concurrent.CompletableFuture<GLSLEngine.ProbeHit[]> probed = new java.util.concurrent.CompletableFuture<>();
+            controller.probe(new float[]{0f, 0f, 0.5f, -0.5f}, probed::complete);
+            GLSLEngine.ProbeHit[] hits = probed.get();
+            engine.postAndWait(() -> {
+                engine.drawRows(H / 2, H - H / 2);
+                engine.fence().await();
+                engine.commitSample();
+            });
+            float[] withProbe = engine.readRawImage();
+            int d = 0;
+            for (int i = 0; i < whole.length; i++) if (whole[i] != withProbe[i]) d++;
+            System.out.printf("  a probe between two strips (%s): differing values %d / %d%n",
+                    hits == null ? "NO PROGRAM, the probe did not run" : String.format("centre %.4f, clearance %.4f", hits[0].distance(), hits[0].clearance()),
+                    d, whole.length);
+            ok &= hits != null && d == 0 && engine.getSampleCount() == 1;
         }
 
         // Discard after the first strip: the count must not move, and the next whole sample
