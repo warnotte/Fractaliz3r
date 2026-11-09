@@ -36,8 +36,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * Usage:
  *   mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.NavigationFluidityProbe" \
  *       -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 1280x720 4"
- *   The scene is a .frac or a FractalType name; WxH is the viewport; the last arg is the
- *   number of seconds of navigation.
+ *   The scene is a .frac or a FractalType name; WxH is the viewport; the third arg is the
+ *   number of seconds of navigation. A fourth arg "probe" also keeps one probe in flight
+ *   per frame, as the auto speed does while a key is held, to see what that costs.
  */
 public class NavigationFluidityProbe {
 
@@ -46,6 +47,7 @@ public class NavigationFluidityProbe {
         String[] res = (args.length > 1 ? args[1] : "1280x720").split("x");
         int w = Integer.parseInt(res[0]), h = Integer.parseInt(res[1]);
         double seconds = args.length > 2 ? Double.parseDouble(args[2]) : 4;
+        boolean withProbe = args.length > 3 && args[3].equals("probe");
 
         CountDownLatch started = new CountDownLatch(1);
         Platform.startup(started::countDown);
@@ -78,6 +80,8 @@ public class NavigationFluidityProbe {
 
         // ---- A. navigation ---------------------------------------------------------------
         List<Long> callMs = Collections.synchronizedList(new ArrayList<>());
+        java.util.concurrent.atomic.AtomicBoolean probing = new java.util.concurrent.atomic.AtomicBoolean();
+        AtomicInteger probes = new AtomicInteger();
         AtomicLong worstStall = new AtomicLong(0);
         AtomicInteger stallsOver16 = new AtomicInteger();
         CountDownLatch done = new CountDownLatch(1);
@@ -106,6 +110,10 @@ public class NavigationFluidityProbe {
                     long t0 = System.nanoTime();
                     lastRequest.set(t0);
                     controller.requestRender();
+                    // As the auto speed does while a key is held: one probe in flight.
+                    if (withProbe && probing.compareAndSet(false, true)) {
+                        controller.probe(new float[]{0f, 0f}, hits -> { probes.incrementAndGet(); probing.set(false); });
+                    }
                     callMs.add((System.nanoTime() - t0) / 1_000_000);
                 }
             }.start();
@@ -122,6 +130,7 @@ public class NavigationFluidityProbe {
                 mean(callMs), pct(callMs, 95), max(callMs));
         System.out.printf("  FX thread stall         worst %4d ms   %d stalls over 16 ms%n", worstStall.get(), stallsOver16.get());
         System.out.printf("  images shown            %5d   (%.1f per second)%n", images.get(), images.get() / elapsed);
+        if (withProbe) System.out.printf("  probes answered         %5d   (%.1f per second, one in flight at a time)%n", probes.get(), probes.get() / elapsed);
         System.out.printf("  request -> image        median %4d ms   p95 %4d ms   max %4d ms%n",
                 pct(latencyMs, 50), pct(latencyMs, 95), max(latencyMs));
 

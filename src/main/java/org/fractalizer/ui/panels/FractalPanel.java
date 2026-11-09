@@ -63,6 +63,15 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             updatePositionLabel();
         });
 
+        autoSpeedCheck = new javafx.scene.control.CheckBox("Auto speed (fraction of the gap ahead)");
+        autoSpeedCheck.setSelected(true);
+        autoSpeedCheck.setTooltip(new javafx.scene.control.Tooltip(
+                "On: each frame moves the camera by a fraction of the free distance ahead in the\n" +
+                "direction it is going, measured on the scene itself, so a dive keeps its pace at\n" +
+                "any depth (a decade a second at 0.1) and never crosses the surface; Move Speed is\n" +
+                "that fraction, and the step far from everything. Off: Move Speed is the step."));
+        autoSpeedCheck.setOnAction(e -> { if (autoSpeedListener != null) autoSpeedListener.accept(autoSpeedCheck.isSelected()); });
+
         positionLabel = new Label("Pos: (0.00, 0.00, -3.00)");
         positionLabel.getStyleClass().add("mono-label");
 
@@ -87,7 +96,7 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         });
         resetBtn.setMaxWidth(Double.MAX_VALUE);
 
-        VBox navBox = new VBox(5, speedSlider, positionLabel, navLabel, helpLabel, resetBtn);
+        VBox navBox = new VBox(5, speedSlider, autoSpeedCheck, positionLabel, navLabel, helpLabel, resetBtn);
         TitledPane navPane = new TitledPane("Navigation", navBox);
         navPane.setExpanded(true);
 
@@ -124,6 +133,15 @@ public class FractalPanel extends ScrollPane implements Refreshable {
             positionLabel.setText(String.format(java.util.Locale.ROOT, "Pos: (%.9f, %.9f, %.9f)\nSpeed: %.3g",
                     pos[0], pos[1], pos[2], camera.getMoveSpeed()));
         }
+    }
+
+    private javafx.scene.control.CheckBox autoSpeedCheck;
+    private java.util.function.Consumer<Boolean> autoSpeedListener;
+
+    /** Who to tell when the auto-speed box changes (the navigation controller); told at once. */
+    public void setAutoSpeedListener(java.util.function.Consumer<Boolean> listener) {
+        this.autoSpeedListener = listener;
+        if (listener != null && autoSpeedCheck != null) listener.accept(autoSpeedCheck.isSelected());
     }
 
     public Camera getCamera() {

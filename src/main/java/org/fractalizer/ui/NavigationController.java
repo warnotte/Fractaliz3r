@@ -26,6 +26,17 @@ public class NavigationController {
     private final Runnable resetCameraCallback;
     private final Consumer<Float> speedChangeCallback;
 
+    // Auto speed: when on, a frame of a held key moves the camera by a fraction of the free
+    // distance ahead of it in the direction it moves (DiveSpeed), the dial being that
+    // fraction, so a dive keeps the same feel at every depth. Off, the dial is the step, as
+    // it always was.
+    private boolean autoSpeed = true;
+    private AutoStep autoStep = (dial, dir) -> dial;
+
+    /** What auto speed makes of the dial for a move along a unit world direction: the length
+     *  of this frame's move, 0 to hold still. */
+    public interface AutoStep { double step(double dial, double[] direction); }
+
     // Input state
     private final Set<KeyCode> pressedKeys = new HashSet<>();
     private boolean isDragging = false;
@@ -156,13 +167,51 @@ public class NavigationController {
         });
     }
 
+    public void setAutoSpeed(boolean on) { this.autoSpeed = on; }
+    public boolean isAutoSpeed() { return autoSpeed; }
+    public void setAutoStep(AutoStep autoStep) { this.autoStep = autoStep; }
+
+    /**
+     * The step each held key moves the camera by this frame, world units: the dial, or with
+     * auto speed what the free distance along the keys' combined move allows (shared between
+     * the keys, so two keys together do not go twice as far).
+     */
+    public float effectiveStep() {
+        Camera camera = getCamera();
+        float dial = camera.getMoveSpeed();
+        if (!autoSpeed) return dial;
+        int sx = (pressedKeys.contains(KeyCode.RIGHT) ? 1 : 0) - (pressedKeys.contains(KeyCode.LEFT) ? 1 : 0);
+        int sy = (pressedKeys.contains(KeyCode.PAGE_UP) ? 1 : 0) - (pressedKeys.contains(KeyCode.PAGE_DOWN) ? 1 : 0);
+        int sz = (pressedKeys.contains(KeyCode.UP) ? 1 : 0) - (pressedKeys.contains(KeyCode.DOWN) ? 1 : 0);
+        float[] r = camera.getRightVector(), u = camera.getUpVector(), f = camera.getForwardVector();
+        double[] move = new double[3];
+        for (int i = 0; i < 3; i++) move[i] = sx * r[i] + sy * u[i] + sz * f[i];
+        double len = Math.sqrt(move[0] * move[0] + move[1] * move[1] + move[2] * move[2]);
+        if (len < 1e-9) return dial;                    // keys that cancel: nothing moves
+        for (int i = 0; i < 3; i++) move[i] /= len;
+        return (float) (autoStep.step(dial, move) / len);
+    }
+
     /**
      * Process keyboard input - should be called from animation timer.
      * @return true if camera moved
      */
     public boolean processKeyboardInput() {
-        boolean moved = false;
+        if (pressedKeys.isEmpty()) return false;
         Camera camera = getCamera();
+        float dial = camera.getMoveSpeed();
+        float step = effectiveStep();
+        if (!(step > 0f)) return false;                 // auto speed waits for a measure
+        camera.setMoveSpeed(step);
+        try {
+            return processKeys(camera);
+        } finally {
+            camera.setMoveSpeed(dial);
+        }
+    }
+
+    private boolean processKeys(Camera camera) {
+        boolean moved = false;
 
         // Arrow keys for movement
         if (pressedKeys.contains(KeyCode.UP)) {

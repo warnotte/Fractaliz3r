@@ -103,6 +103,7 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ResponsivenessProbe
 # How fluid is the viewport while the camera moves: one renderPreview per frame from the FX thread
 # for N seconds; JavaFX held per call, worst FX stall, images/s, request->image latency, and how long a
 # move waits for its preview while the refinement pass runs. Scene = .frac or a FractalType name.
+# A 4th arg "probe" keeps one probe in flight per frame, as the auto speed does while a key is held.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.NavigationFluidityProbe" -Dexec.args="presets/ALBEDO_039.frac 1920x1080 3"
 # The other half: the app's own panels (node editor, Lighting, Material, Quality) built against the
 # real controller, one slider of each dragged at 30 ticks/s; JavaFX held per tick, worst stall,
@@ -117,6 +118,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.BandedSampleProbe"
 # intersection, the scene against its own image's depth, the cost of a probe, and how long a pick
 # made during a refinement takes to come back and to reach the screen.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.FocusPickProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 640x360 64"
+# A dive with the auto speed, headless, on any scene at 60 frames/s: each frame moves by a fraction of
+# the free distance ahead (the probe); logged, a still per decade; must never cross the surface.
+# (scene outDir WxH spp dial frames [eye,target as 6 comma-separated numbers: a detail camera])
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DiveProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac out/dive 480x270 16 0.1 600"
 # What a sample costs as strips against whole, on the GPU, per sync pattern (bound once, rebound
 # each, fenced each, one or two in flight): the measurement behind the scheduler's slice lengths.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.StripCostProbe" -Dexec.args="presets/ALBEDO_039.frac 1920x1080"
@@ -225,6 +230,7 @@ org.fractalizer
 └── ui/
     ├── GLSLFractalizerController.java  # Bridges UI with GLSL engine (parameter caching)
     ├── ViewportHUD.java                # 3D Compass, Speed Meter, Telemetry overlay
+    ├── DiveSpeed.java                  # auto speed: a frame's step = a fraction of the free distance ahead along the move (the probe), less the distance moved since
     ├── AnimationManager.java           # Manages timeline and keyframe editing
     ├── components/
     │   ├── EnhancedSlider.java         # Pro slider: mouse wheel, precision, lock, inline edit
@@ -251,6 +257,7 @@ src/test/java/  (JUnit, no GPU — `mvn test`, run by CI)
 ├── graph/GraphCompilerTest          # GLSL + uniforms for leaves, CSG, transforms
 ├── graph/MaterialSSBOTest           # SSBO layout, matId propagation, serialization
 ├── graph/HybridNodeTest             # chain library, per-step uniforms, serialization
+├── ui/DiveSpeedTest                 # auto speed against a late probe: never more than the gap left ahead, waits for a trusted measure, backs out of the solid
 └── ui/components/UiWiringTest       # is a control actually ON the built panel (stub controller)
 
 test/  (GPU harnesses in src/main — run them instead of re-reading the render path; output in out/)
@@ -277,6 +284,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── SliderFluidityProbe.java     # the viewport while a slider of each real panel moves; "window" for layout costs
 ├── BandedSampleProbe.java       # a sample drawn in strips is the same sample; an aborted one is cleared; a depth read or a probe between strips loses nothing
 ├── FocusPickProbe.java          # the probe and the focus pick: sphere vs exact intersection, scene vs its image's depth, cost, latency during a refinement
+├── DiveProbe.java               # auto speed: a headless dive on any scene, readings per frame, a still per decade, never crosses the surface
 ├── StripCostProbe.java          # GPU cost of strips vs whole per sync pattern: why slices are 60 ms
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them

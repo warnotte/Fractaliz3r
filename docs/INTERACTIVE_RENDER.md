@@ -157,7 +157,9 @@ still planned as before and a throughput-bound scene keeps its 60 ms strips.
   rays from the camera land: the distance along each ray, and the scene's estimate at the
   camera (its clearance). A ray is either the view's ray through a screen point
   (`screenRay`) or a world direction (`directionRay`). It is the one source of every
-  distance the app needs: the focus pick takes the ray through the clicked pixel.
+  distance the app needs:
+  - the focus pick: the ray through the clicked pixel;
+  - the auto speed (`DiveSpeed`): the ray along the move.
 
   A copy of the estimator on the CPU would hold for one fractal type at a time; the probe
   holds for any fractal, graph, hybrid chain or custom shader. In the shader
@@ -243,6 +245,14 @@ a still export ran while the preview loop kept resizing the engine.
   - on a scene, against the depth its own image accumulated: median 0.01 %;
   - its cost: 0.3 ms idle;
   - a pick made during a refinement comes back in 18-35 ms.
+- `DiveProbe`: a dive with the auto speed on any scene at 60 frames a second, the probe's
+  readings logged, a still at each decade. It never crosses the surface, and at a dial of
+  0.1 it closes a decade every 60 frames down to 1e-6 on the Julia bulb, the Mandelbox
+  (detail camera) and the Labyrinth. Below that the float camera position stops following
+  the double one and the dive slows, safely; double precision in the shader is § 4.2 of
+  docs/DEEP_ZOOM_HANDOFF.md. The speed follows the free distance along the move, not the
+  estimate at the camera. That estimate is a lower bound, 3800 times too low at the
+  Mandelbox's default camera, and a speed tied to it froze the camera there.
 - `RenderRegression check`, `ExportAfterPreviewProbe`: exports unchanged to the bit.
 - `ResponsivenessProbe`: the refinement's throughput and image cadence.
 - `StripCostProbe`: what a sample costs as strips against whole, on the GPU, per sync

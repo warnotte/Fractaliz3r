@@ -31,6 +31,7 @@ import org.fractalizer.engine.Camera;
 import org.fractalizer.engine.GLSLEngine.PostProcessParams;
 import org.fractalizer.fractals.*;
 import org.fractalizer.ui.AnimationManager;
+import org.fractalizer.ui.DiveSpeed;
 import org.fractalizer.ui.GLSLFractalizerController;
 import org.fractalizer.ui.NavigationController;
 import org.fractalizer.ui.SplashScreen;
@@ -269,6 +270,14 @@ public class GLSLFractalizerApp extends Application {
                 if (viewportHUD != null) viewportHUD.updateSpeed(newSpeed);
             }
         );
+
+        // Auto speed: the step follows the free distance ahead in the direction of the move,
+        // measured on the scene itself by the probe (any fractal, graph or shader), so a dive
+        // keeps the same pace at every depth and the wheel dial is the fraction of the gap a
+        // frame covers.
+        DiveSpeed diveSpeed = DiveSpeed.over(controller);
+        navigation.setAutoStep((dial, dir) -> diveSpeed.step(dial, fractalPanel.getCamera().getPositionD(), dir));
+        fractalPanel.setAutoSpeedListener(navigation::setAutoSpeed);
 
         // Setup click-to-focus handler (middle click or Ctrl+click)
         setupFocusPickHandler();
