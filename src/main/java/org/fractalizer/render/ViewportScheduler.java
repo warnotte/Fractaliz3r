@@ -7,6 +7,7 @@ import org.fractalizer.render.ViewportEvent.ViewportImage;
 
 import java.util.Map;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -52,7 +53,9 @@ public final class ViewportScheduler {
     private Job current;
     private SceneSnapshot lastShown;          // the scene on screen, for refine and resume
     private ScheduledFuture<?> refineTimer;
-    private boolean stepQueued;
+    // At most one step waits in the GL queue, whoever asked for it (a request from the
+    // JavaFX thread, the step before, the refine timer): two would run two chains of steps.
+    private final AtomicBoolean stepQueued = new AtomicBoolean();
     private float previewScaleNow;            // the scale of the last preview, for the dead band
 
     public ViewportScheduler(GLSLEngine engine, Consumer<Runnable> uiExecutor) {
@@ -91,7 +94,7 @@ public final class ViewportScheduler {
         if (pauseDepth.decrementAndGet() > 0) return;
         engine.post(() -> {
             if (pending.get() == null && lastShown != null) pending.compareAndSet(null, lastShown);
-            step();
+            queueStep();
         });
     }
 
@@ -112,12 +115,16 @@ public final class ViewportScheduler {
 
     // ---- the loop, GL thread ---------------------------------------------------------
 
+    /** Queue the next step behind any GL work already waiting. Never inline, even from the
+     *  GL thread: a step that ran the next one inside itself held the GL thread for the whole
+     *  job, so a focus read or a pause posted meanwhile waited for the end of the refinement
+     *  (FocusPickProbe) while requests, checked at every step, still preempted. */
     private void queueStep() {
-        engine.post(this::step);
+        if (stepQueued.compareAndSet(false, true)) engine.enqueue(this::step);
     }
 
     private void step() {
-        stepQueued = false;
+        stepQueued.set(false);
         if (pauseDepth.get() > 0) { dropCurrent(); return; }
 
         SceneSnapshot req = pending.get();
@@ -151,9 +158,7 @@ public final class ViewportScheduler {
             current = null;
             finished.finished();
         }
-        if (current != null || pending.get() != null) {
-            if (!stepQueued) { stepQueued = true; queueStep(); }
-        }
+        if (current != null || pending.get() != null) queueStep();
     }
 
     private Job startJob(SceneSnapshot scene) {
@@ -179,7 +184,7 @@ public final class ViewportScheduler {
             refineTimer = null;
             if (pauseDepth.get() > 0 || current != null || pending.get() != null) return;
             current = new RefineJob(scene);
-            step();
+            queueStep();
         }, REFINE_DELAY_MS);
     }
 

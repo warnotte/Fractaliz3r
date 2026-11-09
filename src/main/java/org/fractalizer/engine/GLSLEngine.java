@@ -827,6 +827,24 @@ public class GLSLEngine implements AutoCloseable {
     /** Run {@code task} on the GL thread after everything already queued, without waiting. */
     public void post(Runnable task) { postToGLThread(task); }
 
+    /**
+     * Queue {@code task} behind whatever the GL thread already holds, even when called from
+     * the GL thread itself: unlike {@link #post}, never run inline. A task that reschedules
+     * itself (the viewport's steps) must go through here, or each one runs inside the last
+     * and nothing posted meanwhile (a focus read, an upload, a pause) gets in until the
+     * whole chain ends. Dropped silently once the engine is closed.
+     */
+    public void enqueue(Runnable task) {
+        try {
+            glThread.submit(() -> {
+                glfwMakeContextCurrent(window);
+                try { task.run(); } catch (Exception e) { e.printStackTrace(); }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException closed) {
+            // the engine is shutting down: there is no GL thread to run it on
+        }
+    }
+
     /** Run {@code task} on the GL thread and wait for it (inline when already there). */
     public void postAndWait(Runnable task) { runOnGLThread(task); }
 

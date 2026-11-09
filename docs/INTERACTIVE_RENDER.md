@@ -29,6 +29,17 @@ and the step reschedules the next one. Synchronous GL work from other threads (a
 a harness, a resize) interleaves between steps and waits at most one step. There is no
 `ProgressiveRenderer` thread and no cross-thread `.get()` on the interactive path.
 
+The step reschedules itself with `GLSLEngine.enqueue`, never with `post`: `post` runs its
+task inline when called from the GL thread, and until 2026-11-09 the next step therefore
+ran inside the one before it. A whole preview and refinement was one executor task; the
+pending request is checked at every step, so camera moves and sliders still preempted at
+once, but anything else posted to the GL thread waited for the end of the job: a Ctrl+click
+focus pick during a refinement read its depth seconds late (`FocusPickProbe`: ~725 ms on a
+light scene, the length of the refinement on a heavy one), and a `pause()` before an
+export waited the same. At most one step is ever queued (`stepQueued`, an `AtomicBoolean`
+shared by requests, the step itself, the refine timer and `resume`), so a request does not
+start a second chain of steps.
+
 ## Vocabulary
 
 - **SceneSnapshot**: everything a render needs, frozen on the JavaFX thread: program key,
@@ -142,6 +153,13 @@ still planned as before and a throughput-bound scene keeps its 60 ms strips.
   sync, and the slice length is what bounds both that price and the resume latency:
   previews use `STEP_BUDGET_NS` (30 ms), the refinement `REFINE_SLICE_NS` (60 ms, about
   10-20 % on the heaviest scene, where 30 ms cost up to 60 %).
+- `readDepthAt` / `readDepthAtAsync` (the focus pick) may land between two strips of a
+  sample: they call `touchGLState()` like every other pass, or the rest of the sample was
+  drawn into the default framebuffer (`BandedSampleProbe` has the case). With adaptive
+  sampling a converged pixel stops drawing, so the depth comes from the variance image
+  (`.a` the drawn samples' depth sum, `.b` their count), not from the accumulation's alpha
+  over the global sample count, which read 75 % short late in a refinement
+  (`FocusPickProbe`).
 - `readViewportFrame()` runs the post-process and returns a `ViewportFrame` (BGRA bytes,
   size, sample count), converted to a JavaFX image by the listener on the JavaFX thread.
   Read as bytes straight from the display framebuffer (8 ms at 1080p; the float readback
@@ -198,7 +216,10 @@ a still export ran while the preview loop kept resizing the engine.
   § Since 3.2.2 for the numbers); `SliderFluidityProbe` drives it through the app's own
   panels, in a window.
 - `BandedSampleProbe` checks the slicing API: strips give the same sample to the bit, a
-  discarded sample leaves nothing behind.
+  discarded sample leaves nothing behind, a depth read between two strips loses nothing.
+- `FocusPickProbe`: the picked depth against an every-sample reference with adaptive
+  sampling on, and how long a pick made during a refinement takes to come back and to
+  reach the screen.
 - `RenderRegression check`, `ExportAfterPreviewProbe`: exports unchanged to the bit.
 - `ResponsivenessProbe`: the refinement's throughput and image cadence.
 - `StripCostProbe`: what a sample costs as strips against whole, on the GPU, per sync
