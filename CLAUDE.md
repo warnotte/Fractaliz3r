@@ -122,6 +122,12 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.FocusPickProbe" -De
 # the free distance ahead (the probe); logged, a still per decade; must never cross the surface.
 # (scene outDir WxH spp dial frames [eye,target as 6 comma-separated numbers: a detail camera])
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DiveProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac out/dive 480x270 16 0.1 600"
+# Deep precision (the camera rays marched in double, the scene's estimator translated to double by
+# DeepSource): a ladder of cameras toward one surface point placed by the probe, each rung rendered
+# float and double, normal error / roughness / speckle / cost, report.html. "compile" compiles every
+# built-in in float and double and says which double program fails (optional 3rd arg: a name filter).
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PrecisionLab" -Dexec.args="MANDELBOX out/precision 640x360 8 1e-1,1e-2,1e-3,1e-4,1e-5,1e-6 -4.55047,0.23943,-9.37107,-1.45361,1.45941,-6.01285"
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PrecisionLab" -Dexec.args="compile out/precision_compile"
 # What a sample costs as strips against whole, on the GPU, per sync pattern (bound once, rebound
 # each, fenced each, one or two in flight): the measurement behind the scheduler's slice lengths.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.StripCostProbe" -Dexec.args="presets/ALBEDO_039.frac 1920x1080"
@@ -176,6 +182,7 @@ org.fractalizer
 ├── engine/
 │   ├── GLSLEngine.java              # GPU compute abstraction (LWJGL/OpenGL)
 │   ├── ShaderPreprocessor.java      # GLSL symbol renaming for shader concatenation
+│   ├── DeepSource.java              # deep precision: the scene's DE_simple and what it reaches copied in double -> DE_deep(dvec3)
 │   ├── BlueNoiseGenerator.java      # 64x64 blue noise texture (Mitchell's best-candidate)
 │   └── Camera.java                  # Quaternion-based FPS camera (no gimbal lock)
 ├── fractals/
@@ -251,6 +258,7 @@ org.fractalizer
 src/test/java/  (JUnit, no GPU — `mvn test`, run by CI)
 ├── config/ConfigRoundTripTest       # every setting a .frac carries, written and read back
 ├── engine/ShaderPreprocessorTest    # symbol prefixing for shader concatenation
+├── engine/DeepSourceTest            # the double entry: what DE_simple reaches, typed in double, structs, shims, every built-in
 ├── engine/CameraTest                # quaternion camera: orthonormal, no drift, axes
 ├── render/CostModelTest             # strip planning: a latency-bound scene is not cut into latency-only strips
 ├── animation/AnimationTrackTest     # keyframes, easing, Catmull-Rom, timeline
@@ -285,6 +293,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── BandedSampleProbe.java       # a sample drawn in strips is the same sample; an aborted one is cleared; a depth read or a probe between strips loses nothing
 ├── FocusPickProbe.java          # the probe and the focus pick: sphere vs exact intersection, scene vs its image's depth, cost, latency during a refinement
 ├── DiveProbe.java               # auto speed: a headless dive on any scene, readings per frame, a still per decade, never crosses the surface
+├── PrecisionLab.java            # deep precision: float vs double down a camera ladder (normal error, speckle, cost); "compile" = every built-in in double
 ├── StripCostProbe.java          # GPU cost of strips vs whole per sync pattern: why slices are 60 ms
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them

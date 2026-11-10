@@ -94,6 +94,7 @@ public class DiveProbe {
         double start = centre.distance(), lowest = start;
         int nextDecade = (int) Math.floor(Math.log10(start));
         int frames = 0, held = 0, crossed = -1;
+        double lastAhead = start, lastClearance = centre.clearance();
         long stepNs = 0;
         still(controller, outDir, w, h, samples, String.format(Locale.ROOT, "dive_%03d_start.png", 0));
         // Frames at 60 per second: the probe answers between them, as in the app. Faster than
@@ -118,6 +119,16 @@ public class DiveProbe {
             cam.setMoveSpeed(keep);
 
             double ahead = seen[0], clearance = seen[1];
+            // The surface ahead receding by orders of magnitude in one frame is either the
+            // geometry (a sheet seen from afar dissolving into copies with gaps between them:
+            // the ray now passes through) or the camera stepping through a wall. The estimate
+            // at the camera tells them apart: through a gap it stays as small as it was.
+            if (ahead > 100 * lastAhead && lastAhead > 0) {
+                System.out.printf(Locale.ROOT, "  frame %4d: the surface ahead receded %.3e -> %.3e; estimate at the camera %.3e -> %.3e%n",
+                        frames, lastAhead, ahead, lastClearance, clearance);
+            }
+            lastAhead = ahead;
+            lastClearance = clearance;
             if (ahead > 0) lowest = Math.min(lowest, ahead);
             if (!(ahead > 0 && clearance > 0) && crossed < 0) {
                 crossed = frames;
