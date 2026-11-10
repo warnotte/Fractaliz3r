@@ -18,6 +18,7 @@ LASER_TABLE|NODE_GRAPH|
 MANDELBOX_DEEP|MANDELBOX|
 MANDELBOX_LEDGE|MANDELBOX|
 MENGER_WALL|MENGER_SPONGE|
+MIRROR_GLASS|NODE_GRAPH|Test scene for reflection and refraction: a mirror ball and a glass ball on a slab, a Mandelbulb behind them. Path tracing on; in classic shading the mirror shows as a dark ball and the glass as an opaque one.
 NODE_COOL1|NODE_GRAPH|
 NODE_COOL2|NODE_GRAPH|
 NODE_COOL3|NODE_GRAPH|

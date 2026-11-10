@@ -331,6 +331,20 @@ public class PresetForge {
                 .caustics(3.0f).causticPhotons(512)
                 .colorStrength(1.0f).metalness(0.0f));
 
+        // A test scene for reflection and refraction: a mirror ball and a glass ball on a
+        // matte slab, a Mandelbulb behind them, a cloudy sky. One look says whether the
+        // mirror shows the bulb and the sky, and whether the glass shows them upside down.
+        p.put("MIRROR_GLASS", () -> SceneBuilder.nodeGraph(mirrorAndGlass())
+                .camera(0f, 0.55f, -2.4f).lookAt(0f, 0.3f, 0.3f).fov(45)
+                .gradient(SPECTRUM).coloringMode(9)
+                .materialType(0).ior(1.5f).roughness(0.5f)
+                .pathTracing(true).maxBounces(8).rimIntensity(0.0f).skyType(0)
+                .lightDir(1.2f, 2.0f, -1.5f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(3.0f)
+                .ambientColor(0.5f, 0.55f, 0.65f).ambientIntensity(0.2f)
+                .colorStrength(1.0f).metalness(0.0f)
+                .description("Test scene for reflection and refraction: a mirror ball and a glass ball on a slab, a Mandelbulb behind them. "
+                        + "Path tracing on; in classic shading the mirror shows as a dark ball and the glass as an opaque one."));
+
         // The same fractal behind a glass sphere: a lens, the detail magnified and fringed.
         p.put("PRISM_LENS", () -> SceneBuilder.nodeGraph(prismGem(org.fractalizer.graph.PrimitiveNode.PrimitiveType.SPHERE, 0.55f, 1.5f))
                 .camera(0f, 0.2f, -3.0f).lookAt(0f, 0f, 0f).fov(40)
@@ -357,6 +371,22 @@ public class PresetForge {
                 .lightDir(1.5f, 2.5f, -2.5f).lightColor(1.0f, 0.98f, 0.95f).lightIntensity(3.0f)
                 .ambientColor(0.4f, 0.45f, 0.55f).ambientIntensity(0.25f)
                 .colorStrength(1.0f).metalness(0.0f);
+    }
+
+    /** A polished metal ball left, a clear glass ball right (radius 0.35, resting on the
+     *  slab), a Mandelbulb standing behind them. */
+    static org.fractalizer.graph.GraphNode mirrorAndGlass() {
+        org.fractalizer.graph.PrimitiveNode ball = new org.fractalizer.graph.PrimitiveNode(org.fractalizer.graph.PrimitiveNode.PrimitiveType.SPHERE);
+        ball.setSizeX(0.35f);
+        org.fractalizer.graph.MaterialNode mirror = material(SceneBuilder.translate(ball, -0.45f, 0.35f, 0f), 0.95f, 0.95f, 0.97f, 0.0f, 0f);
+        mirror.setMaterialType(org.fractalizer.graph.MaterialNode.TYPE_METALLIC);
+        mirror.setMetallic(1f);
+        mirror.setName("Mirror ball");
+        org.fractalizer.graph.GraphNode glass = SceneBuilder.translate(SceneBuilder.glassBall(0.35f, 1.5f, 0.02f), 0.45f, -0.084f, 0f);
+        glass.setName("Glass ball");
+        org.fractalizer.graph.GraphNode bulb = SceneBuilder.translate(SceneBuilder.scale(SceneBuilder.fractal(org.fractalizer.fractals.FractalType.MANDELBULB), 0.55f), 0f, 0.62f, 1.3f);
+        bulb.setName("Mandelbulb");
+        return SceneBuilder.union(SceneBuilder.union(mirror, glass), SceneBuilder.union(bulb, SceneBuilder.slab(3.0f)));
     }
 
     /** A matte block standing on the slab, a little to the right, turned a bit. */

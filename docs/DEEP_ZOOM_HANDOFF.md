@@ -125,9 +125,17 @@ Read it before touching anything related to deep zoom, precision, DoF or navigat
   - the rest of the secondary rays in double. The sun's shadow and AO at a deep hit, and the
     path tracer's shadow rays and bounces, are done (docs/RENDERING.md); reflections in
     classic shading, extra lights and SSS are still float;
-  - the owner's `presets/PathtracerTest.frac` (the same scene as `ZoOM_ANDBUG`): too dark
-    with 8 bounces. Test 8 / 16 / 32 bounces at a LOW resolution, now that the bounces leave
-    from the right place, and look elsewhere if that is not it;
+  - the owner's `presets/PathtracerTest.frac` (the same scene as `ZoOM_ANDBUG`), too dark
+    with 8 bounces: measured 2026-11-10, 8 / 16 / 32 bounces give the same image to the bit
+    (Russian roulette ends every path on that dark albedo well before 8). The darkness is the
+    Studio sky (its brightness is `cloudDensity`, 0.13 there: no fill light in the shadows),
+    the palette's near-black first stop on the large wall, and the exposure (2.5, or the sun
+    at 3, takes the share of pixels under 10/255 from 33 % to 5 %). Settings, not code;
+  - `presets/MIRROR_GLASS.frac`, the reflection / refraction test scene (mirror ball, glass
+    ball, Mandelbulb, slab). Rendered against `main` from afar and from 0.07 of the glass:
+    the same images (classic bit-exact, path traced within sampling noise). It shows a
+    limitation `main` already had: classic shading draws a metal MaterialNode as a dark ball
+    and a glass one as an opaque ball; only the path tracer reflects and refracts them;
   - § 4.3.
 
 The owner's wishes, in the owner's words and mine:
