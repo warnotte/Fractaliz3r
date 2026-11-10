@@ -50,7 +50,8 @@ import java.util.concurrent.TimeUnit;
  * fractal is known here.
  *
  * <pre>
- *   PrecisionLab scene outDir WxH samples ladder [eyeX,eyeY,eyeZ,targetX,targetY,targetZ]
+ *   PrecisionLab scene outDir WxH samples ladder [eyeX,eyeY,eyeZ,targetX,targetY,targetZ] [asis]
+ *   ("asis" keeps the scene's own shading, path tracing and fog included, instead of classic)
  *   PrecisionLab MANDELBOX out/precision 640x360 8 1e-1,1e-2,1e-3,1e-4,1e-5,1e-6 -4.55047,0.23943,-9.37107,-1.45361,1.45941,-6.01285
  *   PrecisionLab compile out/precision_compile [NAME]  (every built-in, or those whose enum name
  *                                                       contains NAME, float and double: compiles? how long?)
@@ -196,11 +197,16 @@ public class PrecisionLab {
         GLSLFractalizerController controller = start(w, h);
         FocusPickProbe.loadScene(controller, spec);
         AbstractFractalParams params = (AbstractFractalParams) controller.getParams();
-        params.setPathTracingEnabled(false);
-        params.setConeTracingEnabled(true);
+        // "asis": the scene's own shading (path tracing, fog...), to see what the app shows;
+        // otherwise classic shading, which the normal metrics are made for.
+        boolean asis = java.util.Arrays.asList(args).contains("asis");
+        if (!asis) {
+            params.setPathTracingEnabled(false);
+            params.setConeTracingEnabled(true);
+        }
         params.setDofEnabled(false);
         Camera camera = params.getCamera();
-        if (args.length > 5) {
+        if (args.length > 5 && args[5].contains(",")) {
             String[] v = args[5].split(",");
             float[] eye = {Float.parseFloat(v[0]), Float.parseFloat(v[1]), Float.parseFloat(v[2])};
             float[] q = CameraUtils.lookAt(eye, new float[]{Float.parseFloat(v[3]), Float.parseFloat(v[4]), Float.parseFloat(v[5])});

@@ -420,8 +420,22 @@ double one: 0.6° at 1e-2, 13° at 1e-3, **92° at 1e-4** (the image is other ge
   out of dense structure, many steps, each in double. Only the
   three marchers a camera ray goes through switch to double (`rayMarch`, and
   `rayMarchSimpleCamera` for the path tracer's first segment and the depth under each pixel).
-  Still float: reflections, the extra lights' shadows, subsurface scattering, and the path
-  tracer's bounces and light samples.
+- **The path tracer's rays leaving a surface** (the shadow rays toward the sun and the sky,
+  the next bounce) leave from the deep march's own point, in double, too:
+  - `leaveSurface` registers the origin;
+  - `rayMarchSimpleLeaving` (shadow rays) and `rayMarchSimpleCamera` (the next segment)
+    march it in double while it is near the surface, and in float once clear by 100 float
+    steps.
+
+  The offset they leave by used to be a fixed 0.005 world units, five times the view at 1e-3
+  and 125 times at 4e-5: the indirect light came from somewhere unrelated to the screen. It
+  is now `pathBias`, a few pixel footprints (`surfaceBias`) and never more than 0.005, so a
+  view from further than ~0.4 is unchanged (RenderRegression bit-exact). A path-traced Menger
+  at 4e-5 (the owner's `ZoOM_ANDBUG`) was half as bright as at 6e-4, and nearly black over
+  most of the surface. It now stays at the same brightness from 4e-5 to 6e-4.
+
+  Still float: reflections in classic shading, the extra lights' shadows, subsurface
+  scattering. A double program now takes 15-20 s to compile.
 - **A scene whose estimator does not compile in double** (GLSL refuses something the
   translation passed on) is rendered in float with a message: the scheduler compiles the
   snapshot's `floatSource` instead, and the engine remembers the failure so it is not retried

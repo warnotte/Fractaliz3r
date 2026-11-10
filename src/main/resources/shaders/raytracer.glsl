@@ -1678,14 +1678,114 @@ bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist, out int matType
     return false;
 }
 
-/** rayMarchSimple for a ray that may be the camera's (the path tracer's first segment, the
- *  depth under each pixel): in double when the camera is deep. Shadows, ambient occlusion
- *  and bounces call rayMarchSimple itself, so the double march is compiled in three places
- *  rather than into every one of them. */
-bool rayMarchSimpleCamera(Ray ray, out vec3 hitPos, out float hitDist, out int matType) {
-    bool hit = rayMarchSimple(ray, hitPos, hitDist, matType);
+// ---------------------------------------------------------------------------
+// Rays leaving a surface the path tracer hit: a shadow ray toward a light, the next bounce.
+// ---------------------------------------------------------------------------
+// The path tracer used to leave a surface 0.005 world units above it, whatever the scale:
+// at 1e-3 from the surface that is five times the view, and the indirect light came from
+// somewhere unrelated to what is on screen. The offset now follows the view, a few pixel
+// footprints (surfaceBias), and is never more than the 0.005 it was: a view from further
+// than ~0.4 is unchanged. And a ray leaving a point the deep march found leaves from that
+// point in double: leaveSurface registers its origin, and rayMarchSimpleLeaving /
+// rayMarchSimpleCamera march it in double while it is near the surface, in float once clear.
+// From the float hit point, a shadow ray at depth started under the surface and the image
+// darkened as the camera went in (a path-traced Menger at 4e-5: half as bright as at 6e-4).
+
+/** The offset of a ray leaving a surface the path tracer hit, at most what it always was. */
+float pathBias(vec3 hitPos) {
+    return min(0.005, surfaceBias(length(hitPos - camPos)));
+}
+
 #ifdef HAS_DEEP_DE
-    if (deepRay(ray) && deepNeeded(hitDist, gSimpleMinDE)) return rayMarchSimpleDeep(ray, hitPos, hitDist, matType);
+dvec3 gLeaveD = dvec3(0.0LF);    // the double origin of the last ray registered to leave a deep hit
+vec3  gLeaveF = vec3(0.0);       // its float rounding, by which the marcher recognises the ray
+bool  gLeaveValid = false;
+
+/** A ray leaving the deep hit, registered by leaveSurface, marched in double while it is near
+ *  the surface: true and the hit when it meets a surface there (recorded as the deep hit, so
+ *  that surface's normal and rays are double too); otherwise false, with the ray moved to
+ *  where it is clear by 100 float steps and how far that is in tOffset, for the float march
+ *  to go on from there. */
+bool leaveNearDeep(inout Ray ray, out vec3 hitPos, out float hitDist, out int matType, out float tOffset) {
+    tOffset = 0.0;
+    hitPos = ray.origin;
+    hitDist = 0.0;
+    matType = MAT_FRACTAL;
+    gLeaveValid = false;
+    dvec3 ro = gLeaveD;
+    dvec3 rd = dvec3(ray.direction);
+    float ulp = 1.19e-7 * max(length(camPos), 1e-3);
+    float qualityEpsilon = baseEpsilon / qualityMultiplier;
+    int steps = int(float(maxRaySteps) * qualityMultiplier);
+    double t = 0.0LF;
+    for (int i = 0; i < steps; i++) {
+        dvec3 q = ro + rd * t;
+        float d = sceneDE_deep(q);
+        if (d < deepEpsilon(float(t), qualityEpsilon)) {
+            hitPos = vec3(q);
+            hitDist = float(t);
+            gDeepHitPos = q;
+            gDeepHitValid = true;
+            OrbitTrap dummyTrap;
+            sceneDE(hitPos, dummyTrap, matType);
+            return true;
+        }
+        if (d > 100.0 * ulp) break;
+        t = t + double(d * STEP_FACTOR * fudgeFactor);
+    }
+    ray.origin = vec3(ro + rd * t);
+    tOffset = float(t);
+    return false;
+}
+#endif
+
+/** The origin of a ray leaving the surface at hitPos on the side n, bias above it (bias as
+ *  the float path has it): from the deep march's own point, in double, when hitPos is that
+ *  point, the offset then a few pixel footprints at its true distance. */
+vec3 leaveSurface(vec3 hitPos, vec3 n, float bias) {
+#ifdef HAS_DEEP_DE
+    if (deepPrecision != 0 && gDeepHitValid && all(equal(hitPos, vec3(gDeepHitPos)))) {
+        float b = surfaceBias(float(length(gDeepHitPos - camPosD)));
+        gLeaveD = gDeepHitPos + dvec3(n) * double(b);
+        gLeaveF = vec3(gLeaveD);
+        gLeaveValid = true;
+        return gLeaveF;
+    }
+#endif
+    return hitPos + n * bias;
+}
+
+/** rayMarchSimple for a ray leaveSurface may have registered (a shadow ray from a hit). */
+bool rayMarchSimpleLeaving(Ray ray, out vec3 hitPos, out float hitDist, out int matType) {
+    float tOffset = 0.0;
+#ifdef HAS_DEEP_DE
+    if (gLeaveValid && all(equal(ray.origin, gLeaveF))) {
+        if (leaveNearDeep(ray, hitPos, hitDist, matType, tOffset)) return true;
+    }
+#endif
+    bool hit = rayMarchSimple(ray, hitPos, hitDist, matType);
+    hitDist = hitDist + tOffset;
+    return hit;
+}
+
+/** rayMarchSimple for a ray that may be the camera's (the path tracer's first segment, the
+ *  depth under each pixel), in double when it needs it, or the next bounce leaving a deep hit
+ *  (leaveSurface), in double near the surface. Shadow rays go through rayMarchSimpleLeaving,
+ *  ambient occlusion and the rest through rayMarchSimple itself, so the double marches are
+ *  compiled in a few places rather than into every one of them. */
+bool rayMarchSimpleCamera(Ray ray, out vec3 hitPos, out float hitDist, out int matType) {
+    float tOffset = 0.0;
+    bool leaving = false;
+#ifdef HAS_DEEP_DE
+    if (gLeaveValid && all(equal(ray.origin, gLeaveF))) {
+        leaving = true;
+        if (leaveNearDeep(ray, hitPos, hitDist, matType, tOffset)) return true;
+    }
+#endif
+    bool hit = rayMarchSimple(ray, hitPos, hitDist, matType);
+    hitDist = hitDist + tOffset;
+#ifdef HAS_DEEP_DE
+    if (!leaving && deepRay(ray) && deepNeeded(hitDist, gSimpleMinDE)) return rayMarchSimpleDeep(ray, hitPos, hitDist, matType);
 #endif
     return hit;
 }
@@ -1721,12 +1821,12 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
             float fr = fresnelDielectric(max(dot(viewDir, normal), 0.0), 1.33); // Water IOR
             if (random(seed) < fr) {
                 currentRay.direction = reflect(currentRay.direction, normal);
-                currentRay.origin = hitPos + normal * 0.005;
+                currentRay.origin = leaveSurface(hitPos, normal, pathBias(hitPos));
                 throughput *= 0.95;
             } else {
                 throughput *= oceanColor;
                 currentRay.direction = randomCosineHemisphere(seed, normal);
-                currentRay.origin = hitPos + normal * 0.005;
+                currentRay.origin = leaveSurface(hitPos, normal, pathBias(hitPos));
             }
             continue;
         }
@@ -1818,7 +1918,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                     vec3 H = randomGGX(seed, faceNormal, safeRoughness);
                     reflectDir = reflect(-viewDir, H);
                 }
-                currentRay.origin = hitPos + faceNormal * 0.005;
+                currentRay.origin = leaveSurface(hitPos, faceNormal, pathBias(hitPos));
                 currentRay.direction = normalize(reflectDir);
                 throughput *= mix(vec3(1.0), albedo, 0.05);
             } else {
@@ -1833,7 +1933,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
 
                 if (!refractRay(currentRay.direction, faceNormal, entryEta, refractedDir)) {
                     // Total internal reflection
-                    currentRay.origin = hitPos + faceNormal * 0.005;
+                    currentRay.origin = leaveSurface(hitPos, faceNormal, pathBias(hitPos));
                     currentRay.direction = reflect(currentRay.direction, faceNormal);
                     throughput *= mix(vec3(1.0), albedo, 0.05);
                 } else if (entering) {
@@ -1866,13 +1966,13 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                         // TIR at exit — let ray pass through (approximation)
                         currentRay.direction = interiorDir;
                     }
-                    currentRay.origin = exitPos + exitNormal * 0.005;
+                    currentRay.origin = exitPos + exitNormal * pathBias(exitPos);
 
                     // Chromatic dispersion through glass thickness
                     throughput *= vec3(0.98, 1.0, 1.02) * albedo;
                 } else {
                     // Already exiting glass
-                    currentRay.origin = hitPos - faceNormal * 0.005;
+                    currentRay.origin = leaveSurface(hitPos, -faceNormal, pathBias(hitPos));
                     currentRay.direction = normalize(refractedDir);
                     throughput *= vec3(0.98, 1.0, 1.02) * albedo;
                 }
@@ -1889,10 +1989,10 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                 if (NdotL > 0.0) {
                     Ray shadowRay;
                     float shadowBias = surfaceBias(hitDist);
-                    shadowRay.origin = hitPos + faceNormal * shadowBias;
+                    shadowRay.origin = leaveSurface(hitPos, faceNormal, shadowBias);
                     shadowRay.direction = sunSampleDir;
                     vec3 shPos; float shDist; int shMat;
-                    if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
+                    if (!rayMarchSimpleLeaving(shadowRay, shPos, shDist, shMat)) {
                         vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
                         vec3 F = fresnelSchlickVec(max(dot(H_light, viewDir), 0.0), F0);
                         float a = safeRoughness * safeRoughness;
@@ -1929,7 +2029,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
             vec3 reflectDir = reflect(-viewDir, H);
             vec3 F0 = mix(vec3(0.04), albedo, localMetalness);
             throughput *= fresnelSchlickVec(cosTheta, F0);
-            currentRay.origin = hitPos + faceNormal * 0.005;
+            currentRay.origin = leaveSurface(hitPos, faceNormal, pathBias(hitPos));
             currentRay.direction = normalize(reflectDir);
         } else {
             // LAMBERTIAN
@@ -1941,10 +2041,10 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                 if (NdotL > 0.0) {
                     Ray shadowRay;
                     float shadowBias = surfaceBias(hitDist);
-                    shadowRay.origin = hitPos + faceNormal * shadowBias;
+                    shadowRay.origin = leaveSurface(hitPos, faceNormal, shadowBias);
                     shadowRay.direction = sunSampleDir;
                     vec3 shPos; float shDist; int shMat;
-                    if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
+                    if (!rayMarchSimpleLeaving(shadowRay, shPos, shDist, shMat)) {
                         radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI, 0.0, FIREFLY_CLAMP);
                     }
                 }
@@ -1966,7 +2066,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
                     radiance += clamp(throughput * albedo * sssColor * sssExtra * sssIntensity * extraLightRadiance, 0.0, FIREFLY_CLAMP);
                 }
             }
-            currentRay.origin = hitPos + faceNormal * 0.005;
+            currentRay.origin = leaveSurface(hitPos, faceNormal, pathBias(hitPos));
 
             // Stochastic reflection for Lambertian surfaces
             float reflProb = reflectionIntensity * fresnelSchlick(cosTheta, 0.04);
@@ -2081,7 +2181,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             float fr = fresnelDielectric(max(dot(viewDir, normal), 0.0), 1.33);
             if (random(seed) < fr) {
                 currentRay.direction = reflect(currentRay.direction, normal);
-                currentRay.origin = hitPos + normal * 0.005;
+                currentRay.origin = leaveSurface(hitPos, normal, pathBias(hitPos));
                 throughput *= 0.95;
                 lastWasSpecular = true; lastBsdfPdf = 0.0;
 #ifdef BIDIR
@@ -2091,7 +2191,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             } else {
                 throughput *= oceanColor;
                 currentRay.direction = randomCosineHemisphere(seed, normal);
-                currentRay.origin = hitPos + normal * 0.005;
+                currentRay.origin = leaveSurface(hitPos, normal, pathBias(hitPos));
                 lastWasSpecular = false; lastBsdfPdf = max(dot(normal, currentRay.direction), 0.001) / PI;
 #ifdef BIDIR
                 if (bdLive) {
@@ -2304,7 +2404,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     vec3 H = randomGGX(seed, faceNormal, safeRoughness);
                     reflectDir = reflect(-viewDir, H);
                 }
-                currentRay.origin = hitPos + faceNormal * 0.005;
+                currentRay.origin = leaveSurface(hitPos, faceNormal, pathBias(hitPos));
                 currentRay.direction = normalize(reflectDir);
                 throughput *= mix(vec3(1.0), albedo, 0.05);
             } else {
@@ -2317,7 +2417,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 vec3 refractedDir;
 
                 if (!refractRay(currentRay.direction, faceNormal, entryEta, refractedDir)) {
-                    currentRay.origin = hitPos + faceNormal * 0.005;
+                    currentRay.origin = leaveSurface(hitPos, faceNormal, pathBias(hitPos));
                     currentRay.direction = reflect(currentRay.direction, faceNormal);
                     throughput *= mix(vec3(1.0), albedo, 0.05);
                 } else if (entering) {
@@ -2342,7 +2442,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     } else {
                         currentRay.direction = interiorDir;
                     }
-                    currentRay.origin = exitPos + exitNormal * 0.005;
+                    currentRay.origin = exitPos + exitNormal * pathBias(exitPos);
                     if (glassHaze > 0.0) {
                         // a hazy glass: the beam crossing it is seen along this segment inside,
                         // and what passes through is dimmed (the photon pass dims its photons the same)
@@ -2357,7 +2457,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                     bdOutN = exitNormal;
 #endif
                 } else {
-                    currentRay.origin = hitPos - faceNormal * 0.005;
+                    currentRay.origin = leaveSurface(hitPos, -faceNormal, pathBias(hitPos));
                     currentRay.direction = normalize(refractedDir);
                     throughput *= vec3(0.98, 1.0, 1.02) * albedo;
                 }
@@ -2384,10 +2484,10 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 if (NdotL > 0.0) {
                     Ray shadowRay;
                     float shadowBias = surfaceBias(hitDist);
-                    shadowRay.origin = hitPos + faceNormal * shadowBias;
+                    shadowRay.origin = leaveSurface(hitPos, faceNormal, shadowBias);
                     shadowRay.direction = sunSampleDir;
                     vec3 shPos; float shDist; int shMat;
-                    if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
+                    if (!rayMarchSimpleLeaving(shadowRay, shPos, shDist, shMat)) {
                         vec3 H_light = normalize(sunSampleDir + viewDir);
                         float NdotH = max(dot(faceNormal, H_light), 0.0);
                         float VdotH = max(dot(viewDir, H_light), 0.0);
@@ -2455,10 +2555,10 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 if (envNdotL > 0.0) {
                     // Shadow test
                     Ray envShadowRay;
-                    envShadowRay.origin = hitPos + faceNormal * 0.005;
+                    envShadowRay.origin = leaveSurface(hitPos, faceNormal, pathBias(hitPos));
                     envShadowRay.direction = envDir;
                     vec3 eShPos; float eShDist; int eShMat;
-                    if (!rayMarchSimple(envShadowRay, eShPos, eShDist, eShMat)) {
+                    if (!rayMarchSimpleLeaving(envShadowRay, eShPos, eShDist, eShMat)) {
                         // Evaluate GGX BRDF for this direction
                         vec3 H_env = normalize(envDir + viewDir);
                         float NdotH_env = max(dot(faceNormal, H_env), 0.0);
@@ -2502,7 +2602,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
             lastBsdfPdf = D_bounce * NdotH / (4.0 * VdotH);
             lastWasSpecular = false;
 
-            currentRay.origin = hitPos + faceNormal * 0.005;
+            currentRay.origin = leaveSurface(hitPos, faceNormal, pathBias(hitPos));
             currentRay.direction = normalize(reflectDir);
 #ifdef BIDIR
             if (bdLive) {
@@ -2520,10 +2620,10 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 if (NdotL > 0.0) {
                     Ray shadowRay;
                     float shadowBias = surfaceBias(hitDist);
-                    shadowRay.origin = hitPos + faceNormal * shadowBias;
+                    shadowRay.origin = leaveSurface(hitPos, faceNormal, shadowBias);
                     shadowRay.direction = sunSampleDir;
                     vec3 shPos; float shDist; int shMat;
-                    if (!rayMarchSimple(shadowRay, shPos, shDist, shMat)) {
+                    if (!rayMarchSimpleLeaving(shadowRay, shPos, shDist, shMat)) {
 #ifdef BIDIR
                         radiance += clamp(throughput * albedo * lightColor * lightIntensity * NdotL / PI * bdSunW, 0.0, FIREFLY_CLAMP);
 #else
@@ -2571,10 +2671,10 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 float envNdotL = dot(faceNormal, envDir);
                 if (envNdotL > 0.0) {
                     Ray envShadowRay;
-                    envShadowRay.origin = hitPos + faceNormal * 0.005;
+                    envShadowRay.origin = leaveSurface(hitPos, faceNormal, pathBias(hitPos));
                     envShadowRay.direction = envDir;
                     vec3 eShPos; float eShDist; int eShMat;
-                    if (!rayMarchSimple(envShadowRay, eShPos, eShDist, eShMat)) {
+                    if (!rayMarchSimpleLeaving(envShadowRay, eShPos, eShDist, eShMat)) {
                         // Lambertian BRDF = albedo / PI
                         vec3 brdfVal = albedo / PI;
                         // Cosine hemisphere pdf = NdotL / PI
@@ -2596,7 +2696,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
                 }
             }
 
-            currentRay.origin = hitPos + faceNormal * 0.005;
+            currentRay.origin = leaveSurface(hitPos, faceNormal, pathBias(hitPos));
 
             // Stochastic reflection for Lambertian surfaces
             float cosTheta = max(dot(viewDir, faceNormal), 0.0);
