@@ -66,10 +66,10 @@ public class FractalPanel extends ScrollPane implements Refreshable {
         autoSpeedCheck = new javafx.scene.control.CheckBox("Auto speed (fraction of the gap ahead)");
         autoSpeedCheck.setSelected(true);
         autoSpeedCheck.setTooltip(new javafx.scene.control.Tooltip(
-                "On: each frame moves the camera by a fraction of the free distance ahead in the\n" +
-                "direction it is going, measured on the scene itself, so a dive keeps its pace at\n" +
-                "any depth (a decade a second at 0.1) and never crosses the surface; Move Speed is\n" +
-                "that fraction, and the step far from everything. Off: Move Speed is the step."));
+                "On: each frame moves the camera by a fraction of the distance to the surface in\n" +
+                "front of it, measured on the scene itself, so diving in and backing out keep their\n" +
+                "pace at any depth (a decade a second at 0.1) and the camera never crosses a surface;\n" +
+                "Move Speed is that fraction, and the step far from everything. Off: Move Speed is the step."));
         autoSpeedCheck.setOnAction(e -> { if (autoSpeedListener != null) autoSpeedListener.accept(autoSpeedCheck.isSelected()); });
 
         positionLabel = new Label("Pos: (0.00, 0.00, -3.00)");

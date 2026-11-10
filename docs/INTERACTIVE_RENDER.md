@@ -159,7 +159,9 @@ still planned as before and a throughput-bound scene keeps its 60 ms strips.
   (`screenRay`) or a world direction (`directionRay`). It is the one source of every
   distance the app needs:
   - the focus pick: the ray through the clicked pixel;
-  - the auto speed (`DiveSpeed`): the ray along the move.
+  - the auto speed (`DiveSpeed`): the ray along the move (nothing crossed) and the centre
+    ray (the pace: backing out climbs as fast as diving in descends, not by the free space
+    behind).
 
   A copy of the estimator on the CPU would hold for one fractal type at a time; the probe
   holds for any fractal, graph, hybrid chain or custom shader. In the shader

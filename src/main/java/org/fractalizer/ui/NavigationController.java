@@ -26,10 +26,10 @@ public class NavigationController {
     private final Runnable resetCameraCallback;
     private final Consumer<Float> speedChangeCallback;
 
-    // Auto speed: when on, a frame of a held key moves the camera by a fraction of the free
-    // distance ahead of it in the direction it moves (DiveSpeed), the dial being that
-    // fraction, so a dive keeps the same feel at every depth. Off, the dial is the step, as
-    // it always was.
+    // Auto speed: when on, a frame of a held key moves the camera by a fraction of the
+    // distance to the surface in front of it, bounded by the free distance along the move
+    // (DiveSpeed), the dial being that fraction, so diving in and backing out keep the same
+    // feel at every depth. Off, the dial is the step, as it always was.
     private boolean autoSpeed = true;
     private AutoStep autoStep = (dial, dir) -> dial;
 

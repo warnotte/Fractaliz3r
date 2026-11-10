@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
  *
  * What must hold: the camera never crosses the surface (the distance ahead and the estimate at
  * the camera stay positive) and the dive descends at the pace the dial sets (at 0.1, a decade
- * in about 60 frames). Where the float march stops resolving the surface the readings turn to
+ * in about 60 frames). Then the back key: the zoom out climbs at the same pace, without a leap. Where the float march stops resolving the surface the readings turn to
  * noise. That depth is reported, not failed: double precision in the shader is a later step.
  *
  *   mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DiveProbe" \
@@ -33,8 +33,8 @@ import java.util.concurrent.TimeUnit;
  *   The optional camera is a detail view's (out/nav/detail_scenes.txt), for a scene whose
  *   own camera is not worth diving from.
  *
- * Exit code 1 when the camera reaches or crosses the surface above 1e-5, or the dive descends
- * fewer than four decades.
+ * Exit code 1 when the camera reaches or crosses the surface above 1e-5, the dive descends
+ * fewer than four decades, or backing out climbs fewer than three.
  */
 public class DiveProbe {
 
@@ -83,11 +83,12 @@ public class DiveProbe {
         }
 
         // The probe DiveSpeed measures with, logging what it measures.
-        double[] seen = {centre.distance(), centre.clearance()};
-        DiveSpeed speed = new DiveSpeed((dir, onReading) -> controller.probeAlong(dir, hits -> {
+        double[] seen = {centre.distance(), centre.clearance(), centre.distance()};
+        DiveSpeed speed = new DiveSpeed((dir, onReading) -> controller.probeRays(DiveSpeed.rays(dir), hits -> {
             DiveSpeed.Reading r = DiveSpeed.reading(hits);
             seen[0] = r.distance();
             seen[1] = r.clearance();
+            seen[2] = r.view();
             onReading.accept(r);
         }), System::nanoTime);
 
@@ -148,7 +149,37 @@ public class DiveProbe {
         double decades = Math.log10(start / lowest);
         System.out.printf(Locale.ROOT, "  %d frames (%d held waiting for a measure), %.1f decades down to %.3e ahead (%.0f frames a decade), DiveSpeed.step %.3f ms a frame%n",
                 frames, held, decades, lowest, frames / Math.max(decades, 1e-9), stepNs / 1e6 / Math.max(frames, 1));
-        boolean ok = decades >= 4 && (crossed < 0 || lowest < 1e-5);
+
+        // Then the back key, as long: the zoom out must open the gap in front at the pace the
+        // zoom in closed it (a decade in about 60 frames at 0.1), not leap by the free space
+        // behind the camera.
+        System.out.println("  --- backing out ---");
+        double from = seen[2], biggestLeap = 1;
+        int back = 0, backHeld = 0;
+        next = System.nanoTime();
+        double lastView = from;
+        while (back < Math.min(maxFrames, 480)) {
+            next += frameNs;
+            long wait = next - System.nanoTime();
+            if (wait > 0) Thread.sleep(wait / 1_000_000, (int) (wait % 1_000_000));
+            back++;
+            float[] f = cam.getForwardVector();
+            double[] backward = {-f[0], -f[1], -f[2]};
+            double step = speed.step(dial, cam.getPositionD(), backward);
+            if (!(step > 0)) { backHeld++; continue; }
+            float keep = cam.getMoveSpeed();
+            cam.setMoveSpeed((float) step);
+            cam.moveForward(-1);
+            cam.setMoveSpeed(keep);
+            double front = seen[2];
+            if (front > 0 && lastView > 0 && Double.isFinite(front)) biggestLeap = Math.max(biggestLeap, front / lastView);
+            if (Double.isFinite(front) && front > 0) lastView = front;
+            if (back % 60 == 0) System.out.printf(Locale.ROOT, "  frame %4d: surface in front %.3e, step %.3e%n", back, front, step);
+        }
+        double opened = Math.log10(lastView / from);
+        System.out.printf(Locale.ROOT, "  %d frames back (%d held): %.1f decades out, %.3e -> %.3e in front (%.0f frames a decade); largest jump in one frame x%.2f%n",
+                back, backHeld, opened, from, lastView, back / Math.max(opened, 1e-9), biggestLeap);
+        boolean ok = decades >= 4 && (crossed < 0 || lowest < 1e-5) && opened >= 3;
         System.out.println("  stills in " + outDir.getPath());
         System.out.println(ok ? "RESULT: PASS" : "RESULT: FAIL");
         exit(controller, ok);

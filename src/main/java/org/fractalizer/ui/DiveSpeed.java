@@ -7,10 +7,17 @@ import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
 /**
- * The auto speed: a frame of a held key moves the camera by a fraction of the free distance
- * ahead of it, in the direction it is moving, so a dive closes the same fraction of the gap
- * every frame at every depth and never crosses the surface it is heading for. The speed dial
- * sets the fraction; far from everything the dial itself is the step, as with auto speed off.
+ * The auto speed: a frame of a held key moves the camera by a fraction of the distance to the
+ * surface in front of it (the centre of the view), and never more than that fraction of the
+ * free distance along the move. A dive closes the same fraction of the gap every frame at
+ * every depth and never crosses the surface it is heading for; backing out opens it by the
+ * same fraction, a decade a second either way. The speed dial sets the fraction; far from
+ * everything the dial itself is the step, as with auto speed off.
+ *
+ * <p>The pace comes from what is in front, not from the free distance along the move alone:
+ * backing away from a wall at 1e-8 with open space behind, the free distance behind is large
+ * and a step tied to it left the dive in one frame (the zoom out was abrupt, the zoom in was
+ * not). Moving forward the two are the same ray.
  *
  * <p>The free distance is the probe's (the scene's own program marching a ray from the camera
  * along the motion), for any scene. It is not the scene's distance estimate at the camera: that
@@ -41,8 +48,13 @@ public final class DiveSpeed {
      * @param distance  to the surface along the direction, +infinity for none, NaN when the
      *                  scene cannot be measured (no compiled program yet)
      * @param clearance the scene's estimate at the camera: zero or less on or inside the solid
+     * @param view      to the surface along the centre of the view, +infinity for none: the
+     *                  scale of what the camera shows, which sets the pace
      */
-    public record Reading(double distance, double clearance) {}
+    public record Reading(double distance, double clearance, double view) {
+        /** A reading where the move is along the view (moving forward). */
+        public Reading(double distance, double clearance) { this(distance, clearance, Double.POSITIVE_INFINITY); }
+    }
 
     /** Measures from the camera as it is now along a unit world direction and hands the
      *  reading back, from any thread. */
@@ -61,15 +73,24 @@ public final class DiveSpeed {
         this.clock = clock;
     }
 
-    /** The auto speed over the controller's scene: its probe along the move. */
+    /** The auto speed over the controller's scene: its probe along the move and along the view. */
     public static DiveSpeed over(GLSLFractalizerController controller) {
-        return new DiveSpeed((dir, onReading) -> controller.probeAlong(dir, hits -> onReading.accept(reading(hits))), System::nanoTime);
+        return new DiveSpeed((dir, onReading) -> controller.probeRays(rays(dir), hits -> onReading.accept(reading(hits))), System::nanoTime);
     }
 
-    /** A probe's answer for one ray as a reading: no program is NaN, a miss is +infinity. */
+    /** The two rays a measure takes: along the move, and through the centre of the view. */
+    public static float[] rays(double[] dir) {
+        float[] r = new float[8];
+        System.arraycopy(GLSLEngine.directionRay(dir), 0, r, 0, 4);
+        System.arraycopy(GLSLEngine.screenRay(0f, 0f), 0, r, 4, 4);
+        return r;
+    }
+
+    /** A probe's answer to {@link #rays} as a reading: no program is NaN, a miss is +infinity. */
     public static Reading reading(GLSLEngine.ProbeHit[] hits) {
-        if (hits == null) return new Reading(Double.NaN, Double.NaN);
-        return new Reading(hits[0].hit() ? hits[0].distance() : Double.POSITIVE_INFINITY, hits[0].clearance());
+        if (hits == null) return new Reading(Double.NaN, Double.NaN, Double.NaN);
+        double view = hits.length > 1 && hits[1].hit() ? hits[1].distance() : Double.POSITIVE_INFINITY;
+        return new Reading(hits[0].hit() ? hits[0].distance() : Double.POSITIVE_INFINITY, hits[0].clearance(), view);
     }
 
     /**
@@ -91,8 +112,11 @@ public final class DiveSpeed {
             double p = lastFree;
             return Double.isNaN(p) ? dial : Math.min(dial, GAP_FRACTION * dial * p);
         }
-        double free = r.distance() - distance(cam, m.at);
-        return Math.min(dial, GAP_FRACTION * dial * Math.max(0.0, free));
+        // Along the move nothing is crossed (the free distance left, a late measure only slows
+        // the camera down); the pace is the scale in front.
+        double free = Math.max(0.0, r.distance() - distance(cam, m.at));
+        double view = Double.isNaN(r.view()) ? Double.POSITIVE_INFINITY : r.view();
+        return Math.min(dial, GAP_FRACTION * dial * Math.min(free, view));
     }
 
     /** One measure in flight at most. Its age counts from its answer: on a heavy scene the

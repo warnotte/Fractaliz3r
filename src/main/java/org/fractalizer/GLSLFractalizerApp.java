@@ -271,10 +271,10 @@ public class GLSLFractalizerApp extends Application {
             }
         );
 
-        // Auto speed: the step follows the free distance ahead in the direction of the move,
-        // measured on the scene itself by the probe (any fractal, graph or shader), so a dive
-        // keeps the same pace at every depth and the wheel dial is the fraction of the gap a
-        // frame covers.
+        // Auto speed: the step follows the distance to the surface in front, bounded by the
+        // free distance along the move, both measured on the scene itself by the probe (any
+        // fractal, graph or shader), so diving in and backing out keep the same pace at every
+        // depth and the wheel dial is the fraction of the gap a frame covers.
         DiveSpeed diveSpeed = DiveSpeed.over(controller);
         navigation.setAutoStep((dial, dir) -> diveSpeed.step(dial, fractalPanel.getCamera().getPositionD(), dir));
         fractalPanel.setAutoSpeedListener(navigation::setAutoSpeed);

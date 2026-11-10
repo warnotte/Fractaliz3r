@@ -237,7 +237,7 @@ org.fractalizer
 └── ui/
     ├── GLSLFractalizerController.java  # Bridges UI with GLSL engine (parameter caching)
     ├── ViewportHUD.java                # 3D Compass, Speed Meter, Telemetry overlay
-    ├── DiveSpeed.java                  # auto speed: a frame's step = a fraction of the free distance ahead along the move (the probe), less the distance moved since
+    ├── DiveSpeed.java                  # auto speed: a frame's step = a fraction of the distance to the surface in front, bounded by the free distance along the move (the probe)
     ├── AnimationManager.java           # Manages timeline and keyframe editing
     ├── components/
     │   ├── EnhancedSlider.java         # Pro slider: mouse wheel, precision, lock, inline edit

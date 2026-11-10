@@ -80,6 +80,21 @@ class DiveSpeedTest {
     }
 
     @Test
+    void backingOutOpensTheGapAtThePaceItClosed() {
+        double[] cam = {0, 0, 0};
+        double[] back = {0, 0, -1};
+        speed.step(0.1, cam, back);
+        // A wall 1e-8 in front, open space behind: the pace is the wall's, not the space's.
+        asked.remove(0).accept(new DiveSpeed.Reading(5e-3, 5e-9, 1e-8));
+        assertEquals(DiveSpeed.GAP_FRACTION * 0.1 * 1e-8, speed.step(0.1, cam, back), 1e-22);
+        // Nothing in front (looking at the sky): the free distance along the move decides.
+        DiveSpeed open = new DiveSpeed((dir, r) -> asked.add(r), clock::get);
+        open.step(0.1, cam, back);
+        asked.remove(0).accept(new DiveSpeed.Reading(2e-3, 1e-3, Double.POSITIVE_INFINITY));
+        assertEquals(DiveSpeed.GAP_FRACTION * 0.1 * 2e-3, open.step(0.1, cam, back), 1e-18);
+    }
+
+    @Test
     void aStaleMeasureIsNotTrustedAtTheStartOfAMove() {
         double[] cam = {1, 2, 3};
         speed.step(0.1, cam, FORWARD);
