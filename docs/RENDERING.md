@@ -349,6 +349,104 @@ Two regimes, and they need different answers:
 
 The fix is **Julia mode**: a fixed constant instead of `pos` makes every point of the set a boundary point. `MandelbulbParams.juliaC{x,y,z}` (0,0,0 = Mandelbrot, unchanged), matching the existing Bristorbrot / QuaternionJulia4D convention; the Node Graph editor picks up the sliders automatically under a "Julia C" group. With `c = (0.42, 0.18, -0.31)`, a Mandelbulb dive from camDist 1.24 → 0.034 (88×) holds detail 8729 → 10650 — no collapse at all.
 
+### Deep precision: the float wall
+
+Below all of the above sits the number format. A `float` has 24 bits of mantissa: near
+|pos| ≈ 1 the positions the march can represent are ~1.2e-7 apart. The pixel footprint at a
+distance *c* from the surface is about `c · 2·tan(fov/2) / height`, so from **c ≈ 1e-4 down**
+neighbouring pixels round to the same point. Everything downstream reads that as geometry:
+the march lands on a grid, the four samples of the tetrahedron normal collapse onto one or two
+values, and `MIN_EPSILON = 1e-6`, itself about ten ulps, spans tens of pixels. No iteration
+budget or view-relative radius changes this; it is the position itself that is gone.
+`PrecisionLab` measured it on the Mandelbox, normal error of the float march against the
+double one: 0.6° at 1e-2, 13° at 1e-3, **92° at 1e-4** (the image is other geometry).
+
+**What is done about it (QualityPanel → Raymarcher → Deep Precision, `deepPrecision`).**
+- The camera holds its position in double (`Camera.getPositionD()`, saved as
+  `camera.positionD`) and the shader gets it as `dvec3 camPosD`.
+- **The scene's estimator in double, derived, not written.** `DeepSource.java` parses the
+  scene's own source (common.glsl and what the graph compiler emitted: kernels, primitives,
+  hybrid chains, transforms, CSG, effects, or a custom shader). It copies `DE_simple` and
+  every function and struct it reaches with float types made double (`float` → `double`,
+  `vecN` → `dvecN`, `matN` → `dmatN`), and redirects the calls to the copies. The result is
+  appended to the scene as `float DE_deep(dvec3)` under `HAS_DEEP_DE`. Nothing is written per
+  fractal. GLSL has no double `sin`/`cos`/`pow`/`exp`/`log`: those go through small float
+  overloads (`sin_dp`, ...). That loses nothing where they only see a parameter
+  (`cos(angle)`, `pow(scale, -n)`). Where they see the position (the Mandelbulb's,
+  Mandelorus's and Julia 4D's angles), the orbit drops back to float precision at that point:
+  no gain there, and no loss. NVIDIA's compiler dies (C9999) on some compound assignments in
+  double, as it does on swizzled ones in float, so the copies write `a += b` out as
+  `a = a + (b)`. Fourteen of the fifteen built-ins compile in double (`PrecisionLab
+  compile`); a double program takes 12-17 s to compile against 7-10 s. The Polyhedral IFS
+  crashes NVIDIA's compiler all the same (C9999, inside the driver, on a program with no
+  compound assignment left) and is shown in float, with the message below.
+- **The primary rays, float first, double where needed.** A camera ray is marched in float.
+  It is marched again in double (`deepNeeded`; one float step of the position is about
+  1.2e-7 · |camPos|) when either:
+  - where it lands, a pixel spans fewer than ~100 float steps: the image there would be
+    blocks;
+  - on the way, it came within 4 float steps of a surface. There the float estimate is
+    noise, and a float march may step through a wall: a dive below 1e-7 did.
+
+  The double march itself:
+  - `rayMarchDeep` / `rayMarchSimpleDeep`: the point formed as `camPosD + dvec3(dir) · t`,
+    `t` in double, the epsilon floored at `DEEP_MIN_EPSILON = 1e-15`, refinement in double;
+  - `calcNormal`, asked about the point the deep march found, takes its four differences in
+    double with a step the pixel footprint sets.
+
+  The switch is per ray, from where the ray lands, not from the estimate at the camera. That
+  estimate is a lower bound, far too low near a Mandelbox (3800 times at its default camera),
+  and it sent whole views into the double march for nothing. A view with deep precision on
+  therefore costs what it did until the dive gets there: at 1e-1 the image and the time are
+  the float ones.
+- **Secondary rays** (shadows, AO, bounces) leave a float hit point a bias above the surface
+  and stay in float; only the three marchers a camera ray goes through (`rayMarch`, and
+  `rayMarchSimpleCamera` for the path tracer's first segment and the depth under each pixel)
+  can switch, so the double march is compiled in three places rather than into every shadow.
+- **A scene whose estimator does not compile in double** (GLSL refuses something the
+  translation passed on) is rendered in float with a message: the scheduler compiles the
+  snapshot's `floatSource` instead, and the engine remembers the failure so it is not retried
+  every frame.
+- **The probe follows**: it takes the view's own path through `main()`, so a focus pick and
+  the auto speed measure in double too at depth.
+
+Everything is behind `HAS_DEEP_DE`, which only the appended block defines: a program without
+deep precision is the program it was (`RenderRegression` bit-exact, compile times unchanged).
+
+**Measured** (`PrecisionLab`, 640×360, 8 spp; the double render is the reference, the
+whole orbit in double):
+
+| distance | Mandelbox (detail camera): float error | float ms | double ms | KIFS_DIVE: float error | float ms | double ms |
+|---|---|---|---|---|---|---|
+| 1e-1 | 0.00° (the same render) | 79 | 65 | 0.00° | 85 | 72 |
+| 1e-2 | 0.63° | 63 | 166 | 0.31° | 67 | 82 |
+| 1e-3 | 13° | 71 | 266 | 25° | 100 | 151 |
+| 1e-4 | 92° | 85 | 519 | 67° | 81 | 217 |
+| 1e-5 | 22° (other geometry) | 98 | 520 | 88° (flat) | 23 | 321 |
+| 1e-6 | 26° (other geometry) | 100 | 481 | 88° (flat) | 25 | 382 |
+| 1e-7 | | | | 88° (flat) | 19 | 369 |
+| 1e-8 | | | | 69° | 77 | 201 |
+
+The double renders keep a fine, consistent relief at every rung where the float ones turn
+into smooth blobs (Mandelbox) or flat colour (KIFS). On the KIFS, a self-similar IFS, the
+double renders' normal statistics at every depth down to 1e-8 are those of the 1e-1 render,
+where float is exact: neighbouring normals 80° apart on average, 53 % isolated flips, at
+every rung. The cost at depth is two to six float marches: the whole orbit runs in double,
+at the GPU's FP64 rate.
+
+**Diving.** `DiveProbe presets/KIFS_DIVE.frac` with deep precision: seven decades in 900
+frames, down to 2.4e-10 ahead, where the float dive slowed to a stop near 1e-6. Twice the
+surface ahead recedes by orders of magnitude in one frame (4e-8 to 4e-3) while the estimate
+at the camera stays where it was (3.6e-9 to 3.0e-9): the sheet ahead has resolved into copies
+with gaps between them and the ray now passes through one, which is the KIFS's dust, not a
+wall crossed. The WIP of 2026-11-09 ran only the first iterations in
+double, cheaper, but by hand per kernel. Doing that generically would mean finding the
+orbit's loop in any source, which is the obvious next optimisation if dives feel slow.
+
+**Renormalisation** (the WIP's `Renormalizer`, a kaleidoscopic IFS zoomed at float cost by
+carrying the camera through its first folds) is not on this branch; it is an optional
+optimisation on top of the double path (docs/DEEP_ZOOM_HANDOFF.md § 4.3).
+
 ---
 
 ## Adaptive Sampling

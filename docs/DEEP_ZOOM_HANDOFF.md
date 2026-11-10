@@ -2,7 +2,7 @@
 
 Read it before touching anything related to deep zoom, precision, DoF or navigation.
 
-## 0. Where the work is (updated 2026-11-10)
+## 0. Where the work is (updated 2026-11-10, night)
 
 - **`deep-zoom-wip`** (one commit, `c239d69`): the interactive session of 2026-11-08/09 as
   it was left, everything in § 2, untouched. It is the reference for "what worked": the
@@ -81,16 +81,40 @@ Read it before touching anything related to deep zoom, precision, DoF or navigat
     cache);
   - the caustics' photon program still compiles;
   - the viewport probes, see `docs/INTERACTIVE_RENDER.md` § Proof.
-- **Still only on `deep-zoom-wip`, by design:**
-  - § 4.2-4.3: Deep Precision / Renormalize (params, `.frac` fields, Quality panel
-    checkboxes, `rayMarchDeep`, the per-kernel `DE_deep` / `DE_local`, `Renormalizer` +
-    test, the SSBO);
-  - § 4.5: `PrecisionLab`;
-  - `presets/KIFS_DIVE.frac` and the docs/RENDERING.md narrative;
-  - `CpuDE` is not to be lifted.
-- **Next: § 4.2, double precision emitted by the compiler.** The probe must then march in
-  double too: it already takes the view's own path through `main()`, so it follows
-  `rayMarchDeep` wherever the view does.
+- **Step 3 (§ 4.2 + § 4.5, double precision for any scene) is done on `deep-zoom`.** The
+  commits are listed in `git log`; docs/RENDERING.md § "Deep precision: the float wall" has
+  the full account and the numbers.
+  - `DeepSource` (engine) derives the scene's double entry from its own float source, as the
+    plan wanted but without macros in the kernels. It parses common.glsl and the scene, then
+    copies `DE_simple` and every function and struct it reaches with float types made
+    double, and redirects the calls. Transcendentals go through float shims. Compound
+    assignments are written out (NVIDIA C9999). The kernels are not touched, so a program
+    without deep precision is byte-for-byte what it was. 14 of 15 built-ins compile; the
+    Polyhedral IFS crashes the driver's compiler and is shown in float with a message (the
+    same fallback that catches a custom shader GLSL refuses in double).
+  - The WIP's `rayMarchDeep`, `rayMarchSimpleDeep`, `refineSurfaceDeep` and the double
+    normals, behind `HAS_DEEP_DE`. A camera ray goes float first and is redone in double when
+    it lands where a pixel is under ~100 float steps, or came within 4 float steps of a
+    surface. A view costs what it did until the dive gets there.
+  - `PrecisionLab` is back, with the ladder placed by the probe (any scene, `CpuDE` gone), a
+    `compile` mode, and the fallback case.
+    - The double render is the oracle of the WIP (the whole orbit in double), so the bar of
+      § 4.5 holds by construction.
+    - What is measured is float against double: the Mandelbox 0.6° / 13° / 92° at
+      1e-2 / 1e-3 / 1e-4, the KIFS flat in float from 1e-5.
+    - The double renders keep the 1e-1 statistics down to 1e-8. Cost at depth: 2-6x float.
+  - `presets/KIFS_DIVE.frac` with deep precision on (its `renormalize` dropped).
+  - `DiveProbe`: seven decades down to 2.4e-10.
+  - Report for the owner: https://claude.ai/artifact/P3gLuobAhACA19B3qSLdeA (private).
+- **Still only on `deep-zoom-wip`, by design:** § 4.3, the renormalisation (`Renormalizer` +
+  test, `DE_local` in kaleidoscopic.glsl, the SSBO, `rayMarchRenorm`), an optional
+  optimisation of the KIFS on top of the double path, and the WIP's RENDERING.md narrative
+  of it. `CpuDE` is not to be lifted.
+- **Next, if wanted:**
+  - the cost at depth: the double orbit could run only its first iterations in double, as
+    the WIP did by hand, if the translation learns to find the orbit's loop;
+  - secondary rays in double (shadows and AO are float, `surfaceBias` floors at 1e-5);
+  - § 4.3.
 
 The owner's wishes, in the owner's words and mine:
 
@@ -186,6 +210,10 @@ detected at compile (try the double variant, catch the failure, or a tiny static
 the scene falls back to the float entry — automatically, not by a list. `rayMarchDeep` then
 calls `DE_deep` for any scene. Secondary rays (shadows, AO, bounces) should move to local /
 double coordinates too; the float floors (`surfaceBias` 1e-5, AO radius) go away with them.
+
+*Done for the primary rays (§ 0, step 3)*, by translating the scene's float source rather
+than rewriting the kernels with macros: same result, nothing to keep in step by hand, and the
+float programs untouched. Secondary rays are still float.
 
 ### 4.3 Renormalisation as a compiler-recognised optimisation
 Keep `Renormalizer` for affine IFS leaves and let the compiler hook it when a leaf *is* one
