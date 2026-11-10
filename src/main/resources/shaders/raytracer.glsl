@@ -355,8 +355,9 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
 // hit point starts up to a float step (~1e-7 of |pos|) from where the surface is; at a deep
 // zoom that is the size of the view, so the ray starts under the surface and the scene goes
 // dark (PrecisionLab: 36 % of the KIFS lit at 1e-2, 7 % at 1e-6). Near the surface the march
-// runs in double; once it is far from everything compared with a float step, the float
-// march is as good and cheaper, and takes over.
+// runs in double; once it is clear of everything by 100 float steps (the float estimate then
+// within 1 %), the float march is as good and cheaper, and takes over. 1000 steps gave the
+// same shadows (99.9 % of pixels within 0.1) for 5-15 % more time.
 float calcShadowDeep(dvec3 ro, vec3 rd, float mint, float maxt) {
     float res = 1.0;
     float t = mint;
@@ -373,7 +374,7 @@ float calcShadowDeep(dvec3 ro, vec3 rd, float mint, float maxt) {
         if (h < epsilon) return 0.0;
         res = min(res, shadowSoftness * h / t);
         t = t + max(h * fudgeFactor, epsilon * 2.0);
-        if (h > 1000.0 * ulp) break;        // clear of everything: float from here on
+        if (h > 100.0 * ulp) break;         // clear of everything: float from here on
     }
     vec3 rof = vec3(ro);
     for (; i < steps && t < maxt; i++) {

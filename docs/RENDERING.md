@@ -406,13 +406,18 @@ double one: 0.6° at 1e-2, 13° at 1e-3, **92° at 1e-4** (the image is other ge
   already in double. `hitShadow` and `calcAO`, asked about the deep march's own point, work
   from it in double:
   - `calcShadowDeep` marches near the surface in double and hands over to float once the
-    ray is clear of everything (an estimate over 1000 float steps);
+    ray is clear of everything (an estimate over 100 float steps, the float one then within
+    1 %; 1000 gave the same shadows for 5-15 % more time);
   - `calcAODeep` places its probes in double, with radii from the distance to the camera
     in double.
 
   Measured on the KIFS: 36 % lit at 1e-4 as at 1e-2. At 1e-6 and 1e-8 it is 10 % and 8 %,
   and an all-double shadow with four times the steps gives the same pixels (99.9-100 %
-  agree): the region is in the shadow of larger structure, which is the geometry. Only the
+  agree): the region is in the shadow of larger structure, which is the geometry. The cost
+  at depth about doubles: KIFS 840-940 ms a render below 1e-5 against 320-380 with the
+  double march alone, the Mandelbox 0.9-1.2 s against 0.5 (640×360, 8 spp, GPU otherwise
+  idle); far from the surface nothing changes. Most of it is the shadow ray threading its way
+  out of dense structure, many steps, each in double. Only the
   three marchers a camera ray goes through switch to double (`rayMarch`, and
   `rayMarchSimpleCamera` for the path tracer's first segment and the depth under each pixel).
   Still float: reflections, the extra lights' shadows, subsurface scattering, and the path
