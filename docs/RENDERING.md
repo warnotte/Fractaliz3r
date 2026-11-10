@@ -370,11 +370,20 @@ double one: 0.6° at 1e-2, 13° at 1e-3, **92° at 1e-4** (the image is other ge
   every function and struct it reaches with float types made double (`float` → `double`,
   `vecN` → `dvecN`, `matN` → `dmatN`), and redirects the calls to the copies. The result is
   appended to the scene as `float DE_deep(dvec3)` under `HAS_DEEP_DE`. Nothing is written per
-  fractal. GLSL has no double `sin`/`cos`/`pow`/`exp`/`log`: those go through small float
-  overloads (`sin_dp`, ...). That loses nothing where they only see a parameter
-  (`cos(angle)`, `pow(scale, -n)`). Where they see the position (the Mandelbulb's,
-  Mandelorus's and Julia 4D's angles), the orbit drops back to float precision at that point:
-  no gain there, and no loss. NVIDIA's compiler dies (C9999) on some compound assignments in
+  fractal. GLSL has no double `sin`/`cos`/`atan`/`acos`/`pow`/`exp`/`log`: those go through
+  overloads (`sin_dp`, ...). A float argument (a uniform: `cos(angle)`, `pow(scale, -n)`)
+  goes to the float built-in, the same instruction as the float program. A double argument
+  (the Mandelbulb's, Mandelorus's and Julia 4D's angles, taken of the position itself) goes
+  to a small double library emitted with the block, only the parts the calls need:
+  Cody-Waite reduction and the fdlibm kernels for `sin`/`cos`, Taylor for `exp`, an atanh
+  series for `log`, `pow = exp(y log x)`, and `atan2` as one Newton step from the float
+  answer (the error cubes: 1e-6 becomes 1e-19); `acos`/`asin` through `atan2`. Each is within
+  a few ulp of double (checked against the reference over 200 000 random arguments). Before
+  this, a float call rounded the orbit back to 7 digits at the first iteration: on the
+  Mandelbulb at 1e-6 the double image was blocks (speckle 26 %, against 14 % for the surface
+  seen from afar), now it is the surface (14 %). The price is the GeForce's double
+  throughput: ~5× the time of the float calls at depth (640×360, 8 spp, 1e-5: 5.8 s against
+  1.2 s), and nothing until a ray needs the double march. NVIDIA's compiler dies (C9999) on some compound assignments in
   double, as it does on swizzled ones in float, so the copies write `a += b` out as
   `a = a + (b)`. Fourteen of the fifteen built-ins compile in double (`PrecisionLab
   compile`); a double program takes 12-17 s to compile against 7-10 s. The Polyhedral IFS

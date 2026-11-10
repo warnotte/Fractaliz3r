@@ -56,7 +56,12 @@ class DeepSourceTest {
         assertTrue(block.contains("dvec3 z = rot * pos"), "uniforms stay float, GLSL widens them");
         assertTrue(block.contains("pow_dp(scale"), "pow has no double overload: the shim");
         assertTrue(block.contains("sin_dp(z.x)"));
-        assertTrue(block.contains("float pow_dp(double a, double b) { return pow(float(a), float(b)); }"), block);
+        assertTrue(block.contains("float pow_dp(float a, float b) { return pow(a, b); }"), "a float argument keeps the float built-in");
+        assertTrue(block.contains("double pow_dp(double a, double b) { return dp_pow(a, b); }"), "a double argument goes to the double library");
+        assertTrue(block.contains("dvec3 sin_dp(dvec3 x) { return dvec3(dp_sin(x.x), dp_sin(x.y), dp_sin(x.z)); }"), block);
+        assertTrue(block.contains("double dp_pow(double x, double y)") && block.contains("double dp_exp(double x)")
+                && block.contains("double dp_log(double x)") && block.contains("double dp_sin(double x)"), "the library parts the calls need");
+        assertFalse(block.contains("dp_radians"), "and only those");
         assertTrue(block.contains("float " + DeepSource.ENTRY + "(dvec3 pos) { return float(DE_simple_dp(pos)); }"));
         assertFalse(block.contains("unrelated"), "only what DE_simple reaches");
         assertFalse(block.contains("comment"), "comments are not copied");
@@ -93,6 +98,12 @@ class DeepSourceTest {
                 "a loop's increment, which no semicolon ends, is left alone");
         assertEquals("a[i++] += 1.0;", DeepSource.expandCompound("a[i++] += 1.0;"), "an index with a side effect is not duplicated");
         assertEquals("x == y; a <= b; c >= d; e != f;", DeepSource.expandCompound("x == y; a <= b; c >= d; e != f;"));
+    }
+
+    @Test
+    void noTranscendentalNoLibrary() {
+        String block = DeepSource.build("", "float DE_simple(vec3 pos) { return length(pos) - 1.0; }");
+        assertFalse(block.contains("dp_"), block);
     }
 
     @Test

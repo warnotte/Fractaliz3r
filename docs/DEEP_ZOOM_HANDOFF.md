@@ -87,7 +87,11 @@ Read it before touching anything related to deep zoom, precision, DoF or navigat
   - `DeepSource` (engine) derives the scene's double entry from its own float source, as the
     plan wanted but without macros in the kernels. It parses common.glsl and the scene, then
     copies `DE_simple` and every function and struct it reaches with float types made
-    double, and redirects the calls. Transcendentals go through float shims. Compound
+    double, and redirects the calls. Transcendentals go through overloads: a float argument
+    to the float built-in, a double one to a double library emitted with the block (sin, cos,
+    atan2, acos, exp, log, pow at a few ulp of double), so the Mandelbulb family keeps its
+    digits through its angles too (at 1e-6: blocks before, the surface after; ~5x the time
+    of the float calls at depth). Compound
     assignments are written out (NVIDIA C9999). The kernels are not touched, so a program
     without deep precision is byte-for-byte what it was. 14 of 15 built-ins compile; the
     Polyhedral IFS crashes the driver's compiler and is shown in float with a message (the
@@ -111,8 +115,13 @@ Read it before touching anything related to deep zoom, precision, DoF or navigat
   optimisation of the KIFS on top of the double path, and the WIP's RENDERING.md narrative
   of it. `CpuDE` is not to be lifted.
 - **Next, if wanted:**
-  - the cost at depth: the double orbit could run only its first iterations in double, as
-    the WIP did by hand, if the translation learns to find the orbit's loop;
+  - the cost at depth (measured 2026-11-10: on the KIFS at 1e-6 the sun's shadow is ~45 %
+    of the time, legitimate marching out of dense structure; the double march ~3x the float
+    one). Generic shortcuts tried and dropped: a float estimate while far from the surface
+    (~10 % faster) and no final refinement (normals 30-60° different). What would pay:
+    float-float arithmetic (two floats per number, full-rate on a GeForce) in place of
+    double, a large but generic change. Running only the orbit's first iterations in double
+    is NOT safe in general (formulas that are not contractive early);
   - the rest of the secondary rays in double. The sun's shadow and AO at a deep hit, and the
     path tracer's shadow rays and bounces, are done (docs/RENDERING.md); reflections in
     classic shading, extra lights and SSS are still float;
