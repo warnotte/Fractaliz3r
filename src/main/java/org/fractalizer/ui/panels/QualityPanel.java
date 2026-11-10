@@ -84,6 +84,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider stepRelaxationSlider;
     private EnhancedSlider detailLODSlider;
     private EnhancedSlider detailLODMaxSlider;
+    private CheckBox deepPrecisionCheck;
 
     // Adaptive sampling
     private CheckBox adaptiveSamplingCheck;
@@ -723,8 +724,26 @@ public class QualityPanel extends ScrollPane implements Refreshable {
         detailLODInfo.getStyleClass().add("info-label");
         detailLODInfo.setWrapText(true);
 
+        deepPrecisionCheck = new CheckBox("Deep Precision (double)");
+        deepPrecisionCheck.setTooltip(new Tooltip(
+                "The camera rays and their normals marched in double, with the scene's own estimator\n" +
+                "translated to double: any fractal, graph, hybrid chain or custom shader. Recompiles\n" +
+                "the scene; slower. Formulas built on angles or powers of the position (Mandelbulb)\n" +
+                "keep float precision there."));
+        deepPrecisionCheck.setSelected(false);
+        deepPrecisionCheck.setOnAction(e -> {
+            if (!suppressRender) {
+                getParams().setDeepPrecision(deepPrecisionCheck.isSelected());
+                renderCallback.requestRender();
+            }
+        });
+        Label deepInfo = new Label("For dives below ~1e-4 from the surface, where\nfloat positions turn blocky. Recompiles the scene.");
+        deepInfo.getStyleClass().add("info-label");
+        deepInfo.setWrapText(true);
+
         box.getChildren().addAll(coneTracingCheck, fudgeFactorSlider, refinementStepsSlider, stepRelaxationSlider,
-                                 new Separator(), detailLODSlider, detailLODMaxSlider, detailLODInfo);
+                                 new Separator(), detailLODSlider, detailLODMaxSlider, detailLODInfo,
+                                 new Separator(), deepPrecisionCheck, deepInfo);
 
         TitledPane pane = new TitledPane("Raymarcher", box);
         pane.setExpanded(false);
@@ -881,6 +900,7 @@ public class QualityPanel extends ScrollPane implements Refreshable {
             stepRelaxationSlider.setValue(p.getStepRelaxation());
             detailLODSlider.setValue(p.getDetailLOD());
             detailLODMaxSlider.setValue(p.getDetailLODMax());
+            deepPrecisionCheck.setSelected(p.isDeepPrecision());
 
             // Adaptive sampling
             adaptiveSamplingCheck.setSelected(p.isAdaptiveSampling());

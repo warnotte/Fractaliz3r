@@ -214,6 +214,7 @@ public class FractalConfig {
         public boolean coneTracingEnabled = true;
         public float detailLOD = 0.0f;
         public int detailLODMax = 24;
+        public boolean deepPrecision = false;
         public float fudgeFactor = 1.0f;
         public int refinementSteps = 4;
         public float stepRelaxation = 0.0f;
@@ -423,6 +424,7 @@ public class FractalConfig {
         config.effects.coneTracingEnabled = params.isConeTracingEnabled();
         config.effects.detailLOD = params.getDetailLOD();
         config.effects.detailLODMax = params.getDetailLODMax();
+        config.effects.deepPrecision = params.isDeepPrecision();
         config.effects.fudgeFactor = params.getFudgeFactor();
         config.effects.refinementSteps = params.getRefinementSteps();
         config.effects.stepRelaxation = params.getStepRelaxation();
@@ -621,6 +623,7 @@ public class FractalConfig {
         params.setConeTracingEnabled(effects.coneTracingEnabled);
         params.setDetailLOD(effects.detailLOD);
         params.setDetailLODMax(effects.detailLODMax);
+        params.setDeepPrecision(effects.deepPrecision);
         params.setFudgeFactor(effects.fudgeFactor);
         params.setRefinementSteps(effects.refinementSteps);
         params.setStepRelaxation(effects.stepRelaxation);

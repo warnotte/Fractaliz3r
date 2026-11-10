@@ -92,6 +92,12 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float detailLOD = 0.0f;
     protected int detailLODMax = 24;
 
+    // Deep precision: the primary rays and their normals marched in double, with the scene's
+    // estimator in double (DeepSource derives it from the scene's own DE_simple, whatever the
+    // scene). Off by default: it recompiles the scene and its estimator costs more. What it
+    // buys is a dive past the ~1e-4 clearance where a float position stops resolving pixels.
+    protected boolean deepPrecision = false;
+
     // Light direction (will be normalized in kernel)
     protected float lightX, lightY, lightZ;
 
@@ -447,6 +453,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.coneTracingEnabled = this.coneTracingEnabled;
         target.detailLOD = this.detailLOD;
         target.detailLODMax = this.detailLODMax;
+        target.deepPrecision = this.deepPrecision;
         target.fudgeFactor = this.fudgeFactor;
         target.refinementSteps = this.refinementSteps;
         target.stepRelaxation = this.stepRelaxation;
@@ -766,6 +773,8 @@ public abstract class AbstractFractalParams implements FractalParams {
     public float getDetailLOD() { return detailLOD; }
     public void setDetailLOD(float v) { this.detailLOD = Math.max(0f, Math.min(8f, v)); }
     public int getDetailLODMax() { return detailLODMax; }
+    public boolean isDeepPrecision() { return deepPrecision; }
+    public void setDeepPrecision(boolean v) { this.deepPrecision = v; }
     public void setDetailLODMax(int v) { this.detailLODMax = Math.max(0, Math.min(128, v)); }
     public float getFudgeFactor() { return fudgeFactor; }
     public void setFudgeFactor(float f) { this.fudgeFactor = Math.max(0.1f, Math.min(2.0f, f)); }

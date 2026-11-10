@@ -27,6 +27,9 @@ import java.util.Map;
  * @param fullSamples    how many samples the refinement accumulates
  * @param causticPhotons photons per pass for caustics, as the side of a square, 0 for none:
  *                       the engine then needs the scene's photon program too
+ * @param floatSource    the program source without the double entry (deep precision), when
+ *                       {@code programSource} carries one, else null: what is compiled
+ *                       instead when the double program does not compile
  */
 public record SceneSnapshot(String programKey,
                             String programSource,
@@ -41,7 +44,8 @@ public record SceneSnapshot(String programKey,
                             boolean previewFastShading,
                             int previewSamples,
                             int fullSamples,
-                            int causticPhotons) {
+                            int causticPhotons,
+                            String floatSource) {
 
     public SceneSnapshot {
         uniforms = Collections.unmodifiableMap(new HashMap<>(uniforms));
@@ -52,6 +56,14 @@ public record SceneSnapshot(String programKey,
         previewSamples = Math.max(1, previewSamples);
         fullSamples = Math.max(1, fullSamples);
         causticPhotons = Math.max(0, causticPhotons);
+    }
+
+    /** The same scene without the double entry: deep precision falls back to float. */
+    public SceneSnapshot withoutDeep() {
+        if (floatSource == null) return this;
+        return new SceneSnapshot(programKey, floatSource, programDefines, uniforms, coneTan, materialSSBO, lightSSBO,
+                viewportWidth, viewportHeight, previewScale, previewFastShading, previewSamples, fullSamples,
+                causticPhotons, null);
     }
 
     /** Photons per pass for a render at {@code scale} of the viewport: none for a preview

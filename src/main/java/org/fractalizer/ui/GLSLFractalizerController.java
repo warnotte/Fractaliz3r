@@ -175,11 +175,18 @@ public class GLSLFractalizerController implements RenderController {
      */
     private void activateCurrentProgram() {
         if (currentParams instanceof NodeGraphParams ngp) {
-            String glsl = ngp.isDirty() || ngp.getCompiledGLSL() == null ? ngp.recompile() : ngp.getCompiledGLSL();
+            String glsl = nodeGraphSource(ngp);
             if (glsl != null) {
                 long t0 = System.nanoTime();
                 boolean had = engine.hasProgram("nodegraph", glsl, nodeGraphDefines(ngp));
                 String err = engine.ensureProgram("nodegraph", glsl, nodeGraphDefines(ngp));
+                String floatGlsl = ngp.getCompiledGLSL();
+                if (err != null && !glsl.equals(floatGlsl)) {
+                    // Deep precision: the double program does not compile; the scene in float.
+                    System.err.println("Deep precision is not available for this scene, rendering in float: " + err);
+                    glsl = floatGlsl;
+                    err = engine.ensureProgram("nodegraph", glsl, nodeGraphDefines(ngp));
+                }
                 if (err != null) System.err.println("Node graph shader error: " + err);
                 else if (!had) System.out.printf("Scene shader compiled in %d ms%n", (System.nanoTime() - t0) / 1_000_000);
             }
@@ -259,6 +266,30 @@ public class GLSLFractalizerController implements RenderController {
      *  (lights.glsl) only when the graph has an emitter the list can describe. BIDIR, the
      *  photon pass and the path tracer's weights against it, only with caustics on: the
      *  program of a scene without them is what it always was. */
+    /**
+     * The graph's source as its program is built: the compiled GLSL and, with deep precision
+     * on, the scene's double entry after it (DeepSource derives it from the scene's own
+     * DE_simple, whatever the graph holds). Null when the graph does not compile. The viewport
+     * and the exports both build from here, so a still is the scene the viewport showed.
+     */
+    private String nodeGraphSource(NodeGraphParams ngp) {
+        String glsl = ngp.isDirty() || ngp.getCompiledGLSL() == null ? ngp.recompile() : ngp.getCompiledGLSL();
+        if (glsl == null || !ngp.isDeepPrecision()) return glsl;
+        String deep = deepEntry(glsl);
+        return deep == null ? glsl : glsl + "\n" + deep;
+    }
+
+    private String deepFrom, deepBlock;   // the last translation and the source it came from
+
+    /** The double entry of a scene source, translated once per source (the snapshot asks every frame). */
+    private synchronized String deepEntry(String glsl) {
+        if (!glsl.equals(deepFrom)) {
+            deepBlock = org.fractalizer.engine.DeepSource.build(engine.loadShaderSource("/shaders/common.glsl"), glsl);
+            deepFrom = glsl;
+        }
+        return deepBlock;
+    }
+
     private static String nodeGraphDefines(NodeGraphParams ngp) {
         return (ngp.getDetailLOD() > 0f ? "#define DETAIL_LOD\n" : "")
              + (org.fractalizer.render.LightList.hasEmitters(ngp.getGraphRoot()) ? "#define HAS_EMITTERS\n" : "")
@@ -331,12 +362,13 @@ public class GLSLFractalizerController implements RenderController {
      */
     public SceneSnapshot snapshot() {
         if (!(currentParams instanceof AbstractFractalParams params)) return null;
-        String key, source, defines = "";
+        String key, source, defines = "", floatSource = null;
         float[] ssbo = null, lights = null;
         if (params instanceof NodeGraphParams ngp) {
-            String glsl = ngp.isDirty() || ngp.getCompiledGLSL() == null ? ngp.recompile() : ngp.getCompiledGLSL();
+            String glsl = nodeGraphSource(ngp);
             if (glsl != null) {
                 key = "nodegraph"; source = glsl; defines = nodeGraphDefines(ngp);
+                if (!glsl.equals(ngp.getCompiledGLSL())) floatSource = ngp.getCompiledGLSL();
                 ssbo = ngp.getMaterialSSBOData();
                 lights = lightTable(ngp).data();
             } else if (hasBuiltinShader(currentFractalType)) {
@@ -358,7 +390,14 @@ public class GLSLFractalizerController implements RenderController {
         float coneTan = params.isConeTracingEnabled() ? (float) Math.tan(params.getFov() * 0.5) : 0f;
         return new SceneSnapshot(key, source, defines, uniforms, coneTan, ssbo, lights,
                 viewportWidth, viewportHeight, params.getPreviewScale(), params.isPreviewFastShading(),
-                previewSamples, fullSamples, causticsActive(params) ? params.getCausticPhotons() : 0);
+                previewSamples, fullSamples, causticsActive(params) ? params.getCausticPhotons() : 0, floatSource);
+    }
+
+    /** Whether the engine holds the program of the scene as it stands now (compiled, and
+     *  compiled without error): false after a failed compile, or before any. */
+    public boolean holdsSceneProgram() {
+        SceneSnapshot s = snapshot();
+        return s != null && engine.hasProgram(s.programKey(), s.programSource(), s.programDefines());
     }
 
     /** The scene changed: show it. Never blocks. */
@@ -1278,6 +1317,7 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("stepRelaxation", params.getStepRelaxation());
             uniforms.put("detailLOD", params.getDetailLOD());
             uniforms.put("detailLODMax", params.getDetailLODMax());
+            uniforms.put("deepPrecision", params.isDeepPrecision() ? 1 : 0);
 
             // Lighting
             uniforms.put("lightDir", new float[]{

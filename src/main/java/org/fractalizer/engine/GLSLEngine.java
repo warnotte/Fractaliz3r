@@ -600,9 +600,24 @@ public class GLSLEngine implements AutoCloseable {
     public String ensureProgram(String name, String source, String defines) {
         String full = (defines == null ? "" : defines) + source;
         if (full.equals(programSources.get(name)) && programs.containsKey(name)) return null;
+        // A source that failed fails again: answer at once rather than spend the compile.
+        if (full.equals(failedSources.get(name))) return failedErrors.get(name);
         String err = loadCustomFractalShader(name, source, defines == null ? "" : defines);
-        if (err == null) programSources.put(name, full);
+        if (err == null) {
+            programSources.put(name, full);
+            failedSources.remove(name);
+        } else {
+            failedSources.put(name, full);
+            failedErrors.put(name, err);
+        }
         return err;
+    }
+
+    private final Map<String, String> failedSources = new HashMap<>(), failedErrors = new HashMap<>();
+
+    /** Whether this exact source already failed to compile under {@code name}. */
+    public boolean knownToFail(String name, String source, String defines) {
+        return ((defines == null ? "" : defines) + source).equals(failedSources.get(name));
     }
 
     /** Whether {@code name} already holds the program for exactly this source. */

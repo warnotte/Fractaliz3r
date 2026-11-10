@@ -162,6 +162,10 @@ public final class ViewportScheduler {
     }
 
     private Job startJob(SceneSnapshot scene) {
+        // Deep precision whose double program is known not to compile: the scene in float.
+        if (scene.floatSource() != null && engine.knownToFail(scene.programKey(), scene.programSource(), scene.programDefines())) {
+            scene = scene.withoutDeep();
+        }
         if (!engine.hasProgram(scene.programKey(), scene.programSource(), scene.programDefines())
                 || (scene.causticPhotons() > 0 && !engine.hasPhotonProgram(scene.programKey(), scene.programSource(), scene.programDefines()))) {
             return new CompileJob(scene);
@@ -238,16 +242,31 @@ public final class ViewportScheduler {
 
         @Override public boolean step() {
             long t0 = System.nanoTime();
-            String err = engine.ensureProgram(scene.programKey(), scene.programSource(), scene.programDefines());
-            if (err == null && scene.causticPhotons() > 0) err = engine.ensurePhotonProgram(scene.programKey(), scene.programSource(), scene.programDefines());
+            SceneSnapshot s = scene;
+            String err = compile(s);
+            if (err != null && s.floatSource() != null) {
+                // Deep precision: the scene's estimator does not compile in double. Say so, and
+                // show the scene in float rather than nothing.
+                System.err.println("Deep precision is not available for this scene, rendering in float: " + err);
+                emit(Status.error("Deep precision is not available for this scene (its estimator does not compile in double); "
+                        + "rendering it in float. " + err.lines().findFirst().orElse("")));
+                s = s.withoutDeep();
+                err = compile(s);
+            }
             if (err != null) {
                 System.err.println("Scene shader error: " + err);
                 emit(Status.error(err));
             } else {
                 System.out.printf("Scene shader compiled in %d ms%n", (System.nanoTime() - t0) / 1_000_000);
-                pending.compareAndSet(null, scene);   // the preview of what was just compiled
+                pending.compareAndSet(null, s);   // the preview of what was just compiled
             }
             return true;
+        }
+
+        private String compile(SceneSnapshot s) {
+            String err = engine.ensureProgram(s.programKey(), s.programSource(), s.programDefines());
+            if (err == null && s.causticPhotons() > 0) err = engine.ensurePhotonProgram(s.programKey(), s.programSource(), s.programDefines());
+            return err;
         }
         @Override public boolean preemptible() { return false; }
         @Override public void cancel() {}

@@ -211,6 +211,67 @@ float sceneDE_simple(vec3 pos) {
 }
 
 // ============================================================================
+// Deep precision
+// ============================================================================
+// A float position near |pos| ~ 1 is quantised to ~1e-7 world units. Once the camera is
+// closer to the surface than ~1e-4 the pixel footprint is below that, so every point the
+// march evaluates, and the four points the normal is taken from, round to the same handful
+// of values: blocky surfaces, normals that flicker, MIN_EPSILON spanning tens of pixels.
+// The fix is to form the point in double and run the estimator in double: DE_deep, which
+// DeepSource.java derives from the scene's own DE_simple and appends to the scene when deep
+// precision is on (any scene; nothing here knows the fractal). The primary rays and their
+// normals take this path; secondary rays (shadows, AO, bounces) leave from a float hit
+// point a bias above the surface and stay in float.
+//
+// Compiled in only when the scene carries the double entry (HAS_DEEP_DE): a program
+// without it is exactly what it was.
+#ifdef HAS_DEEP_DE
+uniform int deepPrecision;
+
+// Floor of the hit epsilon in double. MIN_EPSILON is about ten float ulps at |pos| ~ 1, the
+// accuracy a float position can have at all; a double position is good to ~1e-16, so the
+// floor can drop to what the float distance returned by the estimator still resolves.
+const float DEEP_MIN_EPSILON = 1.0e-15;
+
+// The last hit found by the deep march, so calcNormal can take its differences in double
+// when it is asked about that very point.
+dvec3 gDeepHitPos = dvec3(0.0LF);
+bool  gDeepHitValid = false;
+
+float sceneDE_deep(dvec3 posD) {
+    float d = DE_deep(posD);
+    vec3 pos = vec3(posD);
+    if (erosionEnabled != 0 && d < erosionMaxDisplacement() + 0.1) d += getErosionDisplacementLight(pos);
+    if (crystalEnabled != 0 && d < crystalMaxDisplacement() + 0.1) d += getCrystalDisplacementLight(pos);
+    if (mossEnabled != 0 && d < mossMaxDisplacement() + 0.1) d += getMossDisplacementLight(pos);
+    d = min(d, getOceanDE(pos));
+    return d;
+}
+
+/** Whether this ray may be marched in double: deep precision is on and the ray leaves from
+ *  the camera (the one origin held in double). */
+bool deepRay(Ray ray) {
+    return deepPrecision != 0 && all(equal(ray.origin, gPrimaryOrigin));
+}
+
+// Whether a camera ray the float march ended at distance t, having come within minD of a
+// surface on the way, needs the double one. Either where it lands a pixel spans fewer than
+// ~100 float steps of the position (the image there would be blocks), or on the way it came
+// within 4 float steps of a surface, where the float estimate is noise and the march may
+// have stepped through a wall (a dive below 1e-7 did, DiveProbe). One float step is
+// ~1.2e-7 of |camPos|. The float march goes first and the double one only redoes the rays
+// that need it, so a scene with deep precision on costs what it did until the dive gets
+// there. Decided per ray, not from the estimate at the camera alone: that is a lower bound,
+// far too low near a Mandelbox (90 float steps where nothing is nearer than 0.17), and as
+// the only test it sent whole views into the double march for nothing (PrecisionLab).
+float gSimpleMinDE = 1e10;   // the least estimate rayMarchSimple met, for rayMarchSimpleCamera
+bool deepNeeded(float t, float minD) {
+    float ulp = 1.19e-7 * max(length(camPos), 1e-3);
+    return pixelScaleAt(t) < 100.0 * ulp || minD < 4.0 * ulp;
+}
+#endif
+
+// ============================================================================
 // Normal Calculation (Tetrahedron Method with adaptive epsilon)
 // ============================================================================
 
@@ -230,6 +291,22 @@ vec3 calcNormal(vec3 pos) {
         float qualityEpsilon = baseEpsilon / max(1.0, qualityMultiplier);
         e = max(qualityEpsilon, distToCamera * 0.00005);
     }
+
+#ifdef HAS_DEEP_DE
+    // Asked about the point the deep march just found: take the differences in double,
+    // with a step the footprint sets rather than the float floor.
+    if (deepPrecision != 0 && gDeepHitValid && all(equal(pos, vec3(gDeepHitPos)))) {
+        float distD = float(length(gDeepHitPos - camPosD));
+        float ed = (pixelRadius > 0.0) ? max(DEEP_MIN_EPSILON, pixelRadius * distD * 0.5) : e;
+        double eD = double(ed);
+        return normalize(
+            k1 * sceneDE_deep(gDeepHitPos + dvec3(k1) * eD) +
+            k2 * sceneDE_deep(gDeepHitPos + dvec3(k2) * eD) +
+            k3 * sceneDE_deep(gDeepHitPos + dvec3(k3) * eD) +
+            k4 * sceneDE_deep(gDeepHitPos + dvec3(k4) * eD)
+        );
+    }
+#endif
 
     return normalize(
         k1 * sceneDE_simple(pos + k1 * e) +
@@ -381,6 +458,185 @@ vec3 refineSurface(vec3 ro, vec3 rd, float hitDist, float lastStep) {
 // once more because every call site of the estimator is another copy of it to compile.
 float gMarchStartDE = -1.0;
 
+#ifdef HAS_DEEP_DE
+// ---------------------------------------------------------------------------
+// Deep-precision march: the same algorithm as rayMarch / rayMarchSimple with the point
+// formed in double and the estimator entered in double. t itself stays a double too; the
+// epsilon floor is DEEP_MIN_EPSILON instead of MIN_EPSILON. No compound assignment on a
+// double here: NVIDIA's compiler dies on some of them (C9999 "assign+", the Polyhedral IFS).
+// ---------------------------------------------------------------------------
+
+/** refineSurface in double: ternary search on the (non-negative) DE along the ray. */
+double refineSurfaceDeep(dvec3 ro, dvec3 rd, double hitDist, double lastStep) {
+    double lo = hitDist - lastStep;
+    double hi = hitDist;
+    float dHi = sceneDE_deep(ro + rd * hi);
+    if (dHi < 0.0) {
+        for (int i = 0; i < refinementSteps; i++) {
+            double mid = (lo + hi) * 0.5LF;
+            float d = sceneDE_deep(ro + rd * mid);
+            if (d < 0.0) hi = mid; else lo = mid;
+        }
+    } else {
+        for (int i = 0; i < refinementSteps; i++) {
+            double m1 = lo + (hi - lo) / 3.0LF;
+            double m2 = hi - (hi - lo) / 3.0LF;
+            float d1 = sceneDE_deep(ro + rd * m1);
+            float d2 = sceneDE_deep(ro + rd * m2);
+            if (d1 < d2) hi = m2; else lo = m1;
+        }
+    }
+    return (lo + hi) * 0.5LF;
+}
+
+float deepEpsilon(float t, float qualityEpsilon) {
+    if (pixelRadius > 0.0) return max(DEEP_MIN_EPSILON, pixelRadius * t);
+    return computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
+}
+
+/** The deep march with orbit traps: traps and matType are taken from the float DE at the
+ *  final point (colouring tolerates the rounding; the geometry does not). */
+RayHit rayMarchDeep(Ray ray) {
+    RayHit result;
+    result.hit = false;
+    result.dist = 0.0;
+    result.minDist = 1e10;
+    result.steps = 0;
+
+    dvec3 ro = camPosD + dvec3(gLensOffset);
+    dvec3 rd = dvec3(ray.direction);
+    double t = 0.0LF;
+
+    int effectiveMaxSteps = int(float(maxRaySteps) * qualityMultiplier);
+    float qualityEpsilon = baseEpsilon / qualityMultiplier;
+
+    float prevD = 1e10;
+    float omega = 1.0 + stepRelaxation;
+    double lastStep = 0.0LF;
+
+    dvec3 p = ro;
+    for (int i = 0; i < effectiveMaxSteps; i++) {
+        p = ro + rd * t;
+        float d = sceneDE_deep(p);
+        if (i == 0) gMarchStartDE = d;
+        result.minDist = min(result.minDist, d);
+        result.steps = i + 1;
+
+        if (d < deepEpsilon(float(t), qualityEpsilon)) {
+            result.hit = true;
+            break;
+        }
+
+        float baseStep = computeStep(d, qualityMultiplier, STEP_FACTOR) * fudgeFactor;
+        float step;
+        if (stepRelaxation > 0.0) {
+            float candidateStep = baseStep * omega;
+            if (prevD + d < candidateStep) {
+                t = t - lastStep;
+                step = baseStep;
+                omega = 1.0;
+            } else {
+                step = candidateStep;
+            }
+        } else {
+            step = baseStep;
+        }
+
+        prevD = d;
+        lastStep = double(step);
+        t = t + lastStep;
+
+        if (t > double(MAX_DISTANCE)) break;
+    }
+
+    if (result.hit && refinementSteps > 0 && lastStep > 0.0LF) {
+        t = refineSurfaceDeep(ro, rd, t, lastStep);
+        p = ro + rd * t;
+    }
+
+    if (result.hit && pixelRadius > 0.0) {
+        for (int i = 0; i < 6; i++) {
+            float d = sceneDE_deep(p);
+            if (d < DEEP_MIN_EPSILON) break;
+            p = p + rd * double(d * STEP_FACTOR);
+        }
+    }
+
+    result.pos = vec3(p);
+    result.dist = float(length(p - ro));
+    if (result.hit) {
+        gDeepHitPos = p;
+        gDeepHitValid = true;
+        sceneDE(result.pos, result.trap, result.matType);
+    }
+    return result;
+}
+
+/** The deep march without traps (the path tracer's camera ray). */
+bool rayMarchSimpleDeep(Ray ray, out vec3 hitPos, out float hitDist, out int matType) {
+    dvec3 ro = camPosD + dvec3(gLensOffset);
+    dvec3 rd = dvec3(ray.direction);
+    double t = 0.0LF;
+
+    int effectiveMaxSteps = int(float(maxRaySteps) * qualityMultiplier);
+    float qualityEpsilon = baseEpsilon / qualityMultiplier;
+    OrbitTrap dummyTrap;
+    matType = MAT_FRACTAL;
+
+    float prevD = 1e10;
+    float omega = 1.0 + stepRelaxation;
+    double lastStep = 0.0LF;
+
+    for (int i = 0; i < effectiveMaxSteps; i++) {
+        dvec3 p = ro + rd * t;
+        float d = sceneDE_deep(p);
+
+        if (d < deepEpsilon(float(t), qualityEpsilon)) {
+            if (refinementSteps > 0 && lastStep > 0.0LF) {
+                t = refineSurfaceDeep(ro, rd, t, lastStep);
+                p = ro + rd * t;
+            }
+            if (pixelRadius > 0.0) {
+                for (int j = 0; j < 6; j++) {
+                    float ds = sceneDE_deep(p);
+                    if (ds < DEEP_MIN_EPSILON) break;
+                    p = p + rd * double(ds * STEP_FACTOR);
+                }
+            }
+            hitPos = vec3(p);
+            hitDist = float(length(p - ro));
+            gDeepHitPos = p;
+            gDeepHitValid = true;
+            // The material is decided by the float scene DE at the point, as rayMarchSimple does.
+            sceneDE(hitPos, dummyTrap, matType);
+            return true;
+        }
+
+        float baseStep = d * STEP_FACTOR * fudgeFactor;
+        float step;
+        if (stepRelaxation > 0.0) {
+            float candidateStep = baseStep * omega;
+            if (prevD + d < candidateStep) {
+                t = t - lastStep;
+                step = baseStep;
+                omega = 1.0;
+            } else {
+                step = candidateStep;
+            }
+        } else {
+            step = baseStep;
+        }
+        prevD = d;
+        lastStep = double(step);
+        t = t + lastStep;
+
+        if (t > double(MAX_DISTANCE)) break;
+    }
+    hitDist = float(t);
+    return false;
+}
+#endif
+
 RayHit rayMarch(Ray ray) {
     RayHit result;
     result.hit = false;
@@ -466,6 +722,9 @@ RayHit rayMarch(Ray ray) {
         sceneDE(result.pos, result.trap, result.matType);
     }
 
+#ifdef HAS_DEEP_DE
+    if (deepRay(ray) && deepNeeded(result.dist, result.minDist)) return rayMarchDeep(ray);
+#endif
     return result;
 }
 
@@ -1275,10 +1534,16 @@ bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist, out int matType
     float prevD = 1e10;
     float omega = 1.0 + stepRelaxation;
     float lastStep = 0.0;
+#ifdef HAS_DEEP_DE
+    gSimpleMinDE = 1e10;
+#endif
 
     for (int i = 0; i < effectiveMaxSteps; i++) {
         vec3 pos = ray.origin + ray.direction * t;
         float d = sceneDE(pos, dummyTrap, matType);
+#ifdef HAS_DEEP_DE
+        gSimpleMinDE = min(gSimpleMinDE, d);
+#endif
 
         // Epsilon: cone tracing or legacy adaptive
         float epsilon;
@@ -1336,6 +1601,18 @@ bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist, out int matType
     return false;
 }
 
+/** rayMarchSimple for a ray that may be the camera's (the path tracer's first segment, the
+ *  depth under each pixel): in double when the camera is deep. Shadows, ambient occlusion
+ *  and bounces call rayMarchSimple itself, so the double march is compiled in three places
+ *  rather than into every one of them. */
+bool rayMarchSimpleCamera(Ray ray, out vec3 hitPos, out float hitDist, out int matType) {
+    bool hit = rayMarchSimple(ray, hitPos, hitDist, matType);
+#ifdef HAS_DEEP_DE
+    if (deepRay(ray) && deepNeeded(hitDist, gSimpleMinDE)) return rayMarchSimpleDeep(ray, hitPos, hitDist, matType);
+#endif
+    return hit;
+}
+
 // Classic path trace (legacy, for A/B comparison - no NEE+MIS, no GGX G term fix)
 vec3 pathTraceClassic(Ray ray, inout uint seed) {
     vec3 throughput = vec3(1.0);  // Path throughput (accumulated BRDF)
@@ -1352,7 +1629,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
         float hitDist;
         int hitMat;
 
-        if (!rayMarchSimple(currentRay, hitPos, hitDist, hitMat)) {
+        if (!rayMarchSimpleCamera(currentRay, hitPos, hitDist, hitMat)) {
             // Ray escaped - add environment light
             float envScale = (bounce == 0) ? 1.0 : indirectMultiplier;
             vec3 envContribution = throughput * sampleEnvironment(currentRay.direction) * envScale;
@@ -1678,7 +1955,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         float hitDist;
         int hitMat;
 
-        bool segmentHit = rayMarchSimple(currentRay, hitPos, hitDist, hitMat);
+        bool segmentHit = rayMarchSimpleCamera(currentRay, hitPos, hitDist, hitMat);
 #ifdef EXTRA_BEAM
         // The beam's glow in the fog along this segment. On the camera segment it is the
         // fog march's, after the path (computeVolumetricFog); after a bounce it is what a
@@ -2408,7 +2685,11 @@ void main() {
     // needed to still resolve it. Probed at the base budget so the anchor itself
     // does not depend on the result.
 #ifdef DETAIL_LOD
+#ifdef HAS_DEEP_DE
+    gExtraIterations = zoomDetailIterations(deepPrecision != 0 ? sceneDE_deep(camPosD) : sceneDE_simple(camPos));
+#else
     gExtraIterations = zoomDetailIterations(sceneDE_simple(camPos));
+#endif
 #endif
 
     // Get camera ray (with optional DoF)
@@ -2431,7 +2712,7 @@ void main() {
         vec3 surfPos;
         float surfDepth;
         int surfMatType;
-        bool surfHit = rayMarchSimple(ray, surfPos, surfDepth, surfMatType);
+        bool surfHit = rayMarchSimpleCamera(ray, surfPos, surfDepth, surfMatType);
         if (surfHit) {
             depth = surfDepth;
         }
