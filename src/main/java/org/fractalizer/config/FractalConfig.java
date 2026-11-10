@@ -269,6 +269,7 @@ public class FractalConfig {
         public float oceanWaveHeight = 0.1f;
         public float oceanSpeed = 1.0f;
         public float oceanTime = 0.0f;
+        public float oceanClarity = 0.0f;
     }
 
     public static class AnimationConfig {
@@ -473,6 +474,7 @@ public class FractalConfig {
         config.effects.oceanWaveHeight = params.getOceanWaveHeight();
         config.effects.oceanSpeed = params.getOceanSpeed();
         config.effects.oceanTime = params.getOceanTime();
+        config.effects.oceanClarity = params.getOceanClarity();
 
         // Fractal-specific parameters
         extractFractalParams(params, config.fractalParams);
@@ -672,6 +674,7 @@ public class FractalConfig {
         params.setOceanWaveHeight(effects.oceanWaveHeight);
         params.setOceanSpeed(effects.oceanSpeed);
         params.setOceanTime(effects.oceanTime);
+        params.setOceanClarity(effects.oceanClarity);
 
         // Fractal-specific parameters
         applyFractalParams(params, fractalParams);

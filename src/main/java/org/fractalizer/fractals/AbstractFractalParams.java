@@ -295,6 +295,10 @@ public abstract class AbstractFractalParams implements FractalParams {
     protected float oceanSpeed = 1.0f;
     @Animatable(display = "Ocean Time")
     protected float oceanTime = 0.0f;
+    /** The water's mean free path, world units: 0 = opaque (a tinted surface), more = clearer
+     *  water the path tracer sees into (refraction, scattering, the sun reaching under it). */
+    @Animatable(display = "Ocean Clarity")
+    protected float oceanClarity = 0.0f;
 
     // Custom gradient palette (used when paletteIndex == 6)
     protected GradientPalette customGradient;
@@ -629,6 +633,7 @@ public abstract class AbstractFractalParams implements FractalParams {
         target.oceanWaveHeight = this.oceanWaveHeight;
         target.oceanSpeed = this.oceanSpeed;
         target.oceanTime = this.oceanTime;
+        target.oceanClarity = this.oceanClarity;
 
         // Copy custom gradient
         target.customGradient = this.customGradient.copy();
@@ -1266,4 +1271,6 @@ public abstract class AbstractFractalParams implements FractalParams {
     public void setOceanSpeed(float speed) { this.oceanSpeed = speed; }
     public float getOceanTime() { return oceanTime; }
     public void setOceanTime(float time) { this.oceanTime = time; }
+    public float getOceanClarity() { return oceanClarity; }
+    public void setOceanClarity(float clarity) { this.oceanClarity = Math.max(0f, clarity); }
 }

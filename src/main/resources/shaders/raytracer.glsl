@@ -160,15 +160,22 @@ vec3 morphFactors(vec3 pos, vec3 primaryFactors) {
 // Environment Distance Functions (Ocean & Floor)
 // ============================================================================
 
+// Clear water (oceanClarity > 0, path tracer only). A path that crossed the surface is under
+// it: the surface is then seen from below (its estimate negated, the water side outside);
+// a shadow ray from under it ignores it and pays for the crossing instead (waterCrossing).
+bool gUnderwater = false;
+bool gOceanOff = false;
+
 float getOceanDE(vec3 pos) {
-    if (oceanEnabled == 0) return 1e10;
+    if (oceanEnabled == 0 || gOceanOff) return 1e10;
     // Layered wave noise using deterministic oceanTime
     vec3 p = pos * oceanWaveScale;
     float timeMod = oceanTime * oceanSpeed;
     float wave = noise(p + vec3(timeMod, 0.0, timeMod * 0.5)) * 0.5;
     wave += noise(p * 2.1 + vec3(-timeMod * 0.7, 0.0, timeMod)) * 0.25;
     wave += noise(p * 4.3 + vec3(timeMod * 0.2, 0.0, -timeMod * 0.8)) * 0.125;
-    return pos.y - (oceanHeight + wave * oceanWaveHeight);
+    float d = pos.y - (oceanHeight + wave * oceanWaveHeight);
+    return gUnderwater ? -d : d;
 }
 
 const int MAT_FRACTAL = 0;
@@ -1756,7 +1763,7 @@ vec3 leaveSurface(vec3 hitPos, vec3 n, float bias) {
 }
 
 /** rayMarchSimple for a ray leaveSurface may have registered (a shadow ray from a hit). */
-bool rayMarchSimpleLeaving(Ray ray, out vec3 hitPos, out float hitDist, out int matType) {
+bool rayMarchSimpleLeavingMarch(Ray ray, out vec3 hitPos, out float hitDist, out int matType) {
     float tOffset = 0.0;
 #ifdef HAS_DEEP_DE
     if (gLeaveValid && all(equal(ray.origin, gLeaveF))) {
@@ -1766,6 +1773,41 @@ bool rayMarchSimpleLeaving(Ray ray, out vec3 hitPos, out float hitDist, out int 
     bool hit = rayMarchSimple(ray, hitPos, hitDist, matType);
     hitDist = hitDist + tOffset;
     return hit;
+}
+
+uint gWaterSeed = 0u;   // the coin of a shadow ray's water crossing, drawn from the path's seed
+
+/** What a ray from under the water toward a light keeps of it at the surface: the
+ *  Fresnel share that crosses, and the share not scattered or absorbed on the way up. The
+ *  ray is not bent (no caustics). */
+float waterCrossing(vec3 origin, vec3 dir) {
+    if (dir.y <= 0.01) return 0.0;
+    float depth = max(getOceanDE(origin), 0.0);           // under the water: the height of water above
+    float len = depth / dir.y;
+    return (1.0 - fresnelDielectric(dir.y, 1.33)) * exp(-len / oceanClarity);
+}
+
+/** A shadow ray. From under the water the surface does not stop it: it is marched without
+ *  the ocean, and what reaches the surface crosses it with the share waterCrossing says
+ *  (a coin, so every caller keeps its yes or no). */
+bool rayMarchSimpleLeaving(Ray ray, out vec3 hitPos, out float hitDist, out int matType) {
+    // one call of the march: GLSL inlines it at every shadow ray, twice would double them all
+    bool under = gUnderwater;
+    gOceanOff = under;
+    bool hit = rayMarchSimpleLeavingMarch(ray, hitPos, hitDist, matType);
+    gOceanOff = false;
+    if (hit || !under) return hit;
+    return random(gWaterSeed) >= waterCrossing(ray.origin, ray.direction);
+}
+
+/** The water's single-scattering albedo for the colour it should show when deep: a
+ *  semi-infinite medium of albedo a reflects about R = (1 - s) / (1 + s), s = sqrt(1 - a),
+ *  so a = 1 - ((1 - R) / (1 + R))^2 makes deep water look oceanColor, as the opaque
+ *  surface did. */
+vec3 waterAlbedo() {
+    vec3 R = clamp(oceanColor, vec3(0.0), vec3(0.95));
+    vec3 q = (1.0 - R) / (1.0 + R);
+    return 1.0 - q * q;
 }
 
 /** rayMarchSimple for a ray that may be the camera's (the path tracer's first segment, the
@@ -1790,6 +1832,40 @@ bool rayMarchSimpleCamera(Ray ray, out vec3 hitPos, out float hitDist, out int m
     return hit;
 }
 
+/** Under the water the segment just marched may end in the water before its hit: a free
+ *  path drawn from the clarity. Scattered there, the path goes on from that point in a new
+ *  direction, tinted by the water's albedo. */
+bool waterScatter(inout Ray r, bool segmentHit, float hitDist, inout vec3 throughput, inout uint seed) {
+    float seg = segmentHit ? hitDist : MAX_DISTANCE;
+    float t = -log(max(1.0 - random(seed), 1e-7)) * oceanClarity;
+    if (t >= seg) return false;
+    r.origin = r.origin + r.direction * t;
+    r.direction = randomUnitSphere(seed);
+    throughput *= waterAlbedo();
+    return true;
+}
+
+/** At the water's surface, from above or from below: reflected or refracted as Fresnel says
+ *  (index 1.33), reflected whole from below past the critical angle. A refracted path
+ *  changes side. */
+void waterSurface(inout Ray r, vec3 hitPos, vec3 normal, inout uint seed) {
+    vec3 faceN = dot(r.direction, normal) > 0.0 ? -normal : normal;
+    vec3 refr;
+    bool crosses = refractRay(r.direction, faceN, gUnderwater ? 1.33 : 1.0 / 1.33, refr);
+    if (crosses) {
+        float cosAir = gUnderwater ? abs(dot(refr, faceN)) : max(dot(-r.direction, faceN), 0.0);
+        crosses = random(seed) >= fresnelDielectric(cosAir, 1.33);
+    }
+    if (crosses) {
+        r.direction = normalize(refr);
+        r.origin = leaveSurface(hitPos, -faceN, pathBias(hitPos));
+        gUnderwater = !gUnderwater;
+    } else {
+        r.direction = reflect(r.direction, faceN);
+        r.origin = leaveSurface(hitPos, faceN, pathBias(hitPos));
+    }
+}
+
 // Classic path trace (legacy, for A/B comparison - no NEE+MIS, no GGX G term fix)
 vec3 pathTraceClassic(Ray ray, inout uint seed) {
     vec3 throughput = vec3(1.0);  // Path throughput (accumulated BRDF)
@@ -1800,13 +1876,20 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
     if (dispersionEnabled != 0) lambda = 400.0 + 300.0 * random(seed);
 
     Ray currentRay = ray;
+    gUnderwater = oceanClarity > 0.0 && getOceanDE(ray.origin) < 0.0;   // a camera under the water
 
     for (int bounce = 0; bounce <= maxBounces; bounce++) {
         vec3 hitPos;
         float hitDist;
         int hitMat;
+        gWaterSeed = seed ^ 0x68E31DA4u;
 
-        if (!rayMarchSimpleCamera(currentRay, hitPos, hitDist, hitMat)) {
+        bool segmentHit = rayMarchSimpleCamera(currentRay, hitPos, hitDist, hitMat);
+        if (gUnderwater) {
+            if (waterScatter(currentRay, segmentHit, hitDist, throughput, seed)) continue;
+            if (!segmentHit) break;          // down into the deep: nothing comes back
+        }
+        if (!segmentHit) {
             // Ray escaped - add environment light
             float envScale = (bounce == 0) ? 1.0 : indirectMultiplier;
             vec3 envContribution = throughput * sampleEnvironment(currentRay.direction) * envScale;
@@ -1817,6 +1900,10 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
         // Handle Ocean/Floor materials
         if (hitMat == MAT_OCEAN) {
             vec3 normal = calcNormal(hitPos);
+            if (oceanClarity > 0.0) {
+                waterSurface(currentRay, hitPos, normal, seed);
+                continue;
+            }
             vec3 viewDir = -currentRay.direction;
             float fr = fresnelDielectric(max(dot(viewDir, normal), 0.0), 1.33); // Water IOR
             if (random(seed) < fr) {
@@ -2090,6 +2177,7 @@ vec3 pathTraceClassic(Ray ray, inout uint seed) {
         }
     }
 
+    gUnderwater = false;
     return clamp(radiance, 0.0, FIREFLY_CLAMP * 2.0);
 }
 
@@ -2126,11 +2214,13 @@ vec3 pathTrace(Ray ray, inout uint seed) {
 #endif
 
     Ray currentRay = ray;
+    gUnderwater = oceanClarity > 0.0 && getOceanDE(ray.origin) < 0.0;   // a camera under the water
 
     for (int bounce = 0; bounce <= maxBounces; bounce++) {
         vec3 hitPos;
         float hitDist;
         int hitMat;
+        gWaterSeed = seed ^ 0x68E31DA4u;
 
         bool segmentHit = rayMarchSimpleCamera(currentRay, hitPos, hitDist, hitMat);
 #ifdef EXTRA_BEAM
@@ -2142,6 +2232,16 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         if (bounce > 0 && volumetricFogEnabled != 0 && fogDensity > 0.0 && extraLightType == EXTRA_LIGHT_BEAM && extraLightIntensity > 0.0)
             radiance += clamp(throughput * beamInScatter(currentRay, segmentHit ? hitDist : MAX_DISTANCE), 0.0, FIREFLY_CLAMP);
 #endif
+        if (gUnderwater) {
+            if (waterScatter(currentRay, segmentHit, hitDist, throughput, seed)) {
+                lastWasSpecular = false; lastBsdfPdf = 1.0 / (4.0 * PI);
+#ifdef BIDIR
+                bdLive = false;              // the photon pass knows no water
+#endif
+                continue;
+            }
+            if (!segmentHit) break;          // down into the deep: nothing comes back
+        }
         if (!segmentHit) {
             // Ray escaped - add environment light with MIS weight
             float envScale = (bounce == 0) ? 1.0 : indirectMultiplier;
@@ -2161,6 +2261,14 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         // Handle Ocean/Floor materials
         if (hitMat == MAT_OCEAN) {
             vec3 normal = calcNormal(hitPos);
+            if (oceanClarity > 0.0) {
+                waterSurface(currentRay, hitPos, normal, seed);
+                lastWasSpecular = true; lastBsdfPdf = 0.0;
+#ifdef BIDIR
+                bdLive = false;              // the photon pass knows no water
+#endif
+                continue;
+            }
             vec3 viewDir = -currentRay.direction;
 #ifdef BIDIR
             bdCosIn = max(dot(normal, viewDir), 0.001);
@@ -2734,6 +2842,7 @@ vec3 pathTrace(Ray ray, inout uint seed) {
         }
     }
 
+    gUnderwater = false;
     return clamp(radiance, 0.0, FIREFLY_CLAMP * 2.0);
 }
 

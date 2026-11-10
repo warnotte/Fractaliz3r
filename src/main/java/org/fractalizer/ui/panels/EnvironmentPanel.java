@@ -51,6 +51,7 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
     private EnhancedSlider oceanWaveHeightSlider;
     private EnhancedSlider oceanSpeedSlider;
     private EnhancedSlider oceanTimeSlider;
+    private EnhancedSlider oceanClaritySlider;
 
     public EnvironmentPanel(GLSLEngine engine, Supplier<AbstractFractalParams> paramsSupplier, Runnable onUpdate) {
         this.engine = engine;
@@ -277,6 +278,19 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
             }
         });
 
+        oceanClaritySlider = new EnhancedSlider("Water Clarity", 0, 2, 0, false);
+        oceanClaritySlider.setPrecision(3);
+        javafx.scene.control.Tooltip.install(oceanClaritySlider, new javafx.scene.control.Tooltip(
+            "How far light travels in the water before it is scattered (world units).\n"
+            + "0 = opaque water, a tinted surface. Above 0 the path tracer refracts into the water\n"
+            + "and sees what is under it; classic shading still draws the surface only."));
+        oceanClaritySlider.setOnAction(v -> {
+            if (!suppressRender) {
+                getParams().setOceanClarity(v.floatValue());
+                onUpdate.run();
+            }
+        });
+
         // Info
         Label infoLabel = new Label(
             "Procedural sky uses FBM noise clouds.\n" +
@@ -293,7 +307,7 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
         skyPane.setExpanded(false);
 
         VBox oceanBox = new VBox(5, oceanEnabledCheck, oceanHeightSlider, oceanColorBox,
-            oceanWaveScaleSlider, oceanWaveHeightSlider, oceanSpeedSlider, oceanTimeSlider);
+            oceanWaveScaleSlider, oceanWaveHeightSlider, oceanSpeedSlider, oceanTimeSlider, oceanClaritySlider);
         TitledPane oceanPane = new TitledPane("Physical Ocean (Raymarched)", oceanBox);
         oceanPane.setExpanded(false);
 
@@ -355,6 +369,7 @@ public class EnvironmentPanel extends ScrollPane implements Refreshable {
             oceanWaveHeightSlider.setValue(p.getOceanWaveHeight());
             oceanSpeedSlider.setValue(p.getOceanSpeed());
             oceanTimeSlider.setValue(p.getOceanTime());
+            oceanClaritySlider.setValue(p.getOceanClarity());
 
             // Re-sync engine state if needed
             rotationSlider.setValue(Math.toDegrees(engine.getEnvRotation()));

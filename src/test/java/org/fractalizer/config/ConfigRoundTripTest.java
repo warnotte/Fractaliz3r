@@ -37,6 +37,7 @@ class ConfigRoundTripTest {
         written.setDetailLOD(2.5f);
         written.setDetailLODMax(19);
         written.setDeepPrecision(true);
+        written.setOceanClarity(0.37f);
         // A deep-zoom camera: the float copy of this position is 1e-7 off.
         written.getCamera().setPosition(1.000000012345678, -0.5000000098765432, 0.25000000123);
         written.setPreviewScale(0.31f);
@@ -101,6 +102,7 @@ class ConfigRoundTripTest {
         assertEquals(written.getDetailLOD(), reloaded.getDetailLOD(), "detailLOD");
         assertEquals(written.getDetailLODMax(), reloaded.getDetailLODMax(), "detailLODMax");
         assertTrue(reloaded.isDeepPrecision(), "deepPrecision");
+        assertEquals(0.37f, reloaded.getOceanClarity(), 1e-6f, "oceanClarity");
         assertEquals(written.getPreviewScale(), reloaded.getPreviewScale(), "previewScale");
         assertEquals(written.isPreviewFastShading(), reloaded.isPreviewFastShading(), "previewFastShading");
         assertEquals(written.getMaterialType(), reloaded.getMaterialType(), "materialType");

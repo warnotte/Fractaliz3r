@@ -256,6 +256,7 @@ uniform float oceanWaveScale;
 uniform float oceanWaveHeight;
 uniform float oceanSpeed;
 uniform float oceanTime;
+uniform float oceanClarity;   // the water's mean free path; 0 = opaque (a tinted surface, as it always was)
 
 // ============================================================================
 // Math & Random Helpers

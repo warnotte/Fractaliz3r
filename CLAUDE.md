@@ -122,6 +122,11 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.FocusPickProbe" -De
 # the free distance ahead (the probe); logged, a still per decade; must never cross the surface.
 # (scene outDir WxH spp dial frames [eye,target as 6 comma-separated numbers: a detail camera])
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DiveProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac out/dive 480x270 16 0.1 600"
+# A dive as a film: straight at the surface point under the view's centre, from as far back as the
+# free space behind allows down to endDistance, geometric (same frames per decade), eased, a slow roll;
+# deep precision on, every frame an export, FFmpeg makes the MP4.
+#   (scene outDir WxH samples seconds fps endDistance [rollDegrees])
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DiveFilm" -Dexec.args="presets/KIFS_DIVE.frac out/dive_film 960x540 12 24 30 2e-9 60"
 # Deep precision (the camera rays marched in double, the scene's estimator translated to double by
 # DeepSource): a ladder of cameras toward one surface point placed by the probe, each rung rendered
 # float and double, normal error / roughness / speckle / cost, report.html. "compile" compiles every
@@ -293,6 +298,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── BandedSampleProbe.java       # a sample drawn in strips is the same sample; an aborted one is cleared; a depth read or a probe between strips loses nothing
 ├── FocusPickProbe.java          # the probe and the focus pick: sphere vs exact intersection, scene vs its image's depth, cost, latency during a refinement
 ├── DiveProbe.java               # auto speed: a headless dive on any scene, readings per frame, a still per decade, never crosses the surface
+├── DiveFilm.java                # a dive as a film: geometric approach to the centre's surface point, deep precision, every frame exported, MP4
 ├── PrecisionLab.java            # deep precision: float vs double down a camera ladder (normal error, speckle, cost); "compile" = every built-in in double
 ├── StripCostProbe.java          # GPU cost of strips vs whole per sync pattern: why slices are 60 ms
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera

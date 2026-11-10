@@ -1519,6 +1519,7 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("oceanWaveHeight", afp.getOceanWaveHeight());
             uniforms.put("oceanSpeed", afp.getOceanSpeed());
             uniforms.put("oceanTime", afp.getOceanTime());
+            uniforms.put("oceanClarity", afp.getOceanClarity());
         }
 
         // Audio-reactive uniforms + fractal parameter modulation

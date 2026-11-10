@@ -519,6 +519,34 @@ Variance-based convergence detection that skips already-converged pixels during 
 4. **Color Grading**: Procedural LUT styles (Cinema, Vintage, Matrix, Neon, Noir) for instant professional looks.
 5. **Monte Carlo Path Tracing**: NEE + MIS, GGX microfacet BRDF.
 6. **Advanced Lighting**: Spot light with configurable cone angle and edge softness.
+7. **Clear water** (Environment → Physical Ocean → Water Clarity, `oceanClarity`, path tracer
+   only). 0 keeps the ocean as it always was, a surface that reflects (Fresnel, index 1.33)
+   or scatters back tinted by `oceanColor`, bit for bit. Above 0 the clarity is the water's
+   mean free path in world units, and the path tracer goes into the water:
+   - at the surface, from above or below, a path reflects or refracts as Fresnel says, and
+     reflects whole from below past the critical angle. A path that crossed is *under the
+     water* (`gUnderwater`): the ocean's estimate is negated, so the surface is seen from
+     below and the marchers need nothing else;
+   - in the water each segment draws a free path; scattered before its hit, the path turns
+     in a random direction, tinted by the water's albedo. The albedo is derived from
+     `oceanColor`, `a = 1 - ((1 - R) / (1 + R))^2`, so deep murky water shows the colour the
+     opaque surface had;
+   - the sun's and the sky's shadow rays from under the water ignore the surface and keep the
+     share that crosses it: Fresnel, and `exp(-length / clarity)` along the way up
+     (`waterCrossing`, a coin so every caller keeps its yes or no). They are not bent: no
+     caustics. The extra lights do not reach under the water;
+   - a path tracer path that enters the water is no longer weighted against the photon pass
+     (`bdLive = false`): the photon pass knows no water;
+   - classic shading still draws the surface only.
+
+   Compile cost: the shadow-ray wrapper calls the march once (GLSL inlines it at every shadow
+   ray; a first version with two calls cost +20 % on ALBEDO_039). Measured A/B with the
+   driver's cache defeated, four scenes, two crossed rounds: 42.6 / 37.2 s before, 48.1 /
+   37.8 s after, inside the ±12 % a version varies from run to run.
+
+   Checked on NODE_COOL4 (clarity 0 identical to the bit; 0.3 and 1 show the drowned part of
+   the sponge under the reflection) and on MIRROR_GLASS half under water (the slab and the
+   balls' lower halves seen through it, the waterline breaking them).
 
 ---
 
