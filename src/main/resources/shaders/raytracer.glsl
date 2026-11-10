@@ -350,6 +350,56 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
     return clamp(res, 0.0, 1.0);
 }
 
+#ifdef HAS_DEEP_DE
+// The sun's shadow from a point the deep march found, in double. A shadow ray from the float
+// hit point starts up to a float step (~1e-7 of |pos|) from where the surface is; at a deep
+// zoom that is the size of the view, so the ray starts under the surface and the scene goes
+// dark (PrecisionLab: 36 % of the KIFS lit at 1e-2, 7 % at 1e-6). Near the surface the march
+// runs in double; once it is far from everything compared with a float step, the float
+// march is as good and cheaper, and takes over.
+float calcShadowDeep(dvec3 ro, vec3 rd, float mint, float maxt) {
+    float res = 1.0;
+    float t = mint;
+    int steps = int(float(shadowSteps) * qualityMultiplier);
+    float qualityEpsilon = baseEpsilon / qualityMultiplier;
+    float ulp = 1.19e-7 * max(length(camPos), 1e-3);
+    dvec3 rdD = dvec3(rd);
+
+    int i = 0;
+    for (; i < steps && t < maxt; i++) {
+        float h = sceneDE_deep(ro + rdD * double(t));
+        float epsilon = (pixelRadius > 0.0) ? max(DEEP_MIN_EPSILON, pixelRadius * t)
+                                            : computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
+        if (h < epsilon) return 0.0;
+        res = min(res, shadowSoftness * h / t);
+        t = t + max(h * fudgeFactor, epsilon * 2.0);
+        if (h > 1000.0 * ulp) break;        // clear of everything: float from here on
+    }
+    vec3 rof = vec3(ro);
+    for (; i < steps && t < maxt; i++) {
+        float h = sceneDE_simple(rof + rd * t);
+        float epsilon = (pixelRadius > 0.0) ? max(MIN_EPSILON, pixelRadius * t)
+                                            : computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
+        if (h < epsilon) return 0.0;
+        res = min(res, shadowSoftness * h / t);
+        t = t + max(h * fudgeFactor, epsilon * 2.0);
+    }
+    return clamp(res, 0.0, 1.0);
+}
+#endif
+
+/** The sun's shadow at a hit point, the ray leaving a bias above it along the normal: from
+ *  the deep march's own point, in double, when pos is that point (its float rounding). */
+float hitShadow(vec3 pos, vec3 normal, float bias, vec3 light, float maxt) {
+#ifdef HAS_DEEP_DE
+    if (deepPrecision != 0 && gDeepHitValid && all(equal(pos, vec3(gDeepHitPos)))) {
+        float b = surfaceBias(float(length(gDeepHitPos - camPosD)));
+        return calcShadowDeep(gDeepHitPos + dvec3(normal) * double(b), light, b, maxt);
+    }
+#endif
+    return calcShadow(pos + normal * bias, light, bias, maxt);
+}
+
 // ============================================================================
 // Ambient Occlusion
 // ============================================================================
@@ -362,7 +412,33 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
 // so it is renormalised to the reference radius to keep AO strength unchanged.
 const float AO_REF_RADIUS = 0.13;
 
+#ifdef HAS_DEEP_DE
+// Ambient occlusion around a point the deep march found, the probes placed in double and the
+// radii taken from the distance to the camera in double (the float one is noise at depth).
+float calcAODeep(dvec3 pos, vec3 normal, float distToCamera) {
+    float ao = 0.0;
+    float scale = 1.0;
+    int steps = int(float(aoSteps) * qualityMultiplier);
+    float maxR = min(AO_REF_RADIUS, 0.12 * viewScaleAt(distToCamera));
+    float minR = maxR * (0.01 / AO_REF_RADIUS);
+    dvec3 n = dvec3(normal);
+    for (int i = 0; i < steps; i++) {
+        float hr = minR + (maxR - minR) * float(i + 1) / float(steps);
+        float dd = sceneDE_deep(pos + n * double(hr));
+        ao = ao + (hr - dd) * scale;
+        scale = scale * 0.6;
+    }
+    ao = ao * (AO_REF_RADIUS / max(maxR, 1e-30));
+    return clamp(1.0 - aoIntensity * ao, 0.0, 1.0);
+}
+#endif
+
 float calcAO(vec3 pos, vec3 normal) {
+#ifdef HAS_DEEP_DE
+    if (deepPrecision != 0 && gDeepHitValid && all(equal(pos, vec3(gDeepHitPos)))) {
+        return calcAODeep(gDeepHitPos, normal, float(length(gDeepHitPos - camPosD)));
+    }
+#endif
     float ao = 0.0;
     float scale = 1.0;
 
@@ -1265,7 +1341,7 @@ vec3 shadeSimple(vec3 hitPos, Ray ray, int matType) {
 
     float NdotL = max(dot(normal, light), 0.0);
     float shadowBias = surfaceBias(length(hitPos - camPos));
-    float shadow = calcShadow(hitPos + normal * shadowBias, light, shadowBias, 15.0);
+    float shadow = hitShadow(hitPos, normal, shadowBias, light, 15.0);
     float ao = calcAO(hitPos, normal);
 
     // Moss coloring
@@ -1311,7 +1387,7 @@ vec3 shade(RayHit hit, Ray ray) {
         vec3 reflectDir = reflect(ray.direction, normal);
         vec3 envReflect = sampleEnvironment(reflectDir);
         float fr = fresnel(viewDir, normal, 5.0);
-        float shadow = calcShadow(hit.pos + normal * surfaceBias(hit.dist), normalize(lightDir), surfaceBias(hit.dist), 15.0);
+        float shadow = hitShadow(hit.pos, normal, surfaceBias(hit.dist), normalize(lightDir), 15.0);
         return mix(oceanColor, envReflect, fr * 0.8) * shadow;
     }
 
@@ -1357,7 +1433,7 @@ vec3 shade(RayHit hit, Ray ray) {
 
     // Shadow
     float shadowBias = surfaceBias(hit.dist);
-    float shadow = calcShadow(hit.pos + normal * shadowBias, light, shadowBias, 15.0);
+    float shadow = hitShadow(hit.pos, normal, shadowBias, light, 15.0);
 
     // Ambient occlusion
     float ao = calcAO(hit.pos, normal);
@@ -2739,7 +2815,7 @@ void main() {
 
             vec3 normal = calcNormal(hit.pos);
             float shadowBias = surfaceBias(hit.dist);
-            float shadow = calcShadow(hit.pos + normal * shadowBias, normalize(lightDir), shadowBias, 15.0);
+            float shadow = hitShadow(hit.pos, normal, shadowBias, normalize(lightDir), 15.0);
             float ao = calcAO(hit.pos, normal);
 
             color = renderByMode(hit, ray, normal, shadow, ao);

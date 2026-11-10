@@ -113,7 +113,9 @@ Read it before touching anything related to deep zoom, precision, DoF or navigat
 - **Next, if wanted:**
   - the cost at depth: the double orbit could run only its first iterations in double, as
     the WIP did by hand, if the translation learns to find the orbit's loop;
-  - secondary rays in double (shadows and AO are float, `surfaceBias` floors at 1e-5);
+  - the rest of the secondary rays in double. The sun's shadow and AO at a deep hit are done
+    (docs/RENDERING.md); reflections, extra lights, SSS and the path tracer's bounces and
+    light samples are still float;
   - § 4.3.
 
 The owner's wishes, in the owner's words and mine:

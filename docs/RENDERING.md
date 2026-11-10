@@ -399,10 +399,24 @@ double one: 0.6° at 1e-2, 13° at 1e-3, **92° at 1e-4** (the image is other ge
   and it sent whole views into the double march for nothing. A view with deep precision on
   therefore costs what it did until the dive gets there: at 1e-1 the image and the time are
   the float ones.
-- **Secondary rays** (shadows, AO, bounces) leave a float hit point a bias above the surface
-  and stay in float; only the three marchers a camera ray goes through (`rayMarch`, and
-  `rayMarchSimpleCamera` for the path tracer's first segment and the depth under each pixel)
-  can switch, so the double march is compiled in three places rather than into every shadow.
+- **The sun's shadow and the ambient occlusion at a deep hit, in double too.** A secondary
+  ray from the float hit point starts up to a float step from the surface, which at depth is
+  the size of the view: the shadow ray starts under the surface and the scene goes dark. On
+  the KIFS, 36 % of the surface was lit by the sun at 1e-2 and 23 % at 1e-4 with the geometry
+  already in double. `hitShadow` and `calcAO`, asked about the deep march's own point, work
+  from it in double:
+  - `calcShadowDeep` marches near the surface in double and hands over to float once the
+    ray is clear of everything (an estimate over 1000 float steps);
+  - `calcAODeep` places its probes in double, with radii from the distance to the camera
+    in double.
+
+  Measured on the KIFS: 36 % lit at 1e-4 as at 1e-2. At 1e-6 and 1e-8 it is 10 % and 8 %,
+  and an all-double shadow with four times the steps gives the same pixels (99.9-100 %
+  agree): the region is in the shadow of larger structure, which is the geometry. Only the
+  three marchers a camera ray goes through switch to double (`rayMarch`, and
+  `rayMarchSimpleCamera` for the path tracer's first segment and the depth under each pixel).
+  Still float: reflections, the extra lights' shadows, subsurface scattering, and the path
+  tracer's bounces and light samples.
 - **A scene whose estimator does not compile in double** (GLSL refuses something the
   translation passed on) is rendered in float with a message: the scheduler compiles the
   snapshot's `floatSource` instead, and the engine remembers the failure so it is not retried

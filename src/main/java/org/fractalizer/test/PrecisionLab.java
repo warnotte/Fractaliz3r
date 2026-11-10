@@ -266,6 +266,12 @@ public class PrecisionLab {
                 controller.setExportSize(w, h);
                 dep[mode] = new File(outDir, tag + "_depth.png");
                 controller.exportAOV(dep[mode], 2);
+                // The light: ambient occlusion and the sun's shadow alone (render modes 3, 4),
+                // what the secondary rays from the hit point make of it.
+                controller.setExportSize(w, h);
+                controller.exportAOV(new File(outDir, tag + "_ao.png"), 3);
+                controller.setExportSize(w, h);
+                controller.exportAOV(new File(outDir, tag + "_shadow.png"), 4);
                 DeepZoomLab.Metrics m = DeepZoomLab.score(rgb, dep[mode]);
                 double[] nq = normalStats(nrm, dep[mode]);
                 pair[mode] = new Result(tag, m, nq[0], nq[1], ms, rgb.getName(), nrm.getName());
