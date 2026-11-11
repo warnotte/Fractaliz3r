@@ -434,8 +434,16 @@ double one: 0.6° at 1e-2, 13° at 1e-3, **92° at 1e-4** (the image is other ge
   already in double. `hitShadow` and `calcAO`, asked about the deep march's own point, work
   from it in double:
   - `calcShadowDeep` marches near the surface in double and hands over to float once the
-    ray is clear of everything (an estimate over 100 float steps, the float one then within
-    1 %; 1000 gave the same shadows for 5-15 % more time);
+    ray is clear of everything by 100 float steps **and** the float estimate, asked at that
+    same point, agrees with the double one within 5 %; where they disagree it goes on in
+    double and asks again four times further out. Clearance alone was enough while the
+    double estimator called the float `sin`/`acos` (both estimators then had the same
+    surface); with the double library the float surface is not the double one rounded but
+    sits 1e-5..1e-4 away near the Mandelbulb's poles, and a ray handed over at 100 float
+    steps (~1e-5) met it: false shadows on 15 % of a Mandelbulb view at 1e-4, 10 % at 1e-5
+    (dark 40 % against 24 %, and 25 % against 15 %, with a shadow marched in double to the
+    end as the reference). With the check, ≤ 1 % of pixels differ from that reference at
+    every depth, for the price of one float estimate per handover;
   - `calcAODeep` places its probes in double, with radii from the distance to the camera
     in double.
 
@@ -453,7 +461,9 @@ double one: 0.6° at 1e-2, 13° at 1e-3, **92° at 1e-4** (the image is other ge
   - `leaveSurface` registers the origin;
   - `rayMarchSimpleLeaving` (shadow rays) and `rayMarchSimpleCamera` (the next segment)
     march it in double while it is near the surface, and in float once clear by 100 float
-    steps.
+    steps and the float estimate agrees there (the same check as `calcShadowDeep`, for the
+    same reason: without it a path-traced Mandelbulb at 1e-4 lost a quarter of its light,
+    mean 71 against 94 with the handover pushed out to 1e-2; with it, 93).
 
   The offset they leave by used to be a fixed 0.005 world units, five times the view at 1e-3
   and 125 times at 4e-5: the indirect light came from somewhere unrelated to the screen. It

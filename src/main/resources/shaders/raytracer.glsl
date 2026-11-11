@@ -362,9 +362,16 @@ float calcShadow(vec3 ro, vec3 rd, float mint, float maxt) {
 // hit point starts up to a float step (~1e-7 of |pos|) from where the surface is; at a deep
 // zoom that is the size of the view, so the ray starts under the surface and the scene goes
 // dark (PrecisionLab: 36 % of the KIFS lit at 1e-2, 7 % at 1e-6). Near the surface the march
-// runs in double; once it is clear of everything by 100 float steps (the float estimate then
-// within 1 %), the float march is as good and cheaper, and takes over. 1000 steps gave the
-// same shadows (99.9 % of pixels within 0.1) for 5-15 % more time.
+// runs in double; the float march is cheaper and takes over once the ray is clear of
+// everything by 100 float steps, but only where the float estimate agrees with the double one
+// at that very point (within 5 %). Clearance alone is not enough: the float estimator is not
+// the double one rounded. Its sin, cos and acos are the float built-ins, off by up to 5e-6
+// and, near the poles of acos, 7e-5 (DoubleMathProbe), so its surface can sit 1e-5..1e-4 from
+// the true one, and a ray handed over at 100 float steps (~1e-5) then met that surface: false
+// shadows on 15 % of a Mandelbulb view at 1e-4, 10 % at 1e-5 (PrecisionLab, against a shadow
+// marched in double to the end). Where the two disagree the double march goes on, and asks
+// again once it is four times clearer. One loop for both, so the scene's estimator is entered
+// at the same two places as before.
 float calcShadowDeep(dvec3 ro, vec3 rd, float mint, float maxt) {
     float res = 1.0;
     float t = mint;
@@ -372,24 +379,33 @@ float calcShadowDeep(dvec3 ro, vec3 rd, float mint, float maxt) {
     float qualityEpsilon = baseEpsilon / qualityMultiplier;
     float ulp = 1.19e-7 * max(length(camPos), 1e-3);
     dvec3 rdD = dvec3(rd);
-
-    int i = 0;
-    for (; i < steps && t < maxt; i++) {
-        float h = sceneDE_deep(ro + rdD * double(t));
-        float epsilon = (pixelRadius > 0.0) ? max(DEEP_MIN_EPSILON, pixelRadius * t)
-                                            : computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
-        if (h < epsilon) return 0.0;
-        res = min(res, shadowSoftness * h / t);
-        t = t + max(h * fudgeFactor, epsilon * 2.0);
-        if (h > 100.0 * ulp) break;         // clear of everything: float from here on
-    }
     vec3 rof = vec3(ro);
-    for (; i < steps && t < maxt; i++) {
-        float h = sceneDE_simple(rof + rd * t);
-        float epsilon = (pixelRadius > 0.0) ? max(MIN_EPSILON, pixelRadius * t)
-                                            : computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
+
+    bool deep = true;
+    float asked = -1.0;               // the double estimate the float one is to confirm, at this same t
+    float clearAt = 100.0 * ulp;      // the clearance at which the float march is asked to take over
+    for (int i = 0; i < steps && t < maxt; i++) {
+        float h;
+        if (deep) h = sceneDE_deep(ro + rdD * double(t));
+        else h = sceneDE_simple(rof + rd * t);
+        if (asked >= 0.0) {
+            if (abs(h - asked) > 0.05 * asked) {        // the float surface is elsewhere: stay in double
+                deep = true;
+                clearAt = 4.0 * asked;
+            }
+            h = asked;
+            asked = -1.0;
+        }
+        float epsilon;
+        if (pixelRadius > 0.0) epsilon = max(deep ? DEEP_MIN_EPSILON : MIN_EPSILON, pixelRadius * t);
+        else epsilon = computeAdaptiveEpsilon(t, qualityEpsilon, qualityMultiplier);
         if (h < epsilon) return 0.0;
         res = min(res, shadowSoftness * h / t);
+        if (deep && h > clearAt) {                    // the float estimate is asked at this point first
+            deep = false;
+            asked = h;
+            continue;
+        }
         t = t + max(h * fudgeFactor, epsilon * 2.0);
     }
     return clamp(res, 0.0, 1.0);
@@ -1711,8 +1727,11 @@ bool  gLeaveValid = false;
 /** A ray leaving the deep hit, registered by leaveSurface, marched in double while it is near
  *  the surface: true and the hit when it meets a surface there (recorded as the deep hit, so
  *  that surface's normal and rays are double too); otherwise false, with the ray moved to
- *  where it is clear by 100 float steps and how far that is in tOffset, for the float march
- *  to go on from there. */
+ *  where it is clear by 100 float steps and the float estimate agrees with the double one
+ *  (within 5 %, as calcShadowDeep asks, for the same reason: the float surface can sit
+ *  1e-5..1e-4 from the true one; handed over on clearance alone, a path-traced Mandelbulb lost
+ *  a quarter of its light at 1e-4), and how far that is in tOffset, for the float march to go
+ *  on from there. */
 bool leaveNearDeep(inout Ray ray, out vec3 hitPos, out float hitDist, out int matType, out float tOffset) {
     tOffset = 0.0;
     hitPos = ray.origin;
@@ -1725,6 +1744,7 @@ bool leaveNearDeep(inout Ray ray, out vec3 hitPos, out float hitDist, out int ma
     float qualityEpsilon = baseEpsilon / qualityMultiplier;
     int steps = int(float(maxRaySteps) * qualityMultiplier);
     double t = 0.0LF;
+    float clearAt = 100.0 * ulp;
     for (int i = 0; i < steps; i++) {
         dvec3 q = ro + rd * t;
         float d = sceneDE_deep(q);
@@ -1737,7 +1757,10 @@ bool leaveNearDeep(inout Ray ray, out vec3 hitPos, out float hitDist, out int ma
             sceneDE(hitPos, dummyTrap, matType);
             return true;
         }
-        if (d > 100.0 * ulp) break;
+        if (d > clearAt) {
+            if (abs(sceneDE_simple(vec3(q)) - d) <= 0.05 * d) break;
+            clearAt = 4.0 * d;                    // the float surface is elsewhere here: ask again further out
+        }
         t = t + double(d * STEP_FACTOR * fudgeFactor);
     }
     ray.origin = vec3(ro + rd * t);
