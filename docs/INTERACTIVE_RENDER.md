@@ -199,7 +199,8 @@ still planned as before and a throughput-bound scene keeps its 60 ms strips.
   and skips it when it drops path tracing.
 
 The accumulation state (`sampleCount`, `needsReset`) is touched on the GL thread only.
-`renderSamples` (whole samples in one call) stays for exports and harnesses.
+`renderSamples` (whole samples in one call) stays for exports, through `ExportSampler`, which
+uses it and the same slicing in steps of ~300 ms waited for one by one (docs/EXPORT.md).
 
 ## Events
 

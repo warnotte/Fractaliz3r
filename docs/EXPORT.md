@@ -57,28 +57,51 @@ Automatic MP4 creation via FFmpeg (H.265 HEVC) with `+faststart` for web optimiz
 
 ---
 
-## Export Progress (why a bar can lie)
+## Export Steps (the driver's watchdog, and why a bar can lie)
 
-`engine.renderSamples()` issues GL commands and returns; `runOnGLThread` waits for them to
-be **issued**, not for the GPU to finish. Left alone, an export loop pushes every batch into
-the driver queue far faster than it drains, so progress reports submissions rather than
-work. Measured on a 2600x1600, 128-sample export: the bar reached 100% after **0.07 s of a
-26 s render** and sat full for the rest.
+Every export and in-memory render (stills, tiles, animation frames, motion blur, AOVs,
+`renderStill`, the depth AOV the explorer reads) draws its samples through
+`render/ExportSampler`, in **steps of at most ~300 ms of GPU work**, each waited for before
+the next is sent:
 
-All six sample loops therefore wait on the GPU before reporting — the four batch loops
-(`exportSingleToPNG`, `exportTiledToPNG`, `exportAnimationFrameSingle`,
-`exportAnimationFrameTiled`) and the two motion-blur loops, which render sample by sample
-through `renderSample`. 100% now arrives at 22.4 s of a 23.0 s export. The two remaining
-`renderSample` callers are AOV exports: one sample followed immediately by `readImage()`,
-which waits by itself and has no progress bar to be wrong.
+- whole samples, as many as fit the step, when a sample is cheaper than the step;
+- otherwise one **strip** of rows of a sample (the viewport's slicing:
+  `GLSLEngine.beginSample` / `drawRows` / `commitSample`, the same sample to the bit, which
+  `BandedSampleProbe` checks);
+- the cost is learned as the render goes: the first sample is cut into strips from 1/64 of
+  the image, doubling, never past what the dearest row seen so far allows (the top rows are
+  often sky); each strip leaves its cost per row, so the next sample is cut where its rows
+  add up to the step; once a whole sample fits, samples go whole;
+- a render of the same program at the same size may start from the last one's cost per
+  sample, only when that was under 1/16 of the step, and for one sample before measuring
+  again (the uniforms may have changed everything: path tracing on, a camera gone deep).
 
-**The wait is not free everywhere.** A batch of eight samples takes ~1.6 s at 2600x1600,
-where draining the pipeline is noise, and ~28 ms at 480x270, where syncing every batch cost
-~18% on the benchmark. Timing the first batch to decide does **not** work — it carries the
-program activation and buffer reset and always looks slow. The gate is therefore
-`width x height x samples > SYNC_MIN_WORK`, known before the loop starts. It ignores how
-expensive the scene is, so an unusually slow small export gets a coarse bar; those finish in
-about a second regardless.
+**Why.** Windows resets the display driver when the GPU does not answer within two seconds
+(TDR, `nvlddmkm` event 153), and an application drawing on the GPU at that moment may not
+survive it. Exports used to hand the GPU eight whole samples per GL task with no wait. At
+depth in double that is seconds: PrecisionLab reset the driver nine times in three minutes on
+path-traced rungs (320x180 at 6+ spp), and the same Mandelbulb at 1e-6 in classic shading,
+960x540 at 4 spp (0.95 s a sample, four in one task), reset it twice in two runs of the old
+code; through the sampler the same export is 20 steps, the longest 300 ms, and no reset.
+`ExportWatchdogProbe` exports a scene (colour and normals) and prints what the sampler did:
+steps, strips, the longest step. Do not test a change to the sampler on something whose
+whole sample takes seconds: if the cutting is broken, that is what resets the driver.
+
+**Why a bar can lie.** `engine.renderSamples()` issues GL commands and returns;
+`runOnGLThread` waits for them to be **issued**, not for the GPU to finish. Left alone, an
+export loop pushes every batch into the driver queue far faster than it drains, so progress
+reports submissions rather than work: on a 2600x1600, 128-sample export the bar reached 100%
+after 0.07 s of a 26 s render. The old loops waited only when `width x height x samples` was
+large, so a small but expensive export still lied (ALBEDO_039 at 1080p, 16 samples: 100% at
+0.06 s of 3.0 s). Every step now ends in a wait, and the progress is the work done, rows of a
+sample in strips included: 100% at 2.98 s of 3.15 s.
+
+**What the waits cost.** A sync costs ~2.5 ms plus the tail of the draw before it. Against
+300 ms steps that is ~4% on ALBEDO_039 at 1080p (190 ms a sample, so one per step; 3.02 s
+before, 3.15 s now) and nothing measurable on the 480x270 benchmark (`RenderRegression
+bench`: 390 ms before, 337 ms after, the order of the runs is the difference). A
+latency-bound scene pays more per strip (the labyrinth at 1080p, ~100 ms of tail per strip,
+INTERACTIVE_RENDER.md), the price of never holding the GPU for seconds.
 
 `test/ExportProgressProbe` measures the gap between the first 100% report and the moment the
 export actually completes, for both the still and the animation-frame paths.

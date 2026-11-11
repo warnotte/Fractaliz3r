@@ -126,7 +126,9 @@ Read it before touching anything related to deep zoom, precision, DoF or navigat
   faster). What is left of the cost is the double arithmetic itself; the choices (exact
   everywhere, float functions while the camera moves, a switch) are the owner's.
   Path tracing in double at depth can take a sample past the driver's 2 s watchdog: 320x180
-  at 6+ spp reset the driver in PrecisionLab (an export batches 8 samples per GL task).
+  at 6+ spp reset the driver in PrecisionLab (an export batched 8 samples per GL task).
+  Fixed the same day at the owner's request: `ExportSampler` draws every export in steps of
+  at most ~300 ms, strips of a sample when one is dearer (docs/EXPORT.md, Export Steps).
 - **Next, if wanted:**
   - the cost at depth (measured 2026-11-10: on the KIFS at 1e-6 the sun's shadow is ~45 %
     of the time, legitimate marching out of dense structure; the double march ~3x the float

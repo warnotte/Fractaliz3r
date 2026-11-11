@@ -1027,7 +1027,7 @@ Display-output and shading refinements (`postprocess.glsl`, `raytracer.glsl`):
 
 ## Sample Accumulation Batching
 
-`GLSLEngine.renderSamples(uniforms, count)` renders a whole batch in one GL-thread pass: constant pass state (FBO, blend, textures, SSBO, user uniforms) is bound **once** instead of per sample, with **no per-sample `glFinish`** — the GPU pipelines all samples and synchronises only at readback. Used by progressive preview and still-frame export. Note: export wall-clock is GPU-bound (the raymarch dominates 93–99%; readback / pixel conversion / PNG encode are negligible), so this is mainly a CPU-overhead and sync cleanup, not a large export speedup.
+`GLSLEngine.renderSamples(uniforms, count)` renders a whole batch in one GL-thread pass: constant pass state (FBO, blend, textures, SSBO, user uniforms) is bound **once** instead of per sample, with **no per-sample `glFinish`** — the GPU pipelines all samples and synchronises only at readback. Exports call it through `render/ExportSampler`, which sizes each call (or cuts a sample into strips) to ~300 ms of GPU work and waits for it, so the driver's two-second watchdog is never reached (docs/EXPORT.md, Export Steps). Note: export wall-clock is GPU-bound (the raymarch dominates 93–99%; readback / pixel conversion / PNG encode are negligible), so this is mainly a CPU-overhead and sync cleanup, not a large export speedup.
 
 ## Test Harnesses: Regression, Benchmark, Traveller
 

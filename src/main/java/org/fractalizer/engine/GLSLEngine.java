@@ -225,6 +225,13 @@ public class GLSLEngine implements AutoCloseable {
 
     public boolean hasProgram(String name) { return programs.containsKey(name); }
 
+    /** The active program's name and a hash of the source it holds: every node graph is
+     *  "nodegraph", so the name alone does not say which scene a cost was measured on. */
+    public String activeProgramKey() {
+        String source = programSources.get(activeProgram);
+        return activeProgram + "#" + (source == null ? "" : Integer.toHexString(source.hashCode()));
+    }
+
     /**
      * Load raw shader source from a resource path.
      */

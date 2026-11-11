@@ -9,6 +9,7 @@ import org.fractalizer.engine.GLSLEngine;
 import org.fractalizer.engine.ShaderPreprocessor;
 import org.fractalizer.fractals.*;
 import org.fractalizer.graph.GraphCompiler;
+import org.fractalizer.render.ExportSampler;
 import org.fractalizer.render.SceneSnapshot;
 import org.fractalizer.render.ViewportEvent;
 import org.fractalizer.render.ViewportScheduler;
@@ -37,6 +38,8 @@ import java.util.function.Supplier;
 public class GLSLFractalizerController implements RenderController {
 
     private final GLSLEngine engine;
+    /** Draws every export and in-memory render in steps the driver's watchdog cannot trip on. */
+    private final ExportSampler sampler;
     // The viewport: requests in, images and status out. See docs/INTERACTIVE_RENDER.md.
     private final ViewportScheduler viewport;
 
@@ -64,6 +67,7 @@ public class GLSLFractalizerController implements RenderController {
 
     public GLSLFractalizerController() throws IOException {
         this.engine = new GLSLEngine(viewportWidth, viewportHeight);
+        this.sampler = new ExportSampler(engine);
         this.viewport = new ViewportScheduler(engine, r -> {
             try { Platform.runLater(r); }
             catch (IllegalStateException e) { r.run(); }   // no toolkit (headless harness)
@@ -467,19 +471,13 @@ public class GLSLFractalizerController implements RenderController {
 
     private static final int MAX_TILE_SIZE = 4096;
 
-    // Samples rendered per GL-thread batch during export. A batch issues one GL task
-    // (no per-sample glFinish); cancellation and progress are checked per batch.
-    //
-    // A batch is followed by a glSync, because renderSamples only guarantees the commands
-    // were *issued*: without the wait the loop outruns the GPU by the depth of the driver
-    // queue and the progress bar reaches 100% almost immediately, then sits there for the
-    // whole export. The wait is only free when a batch is long enough that draining the
-    // pipeline is noise against it — on a 2600x1600 export a batch takes ~1.6 s and the
-    // sync costs nothing measurable, while at 480x270 it takes ~28 ms and syncing every
-    // batch costs ~18%. So the first batch is timed and the rest sync only if it was slow,
-    // which is also exactly when a progress bar is worth having.
-    private static final long SYNC_MIN_WORK = 50_000_000L;   // pixels x samples
-    private static final int EXPORT_SAMPLE_BATCH = 8;
+    // Every export and in-memory render draws its samples through the ExportSampler: steps
+    // of at most ~300 ms of GPU work (whole samples, or strips of one that is dearer), each
+    // waited for before the next. Eight whole samples per GL task, as before, could hold the
+    // GPU for seconds on a deep path-traced view and reset the display driver (its watchdog
+    // is two seconds). Waiting on every step also keeps the progress bar on the work done:
+    // without the wait the loop outran the GPU by the depth of the driver queue and the bar
+    // reached 100% almost at once. Steps are long enough that the wait costs ~1-3 %.
 
     private CompletableFuture<Void> exportSingleToPNG(File file, int samples, Consumer<Double> onProgress, Supplier<Boolean> cancelCheck) {
         return CompletableFuture.runAsync(() -> {
@@ -491,21 +489,12 @@ public class GLSLFractalizerController implements RenderController {
                 Map<String, Object> uniforms = buildUniforms();
 
                 int exportSamples = Math.max(1, samples);
-                boolean syncProgress = (long) exportWidth * exportHeight * exportSamples > SYNC_MIN_WORK;
-                for (int rendered = 0; rendered < exportSamples; ) {
-                    if (cancelCheck.get()) {
-                        engine.resize(viewportWidth, viewportHeight);
-                        return;
-                    }
-                    int batch = Math.min(EXPORT_SAMPLE_BATCH, exportSamples - rendered);
-                    engine.renderSamples(uniforms, batch);
-                    if (syncProgress) engine.glSync();
-                    rendered += batch;
+                sampler.render(uniforms, exportWidth, exportHeight, exportSamples, false, done -> {
                     if (onProgress != null) {
-                        double progress = (double) rendered / exportSamples;
+                        double progress = done / exportSamples;
                         Platform.runLater(() -> onProgress.accept(progress));
                     }
-                }
+                }, cancelCheck::get);
 
                 // Cancelled after loop
                 if (cancelCheck.get()) {
@@ -580,21 +569,12 @@ public class GLSLFractalizerController implements RenderController {
                             uniforms.put("pixelRadius", (float) Math.tan(afp2.getFov() * 0.5) / (fullHf * 0.5f));
                         }
 
-                        boolean syncProgress = (long) tileW * tileH * exportSamples > SYNC_MIN_WORK;
-                        for (int rendered = 0; rendered < exportSamples; ) {
-                            if (cancelCheck.get()) {
-                                engine.resize(viewportWidth, viewportHeight);
-                                return;
-                            }
-                            int batch = Math.min(EXPORT_SAMPLE_BATCH, exportSamples - rendered);
-                            engine.renderSamples(uniforms, batch);
-                            if (syncProgress) engine.glSync();
-                            rendered += batch;
+                        sampler.render(uniforms, tileW, tileH, exportSamples, false, done -> {
                             if (onProgress != null) {
-                                double progress = (double) (tileIndex * exportSamples + rendered) / (totalTiles * exportSamples);
+                                double progress = (tileIndex * exportSamples + done) / (totalTiles * exportSamples);
                                 Platform.runLater(() -> onProgress.accept(progress));
                             }
-                        }
+                        }, cancelCheck::get);
 
                         if (cancelCheck.get()) {
                             engine.resize(viewportWidth, viewportHeight);
@@ -692,16 +672,10 @@ public class GLSLFractalizerController implements RenderController {
 
             Map<String, Object> uniforms = buildUniforms();
 
-            // Render with specified samples
-            boolean syncProgress = (long) engine.getWidth() * engine.getHeight() * samples > SYNC_MIN_WORK;
-            for (int rendered = 0; rendered < samples; ) {
-                if (cancelCheck != null && cancelCheck.get()) break;
-                int batch = Math.min(EXPORT_SAMPLE_BATCH, samples - rendered);
-                engine.renderSamples(uniforms, batch);
-                if (syncProgress) engine.glSync();
-                rendered += batch;
-                if (onProgress != null) onProgress.accept((double) rendered / samples);
-            }
+            // Render with specified samples (a cancel keeps what is done: a sample in strips is finished)
+            sampler.render(uniforms, width, height, samples, true,
+                    done -> { if (onProgress != null) onProgress.accept(done / samples); },
+                    () -> cancelCheck != null && cancelCheck.get());
 
             // Read pixels
             float[] pixels = engine.readImage();
@@ -781,20 +755,12 @@ public class GLSLFractalizerController implements RenderController {
                         uniforms.put("pixelRadius", (float) Math.tan(afp2.getFov() * 0.5) / (fullHf * 0.5f));
                     }
 
-                    boolean syncProgress = (long) tileW * tileH * samples > SYNC_MIN_WORK;
-                    for (int rendered = 0; rendered < samples; ) {
-                        if (cancelCheck != null && cancelCheck.get()) {
-                            engine.resize(viewportWidth, viewportHeight);
-                            return null;
-                        }
-                        int batch = Math.min(EXPORT_SAMPLE_BATCH, samples - rendered);
-                        engine.renderSamples(uniforms, batch);
-                        if (syncProgress) engine.glSync();
-                        rendered += batch;
-                        if (onProgress != null) {
-                            double progress = (double) (tileIndex * samples + rendered) / (totalTiles * samples);
-                            onProgress.accept(progress);
-                        }
+                    sampler.render(uniforms, tileW, tileH, samples, false, done -> {
+                        if (onProgress != null) onProgress.accept((tileIndex * samples + done) / (totalTiles * samples));
+                    }, () -> cancelCheck != null && cancelCheck.get());
+                    if (cancelCheck != null && cancelCheck.get()) {
+                        engine.resize(viewportWidth, viewportHeight);
+                        return null;
                     }
 
                     // Read tile pixels and copy into full image
@@ -898,11 +864,9 @@ public class GLSLFractalizerController implements RenderController {
 
             Random random = new Random();
 
-            // Render samples with time jittering for motion blur
-            boolean syncProgress = (long) width * height * samples > SYNC_MIN_WORK;
-            for (int i = 0; i < samples; i++) {
-                if (cancelCheck != null && cancelCheck.get()) break;
-
+            // Render samples with time jittering for motion blur: each sample's uniforms are
+            // built just before it is drawn, at its own instant of the shutter
+            sampler.render(i -> {
                 // Jitter time within shutter window (centered on frame time)
                 double jitteredTime;
                 if (shutterAngle > 0) {
@@ -915,13 +879,10 @@ public class GLSLFractalizerController implements RenderController {
                 timeApplier.accept(jitteredTime);
 
                 // Rebuild uniforms with the new parameters
-                Map<String, Object> uniforms = buildUniforms();
-
-                // Render this sample
-                engine.renderSample(uniforms);
-                if (syncProgress) engine.glSync();
-                if (onProgress != null) onProgress.accept((double) (i + 1) / samples);
-            }
+                return buildUniforms();
+            }, width, height, samples, true,
+                    done -> { if (onProgress != null) onProgress.accept(done / samples); },
+                    () -> cancelCheck != null && cancelCheck.get());
 
             // Read pixels
             float[] pixels = engine.readImage();
@@ -999,13 +960,7 @@ public class GLSLFractalizerController implements RenderController {
 
                     Random random = new Random(tileIndex); // Consistent per-tile seed
 
-                    boolean syncProgress = (long) tileW * tileH * samples > SYNC_MIN_WORK;
-                    for (int i = 0; i < samples; i++) {
-                        if (cancelCheck != null && cancelCheck.get()) {
-                            engine.resize(viewportWidth, viewportHeight);
-                            return null;
-                        }
-
+                    sampler.render(i -> {
                         double jitteredTime;
                         if (shutterAngle > 0) {
                             jitteredTime = frameTime + (random.nextDouble() - 0.5) * shutterDuration;
@@ -1023,13 +978,13 @@ public class GLSLFractalizerController implements RenderController {
                         if (currentParams instanceof AbstractFractalParams afp2 && afp2.isConeTracingEnabled()) {
                             uniforms.put("pixelRadius", (float) Math.tan(afp2.getFov() * 0.5) / (fullHf * 0.5f));
                         }
-
-                        engine.renderSample(uniforms);
-                        if (syncProgress) engine.glSync();
-                        if (onProgress != null) {
-                            double progress = (double) (tileIndex * samples + i + 1) / (totalTiles * samples);
-                            onProgress.accept(progress);
-                        }
+                        return uniforms;
+                    }, tileW, tileH, samples, false, done -> {
+                        if (onProgress != null) onProgress.accept((tileIndex * samples + done) / (totalTiles * samples));
+                    }, () -> cancelCheck != null && cancelCheck.get());
+                    if (cancelCheck != null && cancelCheck.get()) {
+                        engine.resize(viewportWidth, viewportHeight);
+                        return null;
                     }
 
                     // Read tile pixels and copy into full image
@@ -1111,7 +1066,7 @@ public class GLSLFractalizerController implements RenderController {
         engine.resetAccumulation();
         Map<String, Object> uniforms = buildUniforms();
         uniforms.put("renderMode", 2);
-        engine.renderSample(uniforms);
+        sampler.render(uniforms, width, height, 1, false, null, null);
         float[] pixels = engine.readImage();
         float[] depth = new float[width * height];
         for (int i = 0; i < depth.length; i++) depth[i] = pixels[i * 4];
@@ -1131,12 +1086,8 @@ public class GLSLFractalizerController implements RenderController {
         engine.resetAccumulation();
         Map<String, Object> uniforms = buildUniforms();
         int n = Math.max(1, samples);
-        for (int rendered = 0; rendered < n; ) {
-            if (cancelCheck != null && cancelCheck.get()) return null;
-            int batch = Math.min(EXPORT_SAMPLE_BATCH, n - rendered);
-            engine.renderSamples(uniforms, batch);
-            rendered += batch;
-        }
+        sampler.render(uniforms, width, height, n, false, null, () -> cancelCheck != null && cancelCheck.get());
+        if (cancelCheck != null && cancelCheck.get()) return null;
         float[] pixels = engine.readImage();
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         for (int y = 0; y < height; y++) {
@@ -1150,6 +1101,9 @@ public class GLSLFractalizerController implements RenderController {
         }
         return image;
     }
+
+    /** What the last export or in-memory render did, step by step (ExportWatchdogProbe). */
+    public ExportSampler.Stats lastRenderStats() { return sampler.lastStats(); }
 
     /** Put the framebuffer back at viewport size after in-memory renders. */
     public void restoreViewportSize() {
@@ -1166,7 +1120,7 @@ public class GLSLFractalizerController implements RenderController {
             uniforms.put("renderMode", renderMode);
 
             // 1 sample is sufficient — AOV data is deterministic
-            engine.renderSample(uniforms);
+            sampler.render(uniforms, exportWidth, exportHeight, 1, false, null, null);
 
             float[] pixels = engine.readImage();
 
@@ -1243,7 +1197,7 @@ public class GLSLFractalizerController implements RenderController {
                         uniforms.put("pixelRadius", (float) Math.tan(afp2.getFov() * 0.5) / (fullHf * 0.5f));
                     }
 
-                    engine.renderSample(uniforms);
+                    sampler.render(uniforms, tileW, tileH, 1, false, null, null);
 
                     float[] pixels = engine.readImage();
                     for (int py = 0; py < tileH; py++) {

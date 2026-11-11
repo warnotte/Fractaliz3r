@@ -136,8 +136,13 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PrecisionLab" -Dexe
 #   any "key=value" after the camera sets a parameter first (DeepZoomLab's keys), e.g. steps=200
 #   shadowSteps=32 aoSteps=2 (the interactive preview), or "asis pathTracingEnabled=true"; each rung
 #   also prints the 1-spp time of each pass and the march's mean step count.
-#   Path tracing in double at depth: keep it small (160x90, 2 spp). 320x180 at 6+ spp reset the
-#   display driver (2 s watchdog, nvlddmkm event 153); an application open on the GPU may not survive it.
+#   Path tracing in double at depth: keep it small (160x90, 2 spp). Before ExportSampler, 320x180 at
+#   6+ spp reset the display driver (2 s watchdog, nvlddmkm event 153); an application open on the GPU
+#   may not survive it. Exports are cut into ~300 ms steps now, but a harness that draws otherwise is not.
+# Does an export hand the GPU a long piece of work at once? Exports a scene (colour, normals) through
+# ExportSampler and prints steps, strips and the longest step; PASS when none took over twice the 300 ms
+# aimed at. at=1e-6 puts the camera that far before the surface under the centre, deep precision on.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportWatchdogProbe" -Dexec.args="MANDELBULB out/watchdog 960x540 4 at=1e-6 0.8,1.2,-0.8,0,0,0 pathTracingEnabled=false"
 # The double library DeepSource gives an estimator (sin, cos, atan2, acos, exp, log, pow...) run on
 # the GPU against StrictMath, with the float built-ins' error beside it; "bench" adds what each
 # costs in double fused multiply-adds.
@@ -241,6 +246,7 @@ org.fractalizer
 │   ├── ViewportScheduler.java       # The interactive viewport: requests -> bounded steps on the GL thread, one preemption policy
 │   ├── SceneSnapshot.java           # A scene frozen for one render (program source, uniforms, sizes, preview policy)
 │   ├── CostModel.java               # ns per pixel per program: preview size, samples per step, rows per strip
+│   ├── ExportSampler.java           # every export / in-memory render in steps of <= ~300 ms (whole samples or strips): the driver's 2 s watchdog
 │   ├── ViewportEvent.java           # images and typed status to the UI
 │   ├── LightList.java               # the scene's lights as one table for the shaders (the graph's emitters today)
 │   └── FFmpegExporter.java          # MP4 video export via FFmpeg
@@ -310,6 +316,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── DiveFilm.java                # a dive as a film: geometric approach to the centre's surface point, deep precision, every frame exported, MP4
 ├── PrecisionLab.java            # deep precision: float vs double down a camera ladder (normal error, speckle, cost); "compile" = every built-in in double
 ├── DoubleMathProbe.java         # the double library (dp_sin, dp_atan2, dp_pow...) on the GPU against StrictMath; "bench" = cost of each
+├── ExportWatchdogProbe.java     # an export's steps: how many, strips, the longest (must stay far under the driver's 2 s)
 ├── StripCostProbe.java          # GPU cost of strips vs whole per sync pattern: why slices are 60 ms
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them
