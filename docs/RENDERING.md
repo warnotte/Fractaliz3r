@@ -376,14 +376,33 @@ double one: 0.6° at 1e-2, 13° at 1e-3, **92° at 1e-4** (the image is other ge
   (the Mandelbulb's, Mandelorus's and Julia 4D's angles, taken of the position itself) goes
   to a small double library emitted with the block, only the parts the calls need:
   Cody-Waite reduction and the fdlibm kernels for `sin`/`cos`, Taylor for `exp`, an atanh
-  series for `log`, `pow = exp(y log x)`, and `atan2` as one Newton step from the float
-  answer (the error cubes: 1e-6 becomes 1e-19); `acos`/`asin` through `atan2`. Each is within
-  a few ulp of double (checked against the reference over 200 000 random arguments). Before
-  this, a float call rounded the orbit back to 7 digits at the first iteration: on the
-  Mandelbulb at 1e-6 the double image was blocks (speckle 26 %, against 14 % for the surface
-  seen from afar), now it is the surface (14 %). The price is the GeForce's double
-  throughput: ~5× the time of the float calls at depth (640×360, 8 spp, 1e-5: 5.8 s against
-  1.2 s), and nothing until a ray needs the double march. NVIDIA's compiler dies (C9999) on some compound assignments in
+  series for `log`, `pow` by repeated squaring when the exponent is whole (up to 64: the
+  Mandelbulb's r^7 and r^8) and `exp(y log x)` otherwise, and `atan2` as one Newton step
+  from the float answer (the error cubes: 1e-6 becomes 1e-19); `acos`/`asin` through
+  `atan2`. `sin` and `cos` evaluate both kernels and pick without a branch, so `sin(a)` and
+  `cos(a)` side by side share all their work once inlined.
+
+  `DoubleMathProbe` runs the library on the GPU itself against `StrictMath`, 200 000
+  arguments per function: every one within 1e-13 (relative above 1, absolute below), most
+  within 2 to 5 ulp. The float built-ins it replaces are off by 5e-6 (`sin`, `cos` up to
+  |x| = 30, the GPU's own range reduction) and 7e-5 (`acos` near ±1, where rounding the
+  argument to float costs that much). That error is the float Mandelbulb's surface: it sits
+  1e-6 from the true one in general and up to ~1e-4 near the poles, which is why a double
+  march with float functions turned into blocks at 1e-6. Before the library, a float call
+  rounded the orbit back to 7 digits at the first iteration: on the Mandelbulb at 1e-6 the
+  double image was blocks (speckle 26 %, against 14 % for the surface seen from afar), now it
+  is the surface (14 %).
+
+  The price is the GeForce's double throughput, 1/64 of float. `DoubleMathProbe ... bench`
+  times each function in double fused multiply-adds: `sin` 9, `sin` and `cos` of one angle
+  10, `atan2` 18, `acos` 27, `pow` 5.5 with a whole exponent (25 otherwise), `exp` 10, `log`
+  16, a division 6, a square root 9. A Mandelbulb iteration is ~105 against ~45 with the
+  float functions, and the double estimator costs 2.5 to 3 times what it did (`PrecisionLab`
+  at 1e-6, 640×360, 4 spp: 1.43 s against 0.50 s; the march alone 250 ms against 100).
+  Repeated squaring and the shared `sin`/`cos` took 12 % off the first version (1.62 s).
+  What is left is the arithmetic itself: a table-driven `atan2` trades its `sincos` for a
+  second division and gains a few percent at most. Nothing changes until a ray needs the
+  double march. NVIDIA's compiler dies (C9999) on some compound assignments in
   double, as it does on swizzled ones in float, so the copies write `a += b` out as
   `a = a + (b)`. Fourteen of the fifteen built-ins compile in double (`PrecisionLab
   compile`); a double program takes 12-17 s to compile against 7-10 s. The Polyhedral IFS

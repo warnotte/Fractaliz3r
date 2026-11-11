@@ -330,6 +330,12 @@ public final class DeepSource {
         return lib.append(b).toString();
     }
 
+    /** The double library and the overloads for these built-ins, as a scene's block carries
+     *  them (DoubleMathProbe evaluates them on the GPU against the reference library). */
+    public static String library(Set<String> builtins) {
+        return shims(builtins);
+    }
+
     // ---- double elementary functions --------------------------------------------------------
     //
     // GLSL has sin, exp, log and pow in float only. A double argument rounded to float would
@@ -337,8 +343,20 @@ public final class DeepSource {
     // position itself), so these are evaluated in double: Cody-Waite range reduction and fdlibm
     // kernels for sin and cos, Taylor on |r| <= ln2/2 for exp, atanh series on [sqrt(1/2),
     // sqrt(2)) for log, and atan2 as one Newton step from the float answer on x sin t - y cos t
-    // (= r sin(t - answer): the error cubes, 1e-6 becomes 1e-19). Each is within 2 to 4 ulp of
-    // the true value (checked against the reference library over 200 000 random arguments).
+    // (= r sin(t - answer): the error cubes, 1e-6 becomes 1e-19). pow with a whole exponent up
+    // to 64 (the Mandelbulb's r^7 and r^8) is repeated squaring, otherwise exp(y log x). sin and
+    // cos compute both kernels and pick, without a branch, so sin(a) and cos(a) side by side
+    // share their reduction and kernels once inlined.
+    //
+    // DoubleMathProbe runs them on the GPU against StrictMath: every one within 1e-13 (relative
+    // above 1, absolute below), most within 2 to 5 ulp, where the float built-ins are off by
+    // 5e-6 (sin, cos up to |x| = 30) and 7e-5 (acos near +-1). What they cost on a GeForce,
+    // where a double operation runs at 1/64 of a float one, in double fused multiply-adds:
+    // sin 9, sin and cos of one angle 10, atan2 18, acos 27, pow 5.5 with a whole exponent
+    // (25 otherwise), exp 10, log 16; a division is 6, a square root 9. A Mandelbulb iteration
+    // is ~105 of them against ~45 with the float functions: the double estimator with them
+    // costs 2.5 to 3 times what it did (PrecisionLab at 1e-6: 1.43 s against 0.50 s for 4
+    // samples at 640x360). Repeated squaring and the shared sin/cos took 12 % off that.
 
     private static final String LIBRARY_HEADER =
             "// Double elementary functions (GLSL has them in float only): Cody-Waite reduction, fdlibm kernels.\n";
@@ -372,13 +390,15 @@ public final class DeepSource {
                              + z * (-2.75573143513906633035e-07LF + z * (2.08757232129817482790e-09LF + z * -1.13596475577881948265e-11LF)))));
                     }
                     double dp_sin(double x) {
-                        int q; double r = dp_reduce(x, q); double v;
-                        if ((q & 1) == 0) v = dp_ksin(r); else v = dp_kcos(r);
+                        int q; double r = dp_reduce(x, q);
+                        double s = dp_ksin(r), c = dp_kcos(r);
+                        double v = (q & 1) == 0 ? s : c;
                         return (q & 2) == 0 ? v : -v;
                     }
                     double dp_cos(double x) {
-                        int q; double r = dp_reduce(x, q); double v;
-                        if ((q & 1) == 0) v = dp_kcos(r); else v = dp_ksin(r);
+                        int q; double r = dp_reduce(x, q);
+                        double s = dp_ksin(r), c = dp_kcos(r);
+                        double v = (q & 1) == 0 ? c : s;
                         return ((q + 1) & 2) == 0 ? v : -v;
                     }
                     void dp_sincos(double x, out double s, out double c) {
@@ -456,7 +476,24 @@ public final class DeepSource {
                     double dp_atanh(double x) { return 0.5LF * dp_log((1.0LF + x) / (1.0LF - x)); }
                     """,
             "pow", """
-                    double dp_pow(double x, double y) { return x > 0.0LF ? dp_exp(y * dp_log(x)) : double(pow(float(x), float(y))); }
+                    double dp_powi(double x, int n) {
+                        double r = 1.0LF;
+                        double b = x;
+                        while (n > 0) {
+                            if ((n & 1) != 0) r = r * b;
+                            b = b * b;
+                            n = n >> 1;
+                        }
+                        return r;
+                    }
+                    double dp_pow(double x, double y) {
+                        if (!(x > 0.0LF)) return double(pow(float(x), float(y)));
+                        if (y == floor(y) && abs(y) <= 64.0LF) {
+                            double p = dp_powi(x, int(abs(y)));
+                            return y < 0.0LF ? 1.0LF / p : p;
+                        }
+                        return dp_exp(y * dp_log(x));
+                    }
                     """,
             "misc", """
                     double dp_radians(double x) { return x * 0.017453292519943295LF; }

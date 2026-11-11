@@ -133,6 +133,15 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DiveFilm" -Dexec.ar
 # built-in in float and double and says which double program fails (optional 3rd arg: a name filter).
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PrecisionLab" -Dexec.args="MANDELBOX out/precision 640x360 8 1e-1,1e-2,1e-3,1e-4,1e-5,1e-6 -4.55047,0.23943,-9.37107,-1.45361,1.45941,-6.01285"
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PrecisionLab" -Dexec.args="compile out/precision_compile"
+#   any "key=value" after the camera sets a parameter first (DeepZoomLab's keys), e.g. steps=200
+#   shadowSteps=32 aoSteps=2 (the interactive preview), or "asis pathTracingEnabled=true"; each rung
+#   also prints the 1-spp time of each pass and the march's mean step count.
+#   Path tracing in double at depth: keep it small (160x90, 2 spp). 320x180 at 6+ spp reset the
+#   display driver (2 s watchdog, nvlddmkm event 153); an application open on the GPU may not survive it.
+# The double library DeepSource gives an estimator (sin, cos, atan2, acos, exp, log, pow...) run on
+# the GPU against StrictMath, with the float built-ins' error beside it; "bench" adds what each
+# costs in double fused multiply-adds.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DoubleMathProbe" -Dexec.args="200000 bench"
 # What a sample costs as strips against whole, on the GPU, per sync pattern (bound once, rebound
 # each, fenced each, one or two in flight): the measurement behind the scheduler's slice lengths.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.StripCostProbe" -Dexec.args="presets/ALBEDO_039.frac 1920x1080"
@@ -300,6 +309,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── DiveProbe.java               # auto speed: a headless dive on any scene, readings per frame, a still per decade, never crosses the surface
 ├── DiveFilm.java                # a dive as a film: geometric approach to the centre's surface point, deep precision, every frame exported, MP4
 ├── PrecisionLab.java            # deep precision: float vs double down a camera ladder (normal error, speckle, cost); "compile" = every built-in in double
+├── DoubleMathProbe.java         # the double library (dp_sin, dp_atan2, dp_pow...) on the GPU against StrictMath; "bench" = cost of each
 ├── StripCostProbe.java          # GPU cost of strips vs whole per sync pattern: why slices are 60 ms
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them

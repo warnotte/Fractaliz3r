@@ -205,6 +205,15 @@ public class PrecisionLab {
             params.setConeTracingEnabled(true);
         }
         params.setDofEnabled(false);
+        // "key=value" after the camera: a parameter set before the ladder (DeepZoomLab's keys),
+        // e.g. steps=200 shadowSteps=32 aoSteps=2, what the app's interactive preview uses.
+        DeepZoomLab.params = params;
+        for (int k = 5; k < args.length; k++) {
+            if (!args[k].contains("=") || args[k].contains(",")) continue;
+            String[] kv = args[k].split("=", 2);
+            DeepZoomLab.applyVariant(kv[0], kv[1]);
+            System.out.println("set " + kv[0] + " = " + kv[1]);
+        }
         Camera camera = params.getCamera();
         if (args.length > 5 && args[5].contains(",")) {
             String[] v = args[5].split(",");
@@ -266,18 +275,31 @@ public class PrecisionLab {
                 File rgb = new File(outDir, tag + ".png");
                 controller.exportToPNG(rgb, samples, p -> {}, () -> false).get();
                 long ms = (System.nanoTime() - start) / 1_000_000;
+                long p0 = System.nanoTime();
                 controller.setExportSize(w, h);
                 File nrm = new File(outDir, tag + "_normals.png");
                 controller.exportAOV(nrm, 1);
+                long p1 = System.nanoTime();
                 controller.setExportSize(w, h);
                 dep[mode] = new File(outDir, tag + "_depth.png");
                 controller.exportAOV(dep[mode], 2);
+                long p2 = System.nanoTime();
                 // The light: ambient occlusion and the sun's shadow alone (render modes 3, 4),
                 // what the secondary rays from the hit point make of it.
                 controller.setExportSize(w, h);
                 controller.exportAOV(new File(outDir, tag + "_ao.png"), 3);
+                long p3 = System.nanoTime();
                 controller.setExportSize(w, h);
                 controller.exportAOV(new File(outDir, tag + "_shadow.png"), 4);
+                long p4 = System.nanoTime();
+                // The march's step count per pixel (render mode 8: hue = steps / maxRaySteps).
+                controller.setExportSize(w, h);
+                File stp = new File(outDir, tag + "_steps.png");
+                controller.exportAOV(stp, 8);
+                double steps = meanSteps(stp, dep[mode]) * params.getMaxRaySteps();
+                // One sample each: the march + normal, the march alone, + AO, + the sun's shadow.
+                System.out.printf(Locale.ROOT, "          %-6s   passes (1 spp, ms): normals %d  depth %d  ao %d  shadow %d   march steps %.0f%n",
+                        modeName[mode], (p1 - p0) / 1_000_000, (p2 - p1) / 1_000_000, (p3 - p2) / 1_000_000, (p4 - p3) / 1_000_000, steps);
                 DeepZoomLab.Metrics m = DeepZoomLab.score(rgb, dep[mode]);
                 double[] nq = normalStats(nrm, dep[mode]);
                 pair[mode] = new Result(tag, m, nq[0], nq[1], ms, rgb.getName(), nrm.getName());
@@ -302,6 +324,22 @@ public class PrecisionLab {
         controller.close();
         Platform.exit();
         return ok ? 0 : 1;
+    }
+
+    /** Mean of steps / maxRaySteps over the surface pixels, from render mode 8's hue. */
+    static double meanSteps(File stepsPng, File depthPng) throws Exception {
+        BufferedImage st = ImageIO.read(stepsPng), dep = ImageIO.read(depthPng);
+        double sum = 0;
+        long n = 0;
+        float[] hsb = new float[3];
+        for (int y = 0; y < st.getHeight(); y++) for (int x = 0; x < st.getWidth(); x++) {
+            if (dep.getRaster().getSample(x, y, 0) / 65535.0 <= 0.02) continue;
+            int rgb = st.getRGB(x, y);
+            java.awt.Color.RGBtoHSB((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255, hsb);
+            sum += hsb[0];
+            n++;
+        }
+        return n == 0 ? 0 : sum / n;
     }
 
     /** The probe's distance along the centre ray, -1 for a miss. */

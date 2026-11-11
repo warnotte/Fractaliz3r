@@ -89,9 +89,10 @@ Read it before touching anything related to deep zoom, precision, DoF or navigat
     copies `DE_simple` and every function and struct it reaches with float types made
     double, and redirects the calls. Transcendentals go through overloads: a float argument
     to the float built-in, a double one to a double library emitted with the block (sin, cos,
-    atan2, acos, exp, log, pow at a few ulp of double), so the Mandelbulb family keeps its
-    digits through its angles too (at 1e-6: blocks before, the surface after; ~5x the time
-    of the float calls at depth). Compound
+    atan2, acos, exp, log, pow within 1e-13, checked on the GPU by `DoubleMathProbe`), so
+    the Mandelbulb family keeps its digits through its angles too (at 1e-6: blocks before,
+    the surface after; 2.5-3x the time of the float calls at depth, the GeForce's 1/64
+    double rate: a Mandelbulb iteration is ~105 double FMAs against ~45). Compound
     assignments are written out (NVIDIA C9999). The kernels are not touched, so a program
     without deep precision is byte-for-byte what it was. 14 of 15 built-ins compile; the
     Polyhedral IFS crashes the driver's compiler and is shown in float with a message (the
@@ -114,6 +115,18 @@ Read it before touching anything related to deep zoom, precision, DoF or navigat
   test, `DE_local` in kaleidoscopic.glsl, the SSBO, `rayMarchRenorm`), an optional
   optimisation of the KIFS on top of the double path, and the WIP's RENDERING.md narrative
   of it. `CpuDE` is not to be lifted.
+- **2026-11-11, after the owner saw zones darken while zooming into the Mandelbulb:** the
+  float hand-overs were wrong once the double estimator had its own `sin`/`acos`. The float
+  built-ins are off by 5e-6 (`sin`) and 7e-5 (`acos` near ±1), so the float surface sits
+  1e-5..1e-4 from the true one, and a shadow ray (classic) or a leaving ray (path tracer)
+  handed to float at 100 float steps met it: false shadows on 10-15 % of a view at
+  1e-4..1e-5, a quarter of the path-traced light lost. The float march now takes over only
+  where its estimate agrees with the double one at that point (within 5 %). Also:
+  `pow` with a whole exponent by repeated squaring, `sin`/`cos` without a branch (12 %
+  faster). What is left of the cost is the double arithmetic itself; the choices (exact
+  everywhere, float functions while the camera moves, a switch) are the owner's.
+  Path tracing in double at depth can take a sample past the driver's 2 s watchdog: 320x180
+  at 6+ spp reset the driver in PrecisionLab (an export batches 8 samples per GL task).
 - **Next, if wanted:**
   - the cost at depth (measured 2026-11-10: on the KIFS at 1e-6 the sun's shadow is ~45 %
     of the time, legitimate marching out of dense structure; the double march ~3x the float
