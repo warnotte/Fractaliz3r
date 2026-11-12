@@ -1,0 +1,265 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-11-12T05:09:04.649463800Z",
+  "name": null,
+  "description": null,
+  "fractalType": "NODE_GRAPH",
+  "camera": {
+    "position": [
+      1.25,
+      0.0,
+      0.0
+    ],
+    "positionD": null,
+    "quaternion": [
+      0.7071068,
+      0.0,
+      0.7071068,
+      0.0
+    ],
+    "fov": 70.0,
+    "moveSpeed": 0.02
+  },
+  "rendering": {
+    "maxRaySteps": 400,
+    "epsilon": 1.0E-4,
+    "qualityMultiplier": 1.0,
+    "previewScale": 0.5,
+    "previewFastShading": true,
+    "renderMode": 0,
+    "shadowSoftness": 16.0,
+    "shadowSteps": 128,
+    "aoSteps": 5,
+    "aoIntensity": 0.5,
+    "glowIntensity": 0.15,
+    "rimIntensity": 0.0,
+    "specularIntensity": 0.5,
+    "specularPower": 32.0
+  },
+  "lighting": {
+    "direction": [
+      1.0,
+      0.45,
+      -0.5
+    ],
+    "color": [
+      1.0,
+      0.84,
+      0.62
+    ],
+    "intensity": 7.0,
+    "ambientColor": [
+      0.3,
+      0.36,
+      0.5
+    ],
+    "ambientIntensity": 0.3,
+    "extraType": 0,
+    "extraAttachToCamera": true,
+    "extraPosition": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "extraDirection": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "extraColor": [
+      1.0,
+      0.95,
+      0.9
+    ],
+    "extraIntensity": 1.5,
+    "extraRange": 2.0,
+    "extraAreaRadius": 0.03,
+    "extraConeAngle": 35.0,
+    "extraConeSoftness": 0.3
+  },
+  "material": {
+    "hue": [
+      0.0,
+      0.33,
+      0.67
+    ],
+    "paletteIndex": 0,
+    "coloringMode": 10,
+    "colorStrength": 0.75,
+    "paletteOffset": 0.0,
+    "trapMode": 0,
+    "type": 0,
+    "metalness": 0.0,
+    "ior": 1.5,
+    "dispersionEnabled": false,
+    "dispersion": 0.01,
+    "glassHaze": 0.0,
+    "gradientStops": [
+      {
+        "position": 0.0,
+        "r": 0.8999999761581421,
+        "g": 0.8399999737739563,
+        "b": 0.7200000286102295
+      },
+      {
+        "position": 0.30000001192092896,
+        "r": 0.9599999785423279,
+        "g": 0.800000011920929,
+        "b": 0.5
+      },
+      {
+        "position": 0.550000011920929,
+        "r": 0.8799999952316284,
+        "g": 0.6200000047683716,
+        "b": 0.5
+      },
+      {
+        "position": 0.7799999713897705,
+        "r": 0.6000000238418579,
+        "g": 0.699999988079071,
+        "b": 0.8600000143051147
+      },
+      {
+        "position": 1.0,
+        "r": 0.9599999785423279,
+        "g": 0.9300000071525574,
+        "b": 0.8600000143051147
+      }
+    ],
+    "reflectionIntensity": 0.0,
+    "emissiveIntensity": 0.0,
+    "sssIntensity": 0.0,
+    "sssRadius": 0.1,
+    "sssColor": [
+      1.0,
+      0.4,
+      0.2
+    ]
+  },
+  "effects": {
+    "dofEnabled": false,
+    "focalDistance": 2.5,
+    "aperture": 0.02,
+    "dofSamples": 16,
+    "anamorphicRatio": 1.0,
+    "bokehBlades": 0,
+    "bokehRotation": 0.0,
+    "opticalVignettingStrength": 0.0,
+    "tiltShiftEnabled": false,
+    "tiltAngleX": 0.0,
+    "tiltAngleY": 0.0,
+    "dofChromaticStrength": 0.0,
+    "pathTracingEnabled": true,
+    "maxBounces": 8,
+    "causticsEnabled": false,
+    "causticPhotons": 512,
+    "causticRadius": 3.0,
+    "causticCenter": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "roughness": 0.75,
+    "skyIntensity": 1.0,
+    "indirectMultiplier": 0.5,
+    "skyType": 0,
+    "envMap": null,
+    "cloudDensity": 0.5,
+    "nebulaColor": [
+      0.25,
+      0.35,
+      0.75
+    ],
+    "nebulaTint": 0.0,
+    "skySpeed": 1.0,
+    "skyTime": 0.0,
+    "skyParallax": 0.25,
+    "projectionMode": 0,
+    "lensEffectsEnabled": false,
+    "lensDirtIntensity": 0.0,
+    "starburstIntensity": 0.0,
+    "volumetricFogEnabled": false,
+    "fogDensity": 0.15,
+    "fogColor": [
+      0.5,
+      0.6,
+      0.7
+    ],
+    "fogScattering": 0.5,
+    "fogSteps": 32,
+    "fogHalo": false,
+    "shutterAngle": 180.0,
+    "neeEnabled": true,
+    "coneTracingEnabled": true,
+    "detailLOD": 0.0,
+    "detailLODMax": 24,
+    "deepPrecision": false,
+    "fudgeFactor": 1.0,
+    "refinementSteps": 4,
+    "stepRelaxation": 0.0,
+    "adaptiveSampling": false,
+    "varianceThreshold": 5.0E-4,
+    "minAdaptiveSamples": 16,
+    "erosionEnabled": false,
+    "erosionStrength": 0.5,
+    "erosionTime": 0.0,
+    "erosionScale": 1.0,
+    "erosionType": 0,
+    "crystalEnabled": false,
+    "crystalStrength": 0.5,
+    "crystalTime": 0.0,
+    "crystalScale": 1.0,
+    "crystalSharpness": 2.0,
+    "mossEnabled": false,
+    "mossStrength": 0.5,
+    "mossTime": 0.0,
+    "mossScale": 1.0,
+    "mossColorR": 0.15,
+    "mossColorG": 0.35,
+    "mossColorB": 0.08,
+    "mossNormalThreshold": 0.3,
+    "booleanEnabled": false,
+    "booleanOp": 1,
+    "boolSecondaryType": null,
+    "boolOffsetX": 0.5,
+    "boolOffsetY": 0.0,
+    "boolOffsetZ": 0.0,
+    "boolScale": 1.0,
+    "boolBlend": 0.0,
+    "boolRotX": 0.0,
+    "boolRotY": 0.0,
+    "boolRotZ": 0.0,
+    "nestThreshold": 0.1,
+    "nestRepeatScale": 5.0,
+    "nestRotation": 0.0,
+    "nestMix": 1.0,
+    "oceanEnabled": false,
+    "oceanHeight": -1.0,
+    "oceanColor": [
+      0.05,
+      0.15,
+      0.3
+    ],
+    "oceanWaveScale": 2.0,
+    "oceanWaveHeight": 0.1,
+    "oceanSpeed": 1.0,
+    "oceanTime": 0.0,
+    "oceanClarity": 0.0
+  },
+  "fractalParams": {
+    "graph": {
+      "name": "Nave",
+      "type": "fractal",
+      "fractalType": "MANDELBOX",
+      "params": {
+        "scale": 3.0,
+        "minRadius": 0.25,
+        "fixedRadius": 1.0,
+        "foldingLimit": 1.0,
+        "maxIterations": 15
+      }
+    }
+  },
+  "postProcess": null,
+  "animation": null
+}

@@ -29,7 +29,16 @@ public class MorphFilm {
 
     record Move(String key, double from, double to) {}
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
+        try {
+            run(args);
+        } catch (Throwable t) {   // JavaFX keeps the JVM alive: a failure must end the harness
+            t.printStackTrace();
+            System.exit(1);
+        }
+    }
+
+    static void run(String[] args) throws Exception {
         String spec = args.length > 0 ? args[0] : "presets/PRISM_GEM.frac";
         File outDir = new File(args.length > 1 ? args[1] : "out/morph");
         String[] res = (args.length > 2 ? args[2] : "960x540").split("x");
@@ -93,11 +102,11 @@ public class MorphFilm {
 
     /** Set a float parameter on every leaf that has it. */
     static void set(List<AbstractFractalParams> leaves, String key, double value) throws Exception {
-        String name = "set" + Character.toUpperCase(key.charAt(0)) + key.substring(1);
+        String name = "set" + key;
         boolean found = false;
         for (AbstractFractalParams p : leaves) {
             for (Method m : p.getClass().getMethods()) {
-                if (!m.getName().equals(name) || m.getParameterCount() != 1) continue;
+                if (!m.getName().equalsIgnoreCase(name) || m.getParameterCount() != 1) continue;
                 Class<?> t = m.getParameterTypes()[0];
                 if (t == float.class) { m.invoke(p, (float) value); found = true; }
                 else if (t == double.class) { m.invoke(p, value); found = true; }

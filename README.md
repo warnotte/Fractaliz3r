@@ -42,6 +42,15 @@ is named after the Earth's albedo.
 
 ![The Labyrinth: a stone corridor of the Menger maze opening on the Escher room, three staircases climbing under three gravities around a glowing crystal](docs/gallery/labyrinth.jpg)
 
+![The Cathedral: the nave of a Mandelbox at scale 3, a coffered portal between colonnades of pale gold stone, daylight and blue sky through the openings](docs/gallery/cathedral.jpg)
+
+**The Cathedral** — `presets/CATHEDRAL.frac` — is a Mandelbox at scale 3, where the formula
+builds colonnades, coffered vaults and rose windows open to the sky, path traced in daylight.
+[`docs/gallery/cathedral.mp4`](docs/gallery/cathedral.mp4) is a flight into it and what follows:
+the camera comes from outside along a curve that a shortest-path search found through the free
+space of the estimator, stops in the nave, and the formula's scale then moves, so the building
+opens to the sky and closes again (`FlightFilm`, one still export per frame).
+
 ![A white beam entering a glass prism in fog and leaving it as a fan of colour that lands on the floor as a spectrum](docs/gallery/prism_beam.jpg)
 
 **The prism** — [`PRISM_BEAM.frac`](presets/PRISM_BEAM.frac) — is one light transport at work: a

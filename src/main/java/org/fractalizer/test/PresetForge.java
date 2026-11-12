@@ -242,6 +242,16 @@ public class PresetForge {
                 .fog(0.10f).fogColor(0.30f, 0.24f, 0.18f)
                 .colorStrength(0.8f).metalness(0.05f).roughness(0.8f));
 
+        p.put("CATHEDRAL", () -> SceneBuilder.nodeGraph(cathedral())
+                .camera(1.25f, 0f, 0f).lookAt(2.0f, 0f, 0f).fov(70)
+                .moveSpeed(0.02f)
+                .maxRaySteps(400)
+                .gradient(SANDSTONE).coloringMode(10)
+                .pathTracing(true).maxBounces(8).rimIntensity(0.0f).skyType(0).skyIntensity(1.0f)
+                .lightDir(1.0f, 0.45f, -0.5f).lightColor(1.0f, 0.84f, 0.62f).lightIntensity(7.0f)
+                .ambientColor(0.30f, 0.36f, 0.50f).ambientIntensity(0.3f)
+                .colorStrength(0.75f).metalness(0.0f).roughness(0.75f));
+
         // --- Albedo 0.39: a world seen from orbit at dawn. The overview effect, the thing
         // astronauts come back with: one sphere, no borders. Continents are a sphere carved
         // by the engine's fractal noise, the sea a smooth sphere underneath, so every
@@ -587,6 +597,10 @@ public class PresetForge {
     }
 
     /** Warm sandstone, for the parts of the labyrinth that keep the palette. */
+    /** Pale stone, gilding, rose and a little glass blue: the cathedral's. */
+    private static final float[][] SANDSTONE = {
+        {0.00f, 0.90f, 0.84f, 0.72f}, {0.30f, 0.96f, 0.80f, 0.50f},
+        {0.55f, 0.88f, 0.62f, 0.50f}, {0.78f, 0.60f, 0.70f, 0.86f}, {1.00f, 0.96f, 0.93f, 0.86f}};
     private static final float[][] STONE = {
         {0.00f, 0.22f, 0.17f, 0.12f}, {0.45f, 0.55f, 0.46f, 0.34f},
         {0.80f, 0.72f, 0.64f, 0.50f}, {1.00f, 0.86f, 0.80f, 0.66f}};
@@ -640,6 +654,14 @@ public class PresetForge {
                 SceneBuilder.union(SceneBuilder.union(walls, stairs), crystal), ground);
         world.setName("Labyrinth");
         return world;
+    }
+
+    /** The nave: a Pseudo-Kleinian, whose folds make vaults and columns without end. */
+    static org.fractalizer.graph.GraphNode cathedral() {
+        org.fractalizer.graph.FractalNode box = SceneBuilder.fractal(FractalType.MANDELBOX);
+        ((org.fractalizer.fractals.MandelboxParams) box.getFractalParams()).setScale(3f);
+        box.setName("Nave");
+        return box;
     }
 
     /** Ten axis-aligned steps climbing the diagonal of the junction room, from its floor

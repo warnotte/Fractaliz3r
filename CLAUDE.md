@@ -198,6 +198,11 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.LaserSweep" -Dexec.
 # fractal leaves go from one value to another and back (uniforms, nothing recompiles); the film loops.
 #   (scene outDir WxH samples seconds fps swingDegrees key=from..to ...)
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.MorphFilm" -Dexec.args="presets/PRISM_GEM.frac out/morph 960x540 48 12 30 16 power=5..9"
+# A flight as a film: the camera follows a smooth curve through waypoints (a text file, "ex ey ez tx ty tz"
+# per line) at an even, eased pace; leaf parameters may go and come back as in MorphFilm. seconds = 0
+# renders one still per waypoint instead (to choose the path; parameters then sweep from first to last).
+#   (scene outDir WxH samples seconds fps path.txt [key=from..to ...])
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.FlightFilm" -Dexec.args="presets/CATHEDRAL.frac out/flight 960x540 96 16 24 docs/flights/cathedral.txt"
 # How far ahead of the work an export progress bar runs: time of the first 100%% report
 # against the moment the export future actually completes.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportProgressProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 2600x1600 128"
@@ -343,6 +348,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them
 ├── LaserSweep.java              # the optical table's mirror turning: one still per frame, FFmpeg makes the MP4
 ├── MorphFilm.java               # a film in which the formula moves: the camera swings while leaf parameters go and come back (power=5..9), FFmpeg makes the MP4
+├── FlightFilm.java              # a flight as a film: the camera along a smooth curve through waypoints, leaf parameters moving; seconds = 0 = a still per waypoint
 └── GalleryRender.java           # every .frac in a dir rendered as the app shows it (README gallery)
 ```
 

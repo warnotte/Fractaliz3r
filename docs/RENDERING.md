@@ -1162,6 +1162,7 @@ reliable than re-reading the path it covers:
 | `EmitterProbe` | emitters drawn directly against found by chance: the same converged image (the slab scene), the noise removed, the cost |
 | `BidirProbe` | the path tracer alone against the path tracer with the photon pass weighted against it: the same converged image (panel, metal, beam scenes; the window scene for the gather), the noise, the cost |
 | `LaserSweep` | the optical table's mirror turning a few degrees back and forth, one still export per frame, FFmpeg's MP4: the beam sweeping the prism, the spectrum sliding over the table (`docs/gallery/laser_sweep.mp4`) |
+| `FlightFilm` | a flight as a film: the camera on a Catmull-Rom curve through waypoints (`docs/flights/cathedral.txt`: eye and target per line), paced by the curve's length and eased at both ends, leaf parameters going and coming back as uniforms; `seconds = 0` renders one still per waypoint, the parameters sweeping from first to last, which is how a path and a morph range are chosen. The cathedral's path came from a shortest-path search through the free space of the Mandelbox estimator (clearance never under 0.12) |
 | `ProspectSwapProbe` | the Discoveries search runs on a throw-away scene; the user's scene must come back pixel-identical |
 | `ExploreProbe` | the app's Explore button, headless: scored views or parameter variations from any camera, time per view |
 | `ThumbnailForge` | the Presets & Chains browser's thumbnails, every chain and preset; `install` ships them as resources |
