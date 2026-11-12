@@ -129,14 +129,28 @@ Read it before touching anything related to deep zoom, precision, DoF or navigat
   at 6+ spp reset the driver in PrecisionLab (an export batched 8 samples per GL task).
   Fixed the same day at the owner's request: `ExportSampler` draws every export in steps of
   at most ~300 ms, strips of a sample when one is dearer (docs/EXPORT.md, Export Steps).
+- **2026-11-12, the owner chose the float-float project** (speed at full precision, for
+  every fractal) over float functions while the camera moves. `FloatFloatSource` translates
+  the scene's estimator into float-float (`FloatFloat`: two floats per number, ~48 bits),
+  operator by operator, with the common subexpressions shared (the compiler does not merge
+  them). It is the default deep entry; the double one stays as the fallback
+  (`-Dfractalizer.deep=double` to compare). All 68 estimators translate. In a compute
+  shader the Mandelbulb estimate is 7.6x cheaper than in double, but in the raytracer it
+  was first slower: 16 copies of a large function, one per caller, overflow the instruction
+  cache. The deep estimate is now called through a subroutine uniform (one copy, set by
+  `ShaderProgram.use`), and the copies are written callees first, without which NVIDIA's
+  compiler crashed on it. How deep float-float holds depends on the formula (the Mandelbox
+  matched double to 1e-12, the Mandelbulb broke between 1e-10 and 1e-11), so the program
+  holds both entries and picks one per frame: the camera's distance estimated both ways,
+  double for a frame where they part by more than 3e-6 of it. Result at 640x360, 4 spp:
+  the Mandelbulb 4-4.8x faster to 1e-8 and in double past 1e-10, the Mandelbox 2.6-3.3x
+  faster at every depth, images the double ones. A deep program compiles in 18-23 s
+  against ~13 for double alone. See docs/RENDERING.md, "The estimator in float-float".
 - **Next, if wanted:**
-  - the cost at depth (measured 2026-11-10: on the KIFS at 1e-6 the sun's shadow is ~45 %
-    of the time, legitimate marching out of dense structure; the double march ~3x the float
-    one). Generic shortcuts tried and dropped: a float estimate while far from the surface
-    (~10 % faster) and no final refinement (normals 30-60° different). What would pay:
-    float-float arithmetic (two floats per number, full-rate on a GeForce) in place of
-    double, a large but generic change. Running only the orbit's first iterations in double
-    is NOT safe in general (formulas that are not contractive early);
+  - the cost at depth: float-float done (2026-11-12, above). Generic shortcuts tried and
+    dropped before it: a float estimate while far from the surface (~10 % faster) and no
+    final refinement (normals 30-60° different). Running only the orbit's first iterations
+    in high precision is NOT safe in general (formulas that are not contractive early);
   - the rest of the secondary rays in double. The sun's shadow and AO at a deep hit, and the
     path tracer's shadow rays and bounces, are done (docs/RENDERING.md); reflections in
     classic shading, extra lights and SSS are still float;

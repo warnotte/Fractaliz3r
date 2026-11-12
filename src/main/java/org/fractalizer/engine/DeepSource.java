@@ -56,6 +56,43 @@ public final class DeepSource {
 
     private DeepSource() {}
 
+    /** {@code -Dfractalizer.deep=double} keeps the double entry alone, {@code =ff} the
+     *  float-float one alone (to compare them); unset, both with the relay below. */
+    public static final String MODE_PROPERTY = "fractalizer.deep";
+    /** Defined by a block holding both entries; the raytracer then picks one per frame. */
+    public static final String BOTH_DEFINE = "DEEP_BOTH";
+
+    /**
+     * The deep entry of a scene, {@code DE_deep(dvec3)}. When the scene translates to
+     * float-float (FloatFloatSource), the block holds that entry and the double one
+     * ({@link #build}) as {@code DE_deep_ff} and {@code DE_deep_dp} under {@link #BOTH_DEFINE},
+     * and the raytracer takes the double one for a frame where the two disagree at the
+     * camera. Float-float
+     * holds ~48 bits against 53 and costs a GeForce several times less, but how far down that
+     * is enough depends on the formula: the Mandelbox matched double to 1e-12, the Mandelbulb
+     * broke between 1e-10 and 1e-11 (PrecisionLab), its orbit amplifying the last digits.
+     * A scene that does not translate gets the double entry alone.
+     */
+    public static String entry(String common, String scene) {
+        String mode = System.getProperty(MODE_PROPERTY, "");
+        if (!mode.equals("double")) {
+            String ff = FloatFloatSource.build(common, scene);
+            if (ff != null && mode.equals("ff")) return ff;
+            if (ff != null) {
+                String dp = build(common, scene);
+                if (dp == null) return ff;
+                // both entries; raytracer.glsl calls each through a subroutine of its own and
+                // picks one per frame (gDeepDouble, main)
+                return "#define " + BOTH_DEFINE + "\n"
+                        + ff.replace("float " + ENTRY + "(dvec3 pos)", "float " + ENTRY + "_ff(dvec3 pos)")
+                        + dp.replace("#define " + DEFINE + "\n", "").replace("float " + ENTRY + "(dvec3 pos)", "float " + ENTRY + "_dp(dvec3 pos)");
+            }
+            if (FloatFloatSource.lastError() != null)
+                System.err.println("Deep precision in double for this scene (float-float: " + FloatFloatSource.lastError() + ")");
+        }
+        return build(common, scene);
+    }
+
     /**
      * The double entry for a scene, as a block to append after the scene's source, or null
      * when the source has no {@code DE_simple}.

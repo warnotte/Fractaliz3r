@@ -21,7 +21,9 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
@@ -184,11 +186,14 @@ public class GLSLFractalizerController implements RenderController {
                 long t0 = System.nanoTime();
                 boolean had = engine.hasProgram("nodegraph", glsl, nodeGraphDefines(ngp));
                 String err = engine.ensureProgram("nodegraph", glsl, nodeGraphDefines(ngp));
-                String floatGlsl = ngp.getCompiledGLSL();
-                if (err != null && !glsl.equals(floatGlsl)) {
-                    // Deep precision: the double program does not compile; the scene in float.
-                    System.err.println("Deep precision is not available for this scene, rendering in float: " + err);
-                    glsl = floatGlsl;
+                for (String next : deepFallbacks(ngp, glsl)) {
+                    if (err == null) break;
+                    // Deep precision: the program does not compile; the deep entry in double,
+                    // then the scene in float.
+                    System.err.println(SceneSnapshot.isDeep(next)
+                            ? "Deep precision in double for this scene (its float-float program does not compile): " + err
+                            : "Deep precision is not available for this scene, rendering in float: " + err);
+                    glsl = next;
                     err = engine.ensureProgram("nodegraph", glsl, nodeGraphDefines(ngp));
                 }
                 if (err != null) System.err.println("Node graph shader error: " + err);
@@ -283,15 +288,36 @@ public class GLSLFractalizerController implements RenderController {
         return deep == null ? glsl : glsl + "\n" + deep;
     }
 
-    private String deepFrom, deepBlock;   // the last translation and the source it came from
+    private String deepFrom, deepBlock, deepDoubleBlock;   // the last translations and the source they came from
 
-    /** The double entry of a scene source, translated once per source (the snapshot asks every frame). */
+    /** The deep entry of a scene source (float-float when it translates, else double),
+     *  translated once per source (the snapshot asks every frame). */
     private synchronized String deepEntry(String glsl) {
         if (!glsl.equals(deepFrom)) {
-            deepBlock = org.fractalizer.engine.DeepSource.build(engine.loadShaderSource("/shaders/common.glsl"), glsl);
+            String common = engine.loadShaderSource("/shaders/common.glsl");
+            deepBlock = org.fractalizer.engine.DeepSource.entry(common, glsl);
+            // the double entry too when that one is float-float: what is compiled if the driver refuses it
+            deepDoubleBlock = deepBlock != null && deepBlock.contains("DE_simple_ff(")
+                    ? org.fractalizer.engine.DeepSource.build(common, glsl) : null;
             deepFrom = glsl;
         }
         return deepBlock;
+    }
+
+    /**
+     * What to compile instead of a deep program the driver refuses, in order: the deep entry
+     * in double when the program has it in float-float, then the scene in float. Empty when
+     * the program has no deep entry.
+     */
+    private List<String> deepFallbacks(NodeGraphParams ngp, String program) {
+        String floatGlsl = ngp.getCompiledGLSL();
+        if (program == null || program.equals(floatGlsl)) return List.of();
+        List<String> out = new ArrayList<>();
+        String doubleBlock;
+        synchronized (this) { doubleBlock = floatGlsl.equals(deepFrom) ? deepDoubleBlock : null; }
+        if (doubleBlock != null) out.add(floatGlsl + "\n" + doubleBlock);
+        out.add(floatGlsl);
+        return out;
     }
 
     private static String nodeGraphDefines(NodeGraphParams ngp) {
@@ -366,13 +392,14 @@ public class GLSLFractalizerController implements RenderController {
      */
     public SceneSnapshot snapshot() {
         if (!(currentParams instanceof AbstractFractalParams params)) return null;
-        String key, source, defines = "", floatSource = null;
+        String key, source, defines = "";
+        List<String> fallbacks = List.of();
         float[] ssbo = null, lights = null;
         if (params instanceof NodeGraphParams ngp) {
             String glsl = nodeGraphSource(ngp);
             if (glsl != null) {
                 key = "nodegraph"; source = glsl; defines = nodeGraphDefines(ngp);
-                if (!glsl.equals(ngp.getCompiledGLSL())) floatSource = ngp.getCompiledGLSL();
+                fallbacks = deepFallbacks(ngp, glsl);
                 ssbo = ngp.getMaterialSSBOData();
                 lights = lightTable(ngp).data();
             } else if (hasBuiltinShader(currentFractalType)) {
@@ -394,7 +421,7 @@ public class GLSLFractalizerController implements RenderController {
         float coneTan = params.isConeTracingEnabled() ? (float) Math.tan(params.getFov() * 0.5) : 0f;
         return new SceneSnapshot(key, source, defines, uniforms, coneTan, ssbo, lights,
                 viewportWidth, viewportHeight, params.getPreviewScale(), params.isPreviewFastShading(),
-                previewSamples, fullSamples, causticsActive(params) ? params.getCausticPhotons() : 0, floatSource);
+                previewSamples, fullSamples, causticsActive(params) ? params.getCausticPhotons() : 0, fallbacks);
     }
 
     /** Whether the engine holds the program of the scene as it stands now (compiled, and
@@ -402,6 +429,21 @@ public class GLSLFractalizerController implements RenderController {
     public boolean holdsSceneProgram() {
         SceneSnapshot s = snapshot();
         return s != null && engine.hasProgram(s.programKey(), s.programSource(), s.programDefines());
+    }
+
+    /** Which program the engine holds for the scene: "float-float" (its deep entry in
+     *  float-float, with the double one for the frames past it), "double" (the double entry
+     *  alone), "float" (none, or a fallback after the deep ones were refused), "none". */
+    public String heldProgramKind() {
+        SceneSnapshot s = snapshot();
+        if (s == null) return "none";
+        for (SceneSnapshot k = s; ; k = k.next()) {
+            if (engine.hasProgram(k.programKey(), k.programSource(), k.programDefines())) {
+                String src = k.programSource();
+                return src.contains("DE_simple_ff(") ? "float-float" : src.contains("DE_simple_dp(") ? "double" : "float";
+            }
+            if (!k.hasFallback()) return "none";
+        }
     }
 
     /** The scene changed: show it. Never blocks. */

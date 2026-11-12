@@ -46,7 +46,10 @@ start a second chain of steps.
   program source and defines (the engine compiles only if it does not hold exactly that
   source), the uniform map without the size-dependent `pixelRadius` (derived from the
   height actually rendered), the material SSBO data, the viewport size, the scene's
-  preview ceiling (`previewScale`) and fast-shading flag, the sample targets. Immutable.
+  preview ceiling (`previewScale`) and fast-shading flag, the sample targets, and with deep
+  precision the programs to compile instead when that one does not (`fallbacks`: the deep
+  entry in double when the program has it in float-float, then the scene in float).
+  Immutable.
 - **Request**: "the scene is now this snapshot; show it". `ViewportScheduler.request()` is
   the only entry point from the UI. The latest request wins; earlier unstarted ones are
   dropped (coalescing).

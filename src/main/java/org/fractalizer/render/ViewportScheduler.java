@@ -162,9 +162,9 @@ public final class ViewportScheduler {
     }
 
     private Job startJob(SceneSnapshot scene) {
-        // Deep precision whose double program is known not to compile: the scene in float.
-        if (scene.floatSource() != null && engine.knownToFail(scene.programKey(), scene.programSource(), scene.programDefines())) {
-            scene = scene.withoutDeep();
+        // Deep precision whose program is known not to compile: the next one (double, then float).
+        while (scene.hasFallback() && engine.knownToFail(scene.programKey(), scene.programSource(), scene.programDefines())) {
+            scene = scene.next();
         }
         if (!engine.hasProgram(scene.programKey(), scene.programSource(), scene.programDefines())
                 || (scene.causticPhotons() > 0 && !engine.hasPhotonProgram(scene.programKey(), scene.programSource(), scene.programDefines()))) {
@@ -244,13 +244,19 @@ public final class ViewportScheduler {
             long t0 = System.nanoTime();
             SceneSnapshot s = scene;
             String err = compile(s);
-            if (err != null && s.floatSource() != null) {
-                // Deep precision: the scene's estimator does not compile in double. Say so, and
-                // show the scene in float rather than nothing.
-                System.err.println("Deep precision is not available for this scene, rendering in float: " + err);
-                emit(Status.error("Deep precision is not available for this scene (its estimator does not compile in double); "
-                        + "rendering it in float. " + err.lines().findFirst().orElse("")));
-                s = s.withoutDeep();
+            while (err != null && s.hasFallback()) {
+                SceneSnapshot next = s.next();
+                if (SceneSnapshot.isDeep(next.programSource())) {
+                    // the deep entry in float-float refused: the same in double, nothing to show
+                    System.err.println("Deep precision in double for this scene (its float-float program does not compile): " + err);
+                } else {
+                    // Deep precision: the scene's estimator does not compile with a deep entry.
+                    // Say so, and show the scene in float rather than nothing.
+                    System.err.println("Deep precision is not available for this scene, rendering in float: " + err);
+                    emit(Status.error("Deep precision is not available for this scene (its estimator does not compile in double); "
+                            + "rendering it in float. " + err.lines().findFirst().orElse("")));
+                }
+                s = next;
                 err = compile(s);
             }
             if (err != null) {

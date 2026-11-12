@@ -408,6 +408,96 @@ double one: 0.6° at 1e-2, 13° at 1e-3, **92° at 1e-4** (the image is other ge
   compile`); a double program takes 12-17 s to compile against 7-10 s. The Polyhedral IFS
   crashes NVIDIA's compiler all the same (C9999, inside the driver, on a program with no
   compound assignment left) and is shown in float, with the message below.
+- **The estimator in float-float, the default (`FloatFloatSource`, `FloatFloat`).** On a
+  GeForce a double operation costs as much as 64 float ones, so the double estimator was
+  the cost of a deep view. Float-float holds a number as two floats, `hi + lo` with
+  `|lo| <= ulp(hi)/2`: about 48 bits against the double's 53, built on the error-free
+  transformations (the rounding error of a sum; of a product, through `fma`). An addition
+  is ~20 float operations, a multiplication ~7.
+
+  GLSL has no operator overloading, so this is not a change of types as for double.
+  `FloatFloatSource` parses every function `DE_simple` reaches, types every expression, and
+  writes each operation on a value made from the position as a call (`a * b` becomes
+  `ff_mul(a, b)`). Uniforms, constants and literals stay float, and an operation with a
+  float operand takes the cheaper mixed form (`ff_mul(ff3, float)`). Types `ff1`..`ff4` and
+  a 2x2 matrix `ffm2`; swizzles, assignments to them (`z.xy = -z.yx` writes both halves),
+  `inout` parameters, structs (an orbit trap) and the built-ins all translate. What does not
+  (a 3x3 matrix made from the position, a texture read) makes the translation return null,
+  and the scene gets the double entry. All 68 estimators of the project translate: the 15
+  built-ins, the graph presets and the 31 hybrid chains (`FloatFloatSourceTest`).
+  - **The library.** `precise` on every error-free step, or the compiler may reassociate the
+    error terms away. `FloatFloatProbe` checks every function on the GPU against
+    `StrictMath`: all within 1e-14 relative to max(|f|, 1), x^y 1.2e-13 (the exponential
+    carries the error of y·log x). `sin`/`cos`: reduction by a three-float π/2, the leading
+    coefficients in float-float and the tail in float. `atan2`: the float answer, then the
+    exact correction atan(u) = u, u ~ 1e-7. `log`: one step from the float answer. `pow`:
+    repeated squaring for a whole exponent.
+  - **Common subexpressions.** The compiler does not merge two identical float-float
+    computations (`sin(theta)` twice cost the Mandelbulb 40 %), so the translation does.
+    Every float-float call evaluated unconditionally in a statement goes to a temporary,
+    reused in the block until a variable it reads is assigned (or a loop assigns it, or a
+    preprocessor line or a case label comes between). `sin(x)` and `cos(x)` of one `x` share
+    one `ff_sincos`.
+  - **Precision** (`FloatFloatProbe`, a Mandelbulb estimate at points 1e-9..1e-3 from the
+    surface, against the same estimator in Java): median error 4e-7 of the distance at
+    1e-9 (double 2e-8; float 1e3, i.e. nothing), 5e-12 at 1e-3.
+  - **One copy of the estimate.** In a compute shader a Mandelbulb estimate is 1.8 ns in
+    float-float, 13.8 ns in double, 0.09 ns in float. In the raytracer it first came out
+    *slower* than double (the march 788 ms against 395 at 1e-6). The compiler copies a
+    function into every caller; the raytracer asks for the deep estimate from 16 places (the
+    march, its refinement, the normal, occlusion, shadows, the path tracer's rays), and the
+    float-float code is several times the double's. Called from eight places, the probe's
+    estimate went from 1.8 to 6.6 ns: the copies no longer fit the instruction cache.
+    `sceneDE_deep` therefore calls the estimate through a subroutine uniform
+    (`deepEstimate_sub`), which the compiler cannot copy, so its code exists once. The
+    engine sets it after every `glUseProgram` (`ShaderProgram.use`: the value does not
+    survive a program change). The double entry goes through it too, and gains from it.
+  - **NVIDIA's compiler then crashed** (C9999 "exception during compilation") on every
+    float-float program. Found by elimination: a call, under the subroutine, to a function
+    only declared so far (the graph's `DE_simple` was written before the leaf it calls). The
+    copies are now written callees first, and they compile.
+  - **How deep float-float holds depends on the formula.** Down a ladder of cameras
+    (`PrecisionLab`, float-float against double, both deep): the Mandelbox gives the same
+    image to 1e-12; the Mandelbulb the same image to 1e-10 (normal error 0.6° at 1e-8, 1.8°
+    at 1e-10), then breaks: 23° at 1e-11 with half the pixels off by more than 10°, and 19 %
+    of the surface lost at 1e-12. Its orbit amplifies the last digits; the Mandelbox's folds
+    and scalings by 2 do not. So when the scene translates, the program holds both entries
+    (`DE_deep_ff`, `DE_deep_dp`, under `DEEP_BOTH`), each behind a subroutine of its own
+    (in one subroutine the float-float frames carried the double's registers and were
+    10-25 % slower), and `main` picks one per frame. It estimates the camera's distance both
+    ways, and where they part by more than `DEEP_FF_TOLERANCE` (3e-6) of it, the frame is
+    made in double. The double estimate is only made closer than 1e-7 of the camera's
+    coordinates; further out the Mandelbulb's float-float distance is off by ~1e-8 of
+    itself. What the relay costs: 0-3 % (float-float alone against it, Mandelbulb 1e-4 and
+    1e-6, twice each).
+  - **Result**, `PrecisionLab` at 640×360, 4 spp, the whole render in ms (double alone /
+    float-float with the relay; "dp" where the relay chose double):
+
+    | distance | Mandelbulb | Mandelbox |
+    |---|---|---|
+    | 1e-4 | 1224 / 307 | 667 / 260 |
+    | 1e-6 | 1544 / 338 | 678 / 216 |
+    | 1e-8 | 1958 / 410 | 601 / 188 |
+    | 1e-10 | 3867 / 3748 dp | 487 / 174 |
+    | 1e-11 | 4373 / 4294 dp | 473 / 188 |
+    | 1e-12 | 5093 / 4827 dp | 575 / 185 |
+
+    The images are the double ones (same detail, edges, speckle, coverage). Path traced at
+    160×90 (float-float): 813 → 208 ms at 1e-4, 1844 → 348 ms at 1e-6. A 960×540 export at
+    1e-6 (4 samples, `ExportWatchdogProbe`): 3.7 s of GPU time → 0.6 s. A deep program now
+    compiles in 18-23 s (both entries) against ~13 s for the double one alone.
+
+    The owner's presets (640×360, 4 spp, double / float-float with the relay):
+    `JULIA_BULB_SWEETSPOT` 1728 / 362 ms at 1e-4 and 2584 / 481 at 1e-7, double from 1e-10
+    (with the tolerance at 1e-5 that rung stayed float-float, 6.4x faster but 1.5° from the
+    double normals on average); `KIFS_DIVE` 308 / 134, 493 / 136 and 463 / 135 ms at 1e-4,
+    1e-7, 1e-10, the same image. The check at the camera is a proxy: on the path-traced
+    Mandelbulb at 1e-11 the two estimates agree there and the frame stays float-float, 1.3°
+    from the double normals on average (1.4 % of pixels by more than 10°); float-float
+    alone at that depth on the classic ladder was 23°.
+  - `-Dfractalizer.deep=double` keeps the double entry alone, `=ff` the float-float one
+    alone, to compare them. A program the driver refuses falls back to the double entry
+    alone, then to float (`SceneSnapshot.fallbacks`).
 - **The primary rays, float first, double where needed.** A camera ray is marched in float.
   It is marched again in double (`deepNeeded`; one float step of the position is about
   1.2e-7 · |camPos|) when either:
@@ -474,10 +564,11 @@ double one: 0.6° at 1e-2, 13° at 1e-3, **92° at 1e-4** (the image is other ge
 
   Still float: reflections in classic shading, the extra lights' shadows, subsurface
   scattering. A double program now takes 15-20 s to compile.
-- **A scene whose estimator does not compile in double** (GLSL refuses something the
-  translation passed on) is rendered in float with a message: the scheduler compiles the
-  snapshot's `floatSource` instead, and the engine remembers the failure so it is not retried
-  every frame.
+- **A scene whose deep program does not compile** (GLSL refuses something the translation
+  passed on, or the driver crashes on it). The snapshot carries what to compile instead, in
+  order (`fallbacks`): the deep entry in double when the program has it in float-float
+  (nothing shown), then the scene in float (with a message). The engine remembers each
+  failure, so it is not retried every frame.
 - **The probe follows**: it takes the view's own path through `main()`, so a focus pick and
   the auto speed measure in double too at depth.
 

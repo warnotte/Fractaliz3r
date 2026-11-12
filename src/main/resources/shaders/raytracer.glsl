@@ -224,14 +224,15 @@ float sceneDE_simple(vec3 pos) {
 // closer to the surface than ~1e-4 the pixel footprint is below that, so every point the
 // march evaluates, and the four points the normal is taken from, round to the same handful
 // of values: blocky surfaces, normals that flicker, MIN_EPSILON spanning tens of pixels.
-// The fix is to form the point in double and run the estimator in double: DE_deep, which
-// DeepSource.java derives from the scene's own DE_simple and appends to the scene when deep
-// precision is on (any scene; nothing here knows the fractal). The primary rays and their
-// normals take this path; secondary rays (shadows, AO, bounces) leave from a float hit
-// point a bias above the surface and stay in float.
+// The fix is to form the point in double and run the estimator in high precision: DE_deep,
+// which FloatFloatSource.java (float-float, two floats per number: the default) or
+// DeepSource.java (double: the fallback) derives from the scene's own DE_simple and appends
+// to the scene when deep precision is on (any scene; nothing here knows the fractal). The
+// primary rays and their normals take this path, and so do the sun's shadow, the occlusion
+// and the path tracer's rays near a deep hit (docs/RENDERING.md, "Deep precision").
 //
-// Compiled in only when the scene carries the double entry (HAS_DEEP_DE): a program
-// without it is exactly what it was.
+// Compiled in only when the scene carries a deep entry (HAS_DEEP_DE): a program without it
+// is exactly what it was.
 #ifdef HAS_DEEP_DE
 uniform int deepPrecision;
 
@@ -239,14 +240,42 @@ uniform int deepPrecision;
 // accuracy a float position can have at all; a double position is good to ~1e-16, so the
 // floor can drop to what the float distance returned by the estimator still resolves.
 const float DEEP_MIN_EPSILON = 1.0e-15;
+// How far the float-float and double estimates of the camera's distance may part, relative
+// to it, before a frame is made in double (main).
+const float DEEP_FF_TOLERANCE = 3.0e-6;
+const float DEEP_FF_CHECKED_BELOW = 1.0e-7;
 
 // The last hit found by the deep march, so calcNormal can take its differences in double
 // when it is asked about that very point.
 dvec3 gDeepHitPos = dvec3(0.0LF);
 bool  gDeepHitValid = false;
 
+// The deep estimate is asked for from a dozen places (the march and its refinement, the
+// normal, occlusion, shadows, the path tracer's rays), and the compiler copies a function
+// into every caller. A call through a subroutine uniform cannot be copied: the estimate's
+// code exists once. The float-float one is several times the double's code, and copied into
+// eight callers it no longer fitted the instruction cache: 6.6 ns an estimate against 1.8
+// from one caller, and slower than double in this program (FloatFloatProbe "entries",
+// PrecisionLab). The engine sets the subroutine after every glUseProgram (ShaderProgram.use).
+subroutine float DeepEstimate(dvec3 pos);
+#ifdef DEEP_BOTH
+// Both entries (DeepSource.entry): each behind a subroutine of its own, so neither carries
+// the other's registers (in one subroutine the float-float frames were 10-25 % slower);
+// main picks one for the frame.
+int gDeepDouble = 0;
+subroutine(DeepEstimate) float deepFF_impl(dvec3 pos) { return DE_deep_ff(pos); }
+subroutine(DeepEstimate) float deepDP_impl(dvec3 pos) { return DE_deep_dp(pos); }
+subroutine uniform DeepEstimate deepFF_sub;
+subroutine uniform DeepEstimate deepDP_sub;
+float deepEstimate(dvec3 pos) { return gDeepDouble != 0 ? deepDP_sub(pos) : deepFF_sub(pos); }
+#else
+subroutine(DeepEstimate) float deepEstimate_impl(dvec3 pos) { return DE_deep(pos); }
+subroutine uniform DeepEstimate deepEstimate_sub;
+float deepEstimate(dvec3 pos) { return deepEstimate_sub(pos); }
+#endif
+
 float sceneDE_deep(dvec3 posD) {
-    float d = DE_deep(posD);
+    float d = deepEstimate(posD);
     vec3 pos = vec3(posD);
     if (erosionEnabled != 0 && d < erosionMaxDisplacement() + 0.1) d += getErosionDisplacementLight(pos);
     if (crystalEnabled != 0 && d < crystalMaxDisplacement() + 0.1) d += getCrystalDisplacementLight(pos);
@@ -2999,6 +3028,26 @@ void main() {
 #else
     gExtraIterations = zoomDetailIterations(sceneDE_simple(camPos));
 #endif
+#endif
+#ifdef DEEP_BOTH
+    // The deep estimate in float-float holds ~48 bits, and how deep that is enough depends on
+    // the formula: the Mandelbox matched double to 1e-12, the Mandelbulb broke between 1e-10
+    // and 1e-11, its orbit amplifying the last digits (PrecisionLab). So the camera's distance
+    // is estimated both ways, and where the two part by more than DEEP_FF_TOLERANCE of it,
+    // this frame's deep estimates are all made in double. Every pixel asks the same question
+    // of the same point, so the choice is the frame's. The double estimate costs ~15 % of a
+    // frame, so it is only made closer than DEEP_FF_CHECKED_BELOW (relative to the camera's
+    // coordinates): further out the Mandelbulb's float-float distance is off by ~1e-8 of
+    // itself, 600 times under the tolerance.
+    if (deepPrecision != 0) {
+        gDeepDouble = 0;
+        float deepF = sceneDE_deep(camPosD);
+        if (deepF < DEEP_FF_CHECKED_BELOW * max(length(camPos), 1e-3)) {
+            gDeepDouble = 1;
+            float deepD = sceneDE_deep(camPosD);
+            gDeepDouble = abs(deepF - deepD) > DEEP_FF_TOLERANCE * abs(deepD) ? 1 : 0;
+        }
+    }
 #endif
 
     // Get camera ray (with optional DoF)

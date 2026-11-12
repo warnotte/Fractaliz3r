@@ -143,10 +143,18 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.PrecisionLab" -Dexe
 # ExportSampler and prints steps, strips and the longest step; PASS when none took over twice the 300 ms
 # aimed at. at=1e-6 puts the camera that far before the surface under the centre, deep precision on.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportWatchdogProbe" -Dexec.args="MANDELBULB out/watchdog 960x540 4 at=1e-6 0.8,1.2,-0.8,0,0,0 pathTracingEnabled=false"
+#   -Dfractalizer.deep=double keeps the double entry alone, =ff the float-float one alone (to compare them;
+#   unset, both, the raytracer picking one per frame).
 # The double library DeepSource gives an estimator (sin, cos, atan2, acos, exp, log, pow...) run on
 # the GPU against StrictMath, with the float built-ins' error beside it; "bench" adds what each
 # costs in double fused multiply-adds.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.DoubleMathProbe" -Dexec.args="200000 bench"
+# Float-float (FloatFloat: two floats per number, the default deep entry): every function against StrictMath,
+# a Mandelbulb estimate near the surface in float / double / float-float against Java, "bench" the cost of
+# each; "entries <kernel.glsl>" the entries the program gets (FloatFloatSource, DeepSource) called from one
+# place, from eight, and through a subroutine (why the raytracer calls the deep estimate through one).
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.FloatFloatProbe" -Dexec.args="100000 bench"
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.FloatFloatProbe" -Dexec.args="2000 entries src/main/resources/shaders/fractals/mandelbulb.glsl"
 # What a sample costs as strips against whole, on the GPU, per sync pattern (bound once, rebound
 # each, fenced each, one or two in flight): the measurement behind the scheduler's slice lengths.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.StripCostProbe" -Dexec.args="presets/ALBEDO_039.frac 1920x1080"
@@ -201,7 +209,9 @@ org.fractalizer
 ├── engine/
 │   ├── GLSLEngine.java              # GPU compute abstraction (LWJGL/OpenGL)
 │   ├── ShaderPreprocessor.java      # GLSL symbol renaming for shader concatenation
-│   ├── DeepSource.java              # deep precision: the scene's DE_simple and what it reaches copied in double -> DE_deep(dvec3)
+│   ├── DeepSource.java              # deep precision: the scene's DE_simple and what it reaches copied in double -> DE_deep(dvec3); entry() picks float-float first
+│   ├── FloatFloatSource.java        # the same in float-float: parsed, typed, every operation on the position written as an ff_ call; common subexpressions shared
+│   ├── FloatFloat.java              # the float-float library (ff1..ff4, ffm2): error-free arithmetic under precise, sin/cos/atan2/exp/log/pow...
 │   ├── BlueNoiseGenerator.java      # 64x64 blue noise texture (Mitchell's best-candidate)
 │   └── Camera.java                  # Quaternion-based FPS camera (no gimbal lock)
 ├── fractals/
@@ -279,6 +289,7 @@ src/test/java/  (JUnit, no GPU — `mvn test`, run by CI)
 ├── config/ConfigRoundTripTest       # every setting a .frac carries, written and read back
 ├── engine/ShaderPreprocessorTest    # symbol prefixing for shader concatenation
 ├── engine/DeepSourceTest            # the double entry: what DE_simple reaches, typed in double, structs, shims, every built-in
+├── engine/FloatFloatSourceTest      # the float-float entry: every built-in and chain translates, uniforms stay float, sincos shared, swizzle writes
 ├── engine/CameraTest                # quaternion camera: orthonormal, no drift, axes
 ├── render/CostModelTest             # strip planning: a latency-bound scene is not cut into latency-only strips
 ├── animation/AnimationTrackTest     # keyframes, easing, Catmull-Rom, timeline
@@ -316,6 +327,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── DiveFilm.java                # a dive as a film: geometric approach to the centre's surface point, deep precision, every frame exported, MP4
 ├── PrecisionLab.java            # deep precision: float vs double down a camera ladder (normal error, speckle, cost); "compile" = every built-in in double
 ├── DoubleMathProbe.java         # the double library (dp_sin, dp_atan2, dp_pow...) on the GPU against StrictMath; "bench" = cost of each
+├── FloatFloatProbe.java         # the float-float library against StrictMath, a Mandelbulb estimate in 3 precisions, cost; "entries" = call sites vs subroutine
 ├── ExportWatchdogProbe.java     # an export's steps: how many, strips, the longest (must stay far under the driver's 2 s)
 ├── StripCostProbe.java          # GPU cost of strips vs whole per sync pattern: why slices are 60 ms
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera

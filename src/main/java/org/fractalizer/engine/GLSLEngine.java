@@ -1428,12 +1428,15 @@ public class GLSLEngine implements AutoCloseable {
 
     public static class ShaderProgram {
         private final int programId; private final Map<String, Integer> uniformLocations = new HashMap<>();
+        /** Per shader stage, the subroutine each subroutine uniform location takes; null: none. */
+        private Map<Integer, int[]> subroutines;
         public ShaderProgram(String vertexSource, String fragmentSource) {
             int vs = compileShader(GL_VERTEX_SHADER, vertexSource, "Vertex");
             int fs = compileShader(GL_FRAGMENT_SHADER, fragmentSource, "Fragment");
             programId = glCreateProgram(); glAttachShader(programId, vs); glAttachShader(programId, fs); glLinkProgram(programId);
             if (glGetProgrami(programId, GL_LINK_STATUS) == GL_FALSE) throw new RuntimeException(glGetProgramInfoLog(programId));
             glDeleteShader(vs); glDeleteShader(fs);
+            resolveSubroutines(GL_VERTEX_SHADER, GL_FRAGMENT_SHADER);
         }
         /** A compute program. */
         public ShaderProgram(String computeSource) {
@@ -1441,13 +1444,41 @@ public class GLSLEngine implements AutoCloseable {
             programId = glCreateProgram(); glAttachShader(programId, cs); glLinkProgram(programId);
             if (glGetProgrami(programId, GL_LINK_STATUS) == GL_FALSE) throw new RuntimeException(glGetProgramInfoLog(programId));
             glDeleteShader(cs);
+            resolveSubroutines(GL_COMPUTE_SHADER);
+        }
+        /**
+         * The deep estimate is called through a subroutine uniform, {@code deepDE}, so that its
+         * code exists once (raytracer.glsl). Its value is lost at every glUseProgram, so
+         * {@link #use} sets it again; resolved here once. A program without one has none.
+         */
+        private void resolveSubroutines(int... stages) {
+            for (int stage : stages) {
+                int locations = glGetProgramStagei(programId, stage, GL_ACTIVE_SUBROUTINE_UNIFORM_LOCATIONS);
+                if (locations <= 0) continue;
+                int count = glGetProgramStagei(programId, stage, GL_ACTIVE_SUBROUTINE_UNIFORMS);
+                int[] index = new int[locations];
+                // the convention: the subroutine uniform name_sub takes the subroutine name_impl
+                for (int u = 0; u < count; u++) {
+                    String uniform = glGetActiveSubroutineUniformName(programId, stage, u);
+                    if (!uniform.endsWith("_sub")) throw new IllegalStateException("subroutine uniform " + uniform);
+                    int loc = glGetSubroutineUniformLocation(programId, stage, uniform);
+                    int sub = glGetSubroutineIndex(programId, stage, uniform.substring(0, uniform.length() - 4) + "_impl");
+                    if (loc < 0 || loc >= locations || sub < 0) throw new IllegalStateException("subroutine for " + uniform);
+                    index[loc] = sub;
+                }
+                if (subroutines == null) subroutines = new HashMap<>();
+                subroutines.put(stage, index);
+            }
         }
         private int compileShader(int type, String source, String typeName) {
             int s = glCreateShader(type); glShaderSource(s, source); glCompileShader(s);
             if (glGetShaderi(s, GL_COMPILE_STATUS) == GL_FALSE) throw new RuntimeException(typeName + " failed: " + glGetShaderInfoLog(s));
             return s;
         }
-        public void use() { glUseProgram(programId); }
+        public void use() {
+            glUseProgram(programId);
+            if (subroutines != null) for (Map.Entry<Integer, int[]> e : subroutines.entrySet()) glUniformSubroutinesuiv(e.getKey(), e.getValue());
+        }
         public int getUniformLocation(String name) { return uniformLocations.computeIfAbsent(name, n -> glGetUniformLocation(programId, n)); }
         public void setUniform(String name, int v) { glUniform1i(getUniformLocation(name), v); }
         public void setUniform(String name, float v) { glUniform1f(getUniformLocation(name), v); }

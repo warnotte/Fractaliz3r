@@ -2,6 +2,7 @@ package org.fractalizer.render;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -27,9 +28,10 @@ import java.util.Map;
  * @param fullSamples    how many samples the refinement accumulates
  * @param causticPhotons photons per pass for caustics, as the side of a square, 0 for none:
  *                       the engine then needs the scene's photon program too
- * @param floatSource    the program source without the double entry (deep precision), when
- *                       {@code programSource} carries one, else null: what is compiled
- *                       instead when the double program does not compile
+ * @param fallbacks      what is compiled instead, in this order, when {@code programSource}
+ *                       does not: with deep precision, the scene with its deep entry in
+ *                       double when {@code programSource} has it in float-float, then the
+ *                       scene without one (float). Empty without deep precision.
  */
 public record SceneSnapshot(String programKey,
                             String programSource,
@@ -45,7 +47,7 @@ public record SceneSnapshot(String programKey,
                             int previewSamples,
                             int fullSamples,
                             int causticPhotons,
-                            String floatSource) {
+                            List<String> fallbacks) {
 
     public SceneSnapshot {
         uniforms = Collections.unmodifiableMap(new HashMap<>(uniforms));
@@ -56,14 +58,24 @@ public record SceneSnapshot(String programKey,
         previewSamples = Math.max(1, previewSamples);
         fullSamples = Math.max(1, fullSamples);
         causticPhotons = Math.max(0, causticPhotons);
+        fallbacks = fallbacks == null ? List.of() : List.copyOf(fallbacks);
     }
 
-    /** The same scene without the double entry: deep precision falls back to float. */
-    public SceneSnapshot withoutDeep() {
-        if (floatSource == null) return this;
-        return new SceneSnapshot(programKey, floatSource, programDefines, uniforms, coneTan, materialSSBO, lightSSBO,
+    /** Whether another program can be tried when this one does not compile. */
+    public boolean hasFallback() { return !fallbacks.isEmpty(); }
+
+    /** The same scene with the next program of {@link #fallbacks}: the deep entry in double,
+     *  then none (float). */
+    public SceneSnapshot next() {
+        if (fallbacks.isEmpty()) return this;
+        return new SceneSnapshot(programKey, fallbacks.get(0), programDefines, uniforms, coneTan, materialSSBO, lightSSBO,
                 viewportWidth, viewportHeight, previewScale, previewFastShading, previewSamples, fullSamples,
-                causticPhotons, null);
+                causticPhotons, fallbacks.subList(1, fallbacks.size()));
+    }
+
+    /** Whether the program source has a deep entry (float-float or double). */
+    public static boolean isDeep(String source) {
+        return source != null && source.contains("#define " + org.fractalizer.engine.DeepSource.DEFINE);
     }
 
     /** Photons per pass for a render at {@code scale} of the viewport: none for a preview

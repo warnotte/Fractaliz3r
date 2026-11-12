@@ -112,19 +112,22 @@ public class PrecisionLab {
             p.setPathTracingEnabled(false);
             long[] ms = new long[4];
             boolean[] held = new boolean[2];
+            String kind = "";
             for (int mode = 0; mode < 2; mode++) {
                 p.setDeepPrecision(mode == 1);
                 long t0 = System.nanoTime();
                 controller.renderStill(32, 18, 1, () -> false);     // the compile
                 ms[mode] = (System.nanoTime() - t0) / 1_000_000;
-                held[mode] = controller.holdsSceneProgram();
+                kind = controller.heldProgramKind();
+                // the deep entry held, in float-float or (that one refused) in double
+                held[mode] = mode == 0 ? controller.holdsSceneProgram() : kind.equals("float-float") || kind.equals("double");
                 t0 = System.nanoTime();
                 BufferedImage img = controller.renderStill(320, 180, 4, () -> false);
                 ms[2 + mode] = (System.nanoTime() - t0) / 1_000_000;
                 if (img != null) ImageIO.write(img, "png", new File(outDir, type.getKernelName() + (mode == 1 ? "_double" : "_float") + ".png"));
             }
             System.out.printf("%-24s | %9d %9d | %9d %9d | %s%n", type.getDisplayName(), ms[0], ms[1], ms[2], ms[3],
-                    held[1] ? "compiles" : "refused, float kept");
+                    held[1] ? kind : "refused, float kept");
             ok &= held[0];
             total++;
             if (held[1]) doubled++; else refused.add(type.getDisplayName());
