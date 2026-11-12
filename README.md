@@ -107,6 +107,12 @@ plane, four materials.
   button) goes further: the app draws random chains of the 28 hybrid steps, compiles and
   renders them while you wait, leaves out the empty and the already-known, and shows the rest
   best first, formulas nobody has made; click one to make it the scene.
+- **Deep zoom on any scene.** Past about 1e-4 from a surface a float position runs out of digits
+  and the image turns to blocks. *Deep Precision* (Quality panel) rewrites the scene's own distance
+  estimator, whatever the graph holds, into float-float arithmetic (two floats per number, about
+  14 digits), 3 to 5 times faster than double on a consumer GPU, and takes double for the frames
+  past what float-float resolves. Dives to 1e-12 on the Mandelbox and the Mandelbulb; shadows,
+  occlusion, reflections and path-traced bounces follow.
 - **Measured, not eyeballed.** Bit-exact golden-image regression, deep-zoom detail metrics, colour
   probes per shading pass, and probes that catch a control missing from the UI or a setting missing
   from the save file. Rendering claims in the docs come with the harness that proved them.
@@ -139,6 +145,9 @@ primitive. Julia mode is available where the formula has a seed.
 
 - Cone tracing with a pixel-aware epsilon: stable detail at every resolution, no flicker on distant
   structure, deep-zoom LOD.
+- Deep precision: the estimator of any scene translated at compile time to float-float, with a
+  per-frame relay to double; an auto speed that slows with the distance to the surface; a manual
+  focus pick (Ctrl + click).
 - Path tracing (NEE + MIS, GGX), Lambertian / metallic / glass materials with spectral
   dispersion, caustics from every light (a photon pass per sample, weighted against the
   path tracer), emissive primitives sampled directly, subsurface scattering, 13 colouring
@@ -158,6 +167,8 @@ primitive. Julia mode is available where the formula has a seed.
 
 - Tiled rendering up to 16K, PNG/JPEG, depth and normal AOVs, VR/360 equirectangular with metadata.
 - H.265 video via FFmpeg. Mesh export (GPU marching cubes) to glTF, OBJ and PLY.
+- Exports are drawn in steps of at most 300 ms of GPU work, so a heavy frame cannot trip the
+  display driver's watchdog, and the progress bar follows the work done.
 
 ---
 
@@ -252,7 +263,8 @@ all GPU-side. Java 21 (JPMS), JavaFX for the UI, LWJGL 3 for OpenGL, Gson for `.
 
 - **[docs/SHADER_PIPELINE.md](docs/SHADER_PIPELINE.md)** — How GLSL shaders are assembled and sent to the GPU
 - **[docs/NODE_GRAPH.md](docs/NODE_GRAPH.md)** — Node graph system: node types, hybrid chains, compiler, animation, serialization
-- **[docs/RENDERING.md](docs/RENDERING.md)** — Cone tracing, adaptive sampling, cinematic pipeline, colouring, deep zoom, and the test harnesses
+- **[docs/RENDERING.md](docs/RENDERING.md)** — Cone tracing, adaptive sampling, cinematic pipeline, colouring, deep zoom and deep precision (float-float), and the test harnesses
+- **[docs/INTERACTIVE_RENDER.md](docs/INTERACTIVE_RENDER.md)** — The viewport scheduler: bounded steps, the cost model, what a dive does to it
 - **[docs/FEATURES.md](docs/FEATURES.md)** — EnhancedSlider, dice randomizer, morph crossfade, custom shader editor, boolean ops
 - **[docs/EXPORT.md](docs/EXPORT.md)** — VR/360, tiled rendering, AOV export, mesh export, video encoding, release build
 - **[docs/AUDIO_REACTIVE.md](docs/AUDIO_REACTIVE.md)** — Spectrum analysis, beat detection, mappings, offline export
