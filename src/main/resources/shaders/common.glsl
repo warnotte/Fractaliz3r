@@ -11,6 +11,10 @@
 const float PI = 3.14159265359;
 const float TAU = 6.28318530718;
 const float MAX_DISTANCE = 100.0;
+// How far a ray is marched. MAX_DISTANCE alone cut the scene away on a sphere around a camera
+// backing out: at 100 units a Mandelbulb is still twenty pixels wide. The camera's own
+// distance to the scene is added (main), so the limit follows a camera that leaves.
+float gFarLimit = MAX_DISTANCE;
 const float MIN_EPSILON = 0.000001;
 const float STEP_FACTOR = 0.9;
 const float NORMAL_EPSILON = 0.00001;

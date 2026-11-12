@@ -675,7 +675,7 @@ RayHit rayMarchDeep(Ray ray) {
         lastStep = double(step);
         t = t + lastStep;
 
-        if (t > double(MAX_DISTANCE)) break;
+        if (t > double(gFarLimit)) break;
     }
 
     if (result.hit && refinementSteps > 0 && lastStep > 0.0LF) {
@@ -759,7 +759,7 @@ bool rayMarchSimpleDeep(Ray ray, out vec3 hitPos, out float hitDist, out int mat
         lastStep = double(step);
         t = t + lastStep;
 
-        if (t > double(MAX_DISTANCE)) break;
+        if (t > double(gFarLimit)) break;
     }
     hitDist = float(t);
     return false;
@@ -823,7 +823,7 @@ RayHit rayMarch(Ray ray) {
         lastStep = step;
         result.dist += step;
 
-        if (result.dist > MAX_DISTANCE) break;
+        if (result.dist > gFarLimit) break;
     }
 
     // Surface refinement via binary/ternary search
@@ -1729,7 +1729,7 @@ bool rayMarchSimple(Ray ray, out vec3 hitPos, out float hitDist, out int matType
         lastStep = step;
         t += step;
 
-        if (t > MAX_DISTANCE) break;
+        if (t > gFarLimit) break;
     }
 
     hitDist = t;
@@ -3023,6 +3023,12 @@ void main() {
     vec2 screenUV = fullUV * 2.0 - 1.0 + jitter * 2.0;           // [-1,1] NDC + jitter
     vec4 probeSpec = probe ? probeRay[min(pixel.x, PROBE_RAYS - 1)] : vec4(0.0);
     if (probe) screenUV = probeSpec.xy;
+
+    // The march's limit follows the camera away from the scene: its distance to the nearest
+    // surface, four times over (the scene's far side is past its near one), on top of the
+    // limit a camera in the scene has. An estimate that is not a distance changes nothing.
+    float camGap = sceneDE_simple(camPos);
+    gFarLimit = MAX_DISTANCE + 4.0 * ((camGap > 0.0 && camGap < 1.0e6) ? camGap : 0.0);
 
     // Deep-zoom iteration LOD: how close the camera sits to the surface sets how
     // fine the structure on screen is, and therefore how many DE iterations are

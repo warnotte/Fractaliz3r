@@ -84,6 +84,17 @@ Four independently toggleable raymarcher enhancements in QualityPanel "Raymarche
 
 **Parameters** (in `AbstractFractalParams`, serialized in `EffectsConfig`): `coneTracingEnabled` (bool, default true), `fudgeFactor` (float), `refinementSteps` (int), `stepRelaxation` (float).
 
+### How far a ray is marched
+
+A ray was given up 100 units from its origin (`MAX_DISTANCE`). A camera backing out met that
+limit as a sphere around itself: at 100 units a Mandelbulb is still twenty pixels wide at
+1080p, its far side went first and the rest a unit later. The limit is now `gFarLimit`,
+set once per pixel in `main`: `MAX_DISTANCE` plus four times the scene's distance estimate at
+the camera. Near or inside the scene that estimate is small and the limit is what it was
+(`RenderRegression check` is bit-exact); a camera that leaves takes the limit with it, and
+the probe behind the auto speed sees the scene from there too. An estimate that is not a
+distance (negative, NaN, over 1e6) adds nothing. `BackOutProbe` is the harness.
+
 ### Known consequence: dark rim at silhouettes (path tracing only)
 
 Cone tracing accepts a hit as soon as the ray comes within one pixel footprint of the surface (`d < pixelRadius * dist`) — that is what antialiases the silhouette. At the outline the ray only *grazes*, so the accepted point sits up to a full pixel footprint **beside** the geometry, in empty space, and everything downstream is evaluated there:
@@ -1163,6 +1174,7 @@ reliable than re-reading the path it covers:
 | `BidirProbe` | the path tracer alone against the path tracer with the photon pass weighted against it: the same converged image (panel, metal, beam scenes; the window scene for the gather), the noise, the cost |
 | `LaserSweep` | the optical table's mirror turning a few degrees back and forth, one still export per frame, FFmpeg's MP4: the beam sweeping the prism, the spectrum sliding over the table (`docs/gallery/laser_sweep.mp4`) |
 | `FlightFilm` | a flight as a film: the camera on a Catmull-Rom curve through waypoints (`docs/flights/cathedral.txt`: eye and target per line), paced by the curve's length and eased at both ends, leaf parameters going and coming back as uniforms; `seconds = 0` renders one still per waypoint, the parameters sweeping from first to last, which is how a path and a morph range are chosen. The cathedral's path came from a shortest-path search through the free space of the Mandelbox estimator (clearance never under 0.12) |
+| `BackOutProbe` | the viewport while the camera backs away from the surface (a request per frame, the auto speed if asked): the image on screen at every frame and after each rest, to find where a surface goes missing |
 | `ProspectSwapProbe` | the Discoveries search runs on a throw-away scene; the user's scene must come back pixel-identical |
 | `ExploreProbe` | the app's Explore button, headless: scored views or parameter variations from any camera, time per view |
 | `ThumbnailForge` | the Presets & Chains browser's thumbnails, every chain and preset; `install` ships them as resources |

@@ -113,6 +113,11 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.SliderFluidityProbe
 # cameras ("dive": 1e-3 to 1e-15, three a decade): a request, then the refinement's first steps; each rung's
 # longest step against its plan. Keep it small (320x180): an overrun shows there without resetting the driver.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ViewportDiveProbe" -Dexec.args="MANDELBULB 320x180 dive 0.8,1.2,-0.8,0,0,0 abort=600"
+# The other way: the viewport while the camera backs away from the surface, a request per frame as a held
+# key gives, the image on screen kept at every frame and after a rest (the refinement). "auto" takes each
+# frame's step from the auto speed, distance being the dial. A surface that goes missing shows in the frames.
+#   (scene outDir WxH frames distance [pauseEvery] [refineMs] [auto])
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.BackOutProbe" -Dexec.args="MANDELBULB out/backout 1280x720 420 1.0 60 1200 auto"
 # A refinement sample drawn in scissored strips (abortable between them) must be the same sample
 # to the bit, an aborted one must be cleared, not accumulated, and a strip interrupted by another
 # GL task (a palette upload) then discarded must leave no scissor behind (the bands of a preset load).
@@ -334,6 +339,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── DeferredCompileProbe.java    # a scene compile asked from the FX thread must not block it
 ├── NavigationFluidityProbe.java # the viewport while the camera moves: FX held, images/s, latency, interrupt
 ├── ViewportDiveProbe.java       # the viewport down a dive to 1e-15: each rung's longest GPU step against its plan (the driver's 2 s)
+├── BackOutProbe.java            # the viewport while the camera backs out, auto speed or not: every frame on screen kept (a surface cut away at a distance shows there)
 ├── SliderFluidityProbe.java     # the viewport while a slider of each real panel moves; "window" for layout costs
 ├── BandedSampleProbe.java       # a sample drawn in strips is the same sample; an aborted one is cleared; a depth read or a probe between strips loses nothing
 ├── FocusPickProbe.java          # the probe and the focus pick: sphere vs exact intersection, scene vs its image's depth, cost, latency during a refinement
