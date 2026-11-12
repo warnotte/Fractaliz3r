@@ -109,6 +109,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.NavigationFluidityP
 # real controller, one slider of each dragged at 30 ticks/s; JavaFX held per tick, worst stall,
 # images/s, request->image. "window" puts them in a real window so layout and CSS passes count.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.SliderFluidityProbe" -Dexec.args="presets/ALBEDO_039.frac 1280x720 3 window"
+# Does the viewport hand the GPU a long step while the camera dives? The real scheduler down a ladder of
+# cameras ("dive": 1e-3 to 1e-15, three a decade): a request, then the refinement's first steps; each rung's
+# longest step against its plan. Keep it small (320x180): an overrun shows there without resetting the driver.
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ViewportDiveProbe" -Dexec.args="MANDELBULB 320x180 dive 0.8,1.2,-0.8,0,0,0 abort=600"
 # A refinement sample drawn in scissored strips (abortable between them) must be the same sample
 # to the bit, an aborted one must be cleared, not accumulated, and a strip interrupted by another
 # GL task (a palette upload) then discarded must leave no scissor behind (the bands of a preset load).
@@ -320,6 +324,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── BidirProbe.java              # path tracer alone vs with the photon pass weighted against it: same converged image
 ├── DeferredCompileProbe.java    # a scene compile asked from the FX thread must not block it
 ├── NavigationFluidityProbe.java # the viewport while the camera moves: FX held, images/s, latency, interrupt
+├── ViewportDiveProbe.java       # the viewport down a dive to 1e-15: each rung's longest GPU step against its plan (the driver's 2 s)
 ├── SliderFluidityProbe.java     # the viewport while a slider of each real panel moves; "window" for layout costs
 ├── BandedSampleProbe.java       # a sample drawn in strips is the same sample; an aborted one is cleared; a depth read or a probe between strips loses nothing
 ├── FocusPickProbe.java          # the probe and the focus pick: sphere vs exact intersection, scene vs its image's depth, cost, latency during a refinement

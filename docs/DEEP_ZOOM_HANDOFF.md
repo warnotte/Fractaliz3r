@@ -146,6 +146,10 @@ Read it before touching anything related to deep zoom, precision, DoF or navigat
   the Mandelbulb 4-4.8x faster to 1e-8 and in double past 1e-10, the Mandelbox 2.6-3.3x
   faster at every depth, images the double ones. A deep program compiles in 18-23 s
   against ~13 for double alone. See docs/RENDERING.md, "The estimator in float-float".
+  The same night the owner's Mandelbulb reset the display driver while zooming hard: the
+  viewport planned the refinement on an estimate from much higher up (and the relay made the
+  cost jump). Fixed in the scheduler (docs/INTERACTIVE_RENDER.md, "A camera that dives"):
+  `ViewportDiveProbe` down to 1e-15, longest step 294 ms.
 - **Next, if wanted:**
   - the cost at depth: float-float done (2026-11-12, above). Generic shortcuts tried and
     dropped before it: a float estimate while far from the surface (~10 % faster) and no

@@ -126,6 +126,32 @@ still planned as before and a throughput-bound scene keeps its 60 ms strips.
 `CostModelTest` simulates both scenes; the trace of the plan is
 `-Dfractalizer.debugRender=true` on `ResponsivenessProbe`.
 
+**A camera that dives makes every estimate stale (2026-11-12).** The owner zoomed into a
+Mandelbulb with deep precision and the display driver reset (its two-second watchdog,
+`nvlddmkm` event 153), taking the application with it. Down a dive the cost grows fast and
+in jumps: past ~1e-10 the deep estimate goes from float-float to double (several times the
+cost), and past what double resolves the rays stop converging and take all their steps. The
+full-quality estimate dates from the last refinement that finished, maybe decades higher,
+and the latency fit mixes steps taken at different depths. `ViewportDiveProbe` drives the
+real scheduler down a ladder of cameras (a request, then the refinement's first steps) and
+reports each rung's longest step against its plan. Before: whole samples planned within the
+60 ms slice ran 2-5 times it at 320x180 by 1e-8, and the probe itself reset the driver a
+rung later. Now:
+- a step that cost more than twice its prediction resets the estimate to it
+  (`CostModel.record`, `JUMP`), preview and full quality alike, the fit window included;
+- each refinement draws its first sample in strips, the first 1/64 of the frame, whatever
+  the estimate says, and whole samples only once a sample was measured;
+- no strip is planned past what the dearest row seen in the job allows in
+  `STRIP_CEILING_NS`: rows differ (sky, surface, rays that never converge), and strips
+  planned on the frame's average ran 7 times the slice.
+
+Down to 1e-15 at 320x180 the longest step is now 294 ms (4.9 times the slice), path traced
+at 160x90 164 ms; what is left is the latency of the slowest pixel (a first strip of two rows
+already costs 200-300 ms past 1e-9), which does not grow with the viewport. The preview is
+left as it was: its estimate is the previous frame's, and the largest jump between two
+frames, the switch to double, is about six times its 30 ms. The refinement on Albedo 0.39 is
+unchanged (`ResponsivenessProbe` 1280x720: 127-130 ms a sample against 135-137 before).
+
 ## The engine's part
 
 `GLSLEngine` gains a small sample-slicing API used only on the GL thread:

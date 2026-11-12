@@ -66,6 +66,12 @@ public final class CostModel {
     public static final float MIN_PREVIEW_SCALE = 0.12f;
     private static final int SCALE_STEPS = 32;
 
+    /** A step dearer than this many times its prediction resets the estimate (record). */
+    static final double JUMP = 2.0;
+
+    /** The first strip of a refinement: what the scene costs now, whatever was learned before. */
+    public static final int FIRST_STRIP_FRACTION = 64;
+
     /** Steps of full quality the latency fit looks back over. */
     static final int FIT_WINDOW = 8;
 
@@ -123,7 +129,26 @@ public final class CostModel {
         if (pixels <= 0 || gpuNs <= 0) return;
         double perPixel = (double) gpuNs / pixels;
         Estimate e = of(programKey);
-        if (preview) { e.previewNsPerPixel = e.previewNsPerPixel == 0 ? perPixel : e.previewNsPerPixel * 0.7 + perPixel * 0.3; return; }
+        // A step that cost more than JUMP times what the estimate said: the scene is not the one
+        // the estimate was learned on (the camera dived, the deep estimate went from
+        // float-float to double), and averaging the new cost in would plan the next steps too
+        // dear again. Start from this step. Planned on a stale estimate, the viewport's steps
+        // ran 2-5 times their slice down a dive and one reset the display driver
+        // (ViewportDiveProbe, 2026-11-12).
+        if (preview) {
+            boolean jumped = e.previewNsPerPixel > 0 && perPixel > JUMP * e.previewNsPerPixel;
+            e.previewNsPerPixel = e.previewNsPerPixel == 0 || jumped ? perPixel : e.previewNsPerPixel * 0.7 + perPixel * 0.3;
+            return;
+        }
+        double predicted = e.slopeNsPerPixel > 0 ? e.latencyNs + pixels * e.slopeNsPerPixel : pixels * e.fullNsPerPixel;
+        if (predicted > 0 && gpuNs > JUMP * predicted) {
+            e.fullNsPerPixel = 0;
+            e.fitCount = 0;
+            e.fitNext = 0;
+            e.latencyNs = 0;
+            e.slopeNsPerPixel = 0;
+            e.latencyBound = false;
+        }
         e.fullNsPerPixel = e.fullNsPerPixel == 0 ? perPixel : e.fullNsPerPixel * 0.7 + perPixel * 0.3;
         e.fitPixels[e.fitNext] = pixels;
         e.fitNs[e.fitNext] = gpuNs;

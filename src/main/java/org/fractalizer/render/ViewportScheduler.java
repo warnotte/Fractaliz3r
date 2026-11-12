@@ -58,6 +58,22 @@ public final class ViewportScheduler {
     private final AtomicBoolean stepQueued = new AtomicBoolean();
     private float previewScaleNow;            // the scale of the last preview, for the dead band
 
+    /** A step of GPU work, for the probes: which job, what it cost, what it was planned to. */
+    public record StepRecord(String job, long gpuNs, long planNs) {}
+    private volatile StepRecord longest;
+
+    private void noteStep(String job, long gpuNs, long planNs) {
+        StepRecord l = longest;
+        if (l == null || gpuNs > l.gpuNs()) longest = new StepRecord(job, gpuNs, planNs);
+    }
+
+    /** The longest step since the last call, null when none ran (ViewportDiveProbe). */
+    public StepRecord takeLongestStep() {
+        StepRecord l = longest;
+        longest = null;
+        return l;
+    }
+
     public ViewportScheduler(GLSLEngine engine, Consumer<Runnable> uiExecutor) {
         this.engine = engine;
         this.ui = uiExecutor;
@@ -310,7 +326,9 @@ public final class ViewportScheduler {
             engine.renderSamples(uniforms, n);
             timer.end();
             engine.fence().await();
-            costs.record(costKey, true, (long) w * h * n, timer.elapsedNs());
+            long ns = timer.elapsedNs();
+            costs.record(costKey, true, (long) w * h * n, ns);
+            noteStep(this.toString(), ns, CostModel.STEP_BUDGET_NS);
             samples += n;
             boolean done = samples >= scene.previewSamples();
             if (!shown || done) { emitImage(); shown = true; }
@@ -344,6 +362,16 @@ public final class ViewportScheduler {
         private int samples;
         private int stripY = -1;         // >= 0 while a sliced sample is open
         private int lastRows = 0;
+        // The first sample is drawn in strips, the first of 1/64 of the frame, whatever the
+        // estimate says: the full-quality estimate dates from the last refinement, which may
+        // have been far less deep (a dive goes from float-float to double, rays stop
+        // converging). Each strip's cost resets the estimate when it jumped
+        // (CostModel.record), and no strip is planned past what the dearest row seen in this
+        // job allows in STRIP_CEILING_NS: rows differ (sky, surface, rays that never
+        // converge), and strips planned on the frame's average ran 7 times their slice
+        // (ViewportDiveProbe, Mandelbulb down to 1e-15). Whole samples once one was measured.
+        private boolean begun, measured;
+        private double worstRowNs;
 
         RefineJob(SceneSnapshot scene) {
             this.scene = scene;
@@ -359,8 +387,9 @@ public final class ViewportScheduler {
             long slice = CostModel.REFINE_SLICE_NS;
             GLSLEngine.GpuTimer timer = engine.timer();
             long pixels;
+            int stripRows = 0;
             timer.begin();
-            if (stripY < 0 && !costs.sampleExceedsStep(costKey, false, w, h, slice)) {
+            if (measured && stripY < 0 && !costs.sampleExceedsStep(costKey, false, w, h, slice)) {
                 int n = Math.min(costs.samplesPerStep(costKey, false, w, h, slice), scene.fullSamples() - samples);
                 engine.renderSamples(uniforms, n);
                 pixels = (long) w * h * n;
@@ -368,16 +397,23 @@ public final class ViewportScheduler {
                 lastRows = 0;
             } else {
                 if (stripY < 0) { engine.beginSample(uniforms); stripY = 0; }
-                int rows = Math.min(costs.rowsPerStrip(costKey, false, w, h, lastRows, slice), h - stripY);
-                engine.drawRows(stripY, rows);
-                pixels = (long) w * rows;
-                stripY += rows;
-                lastRows = rows;
-                if (stripY >= h) { engine.commitSample(); stripY = -1; samples++; }
+                int planned = begun ? costs.rowsPerStrip(costKey, false, w, h, lastRows, slice)
+                                      : Math.max(1, h / CostModel.FIRST_STRIP_FRACTION);
+                if (worstRowNs > 0) planned = (int) Math.max(1, Math.min(planned, CostModel.STRIP_CEILING_NS / worstRowNs));
+                begun = true;
+                stripRows = Math.min(planned, h - stripY);
+                engine.drawRows(stripY, stripRows);
+                pixels = (long) w * stripRows;
+                stripY += stripRows;
+                lastRows = stripRows;
+                if (stripY >= h) { engine.commitSample(); stripY = -1; samples++; measured = true; }
             }
             timer.end();
             engine.fence().await();
-            costs.record(costKey, false, pixels, timer.elapsedNs());
+            long ns = timer.elapsedNs();
+            if (stripRows > 0) worstRowNs = Math.max(worstRowNs, (double) ns / stripRows);
+            costs.record(costKey, false, pixels, ns);
+            noteStep(this.toString(), ns, slice);
 
             boolean done = samples >= scene.fullSamples();
             long now = System.nanoTime();

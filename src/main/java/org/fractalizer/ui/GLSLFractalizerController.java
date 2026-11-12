@@ -1144,6 +1144,9 @@ public class GLSLFractalizerController implements RenderController {
         return image;
     }
 
+    /** The viewport's longest GPU step since the last call (ViewportDiveProbe), null if none. */
+    public org.fractalizer.render.ViewportScheduler.StepRecord takeLongestViewportStep() { return viewport.takeLongestStep(); }
+
     /** What the last export or in-memory render did, step by step (ExportWatchdogProbe). */
     public ExportSampler.Stats lastRenderStats() { return sampler.lastStats(); }
 
