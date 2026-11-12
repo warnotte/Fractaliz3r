@@ -1144,6 +1144,9 @@ vec3 getExtraLightPositionWS() {
     return camPos + rotateByQuaternion(extraLightPos * 0.1, camQuat);
 }
 
+vec3 leaveSurface(vec3 hitPos, vec3 n, float bias);
+bool rayMarchSimpleLeavingMarch(Ray ray, out vec3 hitPos, out float hitDist, out int matType);
+
 float calcExtraLightVisibility(vec3 hitPos, vec3 normal, vec3 lightDirNorm, float maxDistance, float surfaceDist) {
     Ray shadowRay;
     float shadowBias = surfaceBias(surfaceDist);
@@ -1606,13 +1609,16 @@ vec3 shade(RayHit hit, Ray ray) {
         }
 
         Ray reflectRay;
-        reflectRay.origin = hit.pos + normal * 0.005;
+        // At a deep hit the ray leaves a few pixel footprints above the surface and is marched
+        // in high precision near it (leaveSurface): the fixed 0.005 is thousands of times the
+        // view there, and the reflection showed what lies far outside it.
+        reflectRay.origin = leaveSurface(hit.pos, normal, 0.005);
         reflectRay.direction = reflectDir;
         vec3 reflHitPos;
         float reflHitDist;
         int reflMat;
         vec3 reflColor;
-        if (rayMarchSimple(reflectRay, reflHitPos, reflHitDist, reflMat)) {
+        if (rayMarchSimpleLeavingMarch(reflectRay, reflHitPos, reflHitDist, reflMat)) {
             reflColor = shadeSimple(reflHitPos, reflectRay, reflMat);
         } else {
             reflColor = sampleEnvironment(reflectDir);

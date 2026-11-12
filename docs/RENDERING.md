@@ -562,8 +562,13 @@ double one: 0.6° at 1e-2, 13° at 1e-3, **92° at 1e-4** (the image is other ge
   at 4e-5 (the owner's `ZoOM_ANDBUG`) was half as bright as at 6e-4, and nearly black over
   most of the surface. It now stays at the same brightness from 4e-5 to 6e-4.
 
-  Still float: reflections in classic shading, the extra lights' shadows, subsurface
-  scattering. A double program now takes 15-20 s to compile.
+  Reflections in classic shading leave a deep hit the same way (2026-11-12): the ray started
+  a fixed 0.005 above the surface, thousands of times the view at 1e-6, and showed what lies
+  far outside it; it now starts a few pixel footprints up and is marched in high precision
+  near the surface (a metallic Mandelbox at 1e-6: mean brightness 37.6 before, 29.6 with the
+  nearby relief reflected; 262 ms against 447). Still float: the extra lights' shadows (the
+  same change there made no measurable difference and was not kept) and subsurface
+  scattering, whose radius is a world length that does not follow the zoom. A double program now takes 15-20 s to compile.
 - **A scene whose deep program does not compile** (GLSL refuses something the translation
   passed on, or the driver crashes on it). The snapshot carries what to compile instead, in
   order (`fallbacks`): the deep entry in double when the program has it in float-float
