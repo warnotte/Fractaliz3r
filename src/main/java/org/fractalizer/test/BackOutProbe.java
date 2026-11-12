@@ -19,9 +19,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * growing step; the image on screen at each frame is kept, and every so often the camera
  * stops and the refinement is left to run (the image a user sees when they let go).
  *
- * Usage: scene outDir WxH frames distance [pauseEvery] [refineMs] [auto]
+ * Usage: scene outDir WxH frames distance [pauseEvery] [refineMs] [auto] [dive=N]
  *   auto: the step of each frame comes from the auto speed (DiveSpeed, a probe per frame),
- *   distance being the speed dial
+ *   distance being the speed dial; dive=N: N frames forward at the auto speed first, so the
+ *   camera backs out from deep
  */
 public class BackOutProbe {
 
@@ -44,6 +45,8 @@ public class BackOutProbe {
         int pauseEvery = args.length > 5 ? Integer.parseInt(args[5]) : 10;
         long refineMs = args.length > 6 ? Long.parseLong(args[6]) : 1500;
         boolean auto = args.length > 7 && args[7].equals("auto");
+        int diveFrames = 0;                                   // "dive=N": N frames forward first (auto speed)
+        for (String a : args) if (a.startsWith("dive=")) diveFrames = Integer.parseInt(a.substring(5));
         outDir.mkdirs();
 
         GLSLFractalizerController controller = PrecisionLab.start(w, h);
@@ -66,6 +69,22 @@ public class BackOutProbe {
         org.fractalizer.ui.DiveSpeed speed = org.fractalizer.ui.DiveSpeed.over(controller);
         double[] back = {-f[0], -f[1], -f[2]};
         double t = 0;
+        double[] ahead = {f[0], f[1], f[2]};
+        for (int k = 0; k < diveFrames; k++) {
+            double[] at = cam.getPositionD();
+            java.util.concurrent.CompletableFuture<Double> step = new java.util.concurrent.CompletableFuture<>();
+            Platform.runLater(() -> step.complete(speed.step(distance, at, ahead)));
+            t -= step.get();
+            cam.setPosition(e0[0] - f[0] * t, e0[1] - f[1] * t, e0[2] - f[2] * t);
+            Platform.runLater(controller::requestRender);
+            Thread.sleep(16);
+            save(last.get(), new File(outDir, String.format("dive_%04d.png", k)));
+            if (k % pauseEvery == 0 || k == diveFrames - 1) {
+                Thread.sleep(refineMs);
+                save(last.get(), new File(outDir, String.format("diverest_%04d.png", k)));
+                System.out.printf(Locale.ROOT, "  dive  %4d  forward %.9f  gap %.3g%n", k, -t, PrecisionLab.centreDistance(controller));
+            }
+        }
         for (int k = 0; k <= frames; k++) {
             double x = (double) k / frames;
             if (auto) {                                       // as the app: a held key, 60 frames a second
