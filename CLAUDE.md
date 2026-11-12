@@ -194,6 +194,10 @@ mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ThumbnailForge" -De
 # per frame (the transform's rotation is a uniform, nothing recompiles), FFmpeg makes the MP4.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.LaserSweep" -Dexec.args="presets/LASER_TABLE.frac out/sweep 1280x720 96 96 24 45 3.0"
 #   (scene outDir WxH samples frames fps mirrorYaw amplitudeDeg)
+# A film in which the formula itself moves: the camera swings around the centre while parameters of the
+# fractal leaves go from one value to another and back (uniforms, nothing recompiles); the film loops.
+#   (scene outDir WxH samples seconds fps swingDegrees key=from..to ...)
+mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.MorphFilm" -Dexec.args="presets/PRISM_GEM.frac out/morph 960x540 48 12 30 16 power=5..9"
 # How far ahead of the work an export progress bar runs: time of the first 100%% report
 # against the moment the export future actually completes.
 mvn compile exec:java -Dexec.mainClass="org.fractalizer.test.ExportProgressProbe" -Dexec.args="presets/JULIA_BULB_OVERVIEW.frac 2600x1600 128"
@@ -338,6 +342,7 @@ test/  (GPU harnesses in src/main — run them instead of re-reading the render 
 ├── ExploreProbe.java            # the app's Explore button, headless: scored views (or variations) from any camera
 ├── ThumbnailForge.java          # the browser's thumbnails: every chain + every preset at 320x180, "install" ships them
 ├── LaserSweep.java              # the optical table's mirror turning: one still per frame, FFmpeg makes the MP4
+├── MorphFilm.java               # a film in which the formula moves: the camera swings while leaf parameters go and come back (power=5..9), FFmpeg makes the MP4
 └── GalleryRender.java           # every .frac in a dir rendered as the app shows it (README gallery)
 ```
 
