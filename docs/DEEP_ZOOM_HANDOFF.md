@@ -2,7 +2,34 @@
 
 Read it before touching anything related to deep zoom, precision, DoF or navigation.
 
-## 0. Where the work is (updated 2026-11-10, night)
+## 0. Where the work is (updated 2026-11-13)
+
+**State on 2026-11-13: everything is on `main`, pushed; no other branch exists.** The
+branches named below (`deep-zoom-wip`, `deep-zoom`) are merged or deleted; what follows them
+is the record of how the work went.
+
+Since the float-float entry (2026-11-12):
+
+- **The Cathedral** (`presets/CATHEDRAL.frac`, `FlightFilm`, `docs/flights/cathedral.txt`): the
+  showcase scene and its film. No showcase is built on the prism (the owner: "it has a problem").
+- **A camera backing out no longer loses the scene at 100 units** (`gFarLimit`,
+  docs/RENDERING.md "How far a ray is marched"); `BackOutProbe` is the harness, it can dive
+  first (`dive=N`).
+- **The Polyhedral IFS renders in deep precision**: all 15 built-ins compile. Its
+  `vector *= matrix` rotations crashed NVIDIA's compiler in double.
+- **Tried and reverted, do not redo** (IDEAS.md, Rejected, 28): a careful march step near
+  surfaces ("Thin Detail"), a step budget extended for rays skimming a surface, and a wider
+  handover from the float march to the deep one. They did give lost surface back in the
+  harnesses (streaks of sky on the Mandelbulb near its pole; holes at 1e-5 with deep
+  precision on), and the viewport's path-traced refinement stopped arriving in the owner's
+  hands. His decision: the fudge factor is the answer, the march stays as it is. A change to
+  the march must be measured on the interactive viewport with path tracing, the GPU free,
+  before it is shown (`ResponsivenessProbe`: 24 samples in 2.6 s on his scene at 1280x720).
+- **Next subject, his request: colour that holds through a zoom** (IDEAS.md § 27). Measure and
+  show first, build after.
+- His personal scenes are in `scenes_perso/` (ignored by git), not in `presets/`.
+
+## 0b. How it went (as written on 2026-11-10, night)
 
 - **`deep-zoom-wip`** (one commit, `c239d69`): the interactive session of 2026-11-08/09 as
   it was left, everything in § 2, untouched. It is the reference for "what worked": the

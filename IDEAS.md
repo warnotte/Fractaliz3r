@@ -28,11 +28,31 @@ Creative feature ideas for Fractaliz3r. Status: IDEA (not started), IN PROGRESS,
 |---|---------|--------|
 | 2 | Fractal Portals | Implemented and reverted — visually uninteresting |
 | 20 | Raymarched Reflections | Already covered by path tracing |
+| 28 | Careful march steps ("Thin Detail") | A surface that frays into streaks of sky up close is the march jumping thin blades (measured, 2026-11-13: the step ignores the hit test's width and a fractal's estimate is steeper than a distance beside a blade). A careful step within a few pixel footprints of a surface, as a Quality checkbox, gave the surface back and was reverted the same day at the owner's request: twice the time in classic shading, one more option, and the viewport's path-traced refinement stopped arriving. **Lowering the fudge factor is the answer.** Do not re-suggest a change to the march step, nor extending a ray's step budget |
 | 15 | Droste Effect | Implemented as a post-process (fb9e3f9, 2026-09-11), judged and reverted the same day: a picture-in-picture spiral is a gimmick that adds nothing to a fractal renderer. Do not re-suggest |
 
 ---
 
 ## Open Ideas
+
+### 27. Colour that holds through a zoom (the owner's request, 2026-11-13: the next subject)
+
+In the owner's words: zooming in or out gives more colour, or none, or one ugly flat colour.
+He does not like how colouring works so far. Nothing has been changed yet.
+
+What is known (docs/RENDERING.md, "Coloring Modes" and "Why a frame reads as a single tone";
+`ColorDemo`, `ColorProbe`): modes 0 to 8 colour from orbit traps and put one hue on an object;
+modes 9 to 12 are scale-invariant and put several. The scene he was looking at
+(a Mandelbulb, mode 0) is in the first group. An orbit trap is a quantity of the whole orbit:
+across a view a thousand times smaller it barely varies, so the palette lookup lands on one
+entry.
+
+How to start: measure before touching anything. One scene, a ladder of cameras from the
+whole object down to 1e-5 (`PrecisionLab` places them), every colouring mode at each rung, a
+hue-spread count per image as `ColorDemo` does, and the sheet shown to him. Then decide with
+him what "good" is: the same palette range in view at every zoom is one candidate (normalise
+the factor by what the view spans), a different default mode is another. Do not build
+before he has seen the sheet.
 
 ### 14. New Fractal Formulas
 **Status:** MOSTLY DONE — Mandelorus done; the rest of the list that could be written as a

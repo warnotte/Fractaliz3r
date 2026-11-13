@@ -120,7 +120,8 @@ plane, four materials.
   and the image turns to blocks. *Deep Precision* (Quality panel) rewrites the scene's own distance
   estimator, whatever the graph holds, into float-float arithmetic (two floats per number, about
   14 digits), 3 to 5 times faster than double on a consumer GPU, and takes double for the frames
-  past what float-float resolves. Dives to 1e-12 on the Mandelbox and the Mandelbulb; shadows,
+  past what float-float resolves. All fifteen built-in formulas have it. Dives to 1e-12 on the
+  Mandelbox and the Mandelbulb; shadows,
   occlusion, reflections and path-traced bounces follow.
 - **Measured, not eyeballed.** Bit-exact golden-image regression, deep-zoom detail metrics, colour
   probes per shading pass, and probes that catch a control missing from the UI or a setting missing
