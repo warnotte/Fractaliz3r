@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## IMPORTANT Rules
 - **NEVER** include `Co-Authored-By`, AI mentions, Claude mentions, or any reference to AI/LLM in commit messages, code comments, or any generated content. This rule is absolute and permanent.
 - Creative feature ideas and roadmap: see **[IDEAS.md](IDEAS.md)**
-- **Deep zoom / precision / DoF / navigation work in progress: read [docs/DEEP_ZOOM_HANDOFF.md](docs/DEEP_ZOOM_HANDOFF.md) first.** § 0 says where the work is (branch `deep-zoom-wip` = the session of 2026-11-08/09 as left, branch `deep-zoom` = the rework from `main`), what is done, and what comes next (no fractal-type-specific code paths; one GPU probe for distances; double precision emitted by the compiler; manual DoF).
+- **Deep zoom / precision / DoF / navigation work in progress: read [docs/DEEP_ZOOM_HANDOFF.md](docs/DEEP_ZOOM_HANDOFF.md) first.** § 0 says where the work is (it is all on `main` now; the branches it names are merged or deleted), what is done, and what comes next (no fractal-type-specific code paths; one GPU probe for distances; double precision emitted by the compiler; manual DoF).
 
 ## Build Commands
 
