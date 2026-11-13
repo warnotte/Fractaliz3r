@@ -54,6 +54,13 @@ him what "good" is: the same palette range in view at every zoom is one candidat
 the factor by what the view spans), a different default mode is another. Do not build
 before he has seen the sheet.
 
+### 29. The README's pictures (the owner, 2026-11-13: "a bit rotten, we will redo them")
+
+To redo after the colouring (§ 27), since the pictures show it. They come from
+`GalleryRender` (`docs/gallery/*.jpg`, 1280x720, 256 spp). Ask him which ones he finds poor
+before rendering: no showcase on the prism, and he does not want to be asked for an artistic
+direction, so propose a set and show it.
+
 ### 14. New Fractal Formulas
 **Status:** MOSTLY DONE — Mandelorus done; the rest of the list that could be written as a
 sequence of maps now lives in the hybrid step library (28 step types, HybridPresets), reachable

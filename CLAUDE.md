@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## IMPORTANT Rules
 - **NEVER** include `Co-Authored-By`, AI mentions, Claude mentions, or any reference to AI/LLM in commit messages, code comments, or any generated content. This rule is absolute and permanent.
 - Creative feature ideas and roadmap: see **[IDEAS.md](IDEAS.md)**
-- **Next subject (the owner, 2026-11-13): colour that holds through a zoom**, [IDEAS.md](IDEAS.md) § 27. Measure and show him first, build after.
+- **Next subject (the owner, 2026-11-13): colour that holds through a zoom**, [IDEAS.md](IDEAS.md) § 27. Measure and show him first, build after. Then the README's pictures, to redo (§ 29).
 - **The march step is not to be changed** (IDEAS.md, Rejected, 28): a surface fraying into streaks up close is answered by the fudge factor.
 - **Deep zoom / precision / DoF / navigation work in progress: read [docs/DEEP_ZOOM_HANDOFF.md](docs/DEEP_ZOOM_HANDOFF.md) first.** § 0 says where the work is (it is all on `main` now; the branches it names are merged or deleted), what is done, and what comes next (no fractal-type-specific code paths; one GPU probe for distances; double precision emitted by the compiler; manual DoF).
 
