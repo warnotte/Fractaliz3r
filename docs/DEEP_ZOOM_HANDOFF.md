@@ -94,9 +94,11 @@ Read it before touching anything related to deep zoom, precision, DoF or navigat
     the surface after; 2.5-3x the time of the float calls at depth, the GeForce's 1/64
     double rate: a Mandelbulb iteration is ~105 double FMAs against ~45). Compound
     assignments are written out (NVIDIA C9999). The kernels are not touched, so a program
-    without deep precision is byte-for-byte what it was. 14 of 15 built-ins compile; the
-    Polyhedral IFS crashes the driver's compiler and is shown in float with a message (the
-    same fallback that catches a custom shader GLSL refuses in double).
+    without deep precision is byte-for-byte what it was. All 15 built-ins compile (the
+    Polyhedral IFS since 2026-11-13: its `vector *= matrix` rotations crashed the driver's
+    compiler in double and are written as dot products now, docs/RENDERING.md); a scene
+    that does not is shown in float with a message (the fallback that catches a custom
+    shader GLSL refuses in double).
   - The WIP's `rayMarchDeep`, `rayMarchSimpleDeep`, `refineSurfaceDeep` and the double
     normals, behind `HAS_DEEP_DE`. A camera ray goes float first and is redone in double when
     it lands where a pixel is under ~100 float steps, or came within 4 float steps of a

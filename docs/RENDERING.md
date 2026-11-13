@@ -415,10 +415,15 @@ double one: 0.6° at 1e-2, 13° at 1e-3, **92° at 1e-4** (the image is other ge
   second division and gains a few percent at most. Nothing changes until a ray needs the
   double march. NVIDIA's compiler dies (C9999) on some compound assignments in
   double, as it does on swizzled ones in float, so the copies write `a += b` out as
-  `a = a + (b)`. Fourteen of the fifteen built-ins compile in double (`PrecisionLab
-  compile`); a double program takes 12-17 s to compile against 7-10 s. The Polyhedral IFS
-  crashes NVIDIA's compiler all the same (C9999, inside the driver, on a program with no
-  compound assignment left) and is shown in float, with the message below.
+  `a = a + (b)`. The fifteen built-ins compile in double (`PrecisionLab compile`); a double
+  program takes 12-17 s to compile against 7-10 s. The Polyhedral IFS was the one that did
+  not (C9999 "assign+", inside the driver, on a program with no compound assignment left):
+  its two rotations were written `w *= fractalRotation1`, a vector times a matrix, which
+  the compiler turns back into the operation it cannot handle in double. Found by removing
+  one part of the kernel at a time. The kernel now writes the product out as three dot
+  products, the same numbers (16 float images of the four polyhedra, rotated, identical to
+  the bit), and has a trap-free `DE_simple` like every other kernel. A kernel that still
+  fails is shown in float, with the message below.
 - **The estimator in float-float, the default (`FloatFloatSource`, `FloatFloat`).** On a
   GeForce a double operation costs as much as 64 float ones, so the double estimator was
   the cost of a deep view. Float-float holds a number as two floats, `hi + lo` with

@@ -47,6 +47,57 @@ const vec3 n1_ico = vec3(-0.80901699437, 0.30901699437, 0.5);
 const vec3 n2_ico = vec3( 0.30901699437, -0.5, 0.80901699437);
 const vec3 n3_ico = vec3(0.0, 0.0, -1.0);
 
+// One iteration's rotations and folds, shared by the coloured estimate and the plain one.
+vec3 polyFold(vec3 w) {
+    w = vec3(dot(w, fractalRotation1[0]), dot(w, fractalRotation1[1]), dot(w, fractalRotation1[2]));
+
+    if (polyType == 0) { // Octahedral
+        // Box fold (abs) required before sorting for octahedral symmetry
+        w = abs(w + shift) - shift;
+        // Explicit swaps (avoid w.xy = w.yx which triggers NVIDIA C9999)
+        if (w.x < w.y) { float tmp = w.x; w = vec3(w.y, tmp, w.z); }
+        if (w.x < w.z) { float tmp = w.x; w = vec3(w.z, w.y, tmp); }
+        if (w.y < w.z) { float tmp = w.y; w = vec3(w.x, w.z, tmp); }
+    }
+    else if (polyType == 1) { // Dodecahedron
+        // 5 reflection fold planes handle symmetry directly (no abs needed)
+        float t;
+        t = w.x * phi3.z + w.y * phi3.y - w.z * phi3.x;
+        if (t < 0.0) w += vec3(-2.0, -2.0, 2.0) * t * phi3.zyx;
+
+        t = -w.x * phi3.x + w.y * phi3.z + w.z * phi3.y;
+        if (t < 0.0) w += vec3(2.0, -2.0, -2.0) * t * phi3.xzy;
+
+        t = w.x * phi3.y - w.y * phi3.x + w.z * phi3.z;
+        if (t < 0.0) w += vec3(-2.0, 2.0, -2.0) * t * phi3.yxz;
+
+        t = -w.x * c_3.x + w.y * c_3.y + w.z * c_3.z;
+        if (t < 0.0) w += vec3(2.0, -2.0, -2.0) * t * c_3.xyz;
+
+        t = w.x * c_3.z - w.y * c_3.x + w.z * c_3.y;
+        if (t < 0.0) w += vec3(-2.0, 2.0, -2.0) * t * c_3.zxy;
+    }
+    else if (polyType == 2) { // Icosahedron
+        // Icosahedron uses its own abs for symmetry
+        w = abs(w);
+        float t;
+        t = dot(w, n1_ico); if (t > 0.0) w -= 2.0 * t * n1_ico;
+        t = dot(w, n2_ico); if (t > 0.0) w -= 2.0 * t * n2_ico;
+        t = dot(w, n3_ico); if (t > 0.0) w -= 2.0 * t * n3_ico;
+        t = dot(w, n2_ico); if (t > 0.0) w -= 2.0 * t * n2_ico;
+    }
+    else if (polyType == 3) { // Tetrahedron
+        // Conditional negate-swap folds (NO abs - it would make conditions always false)
+        // Explicit vec3 constructors to avoid NVIDIA C9999 on swizzled assign
+        if (w.x + w.y < 0.0) { float tmp = w.x; w = vec3(-w.y, -tmp, w.z); }
+        if (w.x + w.z < 0.0) { float tmp = w.x; w = vec3(-w.z, w.y, -tmp); }
+        if (w.y + w.z < 0.0) { float tmp = w.y; w = vec3(w.x, -w.z, -tmp); }
+    }
+
+    w = vec3(dot(w, fractalRotation2[0]), dot(w, fractalRotation2[1]), dot(w, fractalRotation2[2]));
+    return w;
+}
+
 float polyDE(vec3 p, out OrbitTrap trap) {
     trap.minDist = 1e10;
     trap.sumDist = 0.0;
@@ -57,52 +108,7 @@ float polyDE(vec3 p, out OrbitTrap trap) {
     
     int i;
     for (i = 0; i < maxIterations + gExtraIterations; i++) {
-        w *= fractalRotation1;
-
-        if (polyType == 0) { // Octahedral
-            // Box fold (abs) required before sorting for octahedral symmetry
-            w = abs(w + shift) - shift;
-            // Explicit swaps (avoid w.xy = w.yx which triggers NVIDIA C9999)
-            if (w.x < w.y) { float tmp = w.x; w = vec3(w.y, tmp, w.z); }
-            if (w.x < w.z) { float tmp = w.x; w = vec3(w.z, w.y, tmp); }
-            if (w.y < w.z) { float tmp = w.y; w = vec3(w.x, w.z, tmp); }
-        }
-        else if (polyType == 1) { // Dodecahedron
-            // 5 reflection fold planes handle symmetry directly (no abs needed)
-            float t;
-            t = w.x * phi3.z + w.y * phi3.y - w.z * phi3.x;
-            if (t < 0.0) w += vec3(-2.0, -2.0, 2.0) * t * phi3.zyx;
-
-            t = -w.x * phi3.x + w.y * phi3.z + w.z * phi3.y;
-            if (t < 0.0) w += vec3(2.0, -2.0, -2.0) * t * phi3.xzy;
-
-            t = w.x * phi3.y - w.y * phi3.x + w.z * phi3.z;
-            if (t < 0.0) w += vec3(-2.0, 2.0, -2.0) * t * phi3.yxz;
-
-            t = -w.x * c_3.x + w.y * c_3.y + w.z * c_3.z;
-            if (t < 0.0) w += vec3(2.0, -2.0, -2.0) * t * c_3.xyz;
-
-            t = w.x * c_3.z - w.y * c_3.x + w.z * c_3.y;
-            if (t < 0.0) w += vec3(-2.0, 2.0, -2.0) * t * c_3.zxy;
-        }
-        else if (polyType == 2) { // Icosahedron
-            // Icosahedron uses its own abs for symmetry
-            w = abs(w);
-            float t;
-            t = dot(w, n1_ico); if (t > 0.0) w -= 2.0 * t * n1_ico;
-            t = dot(w, n2_ico); if (t > 0.0) w -= 2.0 * t * n2_ico;
-            t = dot(w, n3_ico); if (t > 0.0) w -= 2.0 * t * n3_ico;
-            t = dot(w, n2_ico); if (t > 0.0) w -= 2.0 * t * n2_ico;
-        }
-        else if (polyType == 3) { // Tetrahedron
-            // Conditional negate-swap folds (NO abs - it would make conditions always false)
-            // Explicit vec3 constructors to avoid NVIDIA C9999 on swizzled assign
-            if (w.x + w.y < 0.0) { float tmp = w.x; w = vec3(-w.y, -tmp, w.z); }
-            if (w.x + w.z < 0.0) { float tmp = w.x; w = vec3(-w.z, w.y, -tmp); }
-            if (w.y + w.z < 0.0) { float tmp = w.y; w = vec3(w.x, -w.z, -tmp); }
-        }
-
-        w *= fractalRotation2;
+        w = polyFold(w);
         
         // Use a weighted sum for plane traps to capture variation across all iterations
         trap.plane += abs(w) / pow(scale, float(i) * 0.5);
@@ -129,9 +135,20 @@ float DE(vec3 pos, out OrbitTrap trap) {
     return polyDE(pos, trap);
 }
 
+// The same estimate without the orbit traps, as every other kernel has it: shadows, normals
+// and occlusion do not pay for the colouring, and it is the function deep precision
+// translates (through the traps' struct writes, NVIDIA's compiler crashed on the double
+// program, C9999, and this fractal alone stayed in float).
 float DE_simple(vec3 pos) {
-    OrbitTrap trap;
-    return polyDE(pos, trap);
+    vec3 w = pos;
+    vec3 scale_offset = offset * (scale - 1.0);
+    int n = maxIterations + gExtraIterations;
+    for (int i = 0; i < n; i++) {
+        w = polyFold(w);
+        w *= scale;
+        w -= scale_offset;
+    }
+    return (ifsBasePrimitive(w, basePrimitive) - 2.0) * pow(scale, -float(n));
 }
 
 vec3 getFactors(OrbitTrap trap) {
